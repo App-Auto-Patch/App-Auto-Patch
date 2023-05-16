@@ -973,6 +973,8 @@ doInstallations() {
 	
 	caffExit $errorCount
 	
+	exit 0
+	
 }
 
 oldIFS=$IFS
