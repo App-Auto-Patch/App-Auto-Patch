@@ -326,8 +326,8 @@ updateScriptLog "PRE-FLIGHT CHECK: Complete"
 
 caffExit () {
     updateScriptLog "${scriptFunctionalName}: De-caffeinate $scriptPID..."
-    kill "$scriptPID"
-    exit #$1
+    killProcess "caffeinate"
+    exit 0
 }
 
 ### Logging functions ###
