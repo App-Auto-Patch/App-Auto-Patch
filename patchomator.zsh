@@ -20,7 +20,7 @@
 #   - Additional cleanup
 #
 #   Version 1.0.8, 17-May-2023 Dan K. Snelson (@dan-snelson)
-#   - Changed extension to `.zsh` (to quite Shellcheck)
+#   - Changed extension to `.zsh` (to quiet Shellcheck)
 #   - More dialog tweaks
 #
 ####################################################################################################
@@ -36,7 +36,7 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="1.0.8"
-scriptFunctionalName="Patchomator"
+scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
 scriptLog="${4:-"/var/log/com.company.log"}"                                    # Parameter 4: Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
@@ -81,9 +81,9 @@ LOGO="appstore"
 
 # Set icon based on whether the Mac is a desktop or laptop
 if system_profiler SPPowerDataType | grep -q "Battery Power"; then
-    icon="SF=laptopcomputer.trianglebadge.exclamationmark,weight=heavy,colour1=pink,colour2=blue"
+    icon="SF=laptopcomputer.and.arrow.down,weight=regular,colour1=gray,colour2=red"
 else
-    icon="SF=desktopcomputer.trianglebadge.exclamationmark,weight=heavy,colour1=pink,colour2=blue"
+    icon="SF=laptopcomputer.and.arrow.down,weight=regular,colour1=gray,colour2=red"
 fi
 
 # Create `overlayicon` from Self Service's custom icon (thanks, @meschwartz!)
@@ -366,6 +366,21 @@ removeInstallomator() {
     rm -rf ${patchomatorPath}
 }
 
+# Kill a specified process (thanks, @grahampugh!)
+function killProcess() {
+    process="$1"
+    if process_pid=$( pgrep -a "${process}" 2>/dev/null ) ; then
+        updateScriptLog "Attempting to terminate the '$process' process …"
+        updateScriptLog "(Termination message indicates success.)"
+        kill "$process_pid" 2> /dev/null
+        if pgrep -a "$process" >/dev/null ; then
+            updateScriptLog "ERROR: '$process' could not be terminated."
+        fi
+    else
+        updateScriptLog "The '$process' process isn't running."
+    fi
+}
+
 quitScript() {
     updateScriptLog "QUIT SCRIPT: Exiting …"
     
@@ -470,7 +485,7 @@ completeSwiftDialogWrite(){
 swiftDialogUpdate(){
     infoOut "Update swiftDialog: $1" 
     echo "$1" >> "$dialogCommandFile"
-    sleep 0.4
+    # sleep 0.4
 }
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -668,36 +683,32 @@ PgetAppVersion() {
 }
 
 verifyApp() {
-    
-    appPath=$1
-    notice "Verifying: $appPath"
-    if $useswiftdialog
-    then
-        swiftDialogUpdate "icon: $appPath"
-        swiftDialogUpdate "progresstext: Verifying $appPath"
-    fi
-    
-    # verify with spctl
-    appVerify=$(spctl -a -vv "$appPath" 2>&1 )
-    appVerifyStatus=$(echo $?)
-    teamID=$(echo $appVerify | awk '/origin=/ {print $NF }' | tr -d '()' )
-    
-    if [[ $appVerifyStatus -ne 0 ]]
-    then
-        error "Error verifying $appPath"
-        return
-    fi
-    
-    if [ "$expectedTeamID" != "$teamID" ]
-    then
-        error "Error verifying $appPath"
-        notice "Team IDs do not match: expected: $expectedTeamID, found $teamID"
-        return
-    else
-        
-        
-        # run the commands in current_label to check for the new version string
-        newversion=$(zsh << SCRIPT_EOF
+	
+	appPath=$1
+	notice "Verifying: $appPath"
+	swiftDialogUpdate "progresstext: Verifying $appPath"
+	
+	# verify with spctl
+	appVerify=$(spctl -a -vv "$appPath" 2>&1 )
+	appVerifyStatus=$(echo $?)
+	teamID=$(echo $appVerify | awk '/origin=/ {print $NF }' | tr -d '()' )
+	
+	if [[ $appVerifyStatus -ne 0 ]]
+	then
+		error "Error verifying $appPath"
+		return
+	fi
+	
+	if [ "$expectedTeamID" != "$teamID" ]
+	then
+		error "Error verifying $appPath"
+		notice "Team IDs do not match: expected: $expectedTeamID, found $teamID"
+		return
+	else
+		
+		
+		# run the commands in current_label to check for the new version string
+		newversion=$(zsh << SCRIPT_EOF
 declare -A levels=(DEBUG 0 INFO 1 WARN 2 ERROR 3 REQ 4)
 currentUser=$currentUser
 source "$fragmentsPath/functions.sh"
@@ -705,49 +716,49 @@ ${current_label}
 echo "\$appNewVersion" 
 SCRIPT_EOF
 )
-    fi
-    
-    # build array of labels for the config and/or installation
-    
-    # push label to array
-    # if in write config mode, writes to plist. Otherwise to an array.
-    # Test if label name in ignored labels
-    if [[ ! " ${ignoredLabelsArray[@]} " =~ " ${label_name} " ]]; then
-        if [[ -n "$configArray[$appPath]" ]]; then
-            exists="$configArray[$appPath]"
-        
-            infoOut "${appPath} already linked to label ${exists}."
-            if [[ ${#noninteractive} -eq 1 ]]; then
-                echo "Skipping."
-                return
-            else
-                notice "Replacing label ${exists} with $label_name?"
-            
-                configArray[$appPath]=$label_name
-                
-                /usr/libexec/PlistBuddy -c "set \":${appPath}\" ${label_name}" "$patchomatorconfigFile"
-            fi
-        else
-            
-            configArray[$appPath]=$label_name
+	fi
+	
+	# build array of labels for the config and/or installation
+	
+	# push label to array
+	# if in write config mode, writes to plist. Otherwise to an array.
+	# Test if label name in ignored labels
+	if [[ ! " ${ignoredLabelsArray[@]} " =~ " ${label_name} " ]]; then
+		if [[ -n "$configArray[$appPath]" ]]; then
+			exists="$configArray[$appPath]"
+		
+			infoOut "${appPath} already linked to label ${exists}."
+			if [[ ${#noninteractive} -eq 1 ]]; then
+				echo "Skipping."
+				return
+			else
+				notice "Replacing label ${exists} with $label_name?"
+			
+				configArray[$appPath]=$label_name
+				
+				/usr/libexec/PlistBuddy -c "set \":${appPath}\" ${label_name}" "$patchomatorconfigFile"
+			fi
+		else
+			
+			configArray[$appPath]=$label_name
 
-            /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$patchomatorconfigFile"
+			/usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$patchomatorconfigFile"
 
-        fi
-    fi
-    
-    
-    notice "--- Installed version: ${appversion}"
-    
-    [[ -n "$newversion" ]] && notice "--- Newest version: ${newversion}"
-    
-    if [[ "$appversion" == "$newversion" ]]
-    then
-        notice "--- Latest version installed."
-    else
-        queueLabel
-    fi
-    
+		fi
+	fi
+	
+	
+	notice "--- Installed version: ${appversion}"
+	
+	[[ -n "$newversion" ]] && notice "--- Newest version: ${newversion}"
+	
+	if [[ "$appversion" == "$newversion" ]]
+	then
+		notice "--- Latest version installed."
+	else
+		queueLabel
+	fi
+	
 }
 
 queueLabel() {
@@ -957,18 +968,19 @@ doInstallations() {
         swiftDialogUpdate "infobox: **Updates:** $queuedLabelsArrayLength"
     fi
 
+    i=0
     for label in $queuedLabelsArray
     do
         updateScriptLog "${scriptFunctionalName}: Installing ${label}..."
         swiftDialogUpdate "progress: increment ${progressIncrementValue}"
         
-        # Use built in SwiftDialog Installomator integration options (if swift dialog is being used)
+        # Use built in swiftDialog Installomator integration options (if swiftDialog is being used)
         swiftDialogOptions=()
         if $useswiftdialog
         then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
             
-            # Get the "name=" value from the current label and use it in our SwiftDialog list
+            # Get the "name=" value from the current label and use it in our swiftDialog list
             currentDisplayName=$(sed -n '/# label descriptions/,$p' ${installomatorPath} | grep -i -A 50 "${label})" | grep -m 1 "name=" | sed 's/.*=//' | sed 's/"//g')
             # There are some weird \' shenanigans here because Installomator passes this through eval
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplayName}"\')
@@ -976,6 +988,8 @@ doInstallations() {
 
             swiftDialogUpdate "icon: /Applications/${currentDisplayName}.app"
             swiftDialogUpdate "progresstext: Checking ${currentDisplayName} …"
+            swiftDialogUpdate "listitem: index: $i, status: wait, statustext: Checking …"
+
         fi
         
         # Run Installomator
@@ -984,6 +998,7 @@ doInstallations() {
             error "Error installing ${label}. Exit code $?"
             let errorCount++
         fi
+        let i++
     done
     
     notice "Errors: $errorCount"
