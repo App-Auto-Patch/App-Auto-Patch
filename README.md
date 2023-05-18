@@ -1,6 +1,7 @@
 # App Auto-Patch via Dialog
 Auto patch management script for Jamf Pro via Dialog
 
+This script will provide a user interface for updating applications installed on a Mac computer. The script will run a local discovery of all installed applications and use that information to process installations of those apps using the Installomator.sh script. 
 
 <img width="652" alt="Screenshot 2023-05-18 at 9 57 34 AM" src="https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/dc32b13e-cf86-4ed7-a98c-5a33bb84dd7f">
 
