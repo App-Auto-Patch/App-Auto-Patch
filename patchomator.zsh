@@ -30,6 +30,7 @@
 #   - Moved scriptVersion to infotext on swiftDialog windows
 #   - Changed icon used for desktop computers to match platform (would like to grab model name and match accordingly: MacBook, Mac, Mac Mini, etc)
 #   - Changed `discovery` variable to `runDiscovery`
+#   - Changed repository to App-Auto-Patch and script name to App-Auto-Patch-via-Dialog.zsh
 #
 ####################################################################################################
 
