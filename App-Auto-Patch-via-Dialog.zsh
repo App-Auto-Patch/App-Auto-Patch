@@ -32,6 +32,9 @@
 #   - Changed `discovery` variable to `runDiscovery`
 #   - Changed repository to App-Auto-Patch and script name to App-Auto-Patch-via-Dialog.zsh
 #
+#   Version 1.0.10, 05.23.2023 Robert Schroeder (@robjschroeder)
+#   - Moved the creation of the overlay icon in the IF statement if useoverlayicon is set to true
+#
 ####################################################################################################
 
 ####################################################################################################
@@ -44,7 +47,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="1.0.9"
+scriptVersion="1.0.10"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -96,8 +99,8 @@ else
 fi
 
 # Create `overlayicon` from Self Service's custom icon (thanks, @meschwartz!)
-xxd -p -s 260 "$(defaults read /Library/Preferences/com.jamfsoftware.jamf self_service_app_path)"/Icon$'\r'/..namedfork/rsrc | xxd -r -p > /var/tmp/overlayicon.icns
 if [[ "$useOverlayIcon" == "true" ]]; then
+    xxd -p -s 260 "$(defaults read /Library/Preferences/com.jamfsoftware.jamf self_service_app_path)"/Icon$'\r'/..namedfork/rsrc | xxd -r -p > /var/tmp/overlayicon.icns
     overlayicon="/var/tmp/overlayicon.icns"
 else
     overlayicon=""
