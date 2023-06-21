@@ -35,6 +35,11 @@
 #   Version 1.0.10, 05.23.2023 Robert Schroeder (@robjschroeder)
 #   - Moved the creation of the overlay icon in the IF statement if useoverlayicon is set to true
 #
+#   Version 1.0.11, 06.21.2023 Robert Schroeder (@robjschroeder)
+#   - Added more options for running siliently (Issue #3, thanks @beatlemike)
+#   - Commented out the Update count in List dialog infobox until accurate count can be used
+#
+#
 ####################################################################################################
 
 ####################################################################################################
@@ -53,7 +58,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
 scriptLog="${4:-"/var/log/com.company.log"}"                                    # Parameter 4: Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
 useOverlayIcon="${5:="true"}"                                                   # Parameter 5: Toggles swiftDialog to use an overlay icon [ true (default) | false ]
-interactiveMode="${6:="true"}"                                                  # Parameter 6: Interactive Mode [ true (default) | false ]
+interactiveMode="${6:="2"}"                                                     # Parameter 6: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) ]
 ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "microsoftonedrive-rollingout zoomgov googlechromeenterprise nudge")
 requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "microsoftteams")
 outdatedOsAction="${9:-"/System/Library/CoreServices/Software Update.app"}"     # Parameter 9: Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system ugprades)
@@ -319,7 +324,7 @@ function dialogCheck() {
 }
 
 if [[ ! -e "/Library/Application Support/Dialog/Dialog.app" ]]; then
-    if [ ${interactiveMode} == "true" ]; then
+    if [ ${interactiveMode} -gt 0 ]; then
         dialogCheck
     fi
 else
@@ -418,8 +423,7 @@ quitScript() {
 ### swiftDialog Functions ###
 
 swiftDialogCommand(){
-    if $interactiveMode
-    then    
+    if [ ${interactiveMode} -gt 0 ]; then
         echo "$@" > "$dialogCommandFile"
         sleep .2
     fi
@@ -427,8 +431,7 @@ swiftDialogCommand(){
 
 swiftDialogListWindow(){
     # If we are using SwiftDialog
-    if $interactiveMode
-    then
+    if [ ${interactiveMode} -ge 1 ]; then
         # Check if there's a valid logged in user:
         currentUser=$(scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
         if [ "$currentUser" = "root" ] \
@@ -460,8 +463,7 @@ swiftDialogListWindow(){
 }
 
 completeSwiftDialogList(){
-    if $interactiveMode
-    then
+    if [ ${interactiveMode} -ge 1 ]; then
         # swiftDialogCommand "listitem: add, title: Updates Complete!,status: success"
         swiftDialogUpdate "icon: SF=checkmark.circle.fill,weight=bold,colour1=#00ff44,colour2=#075c1e"
         swiftDialogUpdate "progress: complete"
@@ -478,8 +480,7 @@ completeSwiftDialogList(){
 swiftDialogWriteWindow(){
     # If we are using SwiftDialog
     touch "$dialogCommandFile"
-    if $interactiveMode
-    then
+    if [ ${interactiveMode} -gt 1 ]; then
         $dialogPath \
         ${dialogWriteConfigurationOptions[@]} \
         &
@@ -487,8 +488,7 @@ swiftDialogWriteWindow(){
 }
 
 completeSwiftDialogWrite(){
-    if $interactiveMode
-    then
+    if [ ${interactiveMode} -gt 1 ]; then
         swiftDialogCommand "quit:"
         rm "$dialogCommandFile"
     fi
@@ -630,8 +630,7 @@ PgetAppVersion() {
             notice "Label: $label_name"
             notice "--- found packageID $packageID installed"
             
-            if $interactiveMode
-            then
+            if [ ${interactiveMode} -gt 1 ]; then
                 swiftDialogUpdate "progresstext: Located ${label_name}"
             fi
             
@@ -669,8 +668,7 @@ PgetAppVersion() {
             
             infoOut "Found $appName version $appversion"
             
-            if $interactiveMode
-            then
+            if [ ${interactiveMode} -gt 1 ]; then
                 swiftDialogUpdate "message: Analyzing ${appName//.app/} ($appversion)"
             fi
             
@@ -972,12 +970,11 @@ doInstallations() {
     # Create our main "list" swiftDialog Window
     swiftDialogListWindow
     
-    if $interactiveMode
-    then
+    if [ ${interactiveMode} -ge 1 ]; then
         queuedLabelsArrayLength="${#queuedLabelsArray[@]}"
         progressIncrementValue=$(( 100 / queuedLabelsArrayLength ))
         updateScriptLog "Number of Updates: $queuedLabelsArrayLength"
-        swiftDialogUpdate "infobox: **Updates:** $queuedLabelsArrayLength"
+        #swiftDialogUpdate "infobox: **Updates:** $queuedLabelsArrayLength"
     fi
 
     i=0
@@ -988,8 +985,7 @@ doInstallations() {
         
         # Use built in swiftDialog Installomator integration options (if swiftDialog is being used)
         swiftDialogOptions=()
-        if $interactiveMode
-        then
+        if [ ${interactiveMode} -ge 1 ]; then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
             
             # Get the "name=" value from the current label and use it in our swiftDialog list
