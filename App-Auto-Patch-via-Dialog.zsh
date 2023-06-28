@@ -76,7 +76,8 @@ patchomatorPath="/usr/local/Installomator"
 fragmentsPath=("$patchomatorPath/fragments")
 dialogPath="/usr/local/bin/dialog"
 dialogCommandFile=$(mktemp /var/tmp/dialog.patchomator.XXXXX)
-
+macOSVersion=$(system_profiler SPSoftwareDataType | awk '/System Version/ {print $4}')
+computerName=$(scutil --get ComputerName)
 
 ### Configuration PLIST variables ###
 
@@ -120,7 +121,7 @@ dialogListConfigurationOptions=(
     --button1disabled
     --height 450
     --width 650
-    --position bottomright
+    --position topright
     --progress
     --infotext "${scriptFunctionalName}: Version $scriptVersion"
     --liststyle compact
@@ -129,6 +130,7 @@ dialogListConfigurationOptions=(
     --quitkey k
     --icon "$icon"
     --overlayicon "$overlayicon"
+    --infobox "#### macOS Version:  \n - $macOSVersion \n#### Computer Name  \n - $computerName"
 )
 
 dialogWriteConfigurationOptions=(
