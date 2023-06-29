@@ -39,6 +39,10 @@
 #   - Added more options for running siliently (Issue #3, thanks @beatlemike)
 #   - Commented out the Update count in List dialog infobox until accurate count can be used
 #
+#   Version 1.0.12, 06.29.2023 Robert Schroeder (@robjschroeder)
+#   - Added variables for computer name and macOS version (Issue #6, thanks @AndrewMBarnett)
+#   - Added computer variables to infobox of dialog
+#
 #
 ####################################################################################################
 
@@ -52,7 +56,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="1.0.10"
+scriptVersion="1.0.12"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -68,6 +72,9 @@ outdatedOsAction="${9:-"/System/Library/CoreServices/Software Update.app"}"     
 # Various Feature Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+### Computer Variables ###
+macOSVersion=$(system_profiler SPSoftwareDataType | awk '/System Version/ {print $4}')
+computerName=$(scutil --get ComputerName)
 
 ### Path variables ###
 
@@ -122,6 +129,7 @@ dialogListConfigurationOptions=(
     --width 650
     --position bottomright
     --progress
+    --infobox "#### Computer Name: #### \n\n $computerName \n\n #### macOS Version: #### \n\n $macOSVersion"
     --infotext "${scriptFunctionalName}: Version $scriptVersion"
     --liststyle compact
     --titlefont size=18
