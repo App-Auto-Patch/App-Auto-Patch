@@ -43,6 +43,8 @@
 #   - Added variables for computer name and macOS version (Issue #6, thanks @AndrewMBarnett)
 #   - Added computer variables to infobox of dialog
 #
+#   Version 1.0.13, 09.16.2023 Robert Schroeder (@robjschroeder)
+#   - Fixed repo URL for swiftDialog
 #
 ####################################################################################################
 
@@ -283,7 +285,7 @@ updateScriptLog "PRE-FLIGHT CHECK: Current Logged-in User ID: ${loggedInUserID}"
 function dialogCheck() {
 
     # Get the URL of the latest PKG From the Dialog GitHub repo
-    dialogURL=$(curl --silent --fail "https://api.github.com/repos/bartreardon/swiftDialog/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
+    dialogURL=$(curl -L --silent --fail "https://api.github.com/repos/swiftDialog/swiftDialog/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
     
     # Expected Team ID of the downloaded PKG
     expectedDialogTeamID="PWA5E9TQ59"
