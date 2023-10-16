@@ -778,23 +778,10 @@ SCRIPT_EOF
                 notice "--- Latest version installed."
             else
                 /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
-                touch /Library/Application\ Support/AppAutoPatch/$appName-$newversion.txt
                 queueLabel
             fi
 		fi
 	fi
-	
-	
-	# notice "--- Installed version: ${appversion}"
-	
-	# [[ -n "$newversion" ]] && notice "--- Newest version: ${newversion}"
-	
-	# if [[ "$appversion" == "$newversion" ]]; then
-    #     notice "--- Latest version installed."
-    # else
-    # # This is where it should write the app to the plist
-    #     queueLabel
-    # fi
 	
 }
 
