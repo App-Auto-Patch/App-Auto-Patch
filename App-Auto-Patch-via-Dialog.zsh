@@ -46,6 +46,14 @@
 #   Version 1.0.13, 09.16.2023 Robert Schroeder (@robjschroeder)
 #   - Fixed repo URL for swiftDialog
 #
+#   Version 1.0.14, 10.16.2023 Robert Schroeder (@robjschroeder)
+#   - Made file path changes
+#   - App Auto Patch version checking is now more accurate than before, if an app has an update available, it 
+#   will be written to the plist at /Library/Application Support/AppAutoPatch/
+#   - Some `Latest Versions` of apps cannot be identified during discovery. These apps will be added to the 
+#   plist and will be caught when Installomator goes to install the update. These will show that the latest version
+#   is already installed. 
+#
 ####################################################################################################
 
 ####################################################################################################
@@ -58,14 +66,14 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="1.0.12"
+scriptVersion="1.0.14"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
 scriptLog="${4:-"/var/log/com.company.log"}"                                    # Parameter 4: Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
 useOverlayIcon="${5:="true"}"                                                   # Parameter 5: Toggles swiftDialog to use an overlay icon [ true (default) | false ]
 interactiveMode="${6:="2"}"                                                     # Parameter 6: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) ]
-ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "microsoftonedrive-rollingout zoomgov googlechromeenterprise nudge")
+ignoredLabels="${7:="microsoftonedrive-rollingout zoomgov googlechrome googlechromeenterprise firefox firefox_da firefox_intl firefoxdevleoperedition firefoxesr firefoxesrpkg firefoxesr_intl firefoxpkg"}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "microsoftonedrive-rollingout zoomgov googlechromeenterprise nudge")
 requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "microsoftteams")
 outdatedOsAction="${9:-"/System/Library/CoreServices/Software Update.app"}"     # Parameter 9: Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system ugprades)
 
@@ -81,16 +89,16 @@ computerName=$(scutil --get ComputerName)
 ### Path variables ###
 
 installomatorPath=("/usr/local/Installomator/Installomator.sh")
-patchomatorPath="/usr/local/Installomator"
-fragmentsPath=("$patchomatorPath/fragments")
+appAutoPatchPath="/usr/local/Installomator"
+fragmentsPath=("$appAutoPatchPath/fragments")
 dialogPath="/usr/local/bin/dialog"
-dialogCommandFile=$(mktemp /var/tmp/dialog.patchomator.XXXXX)
+dialogCommandFile=$(mktemp /var/tmp/dialog.appAutoPatch.XXXXX)
 
 
 ### Configuration PLIST variables ###
 
 runDiscovery="true"
-patchomatorconfigFile=("/Library/Application Support/Patchomator/patchomator.plist")
+appAutoPatchConfigFile=("/Library/Application Support/AppAutoPatch/AppAutoPatch.plist")
 declare -A configArray=()
 ignoredLabelsArray=($(echo ${ignoredLabels}))
 requiredLabelsArray=($(echo ${requiredLabels}))
@@ -390,7 +398,7 @@ fatal() {
 ### Cleanup functions ###
 removeInstallomator() {
     updateScriptLog "${scriptFunctionalName}: Removing Installomator..."
-    rm -rf ${patchomatorPath}
+    rm -rf ${appAutoPatchPathPath}
 }
 
 # Kill a specified process (thanks, @grahampugh!)
@@ -560,7 +568,7 @@ checkInstallomator() {
         updateScriptLog "${scriptFunctionalName}: Installomator found, checking version..."
         if [ $($installomatorPath version | cut -d . -f 1) -lt 10 ]
         then
-            fatal "Installomator is installed, but is out of date. Versions prior to 10.0 function unpredictably with Patchomator. You can probably update it by running sudo $installomatorPath installomator"
+            fatal "Installomator is installed, but is out of date. Versions prior to 10.0 function unpredictably with App Auto Patch. You can probably update it by running sudo $installomatorPath installomator"
         fi
     fi    
     
@@ -577,14 +585,14 @@ downloadLatestLabels() {
     latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}') # remove quotes and comma from the returned string
     #eg "https://api.github.com/repos/Installomator/Installomator/tarball/v10.3"
     
-    tarPath="$patchomatorPath/installomator.latest.tar.gz"
+    tarPath="$appAutoPatchPath/installomator.latest.tar.gz"
     
     updateScriptLog "${scriptFunctionalName}: Downloading ${latestURL} to ${tarPath}"
     
-    curl -sSL -o "$tarPath" "$latestURL" || fatal "Unable to download. Check ${patchomatorPath} is writable or re-run as root."
+    curl -sSL -o "$tarPath" "$latestURL" || fatal "Unable to download. Check ${appAutoPatchPath} is writable or re-run as root."
     
-    updateScriptLog "${scriptFunctionalName}: Extracting ${tarPath} into ${patchomatorPath}"
-    tar -xz --include='*/fragments/*' -f "$tarPath" --strip-components 1 -C "$patchomatorPath" || fatal "Unable to extract ${tarPath}. Corrupt or incomplete download?"
+    updateScriptLog "${scriptFunctionalName}: Extracting ${tarPath} into ${appAutoPatchPath}"
+    tar -xz --include='*/fragments/*' -f "$tarPath" --strip-components 1 -C "$appAutoPatchPath" || fatal "Unable to extract ${tarPath}. Corrupt or incomplete download?"
     touch "${fragmentsPath}/labels/"
 }
 
@@ -594,12 +602,12 @@ checkLabels() {
     # use curl to get the labels - who needs git?
     if [[ ! -d "$fragmentsPath" ]]
     then
-        if [[ -w "$patchomatorPath" ]]
+        if [[ -w "$appAutoPatchPath" ]]
         then
             infoOut "Package labels not present at $fragmentsPath. Attempting to download from https://github.com/installomator/"
             downloadLatestLabels
         else 
-            fatal "Package labels not present and $patchomatorPath is not writable. Re-run patchomator with sudo to download and install them."
+            fatal "Package labels not present and $appAutoPatchPath is not writable. Re-run App Auto Patch with sudo to download and install them."
         fi
         
     else
@@ -607,12 +615,12 @@ checkLabels() {
         
         if [[ $labelsAge -gt 30 ]]
         then
-            if [[ -w "$patchomatorPath" ]]
+            if [[ -w "$appAutoPatchPath" ]]
             then
                 warning "Package labels are out of date. Last updated ${labelsAge} days ago. Attempting to download from https://github.com/installomator/"
                 downloadLatestLabels
             else
-                fatal "Package labels are out of date. Last updated ${labelsAge} days ago. Re-run patchomator with sudo to update them."
+                fatal "Package labels are out of date. Last updated ${labelsAge} days ago. Re-run App Auto Patch with sudo to update them."
                 
             fi
             
@@ -731,7 +739,7 @@ verifyApp() {
 		newversion=$(zsh << SCRIPT_EOF
 declare -A levels=(DEBUG 0 INFO 1 WARN 2 ERROR 3 REQ 4)
 currentUser=$currentUser
-source "$fragmentsPath/functions.sh"
+source "/usr/local/Installomator/fragments/functions.sh"
 ${current_label}
 echo "\$appNewVersion" 
 SCRIPT_EOF
@@ -756,28 +764,37 @@ SCRIPT_EOF
 			
 				configArray[$appPath]=$label_name
 				
-				/usr/libexec/PlistBuddy -c "set \":${appPath}\" ${label_name}" "$patchomatorconfigFile"
+				/usr/libexec/PlistBuddy -c "set \":${appPath}\" ${label_name}" "$appAutoPatchConfigFile"
 			fi
 		else
 			
 			configArray[$appPath]=$label_name
+            notice "--- Installed version: ${appversion}"
 
-			/usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$patchomatorconfigFile"
-
+            newversion1=$( echo "${newversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
+            appversion1=$( echo "${appversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
+            [[ -n "$newversion" ]] && notice "--- Newest version: ${newversion}"
+            if [[ "$appversion1" == "$newversion1" ]]; then
+                notice "--- Latest version installed."
+            else
+                /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
+                touch /Library/Application\ Support/AppAutoPatch/$appName-$newversion.txt
+                queueLabel
+            fi
 		fi
 	fi
 	
 	
-	notice "--- Installed version: ${appversion}"
+	# notice "--- Installed version: ${appversion}"
 	
-	[[ -n "$newversion" ]] && notice "--- Newest version: ${newversion}"
+	# [[ -n "$newversion" ]] && notice "--- Newest version: ${newversion}"
 	
-	if [[ "$appversion" == "$newversion" ]]
-	then
-		notice "--- Latest version installed."
-	else
-		queueLabel
-	fi
+	# if [[ "$appversion" == "$newversion" ]]; then
+    #     notice "--- Latest version installed."
+    # else
+    # # This is where it should write the app to the plist
+    #     queueLabel
+    # fi
 	
 }
 
@@ -795,31 +812,31 @@ queueLabel() {
 }
 
 if [[ "${runDiscovery}" == "true" ]]; then
-notice "Re-run discovery of installed applications at $patchomatorconfigFile"
-if [[ -f $patchomatorconfigFile ]]; then
-    rm -f $patchomatorconfigFile
+notice "Re-run discovery of installed applications at $appAutoPatchConfigFile"
+if [[ -f $appAutoPatchConfigFile ]]; then
+    rm -f $appAutoPatchConfigFile
 fi
 
-notice "No config file at $patchomatorconfigFile. Running discovery."
+notice "No config file at $appAutoPatchConfigFile. Running discovery."
 # Call the bouncing progress SwiftDialog window
 swiftDialogWriteWindow
 
 notice "Writing Config"
 
-infoOut "No config file at $patchomatorconfigFile. Creating one now."
-makePath "$patchomatorconfigFile"
+infoOut "No config file at $appAutoPatchConfigFile. Creating one now."
+makePath "$appAutoPatchConfigFile"
 
 
-/usr/libexec/PlistBuddy -c "clear dict" "${patchomatorconfigFile}"
-/usr/libexec/PlistBuddy -c 'add ":IgnoredLabels" array' "${patchomatorconfigFile}"
-/usr/libexec/PlistBuddy -c 'add ":RequiredLabels" array' "${patchomatorconfigFile}"
+/usr/libexec/PlistBuddy -c "clear dict" "${appAutoPatchConfigFile}"
+/usr/libexec/PlistBuddy -c 'add ":IgnoredLabels" array' "${appAutoPatchConfigFile}"
+/usr/libexec/PlistBuddy -c 'add ":RequiredLabels" array' "${appAutoPatchConfigFile}"
 
 # Populate Ingnored Labels
 updateScriptLog "${scriptFunctionalName}: Attempting to populate ignored labels"
 for ignoredLabel in "${ignoredLabelsArray[@]}"; do
     if [[ -f "${fragmentsPath}/labels/${ignoredLabel}.sh" ]]; then
         updateScriptLog "${scriptFunctionalName}: Writing ignored label $ignoredLabel to configuration plist"
-        /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"${ignoredLabel}\"" "${patchomatorconfigFile}"
+        /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"${ignoredLabel}\"" "${appAutoPatchConfigFile}"
     else
         notice "No such label ${ignoredLabel}"
     fi
@@ -830,7 +847,7 @@ updateScriptLog "${scriptFunctionalName}: Attempting to populate required labels
 for requiredLabel in "${requiredLabelsArray[@]}"; do
     if [[ -f "${fragmentsPath}/labels/${requiredLabel}.sh" ]]; then
         updateScriptLog "${scriptFunctionalName}: Writing required label ${requiredLabel} to configuration plist"
-        /usr/libexec/PlistBuddy -c "add \":RequiredLabels:\" string \"${requiredLabel}\"" "${patchomatorconfigFile}"
+        /usr/libexec/PlistBuddy -c "add \":RequiredLabels:\" string \"${requiredLabel}\"" "${appAutoPatchConfigFile}"
     else
         notice "No such label ${requiredLabel}"
     fi
@@ -855,7 +872,7 @@ current_label=""
 
 # MOAR Functions! miscellaneous pieces referenced in the occasional label
 # Needs to confirm that labels exist first.
-source "$fragmentsPath/functions.sh"
+source "/usr/local/Installomator/fragments/functions.sh"
 
 # for each .sh file in fragments/labels/ strip out the switch/case lines and any comments. 
 
@@ -921,11 +938,11 @@ completeSwiftDialogWrite
 
 fi
 
-labelsFromConfig=($(defaults read "$patchomatorconfigFile" | grep -e ';$' | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:]" | tr -s "[:space:]"))
+labelsFromConfig=($(defaults read "$appAutoPatchConfigFile" | grep -e ';$' | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:]" | tr -s "[:space:]"))
 
-ignoredLabelsFromConfig=($(defaults read "$patchomatorconfigFile" IgnoredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:]" | tr -s "[:space:]"))
+ignoredLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" IgnoredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:]" | tr -s "[:space:]"))
 
-requiredLabelsFromConfig=($(defaults read "$patchomatorconfigFile" RequiredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:]" | tr -s "[:space:]"))
+requiredLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" RequiredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:]" | tr -s "[:space:]"))
 
 ignoredLabelsArray+=($ignoredLabelsFromConfig)
 requiredLabelsArray+=($requiredLabelsFromConfig)
