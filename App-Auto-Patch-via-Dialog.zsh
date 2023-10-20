@@ -74,6 +74,7 @@
 #
 #   Version 2.0.0b5, 10.20.2023 Robert Schroeder (@robjschroeder)
 #   - AAP now uses it own directory in `/Library/Application Support` to store Installomator. This directory gets removed after processing (thanks for the suggestion @dan-snelson!)
+#   - Had to update some of the hardcoded Installomator paths. 
 #   
 # 
 ####################################################################################################
@@ -796,7 +797,7 @@ verifyApp() {
 		newversion=$(zsh << SCRIPT_EOF
 declare -A levels=(DEBUG 0 INFO 1 WARN 2 ERROR 3 REQ 4)
 currentUser=$currentUser
-source "/usr/local/Installomator/fragments/functions.sh"
+source "$fragmentsPath/functions.sh"
 ${current_label}
 echo "\$appNewVersion" 
 SCRIPT_EOF
@@ -908,7 +909,7 @@ if [[ "${runDiscovery}" == "true" ]]; then
             else
                 if [[ "${ignoredLabel}" == *"*"* ]]; then
                     notice "Ignoring all lables with $ignoredLabel"
-                    wildIgnored=( $(find /usr/local/Installomator/fragments/labels -name "$ignoredLabel") )
+                    wildIgnored=( $(find $fragmentsPath/labels -name "$ignoredLabel") )
                     for i in "${wildIgnored[@]}"; do
                         ignored=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
                         infoOut "Writing ignored label $ignored to configuration plist"
@@ -930,7 +931,7 @@ if [[ "${runDiscovery}" == "true" ]]; then
             else
                 if [[ "${requiredLabel}" == *"*"* ]]; then
                     notice "Requiring all labels with $requiredLabel"
-                    wildRequired=( $(find /usr/local/Installomator/fragments/labels -name "$requiredLabel") )
+                    wildRequired=( $(find $fragmentsPath/fragments/labels -name "$requiredLabel") )
                     for i in "${wildRequired[@]}"; do
                         required=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
                         infoOut "Writing required label $required to configuration plist"
