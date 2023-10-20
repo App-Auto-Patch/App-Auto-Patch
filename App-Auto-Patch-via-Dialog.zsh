@@ -72,9 +72,8 @@
 #   - Removed app version number from discovery dialog (to be added later as a verboseMode)
 #   - Various typo fixes
 #
-#
-#   TODO:
-#   Use AAP specific directory for Installomator, this will prevent the re-write or removal of custom or pre-installed Installomator
+#   Version 2.0.0b5, 10.20.2023 Robert Schroeder (@robjschroeder)
+#   - AAP now uses it own directory in `/Library/Application Support` to store Installomator. This directory gets removed after processing (thanks for the suggestion @dan-snelson!)
 #   
 # 
 ####################################################################################################
@@ -89,7 +88,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.0b4"
+scriptVersion="2.0.0b5"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -110,8 +109,9 @@ swiftDialogMinimumRequiredVersion="2.3.2.4726"					                # Minimum ver
 
 ### Path variables ###
 
-installomatorScript="/usr/local/Installomator/Installomator.sh"
-installomatorPath="/usr/local/Installomator"
+installomatorPath="/Library/Application Support/AppAutoPatch/Installomator"
+installomatorScript="$installomatorPath/Installomator.sh"
+
 fragmentsPath="$installomatorPath/fragments"
 
 ### Configuration PLIST variables ###
@@ -235,7 +235,7 @@ function currentLoggedInUser() {
 # Pre-flight Check: Logging Preamble
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-updateScriptLog "\n\n###\n# (${scriptVersion})\n###\n"
+updateScriptLog "\n\n###\n# ${scriptFunctionalName} (${scriptVersion})\n# https://techitout.xyz/app-auto-patch\n###\n"
 preFlight "Initiating …"
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -642,49 +642,37 @@ function swiftDialogUpdate(){
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 function checkInstallomator() {
-    
-    # check for existence of Installomator to enable installation of updates
+    # Latest version of Installomator and collateral will be downloaded to $installomatorPath defined above
+
+    # Does the $installomatorPath Exist or does it need to get created
+    if [ ! -d "${installomatorPath}" ]; then
+        notice "$installomatorPath does not exist, create it now"
+        mkdir "${installomatorPath}"
+    else
+        infoOut "AAP Installomator directory exists"
+    fi
+
     notice "Checking for Installomator.sh at $installomatorScript"
     
     if ! [[ -f $installomatorScript ]]; then
-
         warning "Installomator was not found at $installomatorScript"
         
-        infoOut "Attempting to download and install Installomator.sh at $installomatorScript"
-        
-        PKGurl=$(curl --silent --fail "https://api.github.com/repos/Installomator/Installomator/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
-        
-        # Expected Team ID of the downloaded PKG
-        expectedTeamID="JME5BW3F3R"
-        
-        tempDirectory=$( mktemp -d )
-        notice "Created working directory '$tempDirectory'"
-        
-        # Download the installer package
-        notice "Downloading Installomator package"
-        curl --location --silent "$PKGurl" -o "$tempDirectory/Installomator.pkg" || fatal "Download failed."
-        
-        # Verify the download
-        teamID=$(spctl -a -vv -t install "$tempDirectory/Installomator.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
-        notice "Team ID of downloaded package: $teamID"
-        
-        # Install the package, only if Team ID validates
-        if [ "$expectedTeamID" = "$teamID" ]
-        then
-            notice "Package verified. Installing package Installomator.pkg"
-            installer -pkg "$tempDirectory/Installomator.pkg" -target / > /dev/null 2>&1 || fatal "Installation failed. See /var/log/installer.log for details."
-        else
-            fatal "Package verification failed. TeamID does not match."
-        fi
-        
-        # Remove the temporary working directory when done
-        notice "Deleting working directory '$tempDirectory' and its contents"
-        rm -Rf "$tempDirectory"
-        
+        infoOut "Attempting to download Installomator.sh at $installomatorScript"
+
+        latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
+
+        tarPath="$installomatorPath/installomator.latest.tar.gz"
+
+        notice "Downloading ${latestURL} to ${tarPath}"
+
+        curl -sSL -o "$tarPath" "$latestURL" || fatal "Unable to download. Check ${installomatorPath} is writable or re-run as root."
+
+        notice "Extracting ${tarPath} into ${installomatorPath}"
+        tar -xz -f "$tarPath" --strip-components 1 -C "$installomatorPath" || fatal "Unable to extract ${tarPath}. Corrupt or incomplete download?"
     else
-        notice "Installomator found, checking version..."
+        notice "Installomator was found at $installomatorScript, checking version..."
         appNewVersion=$(curl -sLI "https://github.com/Installomator/Installomator/releases/latest" | grep -i "^location" | tr "/" "\n" | tail -1 | sed 's/[^0-9\.]//g')
-        appVersion="$(pkgutil --pkg-info-plist com.scriptingosx.Installomator 2>/dev/null | grep -A 1 pkg-version | tail -1 | sed -E 's/.*>([0-9.]*)<.*/\1/g')"
+        appVersion="$(cat $fragmentsPath/version.sh)"
         if [[ ${appVersion} -lt ${appNewVersion} ]]; then
             errorOut "Installomator is installed, but is out of date. Versions prior to 10.0 function unpredictably with App Auto Patch."
             infoOut "Removing previously installed Installomator version ($appVersion) and reinstalling with latest version ($appNewVersion)"
@@ -694,59 +682,16 @@ function checkInstallomator() {
         else
             infoOut "Installomator latest version ($appVersion) installed, continuing..."
         fi
-    fi     
+    fi
+
+    # Set Installomator script to production
+    notice "Setting Installomator script to production"
+    /usr/bin/sed -i.backup1 "s|DEBUG=1|DEBUG=0|g" $installomatorScript
+    sleep .2
+
 }
 
 checkInstallomator
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# Check Installomator App Labels
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-downloadLatestLabels() {
-
-    latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
-    
-    tarPath="$installomatorPath/installomator.latest.tar.gz"
-    
-    notice "Downloading ${latestURL} to ${tarPath}"
-    
-    curl -sSL -o "$tarPath" "$latestURL" || fatal "Unable to download. Check ${installomatorPath} is writable or re-run as root."
-    
-    notice "Extracting ${tarPath} into ${installomatorPath}"
-    tar -xz --include='*/fragments/*' -f "$tarPath" --strip-components 1 -C "$installomatorPath" || fatal "Unable to extract ${tarPath}. Corrupt or incomplete download?"
-    touch "${fragmentsPath}/labels/"
-}
-
-checkLabels() {
-    notice "Looking for labels in ${fragmentsPath}/labels/"
-    
-    if [[ ! -d "$fragmentsPath" ]]; then
-        if [[ -w "$installomatorPath" ]]; then
-            infoOut "Package labels not present at $fragmentsPath. Attempting to download from https://github.com/installomator/"
-            downloadLatestLabels
-        else 
-            fatal "Package labels not present and $installomatorPath is not writable. Re-run App Auto Patch with sudo to download and install them."
-        fi
-    else
-        labelsAge=$((($(date +%s) - $(stat -t %s -f %m -- "$fragmentsPath/labels")) / 86400))
-        
-        if [[ $labelsAge -gt 30 ]]; then
-            if [[ -w "$installomatorPath" ]]; then
-                warning "Package labels are out of date. Last updated ${labelsAge} days ago. Attempting to download from https://github.com/installomator/"
-                downloadLatestLabels
-            else
-                fatal "Package labels are out of date. Last updated ${labelsAge} days ago. Re-run App Auto Patch with sudo to update them."
-                
-            fi
-        else 
-            infoOut "Package labels installed. Last updated ${labelsAge} days ago."
-        fi
-    fi
-    
-}
-
-checkLabels
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Discovery of installed applications (thanks, @option8)
