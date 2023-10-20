@@ -28,16 +28,16 @@
 #   - Changed `useswiftdialog` variable to `interactiveMode`
 #   - Added variable `useOverlayIcon`
 #   - Moved scriptVersion to infotext on swiftDialog windows
-#   - Changed icon used for desktop computers to match platform (would like to grab model name and match accordingly: MacBook, Mac, Mac Mini, etc)
+#   - Changed icon used for desktop computers to match platform (would like to grab model name and match accordingly: MacBook, Mac, Mac Mini, etc.)
 #   - Changed `discovery` variable to `runDiscovery`
 #   - Changed repository to App-Auto-Patch and script name to App-Auto-Patch-via-Dialog.zsh
 #
 #   Version 1.0.10, 05.23.2023 Robert Schroeder (@robjschroeder)
-#   - Moved the creation of the overlay icon in the IF statement if useoverlayicon is set to true
+#   - Moved the creation of the overlay icon in the IF statement if useOverlayIcon is set to true
 #
 #   Version 1.0.11, 06.21.2023 Robert Schroeder (@robjschroeder)
-#   - Added more options for running siliently (Issue #3, thanks @beatlemike)
-#   - Commented out the Update count in List dialog infobox until accurate count can be used
+#   - Added more options for running silently (Issue #3, thanks @beatlemike)
+#   - Commented out the update count in List dialog infobox until accurate count can be used
 #
 #   Version 1.0.12, 06.29.2023 Robert Schroeder (@robjschroeder)
 #   - Added variables for computer name and macOS version (Issue #6, thanks @AndrewMBarnett)
@@ -57,7 +57,7 @@
 #   Version 2.0-beta2, 10.18.2023 Robert Schroeder (@robjschroeder)
 #   - Reworked workflow
 #   - Added an unattended exit of Dialog parameter. If set to `true` and `unattendedExitSeconds` is defined, the Dialog process will be killed after the duration. 
-#   - Added ability to add wildcards to ignoredLabels and requiredLabels
+#   - Added ability to add wildcards to ignoredLabels and requiredLabels (thanks, @jako)
 #   - Added a swiftDialogMinimumRequiredVersion variable
 #   - Updated minimum required OS for swiftDialog installation
 #   - Updated logging functions
@@ -65,6 +65,17 @@
 #   Version 2.0-beta3, 10.19.2023 Robert Schroeder (@robjschroeder)
 #   - Added plist created in /Library/Application Support/AppAutoPatch, this additional plist can be used to pull data from or build extension
 #   attributes for Jamf Pro
+#
+#   Version 2.0.0b4, 10.20.2023 Robert Schroeder (@robjschroeder)
+#   - Changed versioning schema from `0.0-beta0` to `0.0.0b0` (thanks, @dan-snelson)
+#   - Modified --infotext box, removed $scriptFunctionalName and `Version:` (thanks, @dan-snelson)
+#   - Removed app version number from discovery dialog (to be added later as a verboseMode)
+#   - Various typo fixes
+#
+#
+#   TODO:
+#   Use AAP specific directory for Installomator, this will prevent the re-write or removal of custom or pre-installed Installomator
+#   
 # 
 ####################################################################################################
 
@@ -78,7 +89,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0-beta3"
+scriptVersion="2.0.0b4"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -87,10 +98,10 @@ useOverlayIcon="${5:="true"}"                                                   
 interactiveMode="${6:="2"}"                                                     # Parameter 6: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) ]
 ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "firefox* zoomgov googlechromeenterprise nudge microsoft*")
 requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "githubdesktop")
-outdatedOsAction="${9:-"/System/Library/CoreServices/Software Update.app"}"     # Parameter 9: Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system ugprades)
+outdatedOsAction="${9:-"/System/Library/CoreServices/Software Update.app"}"     # Parameter 9: Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
 unattendedExit="${10:-"false"}"                                                 # Parameter 10: Unattended Exit [ true | false (default) ]
-unattendedExitSeconds="60"							# Number of seconds to wait until a kill Dialog command is sent
-swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDialog required to use workflow
+unattendedExitSeconds="60"							                            # Number of seconds to wait until a kill Dialog command is sent
+swiftDialogMinimumRequiredVersion="2.3.2.4726"					                # Minimum version of swiftDialog required to use workflow
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -139,10 +150,10 @@ fi
 # Operating System, Computer Model Name, etc.
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-computerName=$( /usr/sbin/scutil --get ComputerName )
-osVersion=$( /usr/bin/sw_vers -productVersion )
-osBuild=$( /usr/bin/sw_vers -buildVersion )
-osMajorVersion=$( /bin/echo "${osVersion}" | /usr/bin/awk -F '.' '{print $1}' )
+computerName=$( scutil --get ComputerName )
+osVersion=$( sw_vers -productVersion )
+osBuild=$( sw_vers -buildVersion )
+osMajorVersion=$( echo "${osVersion}" | awk -F '.' '{print $1}' )
 exitCode="0"
 
 ####################################################################################################
@@ -156,7 +167,7 @@ exitCode="0"
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 if [[ ! -f "${scriptLog}" ]]; then
-    /usr/bin/touch "${scriptLog}"
+    touch "${scriptLog}"
 fi
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -164,7 +175,7 @@ fi
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 function updateScriptLog() {
-    /bin/echo "${scriptFunctionalName}: $( /bin/date +%Y-%m-%d\ %H:%M:%S ) - ${1}" | /usr/bin/tee -a "${scriptLog}"
+    echo "${scriptFunctionalName}: $( date +%Y-%m-%d\ %H:%M:%S ) - ${1}" | tee -a "${scriptLog}"
 }
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -172,7 +183,7 @@ function updateScriptLog() {
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 function makePath() {
-    /bin/mkdir -p "$(sed 's/\(.*\)\/.*/\1/' <<< $1)" # && touch $1
+    mkdir -p "$(sed 's/\(.*\)\/.*/\1/' <<< $1)" # && touch $1
     updateScriptLog "Path made: $1"
 }
 
@@ -216,7 +227,7 @@ function quitOut(){
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 function currentLoggedInUser() {
-    loggedInUser=$( /bin/echo "show State:/Users/ConsoleUser" | /usr/sbin/scutil | /usr/bin/awk '/Name :/ { print $3 }' )
+    loggedInUser=$( echo "show State:/Users/ConsoleUser" | scutil | awk '/Name :/ { print $3 }' )
     preFlight "Current Logged-in User: ${loggedInUser}"
 }
 
@@ -266,13 +277,13 @@ until { [[ "${loggedInUser}" != "_mbsetupuser" ]] || [[ "${counter}" -gt "180" ]
 done
 
 loggedInUserFullname=$( id -F "${loggedInUser}" )
-loggedInUserFirstname=$( echo "$loggedInUserFullname" | sed -E 's/^.*, // ; s/([^ ]*).*/\1/' | sed 's/\(.\{25\}\).*/\1…/' | /usr/bin/awk '{print ( $0 == toupper($0) ? toupper(substr($0,1,1))substr(tolower($0),2) : toupper(substr($0,1,1))substr($0,2) )}' )
+loggedInUserFirstname=$( echo "$loggedInUserFullname" | sed -E 's/^.*, // ; s/([^ ]*).*/\1/' | sed 's/\(.\{25\}\).*/\1…/' | awk '{print ( $0 == toupper($0) ? toupper(substr($0,1,1))substr(tolower($0),2) : toupper(substr($0,1,1))substr($0,2) )}' )
 loggedInUserID=$( id -u "${loggedInUser}" )
 preFlight "Current Logged-in User First Name: ${loggedInUserFirstname}"
 preFlight "Current Logged-in User ID: ${loggedInUserID}"
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# Pre-flight Check: Validate Operating System Version Big Sur or later
+# Pre-flight Check: Validate Operating System Version Monterey or later
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
 # Since swiftDialog requires at least macOS 12 Monterey, first confirm the major OS version
@@ -306,7 +317,7 @@ caffeinate -dimsu -w $aapPID &
 function dialogInstall() {
 
     # Get the URL of the latest PKG From the Dialog GitHub repo
-    dialogURL=$(curl -L --silent --fail "https://api.github.com/repos/swiftDialog/swiftDialog/releases/latest" | /usr/bin/awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
+    dialogURL=$(curl -L --silent --fail "https://api.github.com/repos/swiftDialog/swiftDialog/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
 
     # Expected Team ID of the downloaded PKG
     expectedDialogTeamID="PWA5E9TQ59"
@@ -314,14 +325,14 @@ function dialogInstall() {
     preFlight "Installing swiftDialog..."
 
     # Create temporary working directory
-    workDirectory=$( /usr/bin/basename "$0" )
-    tempDirectory=$( /usr/bin/mktemp -d "/private/tmp/$workDirectory.XXXXXX" )
+    workDirectory=$( basename "$0" )
+    tempDirectory=$( mktemp -d "/private/tmp/$workDirectory.XXXXXX" )
 
     # Download the installer package
-    /usr/bin/curl --location --silent "$dialogURL" -o "$tempDirectory/Dialog.pkg"
+    curl --location --silent "$dialogURL" -o "$tempDirectory/Dialog.pkg"
 
     # Verify the download
-    teamID=$(/usr/sbin/spctl -a -vv -t install "$tempDirectory/Dialog.pkg" 2>&1 | /usr/bin/awk '/origin=/ {print $NF }' | tr -d '()')
+    teamID=$(spctl -a -vv -t install "$tempDirectory/Dialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
 
     # Install the package if Team ID validates
     if [[ "$expectedDialogTeamID" == "$teamID" ]]; then
@@ -341,7 +352,7 @@ function dialogInstall() {
     fi
 
     # Remove the temporary working directory when done
-    /bin/rm -Rf "$tempDirectory"
+    rm -Rf "$tempDirectory"
 
 }
 
@@ -391,7 +402,7 @@ preFlight "Complete"
 
 macOSproductVersion="$( sw_vers -productVersion )"
 macOSbuildVersion="$( sw_vers -buildVersion )"
-serialNumber=$( ioreg -rd1 -c IOPlatformExpertDevice | /usr/bin/awk -F'"' '/IOPlatformSerialNumber/{print $4}' )
+serialNumber=$( ioreg -rd1 -c IOPlatformExpertDevice | awk -F'"' '/IOPlatformSerialNumber/{print $4}' )
 timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
 dialogVersion=$( /usr/local/bin/dialog --version )
 
@@ -400,7 +411,7 @@ dialogVersion=$( /usr/local/bin/dialog --version )
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 dialogBinary="/usr/local/bin/dialog"
-dialogCommandFile=$( /usr/bin/mktemp /var/tmp/dialog.appAutoPatch.XXXXX )
+dialogCommandFile=$( mktemp /var/tmp/dialog.appAutoPatch.XXXXX )
 
 ####################################################################################################
 #
@@ -419,12 +430,12 @@ dialogListConfigurationOptions=(
     --moveable
     --button1text "Done"
     --button1disabled
-    --height 450
+    --height 500
     --width 650
     --position bottomright
     --progress
-    --infobox "#### Computer Name: #### \n\n $computerName \n\n #### macOS Version: #### \n\n $osVersion"
-    --infotext "${scriptFunctionalName}: Version $scriptVersion"
+    --infobox "#### Computer Name: #### \n\n $computerName \n\n #### macOS Version: #### \n\n $osVersion \n\n #### macOS Build: #### \n\n $osBuild "
+    --infotext "${scriptVersion}"
     --liststyle compact
     --titlefont size=18
     --messagefont size=11
@@ -559,7 +570,7 @@ function swiftDialogListWindow(){
     # If we are using SwiftDialog
     if [ ${interactiveMode} -ge 1 ]; then
         # Check if there's a valid logged in user:
-        currentUser=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | /usr/bin/awk '/Name :/ { print $3 }')
+        currentUser=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
         if [ "$currentUser" = "root" ] \
             || [ "$currentUser" = "loginwindow" ] \
             || [ "$currentUser" = "_mbsetupuser" ] \
@@ -641,7 +652,7 @@ function checkInstallomator() {
         
         infoOut "Attempting to download and install Installomator.sh at $installomatorScript"
         
-        PKGurl=$(curl --silent --fail "https://api.github.com/repos/Installomator/Installomator/releases/latest" | /usr/bin/awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
+        PKGurl=$(curl --silent --fail "https://api.github.com/repos/Installomator/Installomator/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
         
         # Expected Team ID of the downloaded PKG
         expectedTeamID="JME5BW3F3R"
@@ -654,7 +665,7 @@ function checkInstallomator() {
         curl --location --silent "$PKGurl" -o "$tempDirectory/Installomator.pkg" || fatal "Download failed."
         
         # Verify the download
-        teamID=$(spctl -a -vv -t install "$tempDirectory/Installomator.pkg" 2>&1 | /usr/bin/awk '/origin=/ {print $NF }' | tr -d '()')
+        teamID=$(spctl -a -vv -t install "$tempDirectory/Installomator.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
         notice "Team ID of downloaded package: $teamID"
         
         # Install the package, only if Team ID validates
@@ -694,7 +705,7 @@ checkInstallomator
 
 downloadLatestLabels() {
 
-    latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | /usr/bin/awk '{gsub(/[",]/,"")}{print $2}')
+    latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
     
     tarPath="$installomatorPath/installomator.latest.tar.gz"
     
@@ -790,7 +801,8 @@ PgetAppVersion() {
             infoOut "Found $appName version $appversion"
             
             if [ ${interactiveMode} -gt 1 ]; then
-                swiftDialogUpdate "message: Analyzing ${appName//.app/} ($appversion)"
+                # swiftDialogUpdate "message: Analyzing ${appName//.app/} ($appversion)"
+                swiftDialogUpdate "message: Analyzing ${appName//.app/}"
             fi
             
             notice "Label: $label_name"
@@ -942,7 +954,7 @@ if [[ "${runDiscovery}" == "true" ]]; then
     /usr/libexec/PlistBuddy -c 'add ":IgnoredLabels" array' "${appAutoPatchConfigFile}"
     /usr/libexec/PlistBuddy -c 'add ":RequiredLabels" array' "${appAutoPatchConfigFile}"
 
-    # Populate Ingnored Labels
+    # Populate Ignored Labels
         notice "Attempting to populate ignored labels"
         for ignoredLabel in "${ignoredLabelsArray[@]}"; do
             if [[ -f "${fragmentsPath}/labels/${ignoredLabel}.sh" ]]; then
@@ -1001,10 +1013,6 @@ if [[ "${runDiscovery}" == "true" ]]; then
     IFS=$'\n'
     in_label=0
     current_label=""
-
-    # # MOAR Functions! miscellaneous pieces referenced in the occasional label
-    # # Needs to confirm that labels exist first.
-    # source "/usr/local/Installomator/fragments/functions.sh"
 
     # for each .sh file in fragments/labels/ strip out the switch/case lines and any comments. 
 
