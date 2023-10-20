@@ -88,9 +88,9 @@ interactiveMode="${6:="2"}"                                                     
 ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "firefox* zoomgov googlechromeenterprise nudge microsoft*")
 requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "githubdesktop")
 outdatedOsAction="${9:-"/System/Library/CoreServices/Software Update.app"}"     # Parameter 9: Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system ugprades)
-unattendedExit="${10:-"true"}"                                                 # Parameter 10: Unattended Exit [ true | false (default) ]
-unattendedExitSeconds="60"
-swiftDialogMinimumRequiredVersion="2.3.2.4726"
+unattendedExit="${10:-"false"}"                                                 # Parameter 10: Unattended Exit [ true | false (default) ]
+unattendedExitSeconds="60"							# Number of seconds to wait until a kill Dialog command is sent
+swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDialog required to use workflow
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
