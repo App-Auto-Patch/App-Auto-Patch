@@ -17,7 +17,7 @@ AAP_plist="${AAP_folder}/AppAutoPatchStatus" # No trailing ".plist"
 if [[ -f "${AAP_plist}.plist" ]]; then
     aap_version=$(defaults read "${AAP_plist}" AAPVersion 2> /dev/null)
     [[ -n "${aap_version}" ]] && echo "<result>${aap_version}</result>"
-    [[ -z "${aap_version}" ]] && echo "<result>No super version number found.</result>"
+    [[ -z "${aap_version}" ]] && echo "<result>No AAP version number found.</result>"
 else
     echo "<result>No AAP preference file.</result>"
 fi
