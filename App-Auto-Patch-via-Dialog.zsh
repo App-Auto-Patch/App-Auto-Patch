@@ -647,11 +647,11 @@ function swiftDialogUpdate(){
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 if [ ! -d "${aapPath}" ]; then
-        notice "$aapPath does not exist, create it now"
+	notice "$aapPath does not exist, create it now"
         mkdir "${aapPath}"
-    else
-        infoOut "AAP path already exists, continuing..."
-    fi
+else
+	infoOut "AAP path already exists, continuing..."
+fi
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
