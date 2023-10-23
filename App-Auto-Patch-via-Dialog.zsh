@@ -75,6 +75,9 @@
 #   Version 2.0.0b5, 10.20.2023 Robert Schroeder (@robjschroeder)
 #   - AAP now uses it own directory in `/Library/Application Support` to store Installomator. This directory gets removed after processing (thanks for the suggestion @dan-snelson!)
 #   - Had to update some of the hardcoded Installomator paths. 
+#
+#   Version 2.0.0b6, 10.23.2023 Robert Schroeder (@robjschroeder)
+#   - Added a function to create the App Auto-Patch directory, if it doesn't already exist. ( /Library/Application Support/AppAutoPatch )
 #   
 # 
 ####################################################################################################
@@ -110,6 +113,7 @@ swiftDialogMinimumRequiredVersion="2.3.2.4726"					                # Minimum ver
 
 ### Path variables ###
 
+aapPath="/Library/Application Support/AppAutoPatch"
 installomatorPath="/Library/Application Support/AppAutoPatch/Installomator"
 installomatorScript="$installomatorPath/Installomator.sh"
 
@@ -637,6 +641,18 @@ function swiftDialogUpdate(){
     echo "$1" >> "$dialogCommandFile"
     # sleep 0.4
 }
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Create AppAutoPatch folder, if it doesn't exist
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+if [ ! -d "${aapPath}" ]; then
+        notice "$aapPath does not exist, create it now"
+        mkdir "${aapPath}"
+    else
+        infoOut "AAP path already exists, continuing..."
+    fi
+
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Check Installomator (thanks, @option8)
