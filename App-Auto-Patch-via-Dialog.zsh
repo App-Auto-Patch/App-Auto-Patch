@@ -78,8 +78,10 @@
 #
 #   Version 2.0.0b6, 10.23.2023 Robert Schroeder (@robjschroeder)
 #   - Added a function to create the App Auto-Patch directory, if it doesn't already exist. ( /Library/Application Support/AppAutoPatch )
-#   
-# 
+#
+#   Version 2.0.0b7, 10.23.2023 Andrew Barnett (@AndrewMBarnett)
+#   - Added a help message with variables for the update window. 
+#
 ####################################################################################################
 
 ####################################################################################################
@@ -412,6 +414,21 @@ timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
 dialogVersion=$( /usr/local/bin/dialog --version )
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# IT Support Variable
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+supportTeamName="Add IT Support"
+supportTeamPhone="Add IT Phone Number"
+supportTeamEmail="Add email"
+supportWebsite="Add IT Help site"
+#supportKB=""
+#supportTeamErrorKB=", and mention [${supportKB}](https://servicenow.company.com/support?id=kb_article_view&sysparm_article=${supportKB}#Failures)"
+#supportTeamHelpKB="\n- **Knowledge Base Article:** ${supportKB}"
+
+helpMessage="If you need assistance, please contact ${supportTeamName}:  \n- **Telephone:** ${supportTeamPhone}  \n- **Email:** ${supportTeamEmail}  \n- **Help Website:** ${supportWebsite}  \n\n**Computer Information:**  \n- **Operating System:**  $macOSproductVersion ($macOSbuildVersion)  \n- **Serial Number:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Started:** $timestamp"
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Dialog path and Command Files
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -439,6 +456,7 @@ dialogListConfigurationOptions=(
     --width 650
     --position bottomright
     --progress
+    --helpmessage "$helpMessage"
     --infobox "#### Computer Name: #### \n\n $computerName \n\n #### macOS Version: #### \n\n $osVersion \n\n #### macOS Build: #### \n\n $osBuild "
     --infotext "${scriptVersion}"
     --liststyle compact
