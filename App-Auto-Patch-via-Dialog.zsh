@@ -78,6 +78,13 @@
 #
 #   Version 2.0.0b6, 10.23.2023 Robert Schroeder (@robjschroeder)
 #   - Added a function to create the App Auto-Patch directory, if it doesn't already exist. ( /Library/Application Support/AppAutoPatch )
+#
+#   Version 2.0.0b7, 10.23.2023 Robert Schroeder (@robjschroeder)
+#   - Fixed some logic during discovery that prevented some apps from being queued. (Issue #14, thanks @Apfelpom)
+#   - Added more checks when determining available version vs installed version. Some Installomator app labels do not report an 
+#   accurate appNewVersion variable, those will be found in the logs as "[WARNING] --- Latest version could not be determined from Installomator app label"
+#   These apps will be queued regardless of having a properly updated app. [Line No. ~851-870]
+#   - With the added checks for versioning, if an app with a higher version is installed vs available version from Installomator, the app will not be queued. (thanks, @dan-snelson)
 #   
 # 
 ####################################################################################################
@@ -92,7 +99,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.0b6"
+scriptVersion="2.0.0b7"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -665,6 +672,7 @@ function checkInstallomator() {
     if [ ! -d "${installomatorPath}" ]; then
         notice "$installomatorPath does not exist, create it now"
         mkdir "${installomatorPath}"
+        chmod 777 "${installomatorPath}"
     else
         infoOut "AAP Installomator directory exists"
     fi
@@ -682,7 +690,7 @@ function checkInstallomator() {
 
         notice "Downloading ${latestURL} to ${tarPath}"
 
-        curl -sSL -o "$tarPath" "$latestURL" || fatal "Unable to download. Check ${installomatorPath} is writable or re-run as root."
+        curl -sSL -o "$tarPath" "$latestURL" || fatal "Unable to download. Check ${installomatorPath} is writable."
 
         notice "Extracting ${tarPath} into ${installomatorPath}"
         tar -xz -f "$tarPath" --strip-components 1 -C "$installomatorPath" || fatal "Unable to extract ${tarPath}. Corrupt or incomplete download?"
@@ -714,30 +722,20 @@ checkInstallomator
 # Discovery of installed applications (thanks, @option8)
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-PgetAppVersion() {
+function PgetAppVersion() {
 
     if [[ $packageID != "" ]]; then
         
         appversion="$(pkgutil --pkg-info-plist ${packageID} 2>/dev/null | grep -A 1 pkg-version | tail -1 | sed -E 's/.*>([0-9.]*)<.*/\1/g')"
         
-        if [[ $appversion != "" ]]; then
-            notice "Label: $label_name"
-            notice "--- found packageID $packageID installed"
-            
-            if [ ${interactiveMode} -gt 1 ]; then
-                swiftDialogUpdate "progresstext: Located ${label_name}"
-            fi
-            
-            InstalledLabelsArray+=( "$label_name" )
-            
-            return
-        fi
     fi
     
     if [ -z "$appName" ]; then
         # when not given derive from name
         appName="$name.app"
     fi
+    
+    notice "Searching for $appName"
     
     if [[ -d "/Applications/$appName" ]]; then
         applist="/Applications/$appName"
@@ -761,6 +759,7 @@ PgetAppVersion() {
             appversion=$(defaults read $installedAppPath/Contents/Info.plist $versionKey)
             
             infoOut "Found $appName version $appversion"
+            sleep .2
             
             if [ ${interactiveMode} -gt 1 ]; then
                 # swiftDialogUpdate "message: Analyzing ${appName//.app/} ($appversion)"
@@ -771,11 +770,10 @@ PgetAppVersion() {
             notice "--- found app at $installedAppPath"
             
             # Is current app from App Store
-            if [[ -d "$installedAppPath"/Contents/_MASReceipt ]]
-            then
+            if [[ -d "$installedAppPath"/Contents/_MASReceipt ]]; then
                 notice "--- $appName is from App Store. Skipping."
+                notice "Use the Installomator option \"IGNORE_APP_STORE_APPS=no\" to replace."
                 return
-                # Check disambiguation?
                 
             else
                 verifyApp $installedAppPath
@@ -784,10 +782,15 @@ PgetAppVersion() {
     fi
 }
 
-verifyApp() {
+function convertAppVersion() {
+    echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }';
+}
+
+function verifyApp() {
 	
 	appPath=$1
 	notice "Verifying: $appPath"
+    sleep .2
 	swiftDialogUpdate "progresstext: Verifying $appPath"
 	
 	# verify with spctl
@@ -798,6 +801,7 @@ verifyApp() {
 	if [[ $appVerifyStatus -ne 0 ]]
 	then
 		error "Error verifying $appPath"
+        error "Returned $appVerifyStatus"
 		return
 	fi
 	
@@ -845,12 +849,24 @@ SCRIPT_EOF
 			configArray[$appPath]=$label_name
             notice "--- Installed version: ${appversion}"
 
+
             newversion1=$( echo "${newversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
             appversion1=$( echo "${appversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
+
+            installedVer=$(convertAppVersion $appversion1)
+            availableVer=$(convertAppVersion $newversion1)
+
             [[ -n "$newversion" ]] && notice "--- Newest version: ${newversion}"
             if [[ "$appversion1" == "$newversion1" ]]; then
                 notice "--- Latest version installed."
+            elif [[ "$availableVer" == "0000000000" ]]; then
+                warning "--- Latest version could not be determined from Installomator app label"
+                /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
+                queueLabel
+            elif [[ "$installedVer" -ge "$availableVer" ]]; then
+                notice "--- Latest version installed"
             else
+                notice "--- Newer version available"
                 /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
                 queueLabel
             fi
@@ -858,16 +874,12 @@ SCRIPT_EOF
 	fi
 }
 
-queueLabel() {
+function queueLabel() {
     
     notice "Queueing $label_name"
-    
-    # add to queue if in install mode
-    if [[ $installmode ]]
-    then
-        labelsArray+="$label_name "
-        echo "$labelsArray"
-    fi
+
+    labelsArray+="$label_name "
+    infoOut "$labelsArray"
     
 }
 
@@ -1078,7 +1090,7 @@ warning "Be sure to double check the Installomator label for your app to verify"
 # Complete Installation Of Discovered Applications
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-doInstallations() {
+function doInstallations() {
     
     if [ "$BLOCKING_PROCESS_ACTION" ]; then
         InstallomatorOptions+="BLOCKING_PROCESS_ACTION=$BLOCKING_PROCESS_ACTION"
