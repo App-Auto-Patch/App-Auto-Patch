@@ -85,7 +85,15 @@
 #   accurate appNewVersion variable, those will be found in the logs as "[WARNING] --- Latest version could not be determined from Installomator app label"
 #   These apps will be queued regardless of having a properly updated app. [Line No. ~851-870]
 #   - With the added checks for versioning, if an app with a higher version is installed vs available version from Installomator, the app will not be queued. (thanks, @dan-snelson)
-#   
+#  
+#   Version 2.0.0b8, 10.24.2023 Robert Schroeder (@robjschroeder)
+#   - Removed the extra checks for versioning, this became more of a hinderance and caused issues. Better to queue the label and not need it than to not queue an app that needs an update. 
+#   Addresses issue #20 (thanks @Apfelpom)
+#   - If a wildcard is used for `IgnoredLabels` you can override an individual label by placing it in the required labels. 
+#   - Addressed issue where wildcards wrote additional plist entry 'Application'
+#   - Merged PR #21, Added a help message with variables for the update window. (thanks, @AndrewMBarnett)
+#   - Issue #13, `Discovering firefoxpkg_intl but installing firefoxpkgintl`, fixed.
+#
 # 
 ####################################################################################################
 
@@ -99,7 +107,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.0b7"
+scriptVersion="2.0.0b8"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -107,11 +115,12 @@ scriptLog="${4:-"/var/log/com.company.log"}"                                    
 useOverlayIcon="${5:="true"}"                                                   # Parameter 5: Toggles swiftDialog to use an overlay icon [ true (default) | false ]
 interactiveMode="${6:="2"}"                                                     # Parameter 6: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) ]
 ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "firefox* zoomgov googlechromeenterprise nudge microsoft*")
-requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "githubdesktop")
+requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 outdatedOsAction="${9:-"/System/Library/CoreServices/Software Update.app"}"     # Parameter 9: Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
 unattendedExit="${10:-"false"}"                                                 # Parameter 10: Unattended Exit [ true | false (default) ]
-unattendedExitSeconds="60"							                            # Number of seconds to wait until a kill Dialog command is sent
-swiftDialogMinimumRequiredVersion="2.3.2.4726"					                # Minimum version of swiftDialog required to use workflow
+# debugMode="${11:-"false"}"                                                    # Parameter 11: Reserving Parameter 11 for debug modes....
+unattendedExitSeconds="60"							# Number of seconds to wait until a kill Dialog command is sent
+swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDialog required to use workflow
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -166,7 +175,26 @@ computerName=$( scutil --get ComputerName )
 osVersion=$( sw_vers -productVersion )
 osBuild=$( sw_vers -buildVersion )
 osMajorVersion=$( echo "${osVersion}" | awk -F '.' '{print $1}' )
+macOSproductVersion="$( sw_vers -productVersion )"
+macOSbuildVersion="$( sw_vers -buildVersion )"
+serialNumber=$( ioreg -rd1 -c IOPlatformExpertDevice | awk -F'"' '/IOPlatformSerialNumber/{print $4}' )
+timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
+dialogVersion=$( /usr/local/bin/dialog --version )
 exitCode="0"
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# IT Support Variable (thanks, @AndrewMBarnett)
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+supportTeamName="Add IT Support"
+supportTeamPhone="Add IT Phone Number"
+supportTeamEmail="Add email"
+supportWebsite="Add IT Help site"
+#supportKB=""
+#supportTeamErrorKB=", and mention [${supportKB}](https://servicenow.company.com/support?id=kb_article_view&sysparm_article=${supportKB}#Failures)"
+#supportTeamHelpKB="\n- **Knowledge Base Article:** ${supportKB}"
+
+helpMessage="If you need assistance, please contact ${supportTeamName}:  \n- **Telephone:** ${supportTeamPhone}  \n- **Email:** ${supportTeamEmail}  \n- **Help Website:** ${supportWebsite}  \n\n**Computer Information:**  \n- **Operating System:**  $macOSproductVersion ($macOSbuildVersion)  \n- **Serial Number:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Started:** $timestamp"
 
 ####################################################################################################
 #
@@ -409,16 +437,6 @@ preFlight "Complete"
 ####################################################################################################
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# infobox-related variables
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-macOSproductVersion="$( sw_vers -productVersion )"
-macOSbuildVersion="$( sw_vers -buildVersion )"
-serialNumber=$( ioreg -rd1 -c IOPlatformExpertDevice | awk -F'"' '/IOPlatformSerialNumber/{print $4}' )
-timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
-dialogVersion=$( /usr/local/bin/dialog --version )
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Dialog path and Command Files
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -446,6 +464,7 @@ dialogListConfigurationOptions=(
     --width 650
     --position bottomright
     --progress
+    --helpmessage "$helpMessage"
     --infobox "#### Computer Name: #### \n\n $computerName \n\n #### macOS Version: #### \n\n $osVersion \n\n #### macOS Build: #### \n\n $osBuild "
     --infotext "${scriptVersion}"
     --liststyle compact
@@ -781,9 +800,12 @@ function PgetAppVersion() {
     fi
 }
 
-function convertAppVersion() {
-    echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }';
-}
+#
+# Commenting out function convertAppVersion (saving for later maybe)
+# function convertAppVersion() {
+#     echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }';
+#}
+#
 
 function verifyApp() {
 	
@@ -852,20 +874,29 @@ SCRIPT_EOF
             newversion1=$( echo "${newversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
             appversion1=$( echo "${appversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
 
-            installedVer=$(convertAppVersion $appversion1)
-            availableVer=$(convertAppVersion $newversion1)
-
             [[ -n "$newversion" ]] && notice "--- Newest version: ${newversion}"
+
+            # installedVer=$(convertAppVersion $appversion1)
+            # availableVer=$(convertAppVersion $newversion1)
+
+            # This is the math verison of the if, saving here to figure out later
+            # if [[ "$appversion1" == "$newversion1" ]]; then
+            #     notice "--- Latest version installed."
+            # elif [[ "$availableVer" == "0000000000" ]]; then
+            #     warning "--- Latest version could not be determined from Installomator app label"
+            #     /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
+            #     queueLabel
+            # elif [[ "$installedVer" -ge "$availableVer" ]]; then
+            #     notice "--- Latest version installed"
+            # else
+            #     notice "--- Newer version available"
+            #     /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
+            #     queueLabel
+            # fi
+
             if [[ "$appversion1" == "$newversion1" ]]; then
                 notice "--- Latest version installed."
-            elif [[ "$availableVer" == "0000000000" ]]; then
-                warning "--- Latest version could not be determined from Installomator app label"
-                /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
-                queueLabel
-            elif [[ "$installedVer" -ge "$availableVer" ]]; then
-                notice "--- Latest version installed"
             else
-                notice "--- Newer version available"
                 /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
                 queueLabel
             fi
@@ -939,9 +970,13 @@ if [[ "${runDiscovery}" == "true" ]]; then
                     wildIgnored=( $(find $fragmentsPath/labels -name "$ignoredLabel") )
                     for i in "${wildIgnored[@]}"; do
                         ignored=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
-                        infoOut "Writing ignored label $ignored to configuration plist"
-                        /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"${ignored}\"" "${appAutoPatchConfigFile}"
-                        ignoredLabelsArray+=($ignored)
+                        if [[ ! "$ignored" == "Application" ]]; then
+                            infoOut "Writing ignored label $ignored to configuration plist"
+                            /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"${ignored}\"" "${appAutoPatchConfigFile}"
+                            ignoredLabelsArray+=($ignored)
+                        else
+                            sleep .1
+                        fi
                     done 
                 else
                     notice "No such label ${ignoredLabel}"
@@ -958,11 +993,16 @@ if [[ "${runDiscovery}" == "true" ]]; then
             else
                 if [[ "${requiredLabel}" == *"*"* ]]; then
                     notice "Requiring all labels with $requiredLabel"
-                    wildRequired=( $(find $fragmentsPath/fragments/labels -name "$requiredLabel") )
+                    wildRequired=( $(find $fragmentsPath/labels -name "$requiredLabel") )
                     for i in "${wildRequired[@]}"; do
                         required=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
-                        infoOut "Writing required label $required to configuration plist"
-                        /usr/libexec/PlistBuddy -c "add \":RequiredLabels:\" string \"${required}\"" "${appAutoPatchConfigFile}"
+                        if [[ ! "$required" == "Application" ]]; then
+                            infoOut "Writing required label $required to configuration plist"
+                            /usr/libexec/PlistBuddy -c "add \":RequiredLabels:\" string \"${required}\"" "${appAutoPatchConfigFile}"
+                            requiredLabelsArray+=($required)
+                        else
+                            sleep .1
+                        fi
                     done
                 else
                     notice "No such label ${requiredLabel}"
