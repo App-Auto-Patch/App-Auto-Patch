@@ -81,19 +81,21 @@
 #
 #   Version 2.0.0b7, 10.23.2023 Robert Schroeder (@robjschroeder)
 #   - Fixed some logic during discovery that prevented some apps from being queued. (Issue #14, thanks @Apfelpom)
-#   - Added more checks when determining available version vs installed version. Some Installomator app labels do not report an 
-#   accurate appNewVersion variable, those will be found in the logs as "[WARNING] --- Latest version could not be determined from Installomator app label"
-#   These apps will be queued regardless of having a properly updated app. [Line No. ~851-870]
+#   - Added more checks when determining available version vs installed version. Some Installomator app labels do not report an accurate appNewVersion variable, those will be found in the logs as "[WARNING] --- Latest version could not be determined from Installomator app label". These apps will be queued regardless of having a properly updated app. [Line No. ~851-870]
 #   - With the added checks for versioning, if an app with a higher version is installed vs available version from Installomator, the app will not be queued. (thanks, @dan-snelson)
 #  
 #   Version 2.0.0b8, 10.24.2023 Robert Schroeder (@robjschroeder)
-#   - Removed the extra checks for versioning, this became more of a hinderance and caused issues. Better to queue the label and not need it than to not queue an app that needs an update. 
-#   Addresses issue #20 (thanks @Apfelpom)
+#   - Removed the extra checks for versioning, this became more of a hinderance and caused issues. Better to queue the label and not need it than to not queue an app that needs an update. Addresses issue #20 (thanks @Apfelpom)
 #   - If a wildcard is used for `IgnoredLabels` you can override an individual label by placing it in the required labels. 
 #   - Addressed issue where wildcards wrote additional plist entry 'Application'
 #   - Merged PR #21, Added a help message with variables for the update window. (thanks, @AndrewMBarnett)
 #   - Issue #13, `Discovering firefoxpkg_intl but installing firefoxpkgintl`, fixed.
 #
+#   Version 2.0.0b9, 10.24.2023 Robert Schroeder (@robjschroeder)
+#   - Worked on issue with number of updates not being correct
+#   - Fixed #15, Progress Bar Early Incrementation (thanks @dan-snelson)
+#   - Added warnings into logs that labels will not get replaced if there are multiple labels for the same app (i.e. zoom, zoomclient, zoomgov), please make sure you are targeting the appropriate labels for your org
+#   - Removed duplicate variables
 # 
 ####################################################################################################
 
@@ -107,14 +109,14 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.0b8"
+scriptVersion="2.0.0b9"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
 scriptLog="${4:-"/var/log/com.company.log"}"                                    # Parameter 4: Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
 useOverlayIcon="${5:="true"}"                                                   # Parameter 5: Toggles swiftDialog to use an overlay icon [ true (default) | false ]
 interactiveMode="${6:="2"}"                                                     # Parameter 6: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) ]
-ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "firefox* zoomgov googlechromeenterprise nudge microsoft*")
+ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
 requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 outdatedOsAction="${9:-"/System/Library/CoreServices/Software Update.app"}"     # Parameter 9: Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
 unattendedExit="${10:-"false"}"                                                 # Parameter 10: Unattended Exit [ true | false (default) ]
@@ -175,8 +177,6 @@ computerName=$( scutil --get ComputerName )
 osVersion=$( sw_vers -productVersion )
 osBuild=$( sw_vers -buildVersion )
 osMajorVersion=$( echo "${osVersion}" | awk -F '.' '{print $1}' )
-macOSproductVersion="$( sw_vers -productVersion )"
-macOSbuildVersion="$( sw_vers -buildVersion )"
 serialNumber=$( ioreg -rd1 -c IOPlatformExpertDevice | awk -F'"' '/IOPlatformSerialNumber/{print $4}' )
 timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
 dialogVersion=$( /usr/local/bin/dialog --version )
@@ -194,7 +194,7 @@ supportWebsite="Add IT Help site"
 #supportTeamErrorKB=", and mention [${supportKB}](https://servicenow.company.com/support?id=kb_article_view&sysparm_article=${supportKB}#Failures)"
 #supportTeamHelpKB="\n- **Knowledge Base Article:** ${supportKB}"
 
-helpMessage="If you need assistance, please contact ${supportTeamName}:  \n- **Telephone:** ${supportTeamPhone}  \n- **Email:** ${supportTeamEmail}  \n- **Help Website:** ${supportWebsite}  \n\n**Computer Information:**  \n- **Operating System:**  $macOSproductVersion ($macOSbuildVersion)  \n- **Serial Number:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Started:** $timestamp"
+helpMessage="If you need assistance, please contact ${supportTeamName}:  \n- **Telephone:** ${supportTeamPhone}  \n- **Email:** ${supportTeamEmail}  \n- **Help Website:** ${supportWebsite}  \n\n**Computer Information:**  \n- **Operating System:**  $osVersion ($obBuild)  \n- **Serial Number:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Started:** $timestamp"
 
 ####################################################################################################
 #
@@ -853,18 +853,22 @@ SCRIPT_EOF
 	if [[ ! " ${ignoredLabelsArray[@]} " =~ " ${label_name} " ]]; then
 		if [[ -n "$configArray[$appPath]" ]]; then
 			exists="$configArray[$appPath]"
+
+            notice "${appPath} already linked to label ${exists}, ignoring label ${label_name}"
+            warning "Modify your ingored label list if you are not getting the desired results"
+
+            return
 		
-			infoOut "${appPath} already linked to label ${exists}."
-			if [[ ${#noninteractive} -eq 1 ]]; then
-				echo "Skipping."
-				return
-			else
-				notice "Replacing label ${exists} with $label_name?"
+			# infoOut "${appPath} already linked to label ${exists}."
 			
-				configArray[$appPath]=$label_name
+			# notice "Replacing label ${exists} with $label_name?"
+			
+			# configArray[$appPath]=$label_name
 				
-				/usr/libexec/PlistBuddy -c "set \":${appPath}\" ${label_name}" "$appAutoPatchConfigFile"
-			fi
+			# /usr/libexec/PlistBuddy -c "set \":${appPath}\" ${label_name}" "$appAutoPatchConfigFile"
+            # echo $labelsArray
+            # sleep 10
+            # labelsArray=$(echo "$labelsArray" | sed s/"$label_name "//)
 		else
 			
 			configArray[$appPath]=$label_name
@@ -1157,7 +1161,7 @@ function doInstallations() {
     swiftDialogListWindow
     
     if [ ${interactiveMode} -ge 1 ]; then
-        queuedLabelsArrayLength="${#queuedLabelsArray[@]}"
+        queuedLabelsArrayLength="$numberOfUpdates"
         progressIncrementValue=$(( 100 / queuedLabelsArrayLength ))
         infoOut "Number of Updates: $queuedLabelsArrayLength"
         swiftDialogUpdate "infobox: **Updates:** $queuedLabelsArrayLength"
@@ -1213,7 +1217,8 @@ IFS=' '
 queuedLabelsArray=("${(@s/ /)labelsArray}")    
 
 if [[ ${#queuedLabelsArray[@]} -gt 0 ]]; then
-    infoOut "Passing ${#queuedLabelsArray[@]} labels to Installomator: $queuedLabelsArray"
+    numberOfUpdates=$((${#queuedLabelsArray[@]}-2))
+    infoOut "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
     doInstallations
 else
     infoOut "All apps up to date. Nothing to do." # inbox zero
