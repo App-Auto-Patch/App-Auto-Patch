@@ -86,7 +86,9 @@
 #   These apps will be queued regardless of having a properly updated app. [Line No. ~851-870]
 #   - With the added checks for versioning, if an app with a higher version is installed vs available version from Installomator, the app will not be queued. (thanks, @dan-snelson)
 #   
-# 
+#   Version 2.0.0b8, 10.23.2023 Andrew Barnett (@AndrewMBarnett)
+#   - Added a help message with variables for the update window. 
+#
 ####################################################################################################
 
 ####################################################################################################
@@ -99,7 +101,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.0b7"
+scriptVersion="2.0.0b8"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -419,6 +421,21 @@ timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
 dialogVersion=$( /usr/local/bin/dialog --version )
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# IT Support Variable
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+supportTeamName="Add IT Support"
+supportTeamPhone="Add IT Phone Number"
+supportTeamEmail="Add email"
+supportWebsite="Add IT Help site"
+#supportKB=""
+#supportTeamErrorKB=", and mention [${supportKB}](https://servicenow.company.com/support?id=kb_article_view&sysparm_article=${supportKB}#Failures)"
+#supportTeamHelpKB="\n- **Knowledge Base Article:** ${supportKB}"
+
+helpMessage="If you need assistance, please contact ${supportTeamName}:  \n- **Telephone:** ${supportTeamPhone}  \n- **Email:** ${supportTeamEmail}  \n- **Help Website:** ${supportWebsite}  \n\n**Computer Information:**  \n- **Operating System:**  $macOSproductVersion ($macOSbuildVersion)  \n- **Serial Number:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Started:** $timestamp"
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Dialog path and Command Files
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -446,6 +463,7 @@ dialogListConfigurationOptions=(
     --width 650
     --position bottomright
     --progress
+    --helpmessage "$helpMessage"
     --infobox "#### Computer Name: #### \n\n $computerName \n\n #### macOS Version: #### \n\n $osVersion \n\n #### macOS Build: #### \n\n $osBuild "
     --infotext "${scriptVersion}"
     --liststyle compact
