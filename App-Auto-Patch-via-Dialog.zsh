@@ -1237,7 +1237,7 @@ for label in $queuedLabelsArray; do
 countOfElementsArray+=($label)
 done
 
-if [[ ${#queuedLabelsArray[@]} -gt 0 ]]; then
+if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
     numberOfUpdates=$((${#countOfElementsArray[@]}))
     infoOut "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
     #numberOfListedItems=$((${#displayNames[@]}))
