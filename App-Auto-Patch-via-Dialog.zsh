@@ -96,6 +96,15 @@
 #   - Fixed #15, Progress Bar Early Incrementation (thanks @dan-snelson)
 #   - Added warnings into logs that labels will not get replaced if there are multiple labels for the same app (i.e. zoom, zoomclient, zoomgov), please make sure you are targeting the appropriate labels for your org
 #   - Removed duplicate variables
+#
+#   Version 2.0.0b10, 10.25.2023 Robert Schroeder (@robjschroeder)
+#   - Fixed osBuild variable
+#   - Added countOfElementsArray variable, this should accurately notify of the number of updates that AAP will attempt regardless of `runDiscovery` being true or false (Issue #4, thanks @beatlemike)
+#
+#
+#   TODO Before RC
+#   - Debug | Verbose Modes
+#   - Progress bar incrementation issues
 # 
 ####################################################################################################
 
@@ -109,7 +118,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.0b9"
+scriptVersion="2.0.0b10"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -621,7 +630,10 @@ function swiftDialogListWindow(){
                 displayNames+=(${currentDisplayName})
             fi
         done
-        touch "$dialogCommandFile"
+
+        if [[ ! -f $dialogCommandFile ]]; then
+            touch "$dialogCommandFile"
+        fi
         # Create our running swiftDialog window
         $dialogBinary \
         ${dialogListConfigurationOptions[@]} \
@@ -708,7 +720,7 @@ function checkInstallomator() {
 
         notice "Downloading ${latestURL} to ${tarPath}"
 
-        curl -sSL -o "$tarPath" "$latestURL" || fatal "Unable to download. Check ${installomatorPath} is writable."
+        curl -sSL -o "$tarPath" "$latestURL" || fatal "Unable to download. Check ${installomatorPath} is writable, or that you haven't hit Github's API rate limit."
 
         notice "Extracting ${tarPath} into ${installomatorPath}"
         tar -xz -f "$tarPath" --strip-components 1 -C "$installomatorPath" || fatal "Unable to extract ${tarPath}. Corrupt or incomplete download?"
@@ -1157,11 +1169,16 @@ function doInstallations() {
     # Count errors
     errorCount=0
     
+    # Clean Up Labels Array for counting
+    # labelsArrayClean=("${(@s/ /)labelsArray}")
+
+    
+
     # Create our main "list" swiftDialog Window
     swiftDialogListWindow
     
     if [ ${interactiveMode} -ge 1 ]; then
-        queuedLabelsArrayLength="$numberOfUpdates"
+        queuedLabelsArrayLength=$((${#countOfElementsArray[@]}))
         progressIncrementValue=$(( 100 / queuedLabelsArrayLength ))
         infoOut "Number of Updates: $queuedLabelsArrayLength"
         swiftDialogUpdate "infobox: **Updates:** $queuedLabelsArrayLength"
@@ -1214,11 +1231,16 @@ function doInstallations() {
 oldIFS=$IFS
 IFS=' '
 
-queuedLabelsArray=("${(@s/ /)labelsArray}")    
+queuedLabelsArray=("${(@s/ /)labelsArray}")
+
+for label in $queuedLabelsArray; do
+countOfElementsArray+=($label)
+done
 
 if [[ ${#queuedLabelsArray[@]} -gt 0 ]]; then
-    numberOfUpdates=$((${#queuedLabelsArray[@]}-2))
+    numberOfUpdates=$((${#countOfElementsArray[@]}))
     infoOut "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
+    #numberOfListedItems=$((${#displayNames[@]}))
     doInstallations
 else
     infoOut "All apps up to date. Nothing to do." # inbox zero
