@@ -101,10 +101,13 @@
 #   - Fixed osBuild variable
 #   - Added countOfElementsArray variable, this should accurately notify of the number of updates that AAP will attempt regardless of `runDiscovery` being true or false (Issue #4, thanks @beatlemike)
 #
-#
-#   TODO Before RC
-#   - Debug | Verbose Modes
-#   - Progress bar incrementation issues
+#   Version 2.0.0b11, 10.28.2023 Robert Schroeder (@robjschroeder)
+#   - Progress bar sets to 0 when updates begin
+#   - Added option to set title shown to end-user customizable (thanks @wacko)
+#   - Added option to keep Installomator if desired (thanks @wacko)
+#   - By default, swiftDialog is now ignored since the PreFlight will install as a pre-requisite (thanks @wacko)
+#   - Added Verbose Mode (Adds additional logging)
+#   - Added Deubg mode (Turns Installomator to DEBUG 2, does not install or remove applications)
 # 
 ####################################################################################################
 
@@ -118,7 +121,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.0b10"
+scriptVersion="2.0.0b11"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -129,9 +132,11 @@ ignoredLabels="${7:=""}"                                                        
 requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 outdatedOsAction="${9:-"/System/Library/CoreServices/Software Update.app"}"     # Parameter 9: Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
 unattendedExit="${10:-"false"}"                                                 # Parameter 10: Unattended Exit [ true | false (default) ]
-# debugMode="${11:-"false"}"                                                    # Parameter 11: Reserving Parameter 11 for debug modes....
+debugMode="${11:-"false"}"                                                    	# Parameter 11: Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
+
 unattendedExitSeconds="60"							# Number of seconds to wait until a kill Dialog command is sent
 swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDialog required to use workflow
+removeInstallomatorPath="true"                                                  # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -143,7 +148,6 @@ swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDia
 aapPath="/Library/Application Support/AppAutoPatch"
 installomatorPath="/Library/Application Support/AppAutoPatch/Installomator"
 installomatorScript="$installomatorPath/Installomator.sh"
-
 fragmentsPath="$installomatorPath/fragments"
 
 ### Configuration PLIST variables ###
@@ -161,7 +165,17 @@ BLOCKING_PROCESS_ACTION="prompt_user"
 NOTIFY="silent"
 LOGO="appstore"
 
-### Other variables ###
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Custom Branding, Overlay Icon, etc
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+### App Title ###
+
+# If you desire to customize `App Auto-Patch` to be named something else
+
+appTitle="App Auto-Patch"
+
+### Desktop/Laptop Icon ###
 
 # Set icon based on whether the Mac is a desktop or laptop
 if system_profiler SPPowerDataType | grep -q "Battery Power"; then
@@ -169,6 +183,8 @@ if system_profiler SPPowerDataType | grep -q "Battery Power"; then
 else
     icon="SF=desktopcomputer.and.arrow.down,weight=regular,colour1=gray,colour2=red"
 fi
+
+### Overlay Icon ###
 
 # Create `overlayicon` from Self Service's custom icon (thanks, @meschwartz!)
 if [[ "$useOverlayIcon" == "true" ]]; then
@@ -242,6 +258,18 @@ function preFlight() {
 
 function notice() {
         updateScriptLog "[NOTICE] $1"
+}
+
+function debugVerbose() {
+    if [[ "$debugMode" == "verbose" ]]; then
+        updateScriptLog "[DEBUG VERBOSE] $1"
+    fi
+}
+
+function debug() {
+    if [[ "$debugMode" == "true" ]]; then
+        updateScriptLog "[DEBUG] $1"
+    fi
 }
 
 function infoOut() {
@@ -363,6 +391,8 @@ caffeinate -dimsu -w $aapPID &
 # Pre-flight Check: Validate / install swiftDialog (Thanks big bunches, @acodega!)
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+
+
 function dialogInstall() {
 
     # Get the URL of the latest PKG From the Dialog GitHub repo
@@ -452,6 +482,16 @@ preFlight "Complete"
 dialogBinary="/usr/local/bin/dialog"
 dialogCommandFile=$( mktemp /var/tmp/dialog.appAutoPatch.XXXXX )
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Reflect Debug Mode in `infotext` (i.e., bottom, left-hand corner of each dialog)
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+case ${debugMode} in
+    "true"      ) infoTextScriptVersion="DEBUG MODE | Dialog: v${dialogVersion} • ${scriptFunctionalName}: v${scriptVersion}" ;;
+    "verbose"   ) infoTextScriptVersion="VERBOSE DEBUG MODE | Dialog: v${dialogVersion} • ${scripFunctionalName}: v${scriptVersion}" ;;
+    "false"     ) infoTextScriptVersion="${scriptVersion}" ;;
+esac
+
 ####################################################################################################
 #
 # List dialog
@@ -463,7 +503,7 @@ dialogCommandFile=$( mktemp /var/tmp/dialog.appAutoPatch.XXXXX )
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 dialogListConfigurationOptions=(
-    --title "${scriptFunctionalName}"
+    --title "${appTitle}"
     --message "Updating the following apps …"
     --commandfile "$dialogCommandFile"
     --moveable
@@ -475,7 +515,7 @@ dialogListConfigurationOptions=(
     --progress
     --helpmessage "$helpMessage"
     --infobox "#### Computer Name: #### \n\n $computerName \n\n #### macOS Version: #### \n\n $osVersion \n\n #### macOS Build: #### \n\n $osBuild "
-    --infotext "${scriptVersion}"
+    --infotext "${infoTextScriptVersion}"
     --liststyle compact
     --titlefont size=18
     --messagefont size=11
@@ -495,7 +535,7 @@ dialogListConfigurationOptions=(
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 dialogWriteConfigurationOptions=(
-    --title "${scriptFunctionalName}"
+    --title "${appTitle}"
     --message "Analyzing installed apps …"
     --icon "$icon"
     --overlayicon "$overlayicon"
@@ -537,8 +577,20 @@ function killProcess() {
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 function removeInstallomator() {
-    notice "Removing Installomator..."
+
+    if [[ "$removeInstallomatorPath" == "true" ]]; then
+        infoOut "Removing Installomator..."
+        rm -rf ${installomatorPath}
+    else
+        infoOut "Installomator removal set to false, continuing"
+    fi
+}
+
+removeInstallomatorOutDated() {
+
+    infoOut "Removing Installomator..."
     rm -rf ${installomatorPath}
+
 }
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -675,7 +727,7 @@ function completeSwiftDialogWrite(){
 }
 
 function swiftDialogUpdate(){
-    infoOut "Update swiftDialog: $1" 
+    debugVerbose "Update swiftDialog: $1" 
     echo "$1" >> "$dialogCommandFile"
     # sleep 0.4
 }
@@ -684,11 +736,13 @@ function swiftDialogUpdate(){
 # Create AppAutoPatch folder, if it doesn't exist
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+infoOut "Checking for $aapPath"
+
 if [ ! -d "${aapPath}" ]; then
-	notice "$aapPath does not exist, create it now"
-        mkdir "${aapPath}"
+	debugVerbose "$aapPath does not exist, create it now"
+    mkdir "${aapPath}"
 else
-	infoOut "AAP path already exists, continuing..."
+	debugVerbose "$aapPath already exists, continuing..."
 fi
 
 
@@ -697,17 +751,17 @@ fi
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 function checkInstallomator() {
-    # Latest version of Installomator and collateral will be downloaded to $installomatorPath defined above
 
+    # Latest version of Installomator and collateral will be downloaded to $installomatorPath defined above
     # Does the $installomatorPath Exist or does it need to get created
     if [ ! -d "${installomatorPath}" ]; then
-        notice "$installomatorPath does not exist, create it now"
+        debugVerbose "$installomatorPath does not exist, create it now"
         mkdir "${installomatorPath}"
     else
-        infoOut "AAP Installomator directory exists"
+        debugVerbose "AAP Installomator directory exists"
     fi
 
-    notice "Checking for Installomator.sh at $installomatorScript"
+    debugVerbose "Checking for Installomator.sh at $installomatorScript"
     
     if ! [[ -f $installomatorScript ]]; then
         warning "Installomator was not found at $installomatorScript"
@@ -718,12 +772,17 @@ function checkInstallomator() {
 
         tarPath="$installomatorPath/installomator.latest.tar.gz"
 
-        notice "Downloading ${latestURL} to ${tarPath}"
+        debugVerbose "Downloading ${latestURL} to ${tarPath}"
 
         curl -sSL -o "$tarPath" "$latestURL" || fatal "Unable to download. Check ${installomatorPath} is writable, or that you haven't hit Github's API rate limit."
 
-        notice "Extracting ${tarPath} into ${installomatorPath}"
+        debugVerbose "Extracting ${tarPath} into ${installomatorPath}"
         tar -xz -f "$tarPath" --strip-components 1 -C "$installomatorPath" || fatal "Unable to extract ${tarPath}. Corrupt or incomplete download?"
+        
+        sleep .2
+
+        rm -rf $installomatorPath/*.tar.gz
+
     else
         notice "Installomator was found at $installomatorScript, checking version..."
         appNewVersion=$(curl -sLI "https://github.com/Installomator/Installomator/releases/latest" | grep -i "^location" | tr "/" "\n" | tail -1 | sed 's/[^0-9\.]//g')
@@ -731,7 +790,7 @@ function checkInstallomator() {
         if [[ ${appVersion} -lt ${appNewVersion} ]]; then
             errorOut "Installomator is installed, but is out of date. Versions prior to 10.0 function unpredictably with App Auto Patch."
             infoOut "Removing previously installed Installomator version ($appVersion) and reinstalling with latest version ($appNewVersion)"
-            removeInstallomator
+            removeInstallomatorOutDated
             sleep .2
             checkInstallomator
         else
@@ -739,14 +798,24 @@ function checkInstallomator() {
         fi
     fi
 
-    # Set Installomator script to production
-    notice "Setting Installomator script to production"
-    /usr/bin/sed -i.backup1 "s|DEBUG=1|DEBUG=0|g" $installomatorScript
-    sleep .2
-
 }
 
+infoOut "Checking for Installomator Pre-Requisite"
+
 checkInstallomator
+
+# Set Installomator script to production
+if [[ "$debugMode" == "true" ]]; then
+    debug "Setting Installomator to Debug Mode"
+    /usr/bin/sed -i.backup1 "s|DEBUG=1|DEBUG=2|g" $installomatorScript
+    sleep .2
+else
+    infoOut "Setting Installomator to Production Mode"
+    /usr/bin/sed -i.backup1 "s|DEBUG=1|DEBUG=0|g" $installomatorScript
+    sleep .2
+fi
+
+infoOut "Installomator Pre-Requisite Complete"
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Discovery of installed applications (thanks, @option8)
@@ -765,7 +834,7 @@ function PgetAppVersion() {
         appName="$name.app"
     fi
     
-    notice "Searching for $appName"
+    debugVerbose "Searching for $appName"
     
     if [[ -d "/Applications/$appName" ]]; then
         applist="/Applications/$appName"
@@ -792,8 +861,11 @@ function PgetAppVersion() {
             sleep .2
             
             if [ ${interactiveMode} -gt 1 ]; then
-                # swiftDialogUpdate "message: Analyzing ${appName//.app/} ($appversion)"
-                swiftDialogUpdate "message: Analyzing ${appName//.app/}"
+                if [[ "$debugMode" == "true" || "$debugMode" == "verbose" ]]; then
+                    swiftDialogUpdate "message: Analyzing ${appName//.app/} ($appversion)"
+                else
+                    swiftDialogUpdate "message: Analyzing ${appName//.app/}"
+                fi
             fi
             
             notice "Label: $label_name"
@@ -841,7 +913,7 @@ function verifyApp() {
 	if [ "$expectedTeamID" != "$teamID" ]
 	then
 		error "Error verifying $appPath"
-		notice "Team IDs do not match: expected: $expectedTeamID, found $teamID"
+		warning "Team IDs do not match: expected: $expectedTeamID, found $teamID"
 		return
 	else
 		
@@ -937,13 +1009,15 @@ function queueLabel() {
 # AAPLastRun
 # AAPDiscovery
 
+infoOut "Checking for $appAutoPatchStatusConfigFile"
+
 if [[ ! -f $appAutoPatchStatusConfigFile ]]; then
-    notice "Status configuration profile does  not exist, creating now..."
+    debugVerbose "AAP Status configuration profile does  not exist, creating now..."
     timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
     defaults write $appAutoPatchStatusConfigFile AAPVersion -string "$scriptVersion"
     defaults write $appAutoPatchStatusConfigFile AAPLastRun -date "$timestamp"
 else
-    notice "Status configuration already exists, continuing..."
+    debugVerbose "AAP Status configuration already exists, continuing..."
     timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
     defaults write $appAutoPatchStatusConfigFile AAPVersion -string "$scriptVersion"
     defaults write $appAutoPatchStatusConfigFile AAPLastRun -date "$timestamp"
@@ -975,19 +1049,19 @@ if [[ "${runDiscovery}" == "true" ]]; then
     /usr/libexec/PlistBuddy -c 'add ":RequiredLabels" array' "${appAutoPatchConfigFile}"
 
     # Populate Ignored Labels
-        notice "Attempting to populate ignored labels"
+        infoOut "Attempting to populate ignored labels"
         for ignoredLabel in "${ignoredLabelsArray[@]}"; do
             if [[ -f "${fragmentsPath}/labels/${ignoredLabel}.sh" ]]; then
-                infoOut "Writing ignored label $ignoredLabel to configuration plist"
+                debugVerbose "Writing ignored label $ignoredLabel to configuration plist"
                 /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"${ignoredLabel}\"" "${appAutoPatchConfigFile}"
             else
                 if [[ "${ignoredLabel}" == *"*"* ]]; then
-                    notice "Ignoring all lables with $ignoredLabel"
+                    debugVerbose "Ignoring all lables with $ignoredLabel"
                     wildIgnored=( $(find $fragmentsPath/labels -name "$ignoredLabel") )
                     for i in "${wildIgnored[@]}"; do
                         ignored=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
                         if [[ ! "$ignored" == "Application" ]]; then
-                            infoOut "Writing ignored label $ignored to configuration plist"
+                            debugVerbose "Writing ignored label $ignored to configuration plist"
                             /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"${ignored}\"" "${appAutoPatchConfigFile}"
                             ignoredLabelsArray+=($ignored)
                         else
@@ -995,25 +1069,25 @@ if [[ "${runDiscovery}" == "true" ]]; then
                         fi
                     done 
                 else
-                    notice "No such label ${ignoredLabel}"
+                    debugVerbose "No such label ${ignoredLabel}"
                 fi
             fi
         done
 
         # Populate Required Labels
-        notice "Attempting to populate required labels"
+        infoOut "Attempting to populate required labels"
         for requiredLabel in "${requiredLabelsArray[@]}"; do
             if [[ -f "${fragmentsPath}/labels/${requiredLabel}.sh" ]]; then
-                infoOut "Writing required label ${requiredLabel} to configuration plist"
+                debugVerbose "Writing required label ${requiredLabel} to configuration plist"
                 /usr/libexec/PlistBuddy -c "add \":RequiredLabels:\" string \"${requiredLabel}\"" "${appAutoPatchConfigFile}"
             else
                 if [[ "${requiredLabel}" == *"*"* ]]; then
-                    notice "Requiring all labels with $requiredLabel"
+                    debugVerbose "Requiring all labels with $requiredLabel"
                     wildRequired=( $(find $fragmentsPath/labels -name "$requiredLabel") )
                     for i in "${wildRequired[@]}"; do
                         required=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
                         if [[ ! "$required" == "Application" ]]; then
-                            infoOut "Writing required label $required to configuration plist"
+                            debugVerbose "Writing required label $required to configuration plist"
                             /usr/libexec/PlistBuddy -c "add \":RequiredLabels:\" string \"${required}\"" "${appAutoPatchConfigFile}"
                             requiredLabelsArray+=($required)
                         else
@@ -1021,7 +1095,7 @@ if [[ "${runDiscovery}" == "true" ]]; then
                         fi
                     done
                 else
-                    notice "No such label ${requiredLabel}"
+                    debugVerbose "No such label ${requiredLabel}"
                 fi
             fi
         done
@@ -1043,7 +1117,14 @@ if [[ "${runDiscovery}" == "true" ]]; then
     in_label=0
     current_label=""
 
+    # Ignore swiftDialog as it should already be installed. This is to reduce issues re-downloading swiftDialog
+
+    /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"swiftdialog\"" "${appAutoPatchConfigFile}"
+    ignoredLabelsArray+=("swiftdialog")
+
     # for each .sh file in fragments/labels/ strip out the switch/case lines and any comments. 
+
+    infoOut "Running discovery of installed applications"
 
     for labelFragment in "$fragmentsPath"/labels/*.sh; do 
         
@@ -1051,7 +1132,7 @@ if [[ "${runDiscovery}" == "true" ]]; then
         labelFile="${labelFile%.*}"
         
         if [[ $ignoredLabelsArray =~ ${labelFile} ]]; then
-            notice "Ignoring label $labelFile."
+            debugVerbose "Ignoring label $labelFile."
             continue # we're done here. Move along.
         fi
         
@@ -1180,7 +1261,6 @@ function doInstallations() {
     if [ ${interactiveMode} -ge 1 ]; then
         queuedLabelsArrayLength=$((${#countOfElementsArray[@]}))
         progressIncrementValue=$(( 100 / queuedLabelsArrayLength ))
-        infoOut "Number of Updates: $queuedLabelsArrayLength"
         swiftDialogUpdate "infobox: **Updates:** $queuedLabelsArrayLength"
     fi
 
@@ -1188,7 +1268,7 @@ function doInstallations() {
     for label in $queuedLabelsArray
     do
         infoOut "Installing ${label}..."
-        swiftDialogUpdate "progress: increment ${progressIncrementValue}"
+        # swiftDialogUpdate "progress: increment ${progressIncrementValue}"
         
         # Use built in swiftDialog Installomator integration options (if swiftDialog is being used)
         swiftDialogOptions=()
@@ -1207,6 +1287,8 @@ function doInstallations() {
 
         fi
         
+        swiftDialogUpdate "progress: increment 0"
+
         # Run Installomator
         ${installomatorScript} ${label} ${InstallomatorOptions} ${swiftDialogOptions[@]}
         if [ $? != 0 ]; then
@@ -1214,6 +1296,7 @@ function doInstallations() {
             let errorCount++
         fi
         let i++
+        swiftDialogUpdate "progress: increment ${progressIncrementValue}"
     done
     
     notice "Errors: $errorCount"
