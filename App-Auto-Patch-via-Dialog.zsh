@@ -103,9 +103,9 @@
 #
 #   Version 2.0.0b11, 10.28.2023 Robert Schroeder (@robjschroeder)
 #   - Progress bar sets to 0 when updates begin
-#   - Added option to set title shown to end-user customizable (thanks @wacko)
-#   - Added option to keep Installomator if desired (thanks @wacko)
-#   - By default, swiftDialog is now ignored since the PreFlight will install as a pre-requisite (thanks @wacko)
+#   - Added option to set title shown to end-user customizable (thanks @wakco)
+#   - Added option to keep Installomator if desired (thanks @wakco)
+#   - By default, swiftDialog is now ignored since the PreFlight will install as a pre-requisite (thanks @wakco)
 #   - Added Verbose Mode (Adds additional logging)
 #   - Added Deubg mode (Turns Installomator to DEBUG 2, does not install or remove applications)
 # 
