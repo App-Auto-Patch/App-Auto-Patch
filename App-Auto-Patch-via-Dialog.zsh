@@ -108,6 +108,13 @@
 #   - By default, swiftDialog is now ignored since the PreFlight will install as a pre-requisite (thanks @wakco)
 #   - Added Verbose Mode (Adds additional logging)
 #   - Added Deubg mode (Turns Installomator to DEBUG 2, does not install or remove applications)
+#
+#   Version 2.0.0b12, 10.30.2023 Robert Schroeder (@robjschroeder)
+#   - Cleaned up some additional GUI items (thanks @dan-snelson)
+#   - Team website shown in help message is now a hyperlink (thanks @dan-snelson)
+#   - Changing progress bar to continous bouncing bar until we can accurately control the progress incrementation (if you'd like to re-enable, uncomment lines 1299 & 1308 ( swiftDialogUpdate "progress: increment ... )
+#   - Number of updates should now show in the infobox
+#
 # 
 ####################################################################################################
 
@@ -121,7 +128,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.0b11"
+scriptVersion="2.0.0b12"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -214,12 +221,13 @@ exitCode="0"
 supportTeamName="Add IT Support"
 supportTeamPhone="Add IT Phone Number"
 supportTeamEmail="Add email"
-supportWebsite="Add IT Help site"
+supportTeamWebsite="Add IT Help site"
+supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
 #supportKB=""
 #supportTeamErrorKB=", and mention [${supportKB}](https://servicenow.company.com/support?id=kb_article_view&sysparm_article=${supportKB}#Failures)"
 #supportTeamHelpKB="\n- **Knowledge Base Article:** ${supportKB}"
 
-helpMessage="If you need assistance, please contact ${supportTeamName}:  \n- **Telephone:** ${supportTeamPhone}  \n- **Email:** ${supportTeamEmail}  \n- **Help Website:** ${supportWebsite}  \n\n**Computer Information:**  \n- **Operating System:**  $osVersion ($osBuild)  \n- **Serial Number:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Started:** $timestamp"
+helpMessage="If you need assistance, please contact ${supportTeamName}:  \n- **Telephone:** ${supportTeamPhone}  \n- **Email:** ${supportTeamEmail}  \n- **Help Website:** ${supportTeamHyperlink}  \n\n**Computer Information:**  \n- **Operating System:**  $osVersion ($osBuild)  \n- **Serial Number:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Started:** $timestamp"
 
 ####################################################################################################
 #
@@ -509,12 +517,12 @@ dialogListConfigurationOptions=(
     --moveable
     --button1text "Done"
     --button1disabled
-    --height 500
+    --height 600
     --width 650
     --position bottomright
     --progress
     --helpmessage "$helpMessage"
-    --infobox "#### Computer Name: #### \n\n $computerName \n\n #### macOS Version: #### \n\n $osVersion \n\n #### macOS Build: #### \n\n $osBuild "
+    --infobox "#### Computer Name: #### \n\n $computerName \n\n #### macOS Version: #### \n\n $osVersion \n\n #### macOS Build: #### \n\n $osBuild \n\n "
     --infotext "${infoTextScriptVersion}"
     --liststyle compact
     --titlefont size=18
@@ -896,7 +904,7 @@ function verifyApp() {
 	appPath=$1
 	notice "Verifying: $appPath"
     sleep .2
-	swiftDialogUpdate "progresstext: Verifying $appPath"
+	swiftDialogUpdate "progresstext: $appPath"
 	
 	# verify with spctl
 	appVerify=$(spctl -a -vv "$appPath" 2>&1 )
@@ -1259,9 +1267,10 @@ function doInstallations() {
     swiftDialogListWindow
     
     if [ ${interactiveMode} -ge 1 ]; then
+        sleep 1
         queuedLabelsArrayLength=$((${#countOfElementsArray[@]}))
         progressIncrementValue=$(( 100 / queuedLabelsArrayLength ))
-        swiftDialogUpdate "infobox: **Updates:** $queuedLabelsArrayLength"
+        swiftDialogUpdate "infobox: + **Updates:** $queuedLabelsArrayLength"
     fi
 
     i=0
@@ -1287,7 +1296,7 @@ function doInstallations() {
 
         fi
         
-        swiftDialogUpdate "progress: increment 0"
+        # swiftDialogUpdate "progress: increment 0"
 
         # Run Installomator
         ${installomatorScript} ${label} ${InstallomatorOptions} ${swiftDialogOptions[@]}
@@ -1296,7 +1305,7 @@ function doInstallations() {
             let errorCount++
         fi
         let i++
-        swiftDialogUpdate "progress: increment ${progressIncrementValue}"
+        # swiftDialogUpdate "progress: increment ${progressIncrementValue}"
     done
     
     notice "Errors: $errorCount"
