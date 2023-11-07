@@ -9,15 +9,23 @@ Big shoutout to: @option8, @BigMacAdmin, and @dan-snelson! Thanks for all your h
 # Screenshots
 App Auto-Patch running discovery:
 
-<img width="652" alt="Screenshot 2023-05-18 at 9 57 34 AM" src="https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/dc32b13e-cf86-4ed7-a98c-5a33bb84dd7f">
+![Screenshot 2023-10-30 at 11 56 15 AM](https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/5804c14a-b79c-45bf-b91e-2fc022077740)
+
 
 App Auto-Patch running updates:
 
-<img width="762" alt="Screenshot 2023-05-18 at 9 56 35 AM" src="https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/aa7cb284-ecbb-47fe-bff6-9214d5e562c4">
+![Screenshot 2023-10-30 at 12 00 26 PM](https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/5de4a82d-cadd-4187-bd26-e27df0620af8)
+
+
+App Auto-Patch Help Message:
+
+![Screenshot 2023-10-30 at 12 00 37 PM](https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/7f5f8c77-4356-4e83-b547-d8affa8403d2)
+
 
 App Auto-Patch completed:
 
-<img width="762" alt="Screenshot 2023-05-18 at 10 06 34 AM" src="https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/847d4e9c-114a-4b5e-baab-b4d57db2987c">
+![Screenshot 2023-10-30 at 12 03 07 PM](https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/b4e3ec8d-8c72-44c0-b57f-6f73c3dd62ab)
+
 
 # Why Build This
 This script was built off the same idea as the Patchomator project where a majority of this code came from. A requirement for my use included an easily deployable script from Jamf Pro without having to install multiple dependancies on an end-user's computer. Originally this was a forked repo from Patchomator but has become it's own repo hosted here. 
