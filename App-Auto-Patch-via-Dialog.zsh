@@ -115,6 +115,8 @@
 #   - Changing progress bar to continous bouncing bar until we can accurately control the progress incrementation (if you'd like to re-enable, uncomment lines 1299 & 1308 ( swiftDialogUpdate "progress: increment ... )
 #   - Number of updates should now show in the infobox
 #
+#   Version 2.0.0rc1, 11.07.2023 Robert Schroeder (@robjschroeder)
+#   - Adjusting all references of `MacAdmins Slack)` to `MacAdmins Slack )` in an effor to fix the Slack label coming up as `Asana` (thanks @TechTrekkie)
 # 
 ####################################################################################################
 
@@ -128,7 +130,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.0b12"
+scriptVersion="2.0.0rc1"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -817,9 +819,13 @@ if [[ "$debugMode" == "true" ]]; then
     debug "Setting Installomator to Debug Mode"
     /usr/bin/sed -i.backup1 "s|DEBUG=1|DEBUG=2|g" $installomatorScript
     sleep .2
+    /usr/bin/sed -i.backup1 "s|MacAdmins Slack)|MacAdmins Slack )|g" $installomatorScript
+    sleep .2
 else
     infoOut "Setting Installomator to Production Mode"
     /usr/bin/sed -i.backup1 "s|DEBUG=1|DEBUG=0|g" $installomatorScript
+    sleep .2
+    /usr/bin/sed -i.backup1 "s|MacAdmins Slack)|MacAdmins Slack )|g" $installomatorScript
     sleep .2
 fi
 
@@ -1270,6 +1276,7 @@ function doInstallations() {
         sleep 1
         queuedLabelsArrayLength=$((${#countOfElementsArray[@]}))
         progressIncrementValue=$(( 100 / queuedLabelsArrayLength ))
+	sleep 1
         swiftDialogUpdate "infobox: + **Updates:** $queuedLabelsArrayLength"
     fi
 
