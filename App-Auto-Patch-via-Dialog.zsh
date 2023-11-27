@@ -136,7 +136,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
 scriptLog="${4:-"/var/log/com.company.log"}"                                    # Parameter 4: Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
 useOverlayIcon="${5:="true"}"                                                   # Parameter 5: Toggles swiftDialog to use an overlay icon [ true (default) | false ]
-interactiveMode="${6:="2"}"                                                     # Parameter 6: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) ]
+interactiveMode="${6:="1"}"                                                     # Parameter 6: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) ]
 ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
 requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 outdatedOsAction="${9:-"/System/Library/CoreServices/Software Update.app"}"     # Parameter 9: Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
@@ -146,6 +146,8 @@ debugMode="${11:-"false"}"                                                    	#
 unattendedExitSeconds="60"							# Number of seconds to wait until a kill Dialog command is sent
 swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDialog required to use workflow
 removeInstallomatorPath="true"                                                  # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
+maxDeferrals="3"                                                                # Number of times a user is allowed to defer before forced to intall updates. Disabled will not display this prompt
+deferralTimer=86400 #86400 = 24 hours                                           # Time given to user to respond to deferral prompt if enabled
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -1327,6 +1329,85 @@ function doInstallations() {
 
 }
 
+function checkDeferral() {
+    
+    if [[ $maxDeferrals == "Disabled" || $maxDeferrals == "disabled" ]]; then
+        notice "Deferral workflow disabled, moving on to Installs"
+    else
+    
+    defaults write com.AppAutoPatch.Deferral defaultDeferrals $maxDeferrals
+    notice "Max Deferrals set to $maxDeferrals"
+    
+    
+    ##Calculate remaining deferrals
+    ##Check the Plist and find remaining deferrals from prior executions
+    remainingDeferrals=$(defaults read com.AppAutoPatch.Deferral remainingDeferrals)
+    ##Check that remainingDeferrals isn't empty (aka pulled back an empty value), if so set it to $maxDeferrals
+    if [ -z $remainingDeferrals ]; then
+        defaults write com.AppAutoPatch.Deferral remainingDeferrals $maxDeferrals
+        remainingDeferrals=$maxDeferrals
+        notice "Deferral has not yet been set. Setting to Max Deferral count and pulling back remainingDeferral value."
+    fi
+    ##Check if $remainingDeferrals returns a nonzero string. (Ensuring it is already set)
+    if [ -n "$remainingDeferrals" ]; then
+        notice "Remaining Deferral value of $remainingDeferrals is already set. Continuing"
+    else
+        if [[ $remainingDeferrals -le $maxDeferrals ]]; then
+            deferral=$remainingDeferrals
+            notice "Remaining Deferrals was less than Max. Continuing."
+        else
+            deferral=$maxDeferrals
+            notice "Deferral set back to Max Deferrals."
+        fi
+    fi
+    
+    
+    
+    if [[ $remainingDeferrals -gt 0 ]]; then
+        infobuttontext="Defer"
+    else
+        infobuttontext="Max Deferrals Reached"
+    fi
+    
+    
+    notice "There are $remainingDeferrals deferrals left"
+    
+    #--height ${dialogheight} \
+    #--iconsize ${iconsize} \
+    message="There are $numberOfUpdates application(s) that require updates\n\n \
+You have $remainingDeferrals deferral(s) remaining."
+    
+        $dialogBinary --title "${appTitle}" \
+        --icon "$icon" \
+        --overlayicon "$overlayicon" \
+        --message "${message}" \
+        --infobuttontext "$infobuttontext" \
+        --button1text "Continue" \
+        --position bottomright \
+        --quitoninfo \
+        --moveable \
+        --small \
+        --quitkey k \
+        --titlefont size=18 \
+        --messagefont size=15 \
+        --height 280 \
+        --timer $deferralTimer
+    
+    
+    if [[ $? == 3 ]] && [[ $remainingDeferrals -gt 0 ]]; then
+        
+        remainingDeferrals=$(( $remainingDeferrals - 1 ))
+        defaults write com.AppAutoPatch.Deferral remainingDeferrals $remainingDeferrals
+        notice "There are $remainingDeferrals deferrals left"
+        quitScript
+    else
+        notice "Resetting Deferrals and proceeding to Installations"
+        defaults write com.AppAutoPatch.Deferral remainingDeferrals $maxDeferrals
+        
+    fi
+    fi
+}
+
 oldIFS=$IFS
 IFS=' '
 
@@ -1338,6 +1419,7 @@ done
 
 if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
     numberOfUpdates=$((${#countOfElementsArray[@]}))
+    checkDeferral
     infoOut "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
     #numberOfListedItems=$((${#displayNames[@]}))
     doInstallations
