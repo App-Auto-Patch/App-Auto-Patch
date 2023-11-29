@@ -123,7 +123,7 @@
 #
 #   Version 2.0.0rc1-B, 11.29.2023 Andrew Spokes (@techtrekkie)
 #   - Changed deferral plist to use the aapPath folder to facilitate creating an EA to populate remaining deferrals in Jamf
-#   - Changed deferral timeout behavior to automatically defer if the timer runs out and there are remaining deferrals
+#   - Added deferralTimerAction to indicate whether the default action when the timer expires is to Defer or continue with installs
 # 
 ####################################################################################################
 
@@ -155,6 +155,7 @@ swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDia
 removeInstallomatorPath="true"                                                  # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
 maxDeferrals="3"                                                                # Number of times a user is allowed to defer before forced to intall updates. A value of "Disabled" will not display the deferral prompt
 deferralTimer=3600                                                              # Time given to user to respond to deferral prompt if enabled
+deferralTimerAction="Defer"                                                     # What happens when the deferral timer expires [ Defer | Continue ]
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -1409,18 +1410,33 @@ You have $remainingDeferrals deferral(s) remaining."
         --timer $deferralTimer
     
     
-    if [[ $? == 3 && $remainingDeferrals -gt 0 || $? == 4 && $remainingDeferrals -gt 0 ]]; then
+    dialogOutput=$?
         
-        remainingDeferrals=$(( $remainingDeferrals - 1 ))
-        defaults write $aapAutoPatchDeferralFile remainingDeferrals $remainingDeferrals
-        notice "There are $remainingDeferrals deferrals left"
-        quitScript
-    else
-        notice "Resetting Deferrals and proceeding to Installations"
-        defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
-        
+        if [[ $dialogOutput == 3 && $remainingDeferrals -gt 0 ]] ; then
+            
+            remainingDeferrals=$(( $remainingDeferrals - 1 ))
+            defaults write $aapAutoPatchDeferralFile remainingDeferrals $remainingDeferrals
+            notice "There are $remainingDeferrals deferrals left"
+            exit 0
+        elif [[ $dialogOutput == 4 && $remainingDeferrals -gt 0 ]] ; then
+            if [[ $deferralTimerAction == "Defer" ]]; then
+                notice "Timer expired and action set to Defer... Adjusting remaining deferrals"
+                remainingDeferrals=$(( $remainingDeferrals - 1 ))
+                defaults write $aapAutoPatchDeferralFile remainingDeferrals $remainingDeferrals
+                notice "There are $remainingDeferrals deferrals left"
+                exit 0
+            else
+                notice "Timer Expired and Action not set to Defer... Resetting Deferrals and moving to Installation step"
+                defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
+            fi
+            
+        else
+            notice "Resetting Deferrals and moving to Installation step"
+            defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
+            
+        fi
     fi
-    fi
+
 }
 
 oldIFS=$IFS
