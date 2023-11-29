@@ -120,6 +120,10 @@
 #
 #   Version 2.0.0rc1-A, 11.27.2023 Andrew Spokes (@techtrekkie)
 #   - Added the ability to allow user to defer installing updates using the 'maxDeferrals' variable. A value of 'disabled' will not display the deferral prompt
+#
+#   Version 2.0.0rc1-B, 11.29.2023 Andrew Spokes (@techtrekkie)
+#   - Changed deferral plist to use the aapPath folder to facilitate creating an EA to populate remaining deferrals in Jamf
+#   - Changed deferral timeout behavior to automatically defer if the timer runs out and there are remaining deferrals
 # 
 ####################################################################################################
 
@@ -133,13 +137,13 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.0rc1-A"
+scriptVersion="2.0.0rc1-B"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
 scriptLog="${4:-"/var/log/com.company.log"}"                                    # Parameter 4: Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
 useOverlayIcon="${5:="true"}"                                                   # Parameter 5: Toggles swiftDialog to use an overlay icon [ true (default) | false ]
-interactiveMode="${6:="2"}"                                                     # Parameter 6: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) ]
+interactiveMode="${6:="1"}"                                                     # Parameter 6: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) ]
 ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
 requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 outdatedOsAction="${9:-"/System/Library/CoreServices/Software Update.app"}"     # Parameter 9: Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
@@ -169,6 +173,7 @@ fragmentsPath="$installomatorPath/fragments"
 runDiscovery="true"
 appAutoPatchConfigFile="/Library/Application Support/AppAutoPatch/AppAutoPatch.plist"
 appAutoPatchStatusConfigFile="/Library/Application Support/AppAutoPatch/AppAutoPatchStatus.plist"
+aapAutoPatchDeferralFile="/Library/Application Support/AppAutoPatch/AppAutoPatchDeferrals.plist"
 declare -A configArray=()
 ignoredLabelsArray=($(echo ${ignoredLabels}))
 requiredLabelsArray=($(echo ${requiredLabels}))
@@ -1338,16 +1343,23 @@ function checkDeferral() {
         notice "Deferral workflow disabled, moving on to Installs"
     else
     
-    defaults write com.AppAutoPatch.Deferral defaultDeferrals $maxDeferrals
+    if [[ ! -f $aapAutoPatchDeferralFile ]]; then
+            echo "AAP Status configuration profile does  not exist, creating now..."
+            defaults write $aapAutoPatchDeferralFile AAPDefaultDeferrals "$maxDeferrals"
+        else
+            echo "AAP Status configuration already exists, continuing..."
+            defaults write $aapAutoPatchDeferralFile AAPDefaultDeferrals "$maxDeferrals"
+        fi
+
     notice "Max Deferrals set to $maxDeferrals"
     
     
     ##Calculate remaining deferrals
     ##Check the Plist and find remaining deferrals from prior executions
-    remainingDeferrals=$(defaults read com.AppAutoPatch.Deferral remainingDeferrals)
+    remainingDeferrals=$(defaults read $aapAutoPatchDeferralFile remainingDeferrals)
     ##Check that remainingDeferrals isn't empty (aka pulled back an empty value), if so set it to $maxDeferrals
     if [ -z $remainingDeferrals ]; then
-        defaults write com.AppAutoPatch.Deferral remainingDeferrals $maxDeferrals
+        defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
         remainingDeferrals=$maxDeferrals
         notice "Deferral has not yet been set. Setting to Max Deferral count and pulling back remainingDeferral value."
     fi
@@ -1397,15 +1409,15 @@ You have $remainingDeferrals deferral(s) remaining."
         --timer $deferralTimer
     
     
-    if [[ $? == 3 ]] && [[ $remainingDeferrals -gt 0 ]]; then
+    if [[ $? == 3 && $remainingDeferrals -gt 0 || $? == 4 && $remainingDeferrals -gt 0 ]]; then
         
         remainingDeferrals=$(( $remainingDeferrals - 1 ))
-        defaults write com.AppAutoPatch.Deferral remainingDeferrals $remainingDeferrals
+        defaults write $aapAutoPatchDeferralFile remainingDeferrals $remainingDeferrals
         notice "There are $remainingDeferrals deferrals left"
         quitScript
     else
         notice "Resetting Deferrals and proceeding to Installations"
-        defaults write com.AppAutoPatch.Deferral remainingDeferrals $maxDeferrals
+        defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
         
     fi
     fi
