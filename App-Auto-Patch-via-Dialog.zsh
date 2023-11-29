@@ -124,6 +124,7 @@
 #   Version 2.0.0rc1-B, 11.29.2023 Andrew Spokes (@techtrekkie)
 #   - Changed deferral plist to use the aapPath folder to facilitate creating an EA to populate remaining deferrals in Jamf
 #   - Added deferralTimerAction to indicate whether the default action when the timer expires is to Defer or continue with installs
+#   - Moved deferral reset to after installation step to confirm the user completed the process without skipping it (force shutdown/reboot)
 # 
 ####################################################################################################
 
@@ -1426,14 +1427,11 @@ You have $remainingDeferrals deferral(s) remaining."
                 notice "There are $remainingDeferrals deferrals left"
                 exit 0
             else
-                notice "Timer Expired and Action not set to Defer... Resetting Deferrals and moving to Installation step"
-                defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
+                notice "Timer Expired and Action not set to Defer... Moving to Installation step"
             fi
             
         else
-            notice "Resetting Deferrals and moving to Installation step"
-            defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
-            
+            notice "Moving to Installation step"
         fi
     fi
 
@@ -1454,6 +1452,8 @@ if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
     infoOut "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
     #numberOfListedItems=$((${#displayNames[@]}))
     doInstallations
+    infoOut "Installs Complete... Resetting Deferrals"
+    defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
 else
     infoOut "All apps up to date. Nothing to do." # inbox zero
     removeInstallomator 
