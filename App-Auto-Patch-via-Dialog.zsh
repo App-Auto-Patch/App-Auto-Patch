@@ -118,7 +118,7 @@
 #   Version 2.0.0rc1, 11.07.2023 Robert Schroeder (@robjschroeder)
 #   - Adjusting all references of `MacAdmins Slack)` to `MacAdmins Slack )` in an effor to fix the Slack label coming up as `Asana` (thanks @TechTrekkie)
 #
-#   Version 2.0.0rc2, 11.27.2023 Andrew Spokes (@techtrekkie)
+#   Version 2.0.0rc1-A, 11.27.2023 Andrew Spokes (@techtrekkie)
 #   - Added the ability to allow user to defer installing updates using the 'maxDeferrals' variable. A value of 'disabled' will not display the deferral prompt
 # 
 ####################################################################################################
@@ -133,7 +133,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.0rc1"
+scriptVersion="2.0.0rc1-A"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
