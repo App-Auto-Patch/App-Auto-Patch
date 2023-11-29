@@ -117,6 +117,9 @@
 #
 #   Version 2.0.0rc1, 11.07.2023 Robert Schroeder (@robjschroeder)
 #   - Adjusting all references of `MacAdmins Slack)` to `MacAdmins Slack )` in an effor to fix the Slack label coming up as `Asana` (thanks @TechTrekkie)
+#
+#   Version 2.0.0rc2, 11.27.2023 Andrew Spokes (@techtrekkie)
+#   - Added the ability to allow user to defer installing updates using the 'maxDeferrals' variable. A value of 'disabled' will not display the deferral prompt
 # 
 ####################################################################################################
 
@@ -136,7 +139,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
 scriptLog="${4:-"/var/log/com.company.log"}"                                    # Parameter 4: Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
 useOverlayIcon="${5:="true"}"                                                   # Parameter 5: Toggles swiftDialog to use an overlay icon [ true (default) | false ]
-interactiveMode="${6:="1"}"                                                     # Parameter 6: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) ]
+interactiveMode="${6:="2"}"                                                     # Parameter 6: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) ]
 ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
 requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 outdatedOsAction="${9:-"/System/Library/CoreServices/Software Update.app"}"     # Parameter 9: Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
@@ -146,8 +149,8 @@ debugMode="${11:-"false"}"                                                    	#
 unattendedExitSeconds="60"							# Number of seconds to wait until a kill Dialog command is sent
 swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDialog required to use workflow
 removeInstallomatorPath="true"                                                  # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
-maxDeferrals="3"                                                                # Number of times a user is allowed to defer before forced to intall updates. Disabled will not display this prompt
-deferralTimer=86400 #86400 = 24 hours                                           # Time given to user to respond to deferral prompt if enabled
+maxDeferrals="3"                                                                # Number of times a user is allowed to defer before forced to intall updates. A value of "Disabled" will not display the deferral prompt
+deferralTimer=3600                                                              # Time given to user to respond to deferral prompt if enabled
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
