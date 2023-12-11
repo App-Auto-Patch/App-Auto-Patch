@@ -154,7 +154,7 @@ debugMode="${11:-"false"}"                                                    	#
 unattendedExitSeconds="60"							# Number of seconds to wait until a kill Dialog command is sent
 swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDialog required to use workflow
 removeInstallomatorPath="true"                                                  # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
-maxDeferrals="3"                                                                # Number of times a user is allowed to defer before forced to intall updates. A value of "Disabled" will not display the deferral prompt
+maxDeferrals="Disabled"                                                         # Number of times a user is allowed to defer before forced to intall updates. A value of "Disabled" will not display the deferral prompt
 deferralTimer=3600                                                              # Time given to user to respond to deferral prompt if enabled
 deferralTimerAction="Defer"                                                     # What happens when the deferral timer expires [ Defer | Continue ]
 
