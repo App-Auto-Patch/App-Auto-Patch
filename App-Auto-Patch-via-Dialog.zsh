@@ -125,6 +125,9 @@
 #   - Changed deferral plist to use the aapPath folder to facilitate creating an EA to populate remaining deferrals in Jamf
 #   - Added deferralTimerAction to indicate whether the default action when the timer expires is to Defer or continue with installs
 #   - Moved deferral reset to after installation step to confirm the user completed the process without skipping it (force shutdown/reboot)
+#
+#   Version 2.0.0rc2, 12.13.2023 Robert Schroeder (@robjschroeder)
+#   - Adjusting script version, preparing for version 2.0 release
 # 
 ####################################################################################################
 
@@ -138,7 +141,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.0rc1-B"
+scriptVersion="2.0.0rc2"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
