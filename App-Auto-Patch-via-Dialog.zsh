@@ -117,6 +117,14 @@
 #
 #   Version 2.0.0rc1, 11.07.2023 Robert Schroeder (@robjschroeder)
 #   - Adjusting all references of `MacAdmins Slack)` to `MacAdmins Slack )` in an effor to fix the Slack label coming up as `Asana` (thanks @TechTrekkie)
+#
+#   Version 2.0.0rc1-A, 11.27.2023 Andrew Spokes (@techtrekkie)
+#   - Added the ability to allow user to defer installing updates using the 'maxDeferrals' variable. A value of 'disabled' will not display the deferral prompt
+#
+#   Version 2.0.0rc1-B, 11.29.2023 Andrew Spokes (@techtrekkie)
+#   - Changed deferral plist to use the aapPath folder to facilitate creating an EA to populate remaining deferrals in Jamf
+#   - Added deferralTimerAction to indicate whether the default action when the timer expires is to Defer or continue with installs
+#   - Moved deferral reset to after installation step to confirm the user completed the process without skipping it (force shutdown/reboot)
 # 
 ####################################################################################################
 
@@ -130,7 +138,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.0rc1"
+scriptVersion="2.0.0rc1-B"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -146,6 +154,9 @@ debugMode="${11:-"false"}"                                                    	#
 unattendedExitSeconds="60"							# Number of seconds to wait until a kill Dialog command is sent
 swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDialog required to use workflow
 removeInstallomatorPath="true"                                                  # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
+maxDeferrals="Disabled"                                                         # Number of times a user is allowed to defer before forced to intall updates. A value of "Disabled" will not display the deferral prompt
+deferralTimer=3600                                                              # Time given to user to respond to deferral prompt if enabled
+deferralTimerAction="Defer"                                                     # What happens when the deferral timer expires [ Defer | Continue ]
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -164,6 +175,7 @@ fragmentsPath="$installomatorPath/fragments"
 runDiscovery="true"
 appAutoPatchConfigFile="/Library/Application Support/AppAutoPatch/AppAutoPatch.plist"
 appAutoPatchStatusConfigFile="/Library/Application Support/AppAutoPatch/AppAutoPatchStatus.plist"
+aapAutoPatchDeferralFile="/Library/Application Support/AppAutoPatch/AppAutoPatchDeferrals.plist"
 declare -A configArray=()
 ignoredLabelsArray=($(echo ${ignoredLabels}))
 requiredLabelsArray=($(echo ${requiredLabels}))
@@ -1327,6 +1339,104 @@ function doInstallations() {
 
 }
 
+function checkDeferral() {
+    
+    if [[ $maxDeferrals == "Disabled" || $maxDeferrals == "disabled" ]]; then
+        notice "Deferral workflow disabled, moving on to Installs"
+    else
+    
+    if [[ ! -f $aapAutoPatchDeferralFile ]]; then
+            echo "AAP Status configuration profile does  not exist, creating now..."
+            defaults write $aapAutoPatchDeferralFile AAPDefaultDeferrals "$maxDeferrals"
+        else
+            echo "AAP Status configuration already exists, continuing..."
+            defaults write $aapAutoPatchDeferralFile AAPDefaultDeferrals "$maxDeferrals"
+        fi
+
+    notice "Max Deferrals set to $maxDeferrals"
+    
+    
+    ##Calculate remaining deferrals
+    ##Check the Plist and find remaining deferrals from prior executions
+    remainingDeferrals=$(defaults read $aapAutoPatchDeferralFile remainingDeferrals)
+    ##Check that remainingDeferrals isn't empty (aka pulled back an empty value), if so set it to $maxDeferrals
+    if [ -z $remainingDeferrals ]; then
+        defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
+        remainingDeferrals=$maxDeferrals
+        notice "Deferral has not yet been set. Setting to Max Deferral count and pulling back remainingDeferral value."
+    fi
+    ##Check if $remainingDeferrals returns a nonzero string. (Ensuring it is already set)
+    if [ -n "$remainingDeferrals" ]; then
+        notice "Remaining Deferral value of $remainingDeferrals is already set. Continuing"
+    else
+        if [[ $remainingDeferrals -le $maxDeferrals ]]; then
+            deferral=$remainingDeferrals
+            notice "Remaining Deferrals was less than Max. Continuing."
+        else
+            deferral=$maxDeferrals
+            notice "Deferral set back to Max Deferrals."
+        fi
+    fi
+    
+    
+    
+    if [[ $remainingDeferrals -gt 0 ]]; then
+        infobuttontext="Defer"
+    else
+        infobuttontext="Max Deferrals Reached"
+    fi
+    
+    
+    notice "There are $remainingDeferrals deferrals left"
+    
+    #--height ${dialogheight} \
+    #--iconsize ${iconsize} \
+    message="There are $numberOfUpdates application(s) that require updates\n\n \
+You have $remainingDeferrals deferral(s) remaining."
+    
+        $dialogBinary --title "${appTitle}" \
+        --icon "$icon" \
+        --overlayicon "$overlayicon" \
+        --message "${message}" \
+        --infobuttontext "$infobuttontext" \
+        --button1text "Continue" \
+        --position bottomright \
+        --quitoninfo \
+        --moveable \
+        --small \
+        --quitkey k \
+        --titlefont size=18 \
+        --messagefont size=15 \
+        --height 280 \
+        --timer $deferralTimer
+    
+    
+    dialogOutput=$?
+        
+        if [[ $dialogOutput == 3 && $remainingDeferrals -gt 0 ]] ; then
+            
+            remainingDeferrals=$(( $remainingDeferrals - 1 ))
+            defaults write $aapAutoPatchDeferralFile remainingDeferrals $remainingDeferrals
+            notice "There are $remainingDeferrals deferrals left"
+            exit 0
+        elif [[ $dialogOutput == 4 && $remainingDeferrals -gt 0 ]] ; then
+            if [[ $deferralTimerAction == "Defer" ]]; then
+                notice "Timer expired and action set to Defer... Adjusting remaining deferrals"
+                remainingDeferrals=$(( $remainingDeferrals - 1 ))
+                defaults write $aapAutoPatchDeferralFile remainingDeferrals $remainingDeferrals
+                notice "There are $remainingDeferrals deferrals left"
+                exit 0
+            else
+                notice "Timer Expired and Action not set to Defer... Moving to Installation step"
+            fi
+            
+        else
+            notice "Moving to Installation step"
+        fi
+    fi
+
+}
+
 oldIFS=$IFS
 IFS=' '
 
@@ -1338,9 +1448,12 @@ done
 
 if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
     numberOfUpdates=$((${#countOfElementsArray[@]}))
+    checkDeferral
     infoOut "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
     #numberOfListedItems=$((${#displayNames[@]}))
     doInstallations
+    infoOut "Installs Complete... Resetting Deferrals"
+    defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
 else
     infoOut "All apps up to date. Nothing to do." # inbox zero
     removeInstallomator 
