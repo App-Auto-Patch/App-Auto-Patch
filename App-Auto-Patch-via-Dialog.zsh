@@ -885,6 +885,7 @@ function PgetAppVersion() {
             installedAppPath=$filteredAppPaths[1]
             
             appversion=$(defaults read $installedAppPath/Contents/Info.plist $versionKey)
+            appversionLong=$(defaults read $installedAppPath/Contents/Info.plist $versionKeyLong)
             
             infoOut "Found $appName version $appversion"
             sleep .2
@@ -990,6 +991,7 @@ SCRIPT_EOF
 
             newversion1=$( echo "${newversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
             appversion1=$( echo "${appversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
+            appversionlong1=$( echo "${appversionLong}" | sed 's/[^a-zA-Z0-9]*$//g' )
 
             [[ -n "$newversion" ]] && notice "--- Newest version: ${newversion}"
 
@@ -1012,6 +1014,8 @@ SCRIPT_EOF
             # fi
 
             if [[ "$appversion1" == "$newversion1" ]]; then
+                notice "--- Latest version installed."
+            elif [[ "$appversionlong1" == "$newversion1" ]]; then
                 notice "--- Latest version installed."
             else
                 /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
@@ -1141,6 +1145,7 @@ if [[ "${runDiscovery}" == "true" ]]; then
 
     targetDir="/"
     versionKey="CFBundleShortVersionString"
+    versionKeyLong="CFBundleVersion"
 
     IFS=$'\n'
     in_label=0
