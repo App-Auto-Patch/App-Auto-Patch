@@ -31,4 +31,11 @@ App Auto-Patch completed:
 This script was built off the same idea as the Patchomator project where a majority of this code came from. A requirement for my use included an easily deployable script from Jamf Pro without having to install multiple dependancies on an end-user's computer. Originally this was a forked repo from Patchomator but has become it's own repo hosted here. 
 This script can take an inventory of installed applications and patch them without having to build multiple Smart Groups, Policies, Patch Management Titles, etc in Jamf Pro. It is an easy way to keep your end-user's applications updated as easy as possible. 
 
-# Usage
+## Learn More
+
+Please visit the [App Auto-Patch Wiki](https://github.com/robjschroeder/App-Auto-Patch/wiki) for detailed documentation! (Still in progress...)
+
+Detailed `AAP` version progress can be found in the [Change Log](https://github.com/robjschroeder/App-Auto-Patch/blob/main/CHANGELOG.md). (Does not exist yet...)
+
+You can also join the conversation at the [Mac Admins Foundation Slack](https://www.macadmins.org) in channel [#app-auto-patch](https://macadmins.slack.com/archives/C05D69E7SBH).
+
