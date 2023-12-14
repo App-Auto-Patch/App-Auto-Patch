@@ -1,5 +1,7 @@
 # CHANGELOG
 
+# Version 2
+
 ## 2.0.0rc2
 ### 13-Dec-2023
 - Adjusting script version, preparing for version 2.0 release
@@ -89,7 +91,7 @@
 - Updated minimum required OS for swiftDialog installation
 - Updated logging functions
 
-# Version 2
+# Version 1
 
 ## 1.0.14
 ### 16-Oct-2023
