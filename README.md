@@ -35,7 +35,6 @@ This script can take an inventory of installed applications and patch them witho
 
 Please visit the [App Auto-Patch Wiki](https://github.com/robjschroeder/App-Auto-Patch/wiki) for detailed documentation! (Still in progress...)
 
-Detailed `AAP` version progress can be found in the [Change Log](https://github.com/robjschroeder/App-Auto-Patch/blob/main/CHANGELOG.md). (Does not exist yet...)
+Detailed `AAP` version progress can be found in the [Change Log](https://github.com/robjschroeder/App-Auto-Patch/blob/main/CHANGELOG.md).
 
 You can also join the conversation at the [Mac Admins Foundation Slack](https://www.macadmins.org) in channel [#app-auto-patch](https://macadmins.slack.com/archives/C05D69E7SBH).
-
