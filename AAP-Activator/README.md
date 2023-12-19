@@ -2,7 +2,7 @@
 
 This script is meant to work in tandem with the App-Auto-Patch-via-Dialog.zsh script and is meant to trigger AAP under the right conditions. 
 
-**Note** AAP Activator requires use of the modified App-Auto-Patch-via-Dialog.zsh script. Until those changes are merged into the main repo under @robjschroeder, you can use this version here: https://github.com/TechTrekkie/App-Auto-Patch/blob/f90e05d07aa3570807388cde258890024e4a8fc8/App-Auto-Patch-via-Dialog.zsh
+**Note** AAP Activator requires use of the App Auto-Patch version 2.0.0 or later. 
 
 ## Configuration Variables
 This script writes two variables to a configuration file:
