@@ -2,6 +2,17 @@
 
 # Version 2
 
+## 2.0.0
+### 19-Dec-2022
+- **Breaking Change** for users of App Auto-Patch prior to `2.0.0`
+  - Removed the unattendExit variable out of Jamf Pro Script parameters, this is now under the ### Unattended Exit Options ###
+- Moved the outdatedOsAction variable from Parameter 9 to Parameter 10 in Jamf Pro Script parameters
+- Script cleanup and organization
+- dialogInstall function called only if interactiveMode is greater than 0
+- Added logic for AAP-Activator (thanks @TechTrekkie)
+- Variable added for AAP-Activator logic under ### Deferral Options ###, please see documentation for more information
+- Added optionalLabels array. Installomator labels listed in this array will first check to see if the app is installed. If the app is installed, it will write the label to the required array. If the app is not installed, it will get skipped.
+
 ## 2.0.0rc2
 ### 13-Dec-2023
 - Adjusting script version, preparing for version 2.0 release
