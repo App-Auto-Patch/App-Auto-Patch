@@ -1,5 +1,7 @@
 # App Auto-Patch Activator
 
+## Huge thanks to @TechTrekkie for this workflow!!
+
 This script is meant to work in tandem with the App-Auto-Patch-via-Dialog.zsh script and is meant to trigger AAP under the right conditions. 
 
 **Note** AAP Activator requires use of the App Auto-Patch version 2.0.0 or later. 
