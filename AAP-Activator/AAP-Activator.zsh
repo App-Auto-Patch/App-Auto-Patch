@@ -14,6 +14,9 @@
 #   Version 0.0.2, 12.14.2023, Andrew Spokes (@TechTrekkie)
 #   - Added makePath function to correct config file/folder permissions (Thanks @robjschroeder !)
 #
+#   Version 0.0.3, 12.19.2023, Andrew Spokes (@TechTrekkie)
+#   - Changed AAP Jamf Policy trigger to use variable populated by Jamf Pro Script parameter #5
+#
 ####################################################################################################
 #
 # The purpose of this script is to run as a precursor to the App Auto-Patch scripts in order to
@@ -31,11 +34,12 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="0.0.1"
+scriptVersion="0.0.3"
 scriptFunctionalName="App Auto-Patch Activator"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
 scriptLog="${4:-"/var/log/com.company.aap-activator.log"}"                                    # Parameter 4: Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
+aapPolicyTrigger="${5:-"AppAutoPatch"}"                                                       # Parameter 5: The trigger used to call the App Auto-Patch Jamf Policy [ex: AppAutoPatch ]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Various Feature Variables
@@ -96,7 +100,7 @@ fi
 
 if [[  $weeklyPatchingComplete == 0 ]]; then
 	echo "Executing App Auto-Patch"
-	/usr/local/bin/jamf policy -trigger AppAutoPatch
+	/usr/local/bin/jamf policy -trigger $aapPolicyTrigger
 elif [[  $weeklyPatchingComplete == 1 ]]; then
 	echo "Weekly Patching Complete... Exiting"
 	exit 0
@@ -105,6 +109,6 @@ else
 	defaults write $aapAutoPatchDeferralFile AAPWeeklyPatching -bool false
 	defaults write $aapAutoPatchDeferralFile AAPWeeklyPatchingStatusDate "$CurrentDate"
 	weeklyPatchingComplete=$(defaults read $aapAutoPatchDeferralFile AAPWeeklyPatching)
-	/usr/local/bin/jamf policy -trigger AppAutoPatch
+	/usr/local/bin/jamf policy -trigger $aapPolicyTrigger
 fi
 	
