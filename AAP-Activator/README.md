@@ -20,10 +20,12 @@ AAPWeeklyPatching (True | False) - This is set to False by default which signals
 AAPWeeklyPatchingStatusDate (datetime) - This gets set with the date/time that AAP-Activator first runs and is used to calculate how many days have passed for a weekly patching cadence
 
 ## Setup
-1. Set your App-Auto-Patch Jamf Policy to a frequency of “ongoing” and set a custom trigger (ex: AppAutoPatch)
+1. Set your App Auto-Patch Jamf Policy to a frequency of “ongoing” and set a custom trigger (ex: AppAutoPatch)
 
-2. Import the AAP-Activator Script to your Jamf Pro instance and modify the code on lines 89 and 98 to use the trigger from Step #1
+2. Import the AAP-Activator Script to your Jamf Pro instance and set the Jamf Pro Script parameter names to match Parameter #4 and #5 from the script (#4: Log Location, #5 AAP Jamf Policy Trigger)
 
 3. Create a Jamf Pro policy that uses the AAP-Activator Script
    * Set the Trigger to Recurring Check-In
    * Set the execution frequency to Once Every Day
+   * Populate Parameter #4 with your log location
+   * Populate Parameter #5 with the App Auto-Patch policy trigger from step #1
