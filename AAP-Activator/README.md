@@ -14,9 +14,6 @@ This script writes two variables to a configuration file:
 ## Configuration
 The APP-Activator utilizes the existing AppAutoPatchDeferrals.plist configuration file created in the App-Auto-Patch script and works regardless if the deferral workflow is being utilized or not
 
-**Note**: You will need to add some modified code to the App-Auto-Patch-via-Dialog.zsh script in order for AAP-Activator to work. I have a modified version in this repo that you can copy the changes from between lines 1469 and 1479
-This modified code will set the AAPWeeklyPatching value to True either when patching has been completed successfully, or if no apps are available to patch
-
 Two values are set in the config file:
 
 AAPWeeklyPatching (True | False) - This is set to False by default which signals AAP-Activator to trigger the App-Auto-Patch script
@@ -24,7 +21,6 @@ AAPWeeklyPatchingStatusDate (datetime) - This gets set with the date/time that A
 
 ## Setup
 1. Set your App-Auto-Patch Jamf Policy to a frequency of “ongoing” and set a custom trigger (ex: AppAutoPatch)
-   * Note: You must be using the modified App-Auto-Patch-via-Dialog.zsh script mentioned above.  
 
 2. Import the AAP-Activator Script to your Jamf Pro instance and modify the code on lines 89 and 98 to use the trigger from Step #1
 
