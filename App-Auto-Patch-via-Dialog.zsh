@@ -9,7 +9,7 @@
 # HISTORY
 #
 #   Version 1.0.5, 05.15.2023, Robert Schroeder (@robjschroeder)
-#   - Trying to rewrite script for better readability
+#   - Trying to rewrite the script for better readability
 #   - Adding direct support to deploy within Jamf Pro
 #
 #   Version 1.0.6, 16-May-2023 Dan K. Snelson (@dan-snelson)
@@ -24,11 +24,11 @@
 #   - More dialog tweaks
 #
 #   Version 1.0.9, 05.18.2023 Robert Schroeder (@robjschroeder)
-#   - Removed debugMode (was not being utilized throughout script)
+#   - Removed debugMode (was not being utilized throughout the script)
 #   - Changed `useswiftdialog` variable to `interactiveMode`
 #   - Added variable `useOverlayIcon`
 #   - Moved scriptVersion to infotext on swiftDialog windows
-#   - Changed icon used for desktop computers to match platform (would like to grab model name and match accordingly: MacBook, Mac, Mac Mini, etc.)
+#   - Changed icon used for desktop computers to match platform (would like to grab the model name and match accordingly: MacBook, Mac, Mac Mini, etc.)
 #   - Changed `discovery` variable to `runDiscovery`
 #   - Changed repository to App-Auto-Patch and script name to App-Auto-Patch-via-Dialog.zsh
 #
@@ -37,11 +37,11 @@
 #
 #   Version 1.0.11, 06.21.2023 Robert Schroeder (@robjschroeder)
 #   - Added more options for running silently (Issue #3, thanks @beatlemike)
-#   - Commented out the update count in List dialog infobox until accurate count can be used
+#   - Commented out the update count in the List dialog infobox until an accurate count can be used
 #
 #   Version 1.0.12, 06.29.2023 Robert Schroeder (@robjschroeder)
 #   - Added variables for computer name and macOS version (Issue #6, thanks @AndrewMBarnett)
-#   - Added computer variables to infobox of dialog
+#   - Added computer variables to the infobox of the dialog
 #
 #   Version 1.0.13, 09.16.2023 Robert Schroeder (@robjschroeder)
 #   - Fixed repo URL for swiftDialog
@@ -56,15 +56,14 @@
 #
 #   Version 2.0-beta2, 10.18.2023 Robert Schroeder (@robjschroeder)
 #   - Reworked workflow
-#   - Added an unattended exit of Dialog parameter. If set to `true` and `unattendedExitSeconds` is defined, the Dialog process will be killed after the duration. 
+#   - Added an unattended exit of the Dialog parameter. If set to `true` and `unattendedExitSeconds` is defined, the Dialog process will be killed after the duration. 
 #   - Added ability to add wildcards to ignoredLabels and requiredLabels (thanks, @jako)
 #   - Added a swiftDialogMinimumRequiredVersion variable
-#   - Updated minimum required OS for swiftDialog installation
+#   - Updated the minimum required OS for swiftDialog installation
 #   - Updated logging functions
 #   
 #   Version 2.0-beta3, 10.19.2023 Robert Schroeder (@robjschroeder)
-#   - Added plist created in /Library/Application Support/AppAutoPatch, this additional plist can be used to pull data from or build extension
-#   attributes for Jamf Pro
+#   - Added plist created in /Library/Application Support/AppAutoPatch, this additional plist can be used to pull data from or build extension attributes for Jamf Pro
 #
 #   Version 2.0.0b4, 10.20.2023 Robert Schroeder (@robjschroeder)
 #   - Changed versioning schema from `0.0-beta0` to `0.0.0b0` (thanks, @dan-snelson)
@@ -73,7 +72,7 @@
 #   - Various typo fixes
 #
 #   Version 2.0.0b5, 10.20.2023 Robert Schroeder (@robjschroeder)
-#   - AAP now uses it own directory in `/Library/Application Support` to store Installomator. This directory gets removed after processing (thanks for the suggestion @dan-snelson!)
+#   - AAP now uses its directory in `/Library/Application Support` to store Installomator. This directory gets removed after processing (thanks for the suggestion @dan-snelson!)
 #   - Had to update some of the hardcoded Installomator paths. 
 #
 #   Version 2.0.0b6, 10.23.2023 Robert Schroeder (@robjschroeder)
@@ -82,17 +81,17 @@
 #   Version 2.0.0b7, 10.23.2023 Robert Schroeder (@robjschroeder)
 #   - Fixed some logic during discovery that prevented some apps from being queued. (Issue #14, thanks @Apfelpom)
 #   - Added more checks when determining available version vs installed version. Some Installomator app labels do not report an accurate appNewVersion variable, those will be found in the logs as "[WARNING] --- Latest version could not be determined from Installomator app label". These apps will be queued regardless of having a properly updated app. [Line No. ~851-870]
-#   - With the added checks for versioning, if an app with a higher version is installed vs available version from Installomator, the app will not be queued. (thanks, @dan-snelson)
+#   - With the added checks for versioning, if an app with a higher version is installed vs the available version from Installomator, the app will not be queued. (thanks, @dan-snelson)
 #  
 #   Version 2.0.0b8, 10.24.2023 Robert Schroeder (@robjschroeder)
-#   - Removed the extra checks for versioning, this became more of a hinderance and caused issues. Better to queue the label and not need it than to not queue an app that needs an update. Addresses issue #20 (thanks @Apfelpom)
+#   - Removed the extra checks for versioning, this became more of a hindrance and caused issues. Better to queue the label and not need it than to not queue an app that needs an update. Addresses issue #20 (thanks @Apfelpom)
 #   - If a wildcard is used for `IgnoredLabels` you can override an individual label by placing it in the required labels. 
 #   - Addressed issue where wildcards wrote additional plist entry 'Application'
 #   - Merged PR #21, Added a help message with variables for the update window. (thanks, @AndrewMBarnett)
 #   - Issue #13, `Discovering firefoxpkg_intl but installing firefoxpkgintl`, fixed.
 #
 #   Version 2.0.0b9, 10.24.2023 Robert Schroeder (@robjschroeder)
-#   - Worked on issue with number of updates not being correct
+#   - Worked on the issue with the number of updates not being correct
 #   - Fixed #15, Progress Bar Early Incrementation (thanks @dan-snelson)
 #   - Added warnings into logs that labels will not get replaced if there are multiple labels for the same app (i.e. zoom, zoomclient, zoomgov), please make sure you are targeting the appropriate labels for your org
 #   - Removed duplicate variables
@@ -102,7 +101,7 @@
 #   - Added countOfElementsArray variable, this should accurately notify of the number of updates that AAP will attempt regardless of `runDiscovery` being true or false (Issue #4, thanks @beatlemike)
 #
 #   Version 2.0.0b11, 10.28.2023 Robert Schroeder (@robjschroeder)
-#   - Progress bar sets to 0 when updates begin
+#   - Progress bar set to 0 when updates begin
 #   - Added option to set title shown to end-user customizable (thanks @wakco)
 #   - Added option to keep Installomator if desired (thanks @wakco)
 #   - By default, swiftDialog is now ignored since the PreFlight will install as a pre-requisite (thanks @wakco)
@@ -111,15 +110,15 @@
 #
 #   Version 2.0.0b12, 10.30.2023 Robert Schroeder (@robjschroeder)
 #   - Cleaned up some additional GUI items (thanks @dan-snelson)
-#   - Team website shown in help message is now a hyperlink (thanks @dan-snelson)
-#   - Changing progress bar to continous bouncing bar until we can accurately control the progress incrementation (if you'd like to re-enable, uncomment lines 1299 & 1308 ( swiftDialogUpdate "progress: increment ... )
-#   - Number of updates should now show in the infobox
+#   - The team website shown in the help message is now a hyperlink (thanks @dan-snelson)
+#   - Changing the progress bar to a continuous bouncing bar until we can accurately control the progress incrementation (if you'd like to re-enable, uncomment lines 1299 & 1308 ( swiftDialogUpdate "progress: increment ... )
+#   - The number of updates should now show in the infobox
 #
 #   Version 2.0.0rc1, 11.07.2023 Robert Schroeder (@robjschroeder)
-#   - Adjusting all references of `MacAdmins Slack)` to `MacAdmins Slack )` in an effor to fix the Slack label coming up as `Asana` (thanks @TechTrekkie)
+#   - Adjusting all references of `MacAdmins Slack)` to `MacAdmins Slack )` to fix the Slack label coming up as `Asana` (thanks @TechTrekkie)
 #
 #   Version 2.0.0rc1-A, 11.27.2023 Andrew Spokes (@techtrekkie)
-#   - Added the ability to allow user to defer installing updates using the 'maxDeferrals' variable. A value of 'disabled' will not display the deferral prompt
+#   - Added the ability to allow users to defer installing updates using the 'maxDeferrals' variable. A value of 'disabled' will not display the deferral prompt
 #
 #   Version 2.0.0rc1-B, 11.29.2023 Andrew Spokes (@techtrekkie)
 #   - Changed deferral plist to use the aapPath folder to facilitate creating an EA to populate remaining deferrals in Jamf
@@ -130,7 +129,7 @@
 #   - Adjusting script version, preparing for version 2.0 release
 #
 #   Version 2.0.0, 12.19.2023 Robert Schroeder (@robjschroeder)
-#   - **Breaking Change** for users of App Auto-Patch prior to `2.0.0`
+#   - **Breaking Change** for users of App Auto-Patch before `2.0.0`
 #       - Removed the unattendExit variable out of Jamf Pro Script parameters, this is now under the ### Unattended Exit Options ###
 #       - Moved the outdatedOsAction variable from Parameter 9 to Parameter 10 in Jamf Pro Script parameters
 #   - Script cleanup and organization
@@ -174,8 +173,8 @@ swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDia
 
 ### Deferral Options ###
 
-maxDeferrals="Disabled"								# Number of times a user is allowed to defer before forced to intall updates. A value of "Disabled" will not display the deferral prompt
-deferralTimer=300                                                               # Time given to user to respond to deferral prompt if enabled
+maxDeferrals="Disabled"								# Number of times a user is allowed to defer before being forced to install updates. A value of "Disabled" will not display the deferral prompt
+deferralTimer=300                                                               # Time given to the user to respond to deferral prompt if enabled
 deferralTimerAction="Defer"                                                     # What happens when the deferral timer expires [ Defer | Continue ]
 AAPActivatorFlag="false"                                                        # Flag to indicate if using AAPActivator to launch App Auto-Patch [ true | false (default) ]
 aapAutoPatchDeferralFile="/Library/Application Support/AppAutoPatch/AppAutoPatchDeferrals.plist"
@@ -410,8 +409,8 @@ preFlight "Current Logged-in User ID: ${loggedInUserID}"
 if [[ "${osMajorVersion}" -ge 12 ]] ; then
     preFlight "macOS ${osMajorVersion} installed; proceeding ..."
 else
-    # The Mac is running an operating system older than macOS 12 Monterey; exit with error
-    preFlight "swiftDialog and App Auto-Patch require at least macOS 12 Monterey and this Mac is running ${osVersion} (${osBuild}), exiting with error."
+    # The Mac is running an operating system older than macOS 12 Monterey; exit with an error
+    preFlight "swiftDialog and App Auto-Patch require at least macOS 12 Monterey and this Mac is running ${osVersion} (${osBuild}), exiting with an error."
     osascript -e 'display dialog "Please advise your Support Representative of the following error:\r\rExpected macOS Monterey (or newer), but found macOS '"${osVersion}"' ('"${osBuild}"').\r\r" with title "'"${scriptFunctionalName}"': Detected Outdated Operating System" buttons {"Open Software Update"} with icon caution'
     preFlight "Executing /usr/bin/open '${outdatedOsAction}' …"
     su - "${loggedInUser}" -c "/usr/bin/open \"${outdatedOsAction}\""
@@ -419,7 +418,7 @@ else
 fi
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# Pre-flight Check: Ensure computer does not go to sleep during AAP (thanks, @grahampugh!)
+# Pre-flight Check: Ensure the computer does not go to sleep during AAP (thanks, @grahampugh!)
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 aapPID="$$"
@@ -427,7 +426,7 @@ preFlight "Caffeinating this script (PID: $aapPID)"
 caffeinate -dimsu -w $aapPID &
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# Pre-flight Check: Validate / install swiftDialog (Thanks big bunches, @acodega!)
+# Pre-flight Check: Validate/install swiftDialog (Thanks big bunches, @acodega!)
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
@@ -442,7 +441,7 @@ function dialogInstall() {
 
     preFlight "Installing swiftDialog..."
 
-    # Create temporary working directory
+    # Create a temporary working directory
     workDirectory=$( basename "$0" )
     tempDirectory=$( mktemp -d "/private/tmp/$workDirectory.XXXXXX" )
 
@@ -499,7 +498,7 @@ fi
 # Pre-flight Check: Declare configArray
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-preFlight "Declaing configArray and setting ignoredLabelsArray and requiredLabelsArray"
+preFlight "Declaring configArray and setting ignoredLabelsArray and requiredLabelsArray"
 
 declare -A configArray=()
 ignoredLabelsArray=($(echo ${ignoredLabels}))
@@ -542,7 +541,7 @@ esac
 ####################################################################################################
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# "list" dialog Title, Message and Icon
+# "list" dialog Title, Message, and Icon
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 dialogListConfigurationOptions=(
@@ -714,13 +713,13 @@ function swiftDialogListWindow(){
 
     # If we are using SwiftDialog
     if [ ${interactiveMode} -ge 1 ]; then
-        # Check if there's a valid logged in user:
+        # Check if there's a valid logged-in user:
         currentUser=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
         if [ "$currentUser" = "root" ] || [ "$currentUser" = "loginwindow" ] || [ "$currentUser" = "_mbsetupuser" ] || [ -z "$currentUser" ]; then
             return 0
         fi
         
-        # Build our list of Display Names for SwiftDialog list
+        # Build our list of Display Names for the SwiftDialog list
         for label in $queuedLabelsArray; do
             # Get the "name=" value from the current label and use it in our SwiftDialog list
             currentDisplayName=$(sed -n '/# label descriptions/,$p' ${installomatorScript} | grep -i -A 50 "${label})" | grep -m 1 "name=" | sed 's/.*=//' | sed 's/"//g')
@@ -790,7 +789,7 @@ function swiftDialogUpdate(){
 }
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# Create AppAutoPatch folder, if it doesn't exist
+# Create an AppAutoPatch folder, if it doesn't exist
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 infoOut "Checking for $aapPath"
@@ -808,8 +807,8 @@ fi
 
 function checkInstallomator() {
 
-    # Latest version of Installomator and collateral will be downloaded to $installomatorPath defined above
-    # Does the $installomatorPath Exist or does it need to get created
+    # The latest version of Installomator and collateral will be downloaded to $installomatorPath defined above
+    # Does the $installomatorPath Exist or does it need to be created
     if [ ! -d "${installomatorPath}" ]; then
         debugVerbose "$installomatorPath does not exist, create it now"
         mkdir "${installomatorPath}"
@@ -843,8 +842,8 @@ function checkInstallomator() {
         appNewVersion=$(curl -sLI "https://github.com/Installomator/Installomator/releases/latest" | grep -i "^location" | tr "/" "\n" | tail -1 | sed 's/[^0-9\.]//g')
         appVersion="$(cat $fragmentsPath/version.sh)"
         if [[ ${appVersion} -lt ${appNewVersion} ]]; then
-            errorOut "Installomator is installed, but is out of date. Versions prior to 10.0 function unpredictably with App Auto Patch."
-            infoOut "Removing previously installed Installomator version ($appVersion) and reinstalling with latest version ($appNewVersion)"
+            errorOut "Installomator is installed but is out of date. Versions before 10.0 function unpredictably with App Auto Patch."
+            infoOut "Removing previously installed Installomator version ($appVersion) and reinstalling with the latest version ($appNewVersion)"
             removeInstallomatorOutDated
             sleep .2
             checkInstallomator
@@ -928,9 +927,9 @@ function PgetAppVersion() {
             notice "Label: $label_name"
             notice "--- found app at $installedAppPath"
             
-            # Is current app from App Store
+            # Is the current app from the App Store
             if [[ -d "$installedAppPath"/Contents/_MASReceipt ]]; then
-                notice "--- $appName is from App Store. Skipping."
+                notice "--- $appName is from the App Store. Skipping."
                 notice "Use the Installomator option \"IGNORE_APP_STORE_APPS=no\" to replace."
                 return 
             else
@@ -975,17 +974,17 @@ SCRIPT_EOF
 )
 	fi
 	
-	# build array of labels for the config and/or installation
+	# Build an array of labels for the config and/or installation
 	
-	# push label to array
-	# if in write config mode, writes to plist. Otherwise to an array.
+	# Push label to an array
+	# If in write config mode, write to plist. Otherwise to an array.
 	# Test if label name in ignored labels
 	if [[ ! " ${ignoredLabelsArray[@]} " =~ " ${label_name} " ]]; then
 		if [[ -n "$configArray[$appPath]" ]]; then
 			exists="$configArray[$appPath]"
 
             notice "${appPath} already linked to label ${exists}, ignoring label ${label_name}"
-            warning "Modify your ingored label list if you are not getting the desired results"
+            warning "Modify your ignored label list if you are not getting the desired results"
 
             return
 		else
@@ -1070,7 +1069,7 @@ if [[ "${runDiscovery}" == "true" ]]; then
                 /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"${ignoredLabel}\"" "${appAutoPatchConfigFile}"
             else
                 if [[ "${ignoredLabel}" == *"*"* ]]; then
-                    debugVerbose "Ignoring all lables with $ignoredLabel"
+                    debugVerbose "Ignoring all labels with $ignoredLabel"
                     wildIgnored=( $(find $fragmentsPath/labels -name "$ignoredLabel") )
                     for i in "${wildIgnored[@]}"; do
                         ignored=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
@@ -1131,7 +1130,7 @@ if [[ "${runDiscovery}" == "true" ]]; then
             fi
         done
 
-    # start of label pattern
+    # Start of label pattern
     label_re='^([a-z0-9\_-]*)(\))$'
 
     # ignore comments
@@ -1248,7 +1247,7 @@ notice "Optional Labels: $optionalLabelsArray"
 
 infoOut "Discovery of installed applications complete..."
 warning "Some false positives may appear in labelsArray as they may not be able to determine a new app version based on the Installomator label for the app"
-warning "Be sure to double check the Installomator label for your app to verify"
+warning "Be sure to double-check the Installomator label for your app to verify"
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Complete Installation Of Discovered Applications
@@ -1293,7 +1292,7 @@ function doInstallations() {
     for label in $queuedLabelsArray; do
         infoOut "Installing ${label}..."
         
-        # Use built in swiftDialog Installomator integration options (if swiftDialog is being used)
+        # Use built-in swiftDialog Installomator integration options (if swiftDialog is being used)
         swiftDialogOptions=()
         if [ ${interactiveMode} -ge 1 ]; then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
@@ -1321,7 +1320,7 @@ function doInstallations() {
     
     notice "Errors: $errorCount"
     
-    # Close swiftdialog and delete tmp file
+    # Close swiftdialog and delete the tmp file
     completeSwiftDialogList
     
     # Remove Installomator
@@ -1414,7 +1413,7 @@ function checkDeferral() {
                 notice "There are $remainingDeferrals deferrals left"
                 exit 0
             else
-                notice "Timer Expired and Action not set to Defer... Moving to Installation step"
+                notice "Timer Expired and Action not set to Defer... Moving to the Installation step"
             fi 
         else
             notice "Moving to Installation step"
@@ -1449,7 +1448,7 @@ if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
     defaults write $aapAutoPatchDeferralFile AAPWeeklyPatching -bool true
     fi
 else
-    infoOut "All apps up to date. Nothing to do."
+    infoOut "All apps are up to date. Nothing to do."
 
     #AAP-Activator - Setting weekly patching status to True
     if [[ "$AAPActivatorFlag" == "true" ]]; then
