@@ -29,3 +29,4 @@ AAPWeeklyPatchingStatusDate (datetime) - This gets set with the date/time that A
    * Set the execution frequency to Once Every Day
    * Populate Parameter #4 with your log location
    * Populate Parameter #5 with the App Auto-Patch policy trigger from step #1
+   * Populate Parameter #6 with The number of days until the activator resets the patching status to False (for a weekly reset, set to 7)
