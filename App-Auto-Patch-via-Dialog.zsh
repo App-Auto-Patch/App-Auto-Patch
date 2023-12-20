@@ -137,6 +137,9 @@
 #   - Added logic for AAP-Activator (thanks @TechTrekkie)
 #   - Variable added for AAP-Activator logic under ### Deferral Options ###, please see documentation for more information
 #   - Added optionalLabels array. Installomator labels listed in this array will first check to see if the app is installed. If the app is installed, it will write the label to the required array. If the app is not installed, it will get skipped. 
+#
+#   Version 2.0.1, 12.20.2023 Robert Schroeder (@robjschroeder)
+#   - Fixed issue with labels (#13), improving how regex handles app labels from Installomator
 # 
 ####################################################################################################
 
