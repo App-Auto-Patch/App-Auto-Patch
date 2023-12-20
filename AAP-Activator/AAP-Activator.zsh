@@ -15,7 +15,7 @@
 #   - Added makePath function to correct config file/folder permissions (Thanks @robjschroeder !)
 #
 #   Version 0.0.3, 12.19.2023, Andrew Spokes (@TechTrekkie)
-#   - Changed AAP Jamf Policy trigger to use variable populated by Jamf Pro Script parameter #5
+#   - Changed AAP Jamf Policy trigger to use variable populated by Jamf Pro Script parameter #5, added parameter #6 for days until status reset
 #
 ####################################################################################################
 #
@@ -40,6 +40,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
 scriptLog="${4:-"/var/log/com.company.aap-activator.log"}"                                    # Parameter 4: Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
 aapPolicyTrigger="${5:-"AppAutoPatch"}"                                                       # Parameter 5: The trigger used to call the App Auto-Patch Jamf Policy [ex: AppAutoPatch ]
+daysUntilReset="${6:-7}"								      # Parameter 6: The number of days until the activator resets the patching status to False
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Various Feature Variables
@@ -90,7 +91,7 @@ echo "Weekly Patching Status Date: $weeklyPatchingStatusDate"
 echo "Current Date: $CurrentDate"
 echo "Days Since Status Date: $DaysSinceStatus"
 
-if [ ${DaysSinceStatus} -ge 7 ]; then
+if [ ${DaysSinceStatus} -ge $daysUntilReset ]; then
 	echo "Resetting Weekly Completion Status to False"
 	defaults write $aapAutoPatchDeferralFile AAPWeeklyPatching -bool false
 	defaults write $aapAutoPatchDeferralFile AAPWeeklyPatchingStatusDate "$CurrentDate"
