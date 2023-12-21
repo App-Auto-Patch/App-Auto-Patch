@@ -136,13 +136,18 @@
 #   - dialogInstall function called only if interactiveMode is greater than 0
 #   - Added logic for AAP-Activator (thanks @TechTrekkie)
 #   - Variable added for AAP-Activator logic under ### Deferral Options ###, please see documentation for more information
-#   - Added optionalLabels array. Installomator labels listed in this array will first check to see if the app is installed. If the app is installed, it will write the label to the required array. If the app is not installed, it will get skipped. 
+#   - Added optionalLabels array. Installomator labels listed in this array will first check to see if the app is installed. If installed, AAP will write the label to the required array. If the app is not installed, it will get skipped. 
 #
 #   Version 2.0.1, 12.20.2023 Robert Schroeder (@robjschroeder)
+#   - **Breaking Change** for users of App Auto-Patch before `2.0.1`
+#	- Removed the scriptLog variable out of Jamf Pro Script parameters, this is now under the ### Script Log and General Behavior Options ###
+#	- Removed the debugMode variable out of Jamf Pro Script parameters, this is now under the ### Script Log and General Behavior Options ###
+#	- Removed the outdatedOSAction variable out of the Jamf Pro Script parameters, this is now under the ### Script Log and General Behavior Options ###
+#	- Removed the useOverlayIcon variable out of the Jamf Pro Script parameters, this is now under ### Overlay Icon ### in the Custom Branding, Overlay Icon, etc section
 #   - Fixed issue with labels (#13), improving how regex handles app labels from Installomator
 #   - Updated AAP Activator Flag to pull from config plist and automatically determine if being executed by AAP-Activator (thanks @TechTrekkie)
 #   - Updated deferral reset logic to only update if maxDeferrals is not Disabled. Reset deferrals if remaining is higher than max (thanks @TechTrekkie)
-#   - Updated deferral workflow to run removeInstallomator and quitScript triggers to mirror non deferral workflow (thanks @TechTrekkie)
+#   - Updated deferral workflow to run removeInstallomator and quitScript triggers to mirror non-deferral workflow (thanks @TechTrekkie)
 # 
 ####################################################################################################
 
@@ -160,18 +165,24 @@ scriptVersion="2.0.1"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
-scriptLog="${4:-"/var/log/com.company.log"}"                                    # Parameter 4: Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
-useOverlayIcon="${5:="true"}"                                                   # Parameter 5: Toggles swiftDialog to use an overlay icon [ true (default) | false ]
+unused="${4:-""}"                                    				# Parameter 4: 
+unused="${5:=""}"                                                   		# Parameter 5: 
 interactiveMode="${6:="2"}"                                                     # Parameter 6: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) (default) ]
 ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
 requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 optionalLabels="${9:=""}"                                                       # Parameter 9: A space-separated list of optional Installomator labels (i.e., "renew") ** Does not support wildcards **
-outdatedOsAction="${10:-"/System/Library/CoreServices/Software Update.app"}"    # Parameter 10: Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
-debugMode="${11:-"false"}"                                                      # Parameter 11: Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
+unused="${10:-""}"    								# Parameter 10: 
+unused="${11:-""}"                                                     		# Parameter 11: 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Various Feature Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+### Script Log and General Behavior Options ###
+
+scriptLog="/var/log/com.company.log"						# Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
+debugMode="false"								# Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
+outdatedOsAction="/System/Library/CoreServices/Software Update.app"		# Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
 
 ### swiftDialog Options ###
 
@@ -230,6 +241,8 @@ else
 fi
 
 ### Overlay Icon ###
+
+useOverlayIcon="true"								# Toggles swiftDialog to use an overlay icon [ true (default) | false ]
 
 # Create `overlayicon` from Self Service's custom icon (thanks, @meschwartz!)
 if [[ "$useOverlayIcon" == "true" ]]; then
