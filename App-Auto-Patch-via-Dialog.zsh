@@ -148,6 +148,7 @@
 #   - Updated AAP Activator Flag to pull from config plist and automatically determine if being executed by AAP-Activator (thanks @TechTrekkie)
 #   - Updated deferral reset logic to only update if maxDeferrals is not Disabled. Reset deferrals if remaining is higher than max (thanks @TechTrekkie)
 #   - Updated deferral workflow to run removeInstallomator and quitScript triggers to mirror non-deferral workflow (thanks @TechTrekkie)
+#   - Created installomatorOptions Parameter, can be used to overwrite default installomator options
 # 
 ####################################################################################################
 
@@ -171,7 +172,7 @@ interactiveMode="${6:="2"}"                                                     
 ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
 requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 optionalLabels="${9:=""}"                                                       # Parameter 9: A space-separated list of optional Installomator labels (i.e., "renew") ** Does not support wildcards **
-unused="${10:-""}"    								# Parameter 10: 
+installomatorOptions="${10:-"BLOCKING_PROCESS_ACTION="prompt_user" NOTIFY="silent" LOGO="appstore""}"    								# Parameter 10: A list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION="prompt_user" NOTIFY="silent" LOGO="appstore")
 unused="${11:-""}"                                                     		# Parameter 11: 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -217,9 +218,9 @@ removeInstallomatorPath="true"                                                 	
 
 ### Installomator Options ###
 
-BLOCKING_PROCESS_ACTION="prompt_user"
-NOTIFY="silent"
-LOGO="appstore"
+# BLOCKING_PROCESS_ACTION="prompt_user"
+# NOTIFY="silent"
+# LOGO="appstore"
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Custom Branding, Overlay Icon, etc
@@ -1274,24 +1275,24 @@ warning "Be sure to double-check the Installomator label for your app to verify"
 
 function doInstallations() {
     
-    if [ "$BLOCKING_PROCESS_ACTION" ]; then
-        InstallomatorOptions+="BLOCKING_PROCESS_ACTION=$BLOCKING_PROCESS_ACTION"
-        InstallomatorOptions+=" "
-    fi
+#    if [ "$BLOCKING_PROCESS_ACTION" ]; then
+#        InstallomatorOptions+="BLOCKING_PROCESS_ACTION=$BLOCKING_PROCESS_ACTION"
+#        InstallomatorOptions+=" "
+#    fi
     
-    if [ "$NOTIFY" ]; then
-        InstallomatorOptions+="NOTIFY=$NOTIFY"
-        InstallomatorOptions+=" "
-    fi
+#    if [ "$NOTIFY" ]; then
+#        InstallomatorOptions+="NOTIFY=$NOTIFY"
+#        InstallomatorOptions+=" "
+#    fi
     
-    if [ "$LOGO" ]; then
-        InstallomatorOptions+="LOGO=$LOGO"
-        InstallomatorOptions+=" "
-    fi
+#    if [ "$LOGO" ]; then
+#        InstallomatorOptions+="LOGO=$LOGO"
+#        InstallomatorOptions+=" "
+#    fi
     
-    InstallomatorOptions=$InstallomatorOptions
+#    InstallomatorOptions=$InstallomatorOptions
     
-    infoOut "Installomator Options: $InstallomatorOptions"
+    infoOut "Installomator Options: $installomatorOptions"
     
     # Count errors
     errorCount=0
@@ -1329,7 +1330,7 @@ function doInstallations() {
         fi
 
         # Run Installomator
-        ${installomatorScript} ${label} ${InstallomatorOptions} ${swiftDialogOptions[@]}
+        ${installomatorScript} ${label} ${installomatorOptions} ${swiftDialogOptions[@]}
         if [ $? != 0 ]; then
             error "Error installing ${label}. Exit code $?"
             let errorCount++
