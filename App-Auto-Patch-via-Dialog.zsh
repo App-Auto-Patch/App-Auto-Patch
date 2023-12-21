@@ -140,6 +140,9 @@
 #
 #   Version 2.0.1, 12.20.2023 Robert Schroeder (@robjschroeder)
 #   - Fixed issue with labels (#13), improving how regex handles app labels from Installomator
+#   - Updated AAP Activator Flag to pull from config plist and automatically determine if being executed by AAP-Activator (thanks @TechTrekkie)
+#   - Updated deferral reset logic to only update if maxDeferrals is not Disabled. Reset deferrals if remaining is higher than max (thanks @TechTrekkie)
+#   - Updated deferral workflow to run removeInstallomator and quitScript triggers to mirror non deferral workflow (thanks @TechTrekkie)
 # 
 ####################################################################################################
 
@@ -179,8 +182,8 @@ swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDia
 maxDeferrals="Disabled"								# Number of times a user is allowed to defer before being forced to install updates. A value of "Disabled" will not display the deferral prompt
 deferralTimer=300                                                               # Time given to the user to respond to deferral prompt if enabled
 deferralTimerAction="Defer"                                                     # What happens when the deferral timer expires [ Defer | Continue ]
-AAPActivatorFlag="false"                                                        # Flag to indicate if using AAPActivator to launch App Auto-Patch [ true | false (default) ]
 aapAutoPatchDeferralFile="/Library/Application Support/AppAutoPatch/AppAutoPatchDeferrals.plist"
+AAPActivatorFlag=$(defaults read $aapAutoPatchDeferralFile AAPActivatorFlag)    # Flag to indicate if using AAPActivator to launch App Auto-Patch. AAP Activator will set this value to True prior to launching AAP
 
 ### Unattended Exit Options ###
 
@@ -1355,20 +1358,24 @@ function checkDeferral() {
         if [ -z $remainingDeferrals ]; then
             defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
             remainingDeferrals=$maxDeferrals
-            notice "Deferral has not yet been set. Setting to Max Deferral count and pulling back remainingDeferral value."
+            notice "Deferral has not yet been set. Setting to Max Deferral count."
+        elif [[ $remainingDeferrals == "Disabled" || $remainingDeferrals == "disabled" || $remainingDeferrals -gt $maxDeferrals ]]; then
+            defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
+            remainingDeferrals=$maxDeferrals
+            notice "Deferral previously disabled or set to a higher value. Resetting to Max Deferral count"
         fi
-        ##Check if $remainingDeferrals returns a nonzero string. (Ensuring it is already set)
-        if [ -n "$remainingDeferrals" ]; then
-            notice "Remaining Deferral value of $remainingDeferrals is already set. Continuing"
-        else
-            if [[ $remainingDeferrals -le $maxDeferrals ]]; then
-                deferral=$remainingDeferrals
-                notice "Remaining Deferrals was less than Max. Continuing."
-            else
-                deferral=$maxDeferrals
-                notice "Deferral set back to Max Deferrals."
-            fi
-        fi
+#       ##Check if $remainingDeferrals returns a nonzero string. (Ensuring it is already set)
+#       if [ -n "$remainingDeferrals" ]; then
+#           notice "Remaining Deferral value of $remainingDeferrals is already set. Continuing"
+#       else
+#           if [[ $remainingDeferrals -le $maxDeferrals ]]; then
+#               deferral=$remainingDeferrals
+#               notice "Remaining Deferrals was less than Max. Continuing."
+#           else
+#               deferral=$maxDeferrals
+#               notice "Deferral set back to Max Deferrals."
+#           fi
+#       fi
         
         if [[ $remainingDeferrals -gt 0 ]]; then
             infobuttontext="Defer"
@@ -1407,6 +1414,12 @@ function checkDeferral() {
             remainingDeferrals=$(( $remainingDeferrals - 1 ))
             defaults write $aapAutoPatchDeferralFile remainingDeferrals $remainingDeferrals
             notice "There are $remainingDeferrals deferrals left"
+            if [[ "$AAPActivatorFlag" == 1 ]]; then
+                infoOut "Setting AAPActivatorFlag to False"
+                defaults write $aapAutoPatchDeferralFile AAPActivatorFlag -bool false
+            fi
+            removeInstallomator
+            quitScript
             exit 0
         elif [[ $dialogOutput == 4 && $remainingDeferrals -gt 0 ]] ; then
             if [[ $deferralTimerAction == "Defer" ]]; then
@@ -1414,6 +1427,12 @@ function checkDeferral() {
                 remainingDeferrals=$(( $remainingDeferrals - 1 ))
                 defaults write $aapAutoPatchDeferralFile remainingDeferrals $remainingDeferrals
                 notice "There are $remainingDeferrals deferrals left"
+                if [[ "$AAPActivatorFlag" == 1 ]]; then
+                    infoOut "Setting AAPActivatorFlag to False"
+                    defaults write $aapAutoPatchDeferralFile AAPActivatorFlag -bool false
+                fi
+                removeInstallomator
+                quitScript
                 exit 0
             else
                 notice "Timer Expired and Action not set to Defer... Moving to the Installation step"
@@ -1442,21 +1461,27 @@ if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
     notice "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
     updateScriptLog "----"
     doInstallations
-    infoOut "Installs Complete... Resetting Deferrals"
-    defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
+    if [[ $maxDeferrals == "Disabled" || $maxDeferrals == "disabled" ]]; then
+        infoOut "Installs Complete"
+    else
+        infoOut "Installs Complete... Resetting Deferrals"
+        defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
+    fi
 
     #AAP-Activator - Setting weekly patching status to True
-    if [[ "$AAPActivatorFlag" == "true" ]]; then
+    if [[ "$AAPActivatorFlag" == 1 ]]; then
     infoOut "Setting Weekly Completion Status to True"
     defaults write $aapAutoPatchDeferralFile AAPWeeklyPatching -bool true
+    defaults write $aapAutoPatchDeferralFile AAPActivatorFlag -bool false
     fi
 else
     infoOut "All apps are up to date. Nothing to do."
 
     #AAP-Activator - Setting weekly patching status to True
-    if [[ "$AAPActivatorFlag" == "true" ]]; then
+    if [[ "$AAPActivatorFlag" == 1 ]]; then
         infoOut "Setting Weekly Completion Status to True"
         defaults write $aapAutoPatchDeferralFile AAPWeeklyPatching -bool true
+        defaults write $aapAutoPatchDeferralFile AAPActivatorFlag -bool false
     fi
 
     removeInstallomator 
