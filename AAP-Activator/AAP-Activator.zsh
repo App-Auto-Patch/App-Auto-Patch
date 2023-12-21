@@ -17,6 +17,12 @@
 #   Version 0.0.3, 12.19.2023, Andrew Spokes (@TechTrekkie)
 #   - Changed AAP Jamf Policy trigger to use variable populated by Jamf Pro Script parameter #5, added parameter #6 for days until status reset
 #
+#   Version 1.0.0, 12.20.2023, Andrew Spokes (@TechTrekkie)
+#	- Updated versioning
+#	- Updated logic to populate Weekly Patching Start Date if it does not exist in the config file
+#	- Updated logic to populate AAPActivatorFlag to populate variable in AAP script so a single script can be used for both Automated and Self Service workflows
+#	- Added logging including debugging
+#
 ####################################################################################################
 #
 # The purpose of this script is to run as a precursor to the App Auto-Patch scripts in order to
@@ -34,13 +40,14 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="0.0.3"
+scriptVersion="1.0.0"
 scriptFunctionalName="App Auto-Patch Activator"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
-scriptLog="${4:-"/var/log/com.company.aap-activator.log"}"                                    # Parameter 4: Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
-aapPolicyTrigger="${5:-"AppAutoPatch"}"                                                       # Parameter 5: The trigger used to call the App Auto-Patch Jamf Policy [ex: AppAutoPatch ]
-daysUntilReset="${6:-7}"								      # Parameter 6: The number of days until the activator resets the patching status to False
+scriptLog="${4:-"/var/log/com.company.aap-activator.log"}"                                    	# Parameter 4: Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
+aapPolicyTrigger="${5:-"AppAutoPatch"}"                                                       	# Parameter 5: The trigger used to call the App Auto-Patch Jamf Policy [ex: AppAutoPatch ]
+daysUntilReset="${6:-7}"									# Parameter 6: The number of days until the activator resets the patching status to False
+debugMode="${11:-"false"}"                                                      		# Parameter 11: Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Various Feature Variables
@@ -53,46 +60,151 @@ CurrentDateEpoch=$(date -j -f "%Y-%m-%d" "$CurrentDate" "+%s")
 
 aapAutoPatchDeferralFile="/Library/Application Support/AppAutoPatch/AppAutoPatchDeferrals.plist"
 
-function makePath() {
-	mkdir -p "$(sed 's/\(.*\)\/.*/\1/' <<< $1)" # && touch $1
+####################################################################################################
+#
+# Pre-flight Checks (thanks, @dan-snelson)
+#
+####################################################################################################
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Pre-flight Check: Client-side Logging
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+if [[ ! -f "${scriptLog}" ]]; then
+	touch "${scriptLog}"
+fi
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Pre-flight Check: Client-side Script Logging Function
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+function updateScriptLog() {
+	echo "${scriptFunctionalName}: $( date +%Y-%m-%d\ %H:%M:%S ) - ${1}" | tee -a "${scriptLog}"
 }
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Path Related Functions
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+function makePath() {
+	mkdir -p "$(sed 's/\(.*\)\/.*/\1/' <<< $1)"
+	updateScriptLog "Path made: $1"
+}
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Logging Related Functions
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+function preFlight() {
+	updateScriptLog "[PRE-FLIGHT] $1"
+}
+
+function notice() {
+	updateScriptLog "[NOTICE] $1"
+}
+
+function debugVerbose() {
+	if [[ "$debugMode" == "verbose" ]]; then
+		updateScriptLog "[DEBUG VERBOSE] $1"
+	fi
+}
+
+function debug() {
+	if [[ "$debugMode" == "true" ]]; then
+		updateScriptLog "[DEBUG] $1"
+	fi
+}
+
+function infoOut() {
+	updateScriptLog "[INFO] $1"
+}
+
+function errorOut(){
+	updateScriptLog "[ERROR] $1"
+}
+
+function error() {
+	updateScriptLog "[ERROR] $1"
+	let errorCount++
+}
+
+function warning() {
+	updateScriptLog "[WARNING] $1"
+	let errorCount++
+}
+
+function fatal() {
+	updateScriptLog "[FATAL ERROR] $1"
+	exit 1
+}
+
+function quitOut(){
+	updateScriptLog "[QUIT] $1"
+}
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Pre-flight Check: Logging Preamble
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+updateScriptLog "\n\n###\n# ${scriptFunctionalName} (${scriptVersion})\n###\n"
+preFlight "Initiating …"
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Pre-flight Check: Confirm script is running as root
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+if [[ $(id -u) -ne 0 ]]; then
+	preFlight "This script must be run as root; exiting."
+	exit 1
+fi
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Pre-flight Check: Complete
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+preFlight "Complete"
 
 
 
 if [[ ! -f $aapAutoPatchDeferralFile ]]; then
-	echo "AAP Status configuration profile does  not exist, creating now and setting weekly patching to false"
+	debug "AAP Status configuration profile does not exist, creating now and setting patching to false"
 	makePath "$aapAutoPatchDeferralFile"
 	defaults write $aapAutoPatchDeferralFile AAPWeeklyPatching -bool false
 	defaults write $aapAutoPatchDeferralFile AAPWeeklyPatchingStatusDate "$CurrentDate"
+	debug "Setting AAPActivatorFlag to True"
+	defaults write $aapAutoPatchDeferralFile AAPActivatorFlag -bool true
+else
+	debug "Setting AAPActivatorFlag to True"
+	defaults write $aapAutoPatchDeferralFile AAPActivatorFlag -bool true
 fi
 
 
 
 weeklyPatchingComplete=$(defaults read $aapAutoPatchDeferralFile AAPWeeklyPatching)
+weeklyPatchingStatusDate=$(defaults read $aapAutoPatchDeferralFile AAPWeeklyPatchingStatusDate)
 
 
-if [ -z $weeklyPatchingComplete ]; then
-	echo "Weekly Patching Completion Status not set, setting to False"
+if [[ -z $weeklyPatchingComplete || -z $weeklyPatchingStatusDate ]]; then
+	debug "Patching Completion Status or Start Date not set, setting values"
+	makePath "$aapAutoPatchDeferralFile"
 	defaults write $aapAutoPatchDeferralFile AAPWeeklyPatching -bool false
 	defaults write $aapAutoPatchDeferralFile AAPWeeklyPatchingStatusDate "$CurrentDate"
 	weeklyPatchingComplete=$(defaults read $aapAutoPatchDeferralFile AAPWeeklyPatching)
-else
-	echo "Weekly Patching Completion Status is $weeklyPatchingComplete"
+	weeklyPatchingStatusDate=$(defaults read $aapAutoPatchDeferralFile AAPWeeklyPatchingStatusDate)
 fi
 
-weeklyPatchingStatusDate=$(defaults read $aapAutoPatchDeferralFile AAPWeeklyPatchingStatusDate)
+
 statusDateEpoch=$(date -j -f "%Y-%m-%d" "$weeklyPatchingStatusDate" "+%s")
 EpochTimeSinceStatus=$(($CurrentDateEpoch - $statusDateEpoch))
 DaysSinceStatus=$(($EpochTimeSinceStatus / 86400))
 
-echo "Weekly Patching Status Date: $weeklyPatchingStatusDate"
-echo "Current Date: $CurrentDate"
-echo "Days Since Status Date: $DaysSinceStatus"
+infoOut "Patching Completion Status is $weeklyPatchingComplete"
+infoOut "Patching Start Date is $weeklyPatchingStatusDate"
+infoOut "Current Date: $CurrentDate"
+infoOut "Days Since Patching Start Date: $DaysSinceStatus"
 
 if [ ${DaysSinceStatus} -ge $daysUntilReset ]; then
-	echo "Resetting Weekly Completion Status to False"
+	debug "Resetting Completion Status to False"
 	defaults write $aapAutoPatchDeferralFile AAPWeeklyPatching -bool false
 	defaults write $aapAutoPatchDeferralFile AAPWeeklyPatchingStatusDate "$CurrentDate"
 	weeklyPatchingComplete=$(defaults read $aapAutoPatchDeferralFile AAPWeeklyPatching)
@@ -100,16 +212,16 @@ fi
 	
 
 if [[  $weeklyPatchingComplete == 0 ]]; then
-	echo "Executing App Auto-Patch"
+	infoOut "Executing App Auto-Patch"
 	/usr/local/bin/jamf policy -trigger $aapPolicyTrigger
 elif [[  $weeklyPatchingComplete == 1 ]]; then
-	echo "Weekly Patching Complete... Exiting"
+	infoOut "Patching Status already Complete... Exiting"
 	exit 0
 else
-	echo "Unknown Status... Setting status to False and executing App Auto-Patch"
+	debug "Unknown Status... Setting status to False"
 	defaults write $aapAutoPatchDeferralFile AAPWeeklyPatching -bool false
 	defaults write $aapAutoPatchDeferralFile AAPWeeklyPatchingStatusDate "$CurrentDate"
 	weeklyPatchingComplete=$(defaults read $aapAutoPatchDeferralFile AAPWeeklyPatching)
+	infoOut "Executing App Auto-Patch"
 	/usr/local/bin/jamf policy -trigger $aapPolicyTrigger
 fi
-	
