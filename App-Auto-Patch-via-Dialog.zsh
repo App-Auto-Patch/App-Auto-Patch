@@ -172,7 +172,7 @@ interactiveMode="${6:="2"}"                                                     
 ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
 requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 optionalLabels="${9:=""}"                                                       # Parameter 9: A space-separated list of optional Installomator labels (i.e., "renew") ** Does not support wildcards **
-installomatorOptions="${10:-"BLOCKING_PROCESS_ACTION="prompt_user" NOTIFY="silent" LOGO="appstore""}"    								# Parameter 10: A list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION="prompt_user" NOTIFY="silent" LOGO="appstore")
+installomatorOptions="${10:-"BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore"}"    								# Parameter 10: A list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION="prompt_user" NOTIFY="silent" LOGO="appstore")
 unused="${11:-""}"                                                     		# Parameter 11: 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
