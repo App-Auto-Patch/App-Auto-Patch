@@ -149,6 +149,8 @@
 #   - Updated deferral reset logic to only update if maxDeferrals is not Disabled. Reset deferrals if remaining is higher than max (thanks @TechTrekkie)
 #   - Updated deferral workflow to run removeInstallomator and quitScript triggers to mirror non-deferral workflow (thanks @TechTrekkie)
 #   - Created installomatorOptions Parameter, can be used to overwrite default installomator options
+#   - Fixed Installomator appNewVersion curl URL
+#   - Changed `removeInstallomator` default to false, this will keep AAP's Installomator folder present until Installomator has an update
 # 
 ####################################################################################################
 
@@ -214,7 +216,7 @@ fragmentsPath="$installomatorPath/fragments"
 ### App Auto-Patch Other Behavior Options ###
 
 runDiscovery="true"                                                             # Re-run discovery of installed applications [ true (default) | false ]
-removeInstallomatorPath="true"                                                 	# Remove Installomator after App Auto-Patch is completed [ true (default) | false ]
+removeInstallomatorPath="false"                                                 	# Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Custom Branding, Overlay Icon, etc
