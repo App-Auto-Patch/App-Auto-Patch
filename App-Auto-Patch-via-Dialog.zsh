@@ -172,7 +172,7 @@ interactiveMode="${6:="2"}"                                                     
 ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
 requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 optionalLabels="${9:=""}"                                                       # Parameter 9: A space-separated list of optional Installomator labels (i.e., "renew") ** Does not support wildcards **
-installomatorOptions="${10:-"BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore"}"    								# Parameter 10: A list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION="prompt_user" NOTIFY="silent" LOGO="appstore")
+installomatorOptions="${10:-"BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore"}"    								# Parameter 10: A list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore)
 unused="${11:-""}"                                                     		# Parameter 11: 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -215,12 +215,6 @@ fragmentsPath="$installomatorPath/fragments"
 
 runDiscovery="true"                                                             # Re-run discovery of installed applications [ true (default) | false ]
 removeInstallomatorPath="true"                                                 	# Remove Installomator after App Auto-Patch is completed [ true (default) | false ]
-
-### Installomator Options ###
-
-# BLOCKING_PROCESS_ACTION="prompt_user"
-# NOTIFY="silent"
-# LOGO="appstore"
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Custom Branding, Overlay Icon, etc
@@ -1274,23 +1268,6 @@ warning "Be sure to double-check the Installomator label for your app to verify"
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 function doInstallations() {
-    
-#    if [ "$BLOCKING_PROCESS_ACTION" ]; then
-#        InstallomatorOptions+="BLOCKING_PROCESS_ACTION=$BLOCKING_PROCESS_ACTION"
-#        InstallomatorOptions+=" "
-#    fi
-    
-#    if [ "$NOTIFY" ]; then
-#        InstallomatorOptions+="NOTIFY=$NOTIFY"
-#        InstallomatorOptions+=" "
-#    fi
-    
-#    if [ "$LOGO" ]; then
-#        InstallomatorOptions+="LOGO=$LOGO"
-#        InstallomatorOptions+=" "
-#    fi
-    
-#    InstallomatorOptions=$InstallomatorOptions
     
     infoOut "Installomator Options: $installomatorOptions"
     
