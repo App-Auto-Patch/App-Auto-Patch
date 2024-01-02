@@ -1,6 +1,6 @@
 # App Auto-Patch via Dialog
 
-![AAP](https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/ea6f2e6a-751d-4ea1-aaf7-394a3aba509e)
+[<img_alt="App Auto-Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
 Auto patch management script for Jamf Pro via Dialog
 
