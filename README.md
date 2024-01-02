@@ -1,6 +1,6 @@
 # App Auto-Patch via Dialog
 
-![Screenshot 2024-01-02 at 3 42 17 PM](https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/3ff69109-0a52-4970-bd5d-4a58f6425ade)
+![AAP](https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/ea6f2e6a-751d-4ea1-aaf7-394a3aba509e)
 
 Auto patch management script for Jamf Pro via Dialog
 
