@@ -148,14 +148,14 @@
 #   - Updated AAP Activator Flag to pull from config plist and automatically determine if being executed by AAP-Activator (thanks @TechTrekkie)
 #   - Updated deferral reset logic to only update if maxDeferrals is not Disabled. Reset deferrals if remaining is higher than max (thanks @TechTrekkie)
 #   - Updated deferral workflow to run removeInstallomator and quitScript triggers to mirror non-deferral workflow (thanks @TechTrekkie)
-#   - Created installomatorOptions Parameter, can be used to overwrite default installomator options
+#   - Created installomatorOptions Parameter, which can be used to overwrite default installomator options
 #   - Fixed Installomator appNewVersion curl URL
 #   - Changed `removeInstallomator` default to false, this will keep AAP's Installomator folder present until Installomator has an update
 #
 #   Version 2.0.2, 01.02.2024 Robert Schroeder (@robjschroeder)
 #   - **Breaking Change** for users of App Auto-Patch before `2.0.2`
-#       - Check Jamf Pro Script Parameters before deploying verison 2.0.1, we have re-organized them
-#   - Replaced logic of checking app verison for discovered apps
+#       - Check Jamf Pro Script Parameters before deploying version 2.0.1, we have re-organized them
+#   - Replaced logic of checking app version for discovered apps
 #   - Reduced output to logs outside of debug modes (thanks @dan-snelson)
 # 
 ####################################################################################################
