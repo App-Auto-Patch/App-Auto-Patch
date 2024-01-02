@@ -1,4 +1,7 @@
 # App Auto-Patch via Dialog
+
+![Screenshot 2024-01-02 at 3 42 17 PM](https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/3ff69109-0a52-4970-bd5d-4a58f6425ade)
+
 Auto patch management script for Jamf Pro via Dialog
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/robjschroeder/App-Auto-Patch?display_name=tag) ![GitHub issues](https://img.shields.io/github/issues-raw/robjschroeder/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/robjschroeder/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/robjschroeder/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/robjschroeder/App-Auto-Patch)
