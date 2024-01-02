@@ -157,6 +157,10 @@
 #       - Check Jamf Pro Script Parameters before deploying version 2.0.1, we have re-organized them
 #   - Replaced logic of checking app version for discovered apps
 #   - Reduced output to logs outside of debug modes (thanks @dan-snelson)
+#
+#   Version 2.0.3, 01.02.2024 Robert Schroeder (@robjschroeder)
+#   - App Auto-Patch will do an additional check with a debug version of Installomator to determine if an application that is installed needs an update
+#
 # 
 ####################################################################################################
 
@@ -170,7 +174,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.2"
+scriptVersion="2.0.3"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1020,9 +1024,15 @@ function verifyApp() {
                 elif [[ "$previousVersionLong" == "$appNewVersion" ]]; then
                     notice "--- Latest version installed."
                 else
-                    notice "--- New version: ${appNewVersion}"
-                    /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
-                    queueLabel
+                    # Lastly, verify with Installomator before queueing the label
+                    if ${installomatorScript} ${label_name} DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" | grep "same as installed" >/dev/null 2>&1
+                    then
+                        notice "--- Latest version installed."
+                    else
+                        notice "--- New version: ${appNewVersion}"
+                        /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
+                        queueLabel
+                    fi
                 fi
 
             fi
@@ -1374,18 +1384,6 @@ function checkDeferral() {
             remainingDeferrals=$maxDeferrals
             notice "Deferral previously disabled or set to a higher value. Resetting to Max Deferral count"
         fi
-#       ##Check if $remainingDeferrals returns a nonzero string. (Ensuring it is already set)
-#       if [ -n "$remainingDeferrals" ]; then
-#           notice "Remaining Deferral value of $remainingDeferrals is already set. Continuing"
-#       else
-#           if [[ $remainingDeferrals -le $maxDeferrals ]]; then
-#               deferral=$remainingDeferrals
-#               notice "Remaining Deferrals was less than Max. Continuing."
-#           else
-#               deferral=$maxDeferrals
-#               notice "Deferral set back to Max Deferrals."
-#           fi
-#       fi
         
         if [[ $remainingDeferrals -gt 0 ]]; then
             infobuttontext="Defer"
