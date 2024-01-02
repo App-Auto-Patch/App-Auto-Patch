@@ -136,7 +136,31 @@
 #   - dialogInstall function called only if interactiveMode is greater than 0
 #   - Added logic for AAP-Activator (thanks @TechTrekkie)
 #   - Variable added for AAP-Activator logic under ### Deferral Options ###, please see documentation for more information
-#   - Added optionalLabels array. Installomator labels listed in this array will first check to see if the app is installed. If the app is installed, it will write the label to the required array. If the app is not installed, it will get skipped. 
+#   - Added optionalLabels array. Installomator labels listed in this array will first check to see if the app is installed. If installed, AAP will write the label to the required array. If the app is not installed, it will get skipped. 
+#
+#   Version 2.0.1, 12.20.2023 Robert Schroeder (@robjschroeder)
+#   - **Breaking Change** for users of App Auto-Patch before `2.0.1`
+#	    - Removed the scriptLog variable out of Jamf Pro Script parameters, this is now under the ### Script Log and General Behavior Options ###
+#	    - Removed the debugMode variable out of Jamf Pro Script parameters, this is now under the ### Script Log and General Behavior Options ###
+#	    - Removed the outdatedOSAction variable out of the Jamf Pro Script parameters, this is now under the ### Script Log and General Behavior Options ###
+#	    - Removed the useOverlayIcon variable out of the Jamf Pro Script parameters, this is now under ### Overlay Icon ### in the Custom Branding, Overlay Icon, etc section
+#   - Fixed issue with labels (#13), improving how regex handles app labels from Installomator
+#   - Updated AAP Activator Flag to pull from config plist and automatically determine if being executed by AAP-Activator (thanks @TechTrekkie)
+#   - Updated deferral reset logic to only update if maxDeferrals is not Disabled. Reset deferrals if remaining is higher than max (thanks @TechTrekkie)
+#   - Updated deferral workflow to run removeInstallomator and quitScript triggers to mirror non-deferral workflow (thanks @TechTrekkie)
+#   - Created installomatorOptions Parameter, which can be used to overwrite default installomator options
+#   - Fixed Installomator appNewVersion curl URL
+#   - Changed `removeInstallomator` default to false, this will keep AAP's Installomator folder present until Installomator has an update
+#
+#   Version 2.0.2, 01.02.2024 Robert Schroeder (@robjschroeder)
+#   - **Breaking Change** for users of App Auto-Patch before `2.0.2`
+#       - Check Jamf Pro Script Parameters before deploying version 2.0.1, we have re-organized them
+#   - Replaced logic of checking app version for discovered apps
+#   - Reduced output to logs outside of debug modes (thanks @dan-snelson)
+#
+#   Version 2.0.3, 01.02.2024 Robert Schroeder (@robjschroeder)
+#   - App Auto-Patch will do an additional check with a debug version of Installomator to determine if an application that is installed needs an update
+#
 # 
 ####################################################################################################
 
@@ -150,22 +174,26 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.0"
+scriptVersion="2.0.3"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
-scriptLog="${4:-"/var/log/com.company.log"}"                                    # Parameter 4: Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
-useOverlayIcon="${5:="true"}"                                                   # Parameter 5: Toggles swiftDialog to use an overlay icon [ true (default) | false ]
-interactiveMode="${6:="2"}"                                                     # Parameter 6: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) (default) ]
-ignoredLabels="${7:=""}"                                                        # Parameter 7: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
-requiredLabels="${8:=""}"                                                       # Parameter 8: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
-optionalLabels="${9:=""}"                                                       # Parameter 9: A space-separated list of optional Installomator labels (i.e., "renew") ** Does not support wildcards **
-outdatedOsAction="${10:-"/System/Library/CoreServices/Software Update.app"}"    # Parameter 10: Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
-debugMode="${11:-"false"}"                                                      # Parameter 11: Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
+interactiveMode="${4:="2"}"                                                     # Parameter 4: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) (default) ]
+ignoredLabels="${5:=""}"                                                        # Parameter 5: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
+requiredLabels="${6:=""}"                                                       # Parameter 6: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
+optionalLabels="${7:=""}"                                                       # Parameter 7: A space-separated list of optional Installomator labels (i.e., "renew") ** Does not support wildcards **
+installomatorOptions="${8:-""}"    						# Parameter 8: A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore)
+maxDeferrals="${9:-"Disabled"}"                                                 # Parameter 9: Number of times a user is allowed to defer before being forced to install updates. A value of "Disabled" will not display the deferral prompt. [ `integer` | Disabled (default) ]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Various Feature Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+### Script Log and General Behavior Options ###
+
+scriptLog="/var/log/com.company.log"						# Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
+debugMode="false"								# Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
+outdatedOsAction="/System/Library/CoreServices/Software Update.app"		# Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
 
 ### swiftDialog Options ###
 
@@ -173,11 +201,10 @@ swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDia
 
 ### Deferral Options ###
 
-maxDeferrals="Disabled"								# Number of times a user is allowed to defer before being forced to install updates. A value of "Disabled" will not display the deferral prompt
 deferralTimer=300                                                               # Time given to the user to respond to deferral prompt if enabled
 deferralTimerAction="Defer"                                                     # What happens when the deferral timer expires [ Defer | Continue ]
-AAPActivatorFlag="false"                                                        # Flag to indicate if using AAPActivator to launch App Auto-Patch [ true | false (default) ]
 aapAutoPatchDeferralFile="/Library/Application Support/AppAutoPatch/AppAutoPatchDeferrals.plist"
+AAPActivatorFlag=$(defaults read $aapAutoPatchDeferralFile AAPActivatorFlag)    # Flag to indicate if using AAPActivator to launch App Auto-Patch. AAP Activator will set this value to True prior to launching AAP
 
 ### Unattended Exit Options ###
 
@@ -196,13 +223,7 @@ fragmentsPath="$installomatorPath/fragments"
 ### App Auto-Patch Other Behavior Options ###
 
 runDiscovery="true"                                                             # Re-run discovery of installed applications [ true (default) | false ]
-removeInstallomatorPath="true"                                                 	# Remove Installomator after App Auto-Patch is completed [ true (default) | false ]
-
-### Installomator Options ###
-
-BLOCKING_PROCESS_ACTION="prompt_user"
-NOTIFY="silent"
-LOGO="appstore"
+removeInstallomatorPath="false"                                                 # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Custom Branding, Overlay Icon, etc
@@ -224,6 +245,8 @@ else
 fi
 
 ### Overlay Icon ###
+
+useOverlayIcon="true"								# Toggles swiftDialog to use an overlay icon [ true (default) | false ]
 
 # Create `overlayicon` from Self Service's custom icon (thanks, @meschwartz!)
 if [[ "$useOverlayIcon" == "true" ]]; then
@@ -924,13 +947,13 @@ function PgetAppVersion() {
                 fi
             fi
             
-            notice "Label: $label_name"
-            notice "--- found app at $installedAppPath"
+            debugVerbose "Label: $label_name"
+            debugVerbose "--- found app at $installedAppPath"
             
             # Is the current app from the App Store
             if [[ -d "$installedAppPath"/Contents/_MASReceipt ]]; then
                 notice "--- $appName is from the App Store. Skipping."
-                notice "Use the Installomator option \"IGNORE_APP_STORE_APPS=no\" to replace."
+                debugVerbose "Use the Installomator option \"IGNORE_APP_STORE_APPS=no\" to replace."
                 return 
             else
                 verifyApp $installedAppPath
@@ -943,7 +966,7 @@ function PgetAppVersion() {
 function verifyApp() {
 	
 	appPath=$1
-	notice "Verifying: $appPath"
+	debugVerbose "Verifying: $appPath"
     sleep .2
 	swiftDialogUpdate "progresstext: $appPath"
 	
@@ -963,50 +986,64 @@ function verifyApp() {
 		warning "Team IDs do not match: expected: $expectedTeamID, found $teamID"
 		return
 	else
-		# run the commands in current_label to check for the new version string
-		newversion=$(zsh << SCRIPT_EOF
-declare -A levels=(DEBUG 0 INFO 1 WARN 2 ERROR 3 REQ 4)
-currentUser=$currentUser
-source "$fragmentsPath/functions.sh"
-${current_label}
-echo "\$appNewVersion" 
-SCRIPT_EOF
-)
-	fi
-	
-	# Build an array of labels for the config and/or installation
-	
-	# Push label to an array
-	# If in write config mode, write to plist. Otherwise to an array.
-	# Test if label name in ignored labels
-	if [[ ! " ${ignoredLabelsArray[@]} " =~ " ${label_name} " ]]; then
-		if [[ -n "$configArray[$appPath]" ]]; then
-			exists="$configArray[$appPath]"
 
-            notice "${appPath} already linked to label ${exists}, ignoring label ${label_name}"
-            warning "Modify your ignored label list if you are not getting the desired results"
+    functionsPath="$fragmentsPath/functions.sh"
+    source "${functionsPath}"
 
-            return
-		else
-			configArray[$appPath]=$label_name
-            notice "--- Installed version: ${appversion}"
+    fragment=$(cat ${fragmentsPath}/labels/${label_name}.sh)
 
-            newversion1=$( echo "${newversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
-            appversion1=$( echo "${appversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
-            appversionlong1=$( echo "${appversionLong}" | sed 's/[^a-zA-Z0-9]*$//g' )
+    caseStatement="
+    case $label_name in
+        $fragment
+        *)
+            echo \"$label_name didn't match anything in the case block - weird.\"
+        ;;
+    esac
+    "
+    eval $caseStatement
 
-            [[ -n "$newversion" ]] && notice "--- Newest version: ${newversion}"
+    if [[ -n $name ]]; then
+        if [[ ! " ${ignoredLabelsArray[@]} " =~ " ${label_name} " ]]; then
+            if [[ -n "$configArray[$appPath]" ]]; then
+                exists="$configArray[$appPath]"
 
-            if [[ "$appversion1" == "$newversion1" ]]; then
-                notice "--- Latest version installed."
-            elif [[ "$appversionlong1" == "$newversion1" ]]; then
-                notice "--- Latest version installed."
+                notice "${appPath} already linked to label ${exists}, ignoring label ${label_name}"
+                warning "Modify your ignored label list if you are not getting the desired results"
+
+                return
             else
-                /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
-                queueLabel
+                configArray[$appPath]=$label_name
+
+                appNewVersion=$( echo "${appNewVersion}" | sed 's/[^a-zA-Z0-9]*$//g' )
+                previousVersion=$( echo "${appversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
+                previousVersionLong=$( echo "${appversionLong}" | sed 's/[^a-zA-Z0-9]*$//g' )
+
+                # Compare version strings
+                if [[ "$previousVersion" == "$appNewVersion" ]]; then
+                    notice "--- Latest version installed."
+                elif [[ "$previousVersionLong" == "$appNewVersion" ]]; then
+                    notice "--- Latest version installed."
+                else
+                    # Lastly, verify with Installomator before queueing the label
+                    if ${installomatorScript} ${label_name} DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" | grep "same as installed" >/dev/null 2>&1
+                    then
+                        notice "--- Latest version installed."
+                    else
+                        notice "--- New version: ${appNewVersion}"
+                        /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
+                        queueLabel
+                    fi
+                fi
+
             fi
-		fi
-	fi
+        fi
+    fi
+
+    unset appNewVersion
+    unset name
+    unset previousVersion
+
+    fi
 
 }
 
@@ -1015,7 +1052,7 @@ function queueLabel() {
     notice "Queueing $label_name"
 
     labelsArray+="$label_name "
-    infoOut "$labelsArray"
+    debugVerbose "$labelsArray"
     
 }
 
@@ -1169,7 +1206,7 @@ if [[ "${runDiscovery}" == "true" ]]; then
         while read -r -u 3 line; do 
             
             # Remove spaces and tabs
-            scrubbedLine="$(echo $line | sed -E 's/^( |\t)*//g')"
+            scrubbedLine="$(echo $line | sed -E -e 's/^( |\t)*//g' -e 's/^\s*#.*$//')"
             
             if [ -n $scrubbedLine ]; then
                 if [[ $in_label -eq 0 && "$scrubbedLine" =~ $label_re ]]; then
@@ -1217,10 +1254,10 @@ fi
 # Set variables for various labels
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-labelsFromConfig=($(defaults read "$appAutoPatchConfigFile" | grep -e ';$' | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:]" | tr -s "[:space:]"))
-ignoredLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" IgnoredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:]" | tr -s "[:space:]"))
-requiredLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" RequiredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:]" | tr -s "[:space:]"))
-optionalLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" OptionalLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:]" | tr -s "[:space:]"))
+labelsFromConfig=($(defaults read "$appAutoPatchConfigFile" | grep -e ';$' | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+ignoredLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" IgnoredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+requiredLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" RequiredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+optionalLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" OptionalLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
 ignoredLabelsArray+=($ignoredLabelsFromConfig)
 requiredLabelsArray+=($requiredLabelsFromConfig)
 optionalLabelsArray+=($optionalLabelsFromConfig)
@@ -1255,24 +1292,13 @@ warning "Be sure to double-check the Installomator label for your app to verify"
 
 function doInstallations() {
     
-    if [ "$BLOCKING_PROCESS_ACTION" ]; then
-        InstallomatorOptions+="BLOCKING_PROCESS_ACTION=$BLOCKING_PROCESS_ACTION"
-        InstallomatorOptions+=" "
+    # Check for blank installomatorOptions variable
+    if [[ -z $installomatorOptions ]]; then
+        infoOut "Installomator options blank, setting to 'BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore'"
+        installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore"
     fi
-    
-    if [ "$NOTIFY" ]; then
-        InstallomatorOptions+="NOTIFY=$NOTIFY"
-        InstallomatorOptions+=" "
-    fi
-    
-    if [ "$LOGO" ]; then
-        InstallomatorOptions+="LOGO=$LOGO"
-        InstallomatorOptions+=" "
-    fi
-    
-    InstallomatorOptions=$InstallomatorOptions
-    
-    infoOut "Installomator Options: $InstallomatorOptions"
+
+    infoOut "Installomator Options: $installomatorOptions"
     
     # Count errors
     errorCount=0
@@ -1310,7 +1336,7 @@ function doInstallations() {
         fi
 
         # Run Installomator
-        ${installomatorScript} ${label} ${InstallomatorOptions} ${swiftDialogOptions[@]}
+        ${installomatorScript} ${label} ${installomatorOptions} ${swiftDialogOptions[@]}
         if [ $? != 0 ]; then
             error "Error installing ${label}. Exit code $?"
             let errorCount++
@@ -1352,19 +1378,11 @@ function checkDeferral() {
         if [ -z $remainingDeferrals ]; then
             defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
             remainingDeferrals=$maxDeferrals
-            notice "Deferral has not yet been set. Setting to Max Deferral count and pulling back remainingDeferral value."
-        fi
-        ##Check if $remainingDeferrals returns a nonzero string. (Ensuring it is already set)
-        if [ -n "$remainingDeferrals" ]; then
-            notice "Remaining Deferral value of $remainingDeferrals is already set. Continuing"
-        else
-            if [[ $remainingDeferrals -le $maxDeferrals ]]; then
-                deferral=$remainingDeferrals
-                notice "Remaining Deferrals was less than Max. Continuing."
-            else
-                deferral=$maxDeferrals
-                notice "Deferral set back to Max Deferrals."
-            fi
+            notice "Deferral has not yet been set. Setting to Max Deferral count."
+        elif [[ $remainingDeferrals == "Disabled" || $remainingDeferrals == "disabled" || $remainingDeferrals -gt $maxDeferrals ]]; then
+            defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
+            remainingDeferrals=$maxDeferrals
+            notice "Deferral previously disabled or set to a higher value. Resetting to Max Deferral count"
         fi
         
         if [[ $remainingDeferrals -gt 0 ]]; then
@@ -1404,6 +1422,12 @@ function checkDeferral() {
             remainingDeferrals=$(( $remainingDeferrals - 1 ))
             defaults write $aapAutoPatchDeferralFile remainingDeferrals $remainingDeferrals
             notice "There are $remainingDeferrals deferrals left"
+            if [[ "$AAPActivatorFlag" == 1 ]]; then
+                infoOut "Setting AAPActivatorFlag to False"
+                defaults write $aapAutoPatchDeferralFile AAPActivatorFlag -bool false
+            fi
+            removeInstallomator
+            quitScript
             exit 0
         elif [[ $dialogOutput == 4 && $remainingDeferrals -gt 0 ]] ; then
             if [[ $deferralTimerAction == "Defer" ]]; then
@@ -1411,6 +1435,12 @@ function checkDeferral() {
                 remainingDeferrals=$(( $remainingDeferrals - 1 ))
                 defaults write $aapAutoPatchDeferralFile remainingDeferrals $remainingDeferrals
                 notice "There are $remainingDeferrals deferrals left"
+                if [[ "$AAPActivatorFlag" == 1 ]]; then
+                    infoOut "Setting AAPActivatorFlag to False"
+                    defaults write $aapAutoPatchDeferralFile AAPActivatorFlag -bool false
+                fi
+                removeInstallomator
+                quitScript
                 exit 0
             else
                 notice "Timer Expired and Action not set to Defer... Moving to the Installation step"
@@ -1439,21 +1469,27 @@ if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
     notice "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
     updateScriptLog "----"
     doInstallations
-    infoOut "Installs Complete... Resetting Deferrals"
-    defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
+    if [[ $maxDeferrals == "Disabled" || $maxDeferrals == "disabled" ]]; then
+        infoOut "Installs Complete"
+    else
+        infoOut "Installs Complete... Resetting Deferrals"
+        defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
+    fi
 
     #AAP-Activator - Setting weekly patching status to True
-    if [[ "$AAPActivatorFlag" == "true" ]]; then
+    if [[ "$AAPActivatorFlag" == 1 ]]; then
     infoOut "Setting Weekly Completion Status to True"
     defaults write $aapAutoPatchDeferralFile AAPWeeklyPatching -bool true
+    defaults write $aapAutoPatchDeferralFile AAPActivatorFlag -bool false
     fi
 else
     infoOut "All apps are up to date. Nothing to do."
 
     #AAP-Activator - Setting weekly patching status to True
-    if [[ "$AAPActivatorFlag" == "true" ]]; then
+    if [[ "$AAPActivatorFlag" == 1 ]]; then
         infoOut "Setting Weekly Completion Status to True"
         defaults write $aapAutoPatchDeferralFile AAPWeeklyPatching -bool true
+        defaults write $aapAutoPatchDeferralFile AAPActivatorFlag -bool false
     fi
 
     removeInstallomator 
