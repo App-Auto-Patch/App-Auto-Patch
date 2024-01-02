@@ -1,6 +1,6 @@
 # App Auto-Patch via Dialog
 
-[<img_alt="App Auto-Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
+[<img_alt="App Auto-Patch" src="images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
 Auto patch management script for Jamf Pro via Dialog
 
