@@ -2,8 +2,34 @@
 
 # Version 2
 
+## 2.0.3
+### 2-Jan-2024
+- App Auto-Patch will do an additional check with a debug version of Installomator to determine if an application that is installed needs an update
+
+## 2.0.2
+### 2-Jan-2024
+- **Breaking Change** for users of App Auto-Patch before `2.0.2`
+       - Check Jamf Pro Script Parameters before deploying version 2.0.1, we have re-organized them
+- Replaced logic of checking app version for discovered apps
+- Reduced output to logs outside of debug modes (thanks @dan-snelson)
+
+## 2.0.1
+### 20-Dec-2023
+- **Breaking Change** for users of App Auto-Patch before `2.0.1`
+  - Removed the scriptLog variable out of Jamf Pro Script parameters, this is now under the ### Script Log and General Behavior Options ###
+  - Removed the debugMode variable out of Jamf Pro Script parameters, this is now under the ### Script Log and General Behavior Options ###
+  - Removed the outdatedOSAction variable out of the Jamf Pro Script parameters, this is now under the ### Script Log and General Behavior Options ###
+  - Removed the useOverlayIcon variable out of the Jamf Pro Script parameters, this is now under ### Overlay Icon ### in the Custom Branding, Overlay Icon, etc section
+- Fixed issue with labels (#13), improving how regex handles app labels from Installomator
+- Updated AAP Activator Flag to pull from config plist and automatically determine if being executed by AAP-Activator (thanks @TechTrekkie)
+- Updated deferral reset logic to only update if maxDeferrals is not Disabled. Reset deferrals if remaining is higher than max (thanks @TechTrekkie)
+- Updated deferral workflow to run removeInstallomator and quitScript triggers to mirror non-deferral workflow (thanks @TechTrekkie)
+- Created installomatorOptions Parameter, which can be used to overwrite default installomator options
+- Fixed Installomator appNewVersion curl URL
+- Changed `removeInstallomator` default to false, this will keep AAP's Installomator folder present until Installomator has an update
+
 ## 2.0.0
-### 19-Dec-2022
+### 19-Dec-2023
 - **Breaking Change** for users of App Auto-Patch prior to `2.0.0`
   - Removed the unattendExit variable out of Jamf Pro Script parameters, this is now under the ### Unattended Exit Options ###
 - Moved the outdatedOsAction variable from Parameter 9 to Parameter 10 in Jamf Pro Script parameters
