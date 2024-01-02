@@ -1,5 +1,6 @@
 # App Auto-Patch via Dialog
 Auto patch management script for Jamf Pro via Dialog
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/robjschroeder/App-Auto-Patch?display_name=tag) ![GitHub issues](https://img.shields.io/github/issues-raw/robjschroeder/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/robjschroeder/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/robjschroeder/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/robjschroeder/App-Auto-Patch)
 
 ...Next up, creating wiki and updating documentation @robjschroeder 12.19.2023
 
