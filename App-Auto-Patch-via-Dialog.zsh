@@ -161,6 +161,9 @@
 #   Version 2.0.3, 01.02.2024 Robert Schroeder (@robjschroeder)
 #   - App Auto-Patch will do an additional check with a debug version of Installomator to determine if an application that is installed needs an update
 #
+#   Version 2.0.4, 01.03.2024 Andrew Spokes (@TechTrekkie)
+#   - Adjusting references of 'There is no newer version available' to 'same as installed' to fix debug check behavior for DMG/ZIP installomator labels 
+#
 # 
 ####################################################################################################
 
@@ -174,7 +177,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.3"
+scriptVersion="2.0.4"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -888,11 +891,15 @@ if [[ "$debugMode" == "true" ]]; then
     sleep .2
     /usr/bin/sed -i.backup1 "s|MacAdmins Slack)|MacAdmins Slack )|g" $installomatorScript
     sleep .2
+    /usr/bin/sed -i.backup1 "s|There is no newer version available|same as installed|g" $installomatorScript
+    sleep .2
 else
     infoOut "Setting Installomator to Production Mode"
     /usr/bin/sed -i.backup1 "s|DEBUG=1|DEBUG=0|g" $installomatorScript
     sleep .2
     /usr/bin/sed -i.backup1 "s|MacAdmins Slack)|MacAdmins Slack )|g" $installomatorScript
+    sleep .2
+    /usr/bin/sed -i.backup1 "s|There is no newer version available|same as installed|g" $installomatorScript
     sleep .2
 fi
 
