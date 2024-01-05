@@ -162,7 +162,10 @@
 #   - App Auto-Patch will do an additional check with a debug version of Installomator to determine if an application that is installed needs an update
 #
 #   Version 2.0.4, 01.03.2024 Andrew Spokes (@TechTrekkie)
-#   - Adjusting references of 'There is no newer version available' to 'same as installed' to fix debug check behavior for DMG/ZIP installomator labels 
+#   - Adjusting references of 'There is no newer version available' to 'same as installed' to fix debug check behavior for DMG/ZIP installomator labels
+#
+#   Version 2.0.5, 01.05.2024 Robert Schroeder (@robjschroeder)
+#   - If `interactiveMode` is greater than 1 (set for Full Interactive), and AAP does not detect any app updates a dialog will be presented to the user letting them know. 
 #
 # 
 ####################################################################################################
@@ -177,7 +180,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.4"
+scriptVersion="2.0.5"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1491,6 +1494,12 @@ if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
     fi
 else
     infoOut "All apps are up to date. Nothing to do."
+
+    # Send a dialog out if all apps are updated and interactiveMode is set
+    if [ ${interactiveMode} -gt 1 ]; then
+        $dialogBinary --title "$appTitle" --message "All apps updated." --icon "$icon" --overlayicon "$overlayIcon" --movable --position bottomright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
+    fi
+
 
     #AAP-Activator - Setting weekly patching status to True
     if [[ "$AAPActivatorFlag" == 1 ]]; then
