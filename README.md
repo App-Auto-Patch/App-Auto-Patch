@@ -20,24 +20,20 @@ This project has since been applied to MDMs outside of Jamf Pro, showcasing its 
 
 Please visit the [App Auto-Patch Wiki](https://github.com/robjschroeder/App-Auto-Patch/wiki) for detailed documentation!
 
+- [Getting Started](https://github.com/robjschroeder/App-Auto-Patch/wiki/Getting-Started)
+
+- [Jamf Pro Deployment](https://github.com/robjschroeder/App-Auto-Patch/wiki/Jamf-Pro-Deployment)
+
+- [AAP Activator](https://github.com/robjschroeder/App-Auto-Patch/wiki/AAP-Activator)
+
+- [End-User Experience](https://github.com/robjschroeder/App-Auto-Patch/wiki/End-User-Experience)
+
+
+***
+
 Detailed `AAP` version progress can be found in the [Change Log](https://github.com/robjschroeder/App-Auto-Patch/blob/main/CHANGELOG.md).
 
 You can also join the conversation at the [Mac Admins Foundation Slack](https://www.macadmins.org) in channel [#app-auto-patch](https://macadmins.slack.com/archives/C05D69E7SBH).
-
-## Screenshots
-App Auto-Patch running discovery:
-![Screenshot 2023-10-30 at 11 56 15 AM](https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/5804c14a-b79c-45bf-b91e-2fc022077740)
-
-App Auto-Patch running updates:
-![Screenshot 2023-10-30 at 12 00 26 PM](https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/5de4a82d-cadd-4187-bd26-e27df0620af8)
-
-App Auto-Patch Help Message:
-
-![Screenshot 2023-10-30 at 12 00 37 PM](https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/7f5f8c77-4356-4e83-b547-d8affa8403d2)
-
-App Auto-Patch completed:
-
-![Screenshot 2023-10-30 at 12 03 07 PM](https://github.com/robjschroeder/App-Auto-Patch/assets/23343243/b4e3ec8d-8c72-44c0-b57f-6f73c3dd62ab)
 
 ## Thank you
 To everyone who has helped contribute to App Auto-Patch, including but not limited to:
