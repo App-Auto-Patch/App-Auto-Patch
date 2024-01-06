@@ -2,6 +2,10 @@
 
 # Version 2
 
+## 2.0.5
+### 5-Jan-2024
+If `interactiveMode` is greater than 1 (set for Full Interactive), and AAP does not detect any app updates a dialog will be presented to the user letting them know.
+
 ## 2.0.4
 ### 3-Jan-2024
 - Adjusted references of 'There is no newer version available' to 'same as installed' to fix debug check behavior for DMG/ZIP Installomator labels (thanks @TechTrekkie) 
