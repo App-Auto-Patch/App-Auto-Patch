@@ -8,6 +8,9 @@
 ## Introduction
 App Auto-Patch combines local application discovery, an Installomator integration, and user-friendly swiftDialog prompts to automate application patch management across Mac computers.
 
+[<img alt="App Auto Patch" src="https://github.com/robjschroeder/App-Auto-Patch/blob/6a7ace89d2f4fc6641b1829f04950bbf3401b6f1/Images/AAP-Demo.gif" />](https://techitout.xyz/app-auto-patch)
+
+
 ## Why Build This
 
 App Auto-Patch was developed based on a similar concept as the Patchomator project, with a significant portion of its code borrowed from there. The main requirement for its use was to create a script deployable through Jamf Pro without the need for installing multiple dependencies on end-user computers. Since the original concept, it has since become an independent repository hosted here.
