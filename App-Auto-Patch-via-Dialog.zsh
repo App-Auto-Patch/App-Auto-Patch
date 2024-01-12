@@ -230,6 +230,7 @@ fragmentsPath="$installomatorPath/fragments"
 
 runDiscovery="true"                                                             # Re-run discovery of installed applications [ true (default) | false ]
 removeInstallomatorPath="false"                                                 # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
+ignoreAppsInHomeFolder="true"                                                  # Ignore apps found in '/Users/*' [ true (default) | false ]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Custom Branding, Overlay Icon, etc
@@ -931,7 +932,11 @@ function PgetAppVersion() {
     elif [[ -d "/Applications/Utilities/$appName" ]]; then
         applist="/Applications/Utilities/$appName"
     else
-        applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0 )
+        applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0)
+	if ([[ "$applist" == *"/Users/"* && "ignoreAppsInHomeFolder" == "true" ]]); then
+		debugVerbose "Ignoring user installed application:"
+		debugVerbose "$applist"
+		applist=""
     fi
     
     appPathArray=( ${(0)applist} )
