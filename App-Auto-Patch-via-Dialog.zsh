@@ -933,7 +933,7 @@ function PgetAppVersion() {
         applist="/Applications/Utilities/$appName"
     else
         applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0)
-	if ([[ "$applist" == *"/Users/"* && "ignoreAppsInHomeFolder" == "true" ]]); then
+	if ([[ "$applist" == *"/Users/"* && "$ignoreAppsInHomeFolder" == "true" ]]); then
 		debugVerbose "Ignoring user installed application:"
 		debugVerbose "$applist"
 		applist=""
