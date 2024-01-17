@@ -167,7 +167,12 @@
 #   Version 2.0.5, 01.05.2024 Robert Schroeder (@robjschroeder)
 #   - If `interactiveMode` is greater than 1 (set for Full Interactive), and AAP does not detect any app updates a dialog will be presented to the user letting them know. 
 #
-# 
+#   Version 2.0.6, 01.17.2024
+#   - Added function to list application names needing to update to show users before updates are installed during the deferral window
+#   - Added text to explain the deferral timer during the deferall window
+#   - Text displayed during the deferral period and no deferrals remaining changes depending on how many deferrals are left.
+#
+#
 ####################################################################################################
 
 ####################################################################################################
@@ -180,7 +185,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.5"
+scriptVersion="2.0.6"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -188,7 +193,7 @@ interactiveMode="${4:="2"}"                                                     
 ignoredLabels="${5:=""}"                                                        # Parameter 5: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
 requiredLabels="${6:=""}"                                                       # Parameter 6: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 optionalLabels="${7:=""}"                                                       # Parameter 7: A space-separated list of optional Installomator labels (i.e., "renew") ** Does not support wildcards **
-installomatorOptions="${8:-""}"    						# Parameter 8: A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore)
+installomatorOptions="${8:-""}" 						# Parameter 8: A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=Jamf Pro)
 maxDeferrals="${9:-"Disabled"}"                                                 # Parameter 9: Number of times a user is allowed to defer before being forced to install updates. A value of "Disabled" will not display the deferral prompt. [ `integer` | Disabled (default) ]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -197,7 +202,7 @@ maxDeferrals="${9:-"Disabled"}"                                                 
 
 ### Script Log and General Behavior Options ###
 
-scriptLog="/var/log/com.company.log"						# Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
+scriptLog="/var/log/appautopatch.log"						# Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
 debugMode="false"								# Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
 outdatedOsAction="/System/Library/CoreServices/Software Update.app"		# Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
 
@@ -207,7 +212,7 @@ swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDia
 
 ### Deferral Options ###
 
-deferralTimer=300                                                               # Time given to the user to respond to deferral prompt if enabled
+deferralTimer=300                                                             # Time given to the user to respond to deferral prompt if enabled
 deferralTimerAction="Defer"                                                     # What happens when the deferral timer expires [ Defer | Continue ]
 aapAutoPatchDeferralFile="/Library/Application Support/AppAutoPatch/AppAutoPatchDeferrals.plist"
 AAPActivatorFlag=$(defaults read $aapAutoPatchDeferralFile AAPActivatorFlag)    # Flag to indicate if using AAPActivator to launch App Auto-Patch. AAP Activator will set this value to True prior to launching AAP
@@ -551,6 +556,7 @@ preFlight "Complete"
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 dialogBinary="/usr/local/bin/dialog"
+dialog="/Library/Application Support/Dialog/Dialog.app"
 dialogCommandFile=$( mktemp /var/tmp/dialog.appAutoPatch.XXXXX )
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -715,7 +721,7 @@ function quitScript() {
         rm "${overlayicon}"
     fi
     
-    # Remove welcomeCommandFile
+    # Remove dialogCommandFile
     if [[ -e ${dialogCommandFile} ]]; then
         quitOut "Removing ${dialogCommandFile} …"
         rm "${dialogCommandFile}"
@@ -785,7 +791,7 @@ function completeSwiftDialogList(){
     fi
 
     # Delete the tmp command file
-    rm "$dialogCommandFile"
+    rm  "$dialogCommandFile"
 
 }
 
@@ -1062,6 +1068,7 @@ function queueLabel() {
     notice "Queueing $label_name"
 
     labelsArray+="$label_name "
+    namesArray+="$name "
     debugVerbose "$labelsArray"
     
 }
@@ -1287,6 +1294,27 @@ labelsArray=($(tr ' ' '\n' <<< "${labelsArray[@]}" | sort -u | tr '\n' ' '))
 
 labelsArray=${labelsArray:|ignoredLabelsArray}
 
+# Function for spacing with a space and bullet points
+function formatWithBulletPoints() {
+    local input="$1"
+    local formattedInput=$(printf "• %s\n\n" "${(@s/, /)input}")
+    echo "${formattedInput%,}"
+}
+
+# Get App Names for each label in labelsArray
+queuedLabelsForNames=("${(@s/ /)labelsArray}")
+for label in $queuedLabelsForNames; do
+    debugVerbose "Obtaining proper name for $label"
+    appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g')"
+    appNamesArray+="$appName,"
+done
+
+# Convert array to a string with bullet points and spaces
+formattedAppNames=$(formatWithBulletPoints "${appNamesArray[*]}")
+
+# Update dialog with formatted app names
+notice "formatted app names: $formattedAppNames"
+notice "Application Names: $appNamesArray"
 notice "Labels to install: $labelsArray"
 notice "Ignoring labels: $ignoredLabelsArray"
 notice "Required labels: $requiredLabelsArray"
@@ -1302,10 +1330,11 @@ warning "Be sure to double-check the Installomator label for your app to verify"
 
 function doInstallations() {
     
+
     # Check for blank installomatorOptions variable
     if [[ -z $installomatorOptions ]]; then
-        infoOut "Installomator options blank, setting to 'BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore'"
-        installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore"
+        infoOut "Installomator options blank, setting to 'BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=Jamf Pro'"
+        installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=Jamf Pro"
     fi
 
     infoOut "Installomator Options: $installomatorOptions"
@@ -1339,9 +1368,11 @@ function doInstallations() {
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplayName}"\')
             sleep .5
 
+            infoOut "$currentDisplayName"
             swiftDialogUpdate "icon: /Applications/${currentDisplayName}.app"
             swiftDialogUpdate "progresstext: Checking ${currentDisplayName} …"
             swiftDialogUpdate "listitem: index: $i, status: wait, statustext: Checking …"
+
 
         fi
 
@@ -1367,7 +1398,7 @@ function doInstallations() {
 }
 
 function checkDeferral() {
-    
+
     if [[ $maxDeferrals == "Disabled" || $maxDeferrals == "disabled" ]]; then
         notice "Deferral workflow disabled, moving on to Installs"
     else
@@ -1394,40 +1425,47 @@ function checkDeferral() {
             remainingDeferrals=$maxDeferrals
             notice "Deferral previously disabled or set to a higher value. Resetting to Max Deferral count"
         fi
-        
+
         if [[ $remainingDeferrals -gt 0 ]]; then
-            infobuttontext="Defer"
+            infobuttontext="Defer 1 Day"
+            infobox="You will automatically defer after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $remainingDeferrals"
+            message="You can **Defer** the updates or **Update Now** to close the applications and apply updates. 
+            Applications will reopen once updates are complete. \n\n The following applications require updates: \n\n $formattedAppNames"
+            height=425
+            width=525
         else
-            infobuttontext="Max Deferrals Reached"
+            infobuttontext="No Deferrals"
+            infobox="#### No Deferrals Remaining ####"
+            message="Updates will begin when the timer expires. Applications will reopen once updates are complete. \n\n **_Please save your work before updating_**. \n\n The following applications must be updated: \n\n $formattedAppNames"
+            height=425
+            width=525
         fi
-        
-        
+
         notice "There are $remainingDeferrals deferrals left"
         
-        #--height ${dialogheight} \
-        #--iconsize ${iconsize} \
-        message="There are $numberOfUpdates application(s) that require updates\n\n \
-    You have $remainingDeferrals deferral(s) remaining."
-        
-            $dialogBinary --title "${appTitle}" \
-            --icon "$icon" \
-            --overlayicon "$overlayicon" \
-            --message "${message}" \
-            --infobuttontext "$infobuttontext" \
-            --button1text "Continue" \
-            --position bottomright \
-            --quitoninfo \
-            --moveable \
-            --small \
-            --quitkey k \
-            --titlefont size=18 \
-            --messagefont size=15 \
-            --height 280 \
-            --timer $deferralTimer
-        
-        
-        dialogOutput=$?
-            
+        $dialogBinary --title "$appTitle" \
+                    --commandfile "$dialogCommandFile" \
+                    --icon "$icon" \
+                    --iconsize 100 \
+                    --overlayicon "$overlayicon" \
+                    --message "$message" \
+                    --helpmessage "$helpMessage" \
+                    --infobuttontext "$infobuttontext" \
+                    --infobox "$infobox" \
+                    --button1text "Update Now" \
+                    --position bottomright \
+                    --quitoninfo \
+                    --moveable \
+                    --quitkey k \
+                    --titlefont size=18 \
+                    --messagefont size=15 \
+                    --height $height \
+                    --width $width \
+                    --timer $deferralTimer \
+
+        dialogOutput=$? 
+        infoOut "dialog deferral output: $dialogOutput"
+
         if [[ $dialogOutput == 3 && $remainingDeferrals -gt 0 ]] ; then
             remainingDeferrals=$(( $remainingDeferrals - 1 ))
             defaults write $aapAutoPatchDeferralFile remainingDeferrals $remainingDeferrals
@@ -1458,9 +1496,7 @@ function checkDeferral() {
         else
             notice "Moving to Installation step"
         fi
-
     fi
-
 }
 
 oldIFS=$IFS
@@ -1497,7 +1533,7 @@ else
 
     # Send a dialog out if all apps are updated and interactiveMode is set
     if [ ${interactiveMode} -gt 1 ]; then
-        $dialogBinary --title "$appTitle" --message "All apps updated." --icon "$icon" --overlayicon "$overlayIcon" --movable --position bottomright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
+        $dialogBinary --title "$appTitle" --message "All apps updated." --icon "$icon" --overlayicon "$overlayIcon" --movable --position  --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
     fi
 
 
