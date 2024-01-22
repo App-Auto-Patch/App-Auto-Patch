@@ -167,6 +167,10 @@
 #   Version 2.0.5, 01.05.2024 Robert Schroeder (@robjschroeder)
 #   - If `interactiveMode` is greater than 1 (set for Full Interactive), and AAP does not detect any app updates a dialog will be presented to the user letting them know. 
 #
+#   Version 2.0.6, 01.22.2024 Robert Schroeder (@robjschroeder)
+#   - New feature, `convertAppsInHomeFolder`. If this variable is set to `true` and an app is found within the /Users/* directory, the app will be queued for installation into the default path and removed into from the /Users/* directory
+#   - New feature, `ignoreAppsInHomeFolder`. If this variable is set to `true` apps found within the /Users/* directory will be ignored. If `false` an app discovered with an update will be queued and installed into the default directory. This may may lead to two version of the same app installed. (thanks @gilburns!) 
+#
 # 
 ####################################################################################################
 
@@ -180,7 +184,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.5"
+scriptVersion="2.0.6"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -230,6 +234,8 @@ fragmentsPath="$installomatorPath/fragments"
 
 runDiscovery="true"                                                             # Re-run discovery of installed applications [ true (default) | false ]
 removeInstallomatorPath="false"                                                 # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
+convertAppsInHomeFolder="true"                                                  # Remove apps in /Users/* and install them to do default path [ true (default) | false ]
+ignoreAppsInHomeFolder="false"                                                  # Ignore apps found in '/Users/*'. If an update is found in '/Users/*' and variable is set to `false`, the app will be updated into the application's default path [ true | false (default) ]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Custom Branding, Overlay Icon, etc
@@ -533,6 +539,7 @@ declare -A configArray=()
 ignoredLabelsArray=($(echo ${ignoredLabels}))
 requiredLabelsArray=($(echo ${requiredLabels}))
 optionalLabelsArray=($(echo ${optionalLabels}))
+convertedLabelsArray=($(echo ${convertedLabels}))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Pre-flight Check: Complete
@@ -931,7 +938,16 @@ function PgetAppVersion() {
     elif [[ -d "/Applications/Utilities/$appName" ]]; then
         applist="/Applications/Utilities/$appName"
     else
-        applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0 )
+        applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0)
+            if ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "true" ]]); then
+                debugVerbose "App found in User directory: $applist, coverting to default directory"
+                # Adding the label to the converted labels
+                /usr/libexec/PlistBuddy -c "add \":ConvertedLabels:\" string \"${label_name}\"" "${appAutoPatchConfigFile}"
+                rm -rf $applist
+            elif ([[ "$applist" == *"/Users/"* && "$ignoreAppsInHomeFolder" == "true" ]]); then
+ 		        debugVerbose "Ignoring user installed application: $applist"
+ 		        applist=""
+            fi
     fi
     
     appPathArray=( ${(0)applist} )
@@ -1107,6 +1123,7 @@ if [[ "${runDiscovery}" == "true" ]]; then
     /usr/libexec/PlistBuddy -c 'add ":IgnoredLabels" array' "${appAutoPatchConfigFile}"
     /usr/libexec/PlistBuddy -c 'add ":RequiredLabels" array' "${appAutoPatchConfigFile}"
     /usr/libexec/PlistBuddy -c 'add ":OptionalLabels" array' "${appAutoPatchConfigFile}"
+    /usr/libexec/PlistBuddy -c 'add ":ConvertedLabels" array' "${appAutoPatchConfigFile}"
 
     # Populate Ignored Labels
         infoOut "Attempting to populate ignored labels"
@@ -1268,10 +1285,12 @@ labelsFromConfig=($(defaults read "$appAutoPatchConfigFile" | grep -e ';$' | awk
 ignoredLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" IgnoredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
 requiredLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" RequiredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
 optionalLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" OptionalLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+convertedLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" ConvertedLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
 ignoredLabelsArray+=($ignoredLabelsFromConfig)
 requiredLabelsArray+=($requiredLabelsFromConfig)
 optionalLabelsArray+=($optionalLabelsFromConfig)
-labelsArray+=($labelsFromConfig $requiredLabels $requiredLabelsFromConfig)
+convertedLabelsArray+=($convertedLabelsFromConfig)
+labelsArray+=($labelsFromConfig $requiredLabels $requiredLabelsFromConfig $convertedLabelsFromConfig)
 
 # Deduplicate ignored labels
 ignoredLabelsArray=($(tr ' ' '\n' <<< "${ignoredLabelsArray[@]}" | sort -u | tr '\n' ' '))
@@ -1282,6 +1301,9 @@ requiredLabelsArray=($(tr ' ' '\n' <<< "${requiredLabelsArray[@]}" | sort -u | t
 # Deduplicate required labels
 optionalLabelsArray=($(tr ' ' '\n' <<< "${optionalLabelsArray[@]}" | sort -u | tr '\n' ' '))
 
+# Deduplicate converted labels
+convertedLabelsArray=($(tr ' ' '\n' <<< "${convertedLabelsArray[@]}" | sort -u | tr '\n' ' '))
+
 # Deduplicate labels list
 labelsArray=($(tr ' ' '\n' <<< "${labelsArray[@]}" | sort -u | tr '\n' ' '))
 
@@ -1291,6 +1313,7 @@ notice "Labels to install: $labelsArray"
 notice "Ignoring labels: $ignoredLabelsArray"
 notice "Required labels: $requiredLabelsArray"
 notice "Optional Labels: $optionalLabelsArray"
+notice "Converted Labels: $convertedLabelsArray"
 
 infoOut "Discovery of installed applications complete..."
 warning "Some false positives may appear in labelsArray as they may not be able to determine a new app version based on the Installomator label for the app"
