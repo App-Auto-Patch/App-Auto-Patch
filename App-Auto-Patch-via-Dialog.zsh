@@ -167,12 +167,16 @@
 #   Version 2.0.5, 01.05.2024 Robert Schroeder (@robjschroeder)
 #   - If `interactiveMode` is greater than 1 (set for Full Interactive), and AAP does not detect any app updates a dialog will be presented to the user letting them know. 
 #
-#   Version 2.0.6, 01.17.2024
+#   Version 2.0.6, 01.22.2024 Robert Schroeder (@robjschroeder)
+#   - New feature, `convertAppsInHomeFolder`. If this variable is set to `true` and an app is found within the /Users/* directory, the app will be queued for installation into the default path and removed into from the /Users/* directory
+#   - New feature, `ignoreAppsInHomeFolder`. If this variable is set to `true` apps found within the /Users/* directory will be ignored. If `false` an app discovered with an update will be queued and installed into the default directory. This may may lead to two version of the same app installed. (thanks @gilburns!) 
+#
+#   Version 2.0.7, 01.22.2024
 #   - Added function to list application names needing to update to show users before updates are installed during the deferral window
 #   - Added text to explain the deferral timer during the deferall window
 #   - Text displayed during the deferral period and no deferrals remaining changes depending on how many deferrals are left.
 #
-#
+# 
 ####################################################################################################
 
 ####################################################################################################
@@ -185,7 +189,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.6"
+scriptVersion="2.0.7"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -193,7 +197,7 @@ interactiveMode="${4:="2"}"                                                     
 ignoredLabels="${5:=""}"                                                        # Parameter 5: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
 requiredLabels="${6:=""}"                                                       # Parameter 6: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 optionalLabels="${7:=""}"                                                       # Parameter 7: A space-separated list of optional Installomator labels (i.e., "renew") ** Does not support wildcards **
-installomatorOptions="${8:-""}" 						# Parameter 8: A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=Jamf Pro)
+installomatorOptions="${8:-""}"    						# Parameter 8: A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore)
 maxDeferrals="${9:-"Disabled"}"                                                 # Parameter 9: Number of times a user is allowed to defer before being forced to install updates. A value of "Disabled" will not display the deferral prompt. [ `integer` | Disabled (default) ]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -202,7 +206,7 @@ maxDeferrals="${9:-"Disabled"}"                                                 
 
 ### Script Log and General Behavior Options ###
 
-scriptLog="/var/log/appautopatch.log"						# Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
+scriptLog="/var/log/com.company.log"						# Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
 debugMode="false"								# Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
 outdatedOsAction="/System/Library/CoreServices/Software Update.app"		# Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
 
@@ -212,7 +216,7 @@ swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDia
 
 ### Deferral Options ###
 
-deferralTimer=300                                                             # Time given to the user to respond to deferral prompt if enabled
+deferralTimer=300                                                               # Time given to the user to respond to deferral prompt if enabled
 deferralTimerAction="Defer"                                                     # What happens when the deferral timer expires [ Defer | Continue ]
 aapAutoPatchDeferralFile="/Library/Application Support/AppAutoPatch/AppAutoPatchDeferrals.plist"
 AAPActivatorFlag=$(defaults read $aapAutoPatchDeferralFile AAPActivatorFlag)    # Flag to indicate if using AAPActivator to launch App Auto-Patch. AAP Activator will set this value to True prior to launching AAP
@@ -235,6 +239,8 @@ fragmentsPath="$installomatorPath/fragments"
 
 runDiscovery="true"                                                             # Re-run discovery of installed applications [ true (default) | false ]
 removeInstallomatorPath="false"                                                 # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
+convertAppsInHomeFolder="true"                                                  # Remove apps in /Users/* and install them to do default path [ true (default) | false ]
+ignoreAppsInHomeFolder="false"                                                  # Ignore apps found in '/Users/*'. If an update is found in '/Users/*' and variable is set to `false`, the app will be updated into the application's default path [ true | false (default) ]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Custom Branding, Overlay Icon, etc
@@ -538,6 +544,7 @@ declare -A configArray=()
 ignoredLabelsArray=($(echo ${ignoredLabels}))
 requiredLabelsArray=($(echo ${requiredLabels}))
 optionalLabelsArray=($(echo ${optionalLabels}))
+convertedLabelsArray=($(echo ${convertedLabels}))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Pre-flight Check: Complete
@@ -556,7 +563,6 @@ preFlight "Complete"
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 dialogBinary="/usr/local/bin/dialog"
-dialog="/Library/Application Support/Dialog/Dialog.app"
 dialogCommandFile=$( mktemp /var/tmp/dialog.appAutoPatch.XXXXX )
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -721,7 +727,7 @@ function quitScript() {
         rm "${overlayicon}"
     fi
     
-    # Remove dialogCommandFile
+    # Remove welcomeCommandFile
     if [[ -e ${dialogCommandFile} ]]; then
         quitOut "Removing ${dialogCommandFile} …"
         rm "${dialogCommandFile}"
@@ -791,7 +797,7 @@ function completeSwiftDialogList(){
     fi
 
     # Delete the tmp command file
-    rm  "$dialogCommandFile"
+    rm "$dialogCommandFile"
 
 }
 
@@ -937,7 +943,16 @@ function PgetAppVersion() {
     elif [[ -d "/Applications/Utilities/$appName" ]]; then
         applist="/Applications/Utilities/$appName"
     else
-        applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0 )
+        applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0)
+            if ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "true" ]]); then
+                debugVerbose "App found in User directory: $applist, coverting to default directory"
+                # Adding the label to the converted labels
+                /usr/libexec/PlistBuddy -c "add \":ConvertedLabels:\" string \"${label_name}\"" "${appAutoPatchConfigFile}"
+                rm -rf $applist
+            elif ([[ "$applist" == *"/Users/"* && "$ignoreAppsInHomeFolder" == "true" ]]); then
+ 		        debugVerbose "Ignoring user installed application: $applist"
+ 		        applist=""
+            fi
     fi
     
     appPathArray=( ${(0)applist} )
@@ -1068,7 +1083,6 @@ function queueLabel() {
     notice "Queueing $label_name"
 
     labelsArray+="$label_name "
-    namesArray+="$name "
     debugVerbose "$labelsArray"
     
 }
@@ -1114,6 +1128,7 @@ if [[ "${runDiscovery}" == "true" ]]; then
     /usr/libexec/PlistBuddy -c 'add ":IgnoredLabels" array' "${appAutoPatchConfigFile}"
     /usr/libexec/PlistBuddy -c 'add ":RequiredLabels" array' "${appAutoPatchConfigFile}"
     /usr/libexec/PlistBuddy -c 'add ":OptionalLabels" array' "${appAutoPatchConfigFile}"
+    /usr/libexec/PlistBuddy -c 'add ":ConvertedLabels" array' "${appAutoPatchConfigFile}"
 
     # Populate Ignored Labels
         infoOut "Attempting to populate ignored labels"
@@ -1275,10 +1290,12 @@ labelsFromConfig=($(defaults read "$appAutoPatchConfigFile" | grep -e ';$' | awk
 ignoredLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" IgnoredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
 requiredLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" RequiredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
 optionalLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" OptionalLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+convertedLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" ConvertedLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
 ignoredLabelsArray+=($ignoredLabelsFromConfig)
 requiredLabelsArray+=($requiredLabelsFromConfig)
 optionalLabelsArray+=($optionalLabelsFromConfig)
-labelsArray+=($labelsFromConfig $requiredLabels $requiredLabelsFromConfig)
+convertedLabelsArray+=($convertedLabelsFromConfig)
+labelsArray+=($labelsFromConfig $requiredLabels $requiredLabelsFromConfig $convertedLabelsFromConfig)
 
 # Deduplicate ignored labels
 ignoredLabelsArray=($(tr ' ' '\n' <<< "${ignoredLabelsArray[@]}" | sort -u | tr '\n' ' '))
@@ -1289,36 +1306,29 @@ requiredLabelsArray=($(tr ' ' '\n' <<< "${requiredLabelsArray[@]}" | sort -u | t
 # Deduplicate required labels
 optionalLabelsArray=($(tr ' ' '\n' <<< "${optionalLabelsArray[@]}" | sort -u | tr '\n' ' '))
 
+# Deduplicate converted labels
+convertedLabelsArray=($(tr ' ' '\n' <<< "${convertedLabelsArray[@]}" | sort -u | tr '\n' ' '))
+
 # Deduplicate labels list
 labelsArray=($(tr ' ' '\n' <<< "${labelsArray[@]}" | sort -u | tr '\n' ' '))
 
 labelsArray=${labelsArray:|ignoredLabelsArray}
 
-# Function for spacing with a space and bullet points
-function formatWithBulletPoints() {
-    local input="$1"
-    local formattedInput=$(printf "• %s\n\n" "${(@s/, /)input}")
-    echo "${formattedInput%,}"
-}
-
+appNamesArray=()
 # Get App Names for each label in labelsArray
 queuedLabelsForNames=("${(@s/ /)labelsArray}")
 for label in $queuedLabelsForNames; do
     debugVerbose "Obtaining proper name for $label"
     appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g')"
-    appNamesArray+="$appName,"
+    appName=$(echo $appName | sed -e 's/^[ \t]*//' )
+    appNamesArray+=(--listitem "$appName")
 done
 
-# Convert array to a string with bullet points and spaces
-formattedAppNames=$(formatWithBulletPoints "${appNamesArray[*]}")
-
-# Update dialog with formatted app names
-notice "formatted app names: $formattedAppNames"
-notice "Application Names: $appNamesArray"
 notice "Labels to install: $labelsArray"
 notice "Ignoring labels: $ignoredLabelsArray"
 notice "Required labels: $requiredLabelsArray"
 notice "Optional Labels: $optionalLabelsArray"
+notice "Converted Labels: $convertedLabelsArray"
 
 infoOut "Discovery of installed applications complete..."
 warning "Some false positives may appear in labelsArray as they may not be able to determine a new app version based on the Installomator label for the app"
@@ -1330,11 +1340,10 @@ warning "Be sure to double-check the Installomator label for your app to verify"
 
 function doInstallations() {
     
-
     # Check for blank installomatorOptions variable
     if [[ -z $installomatorOptions ]]; then
-        infoOut "Installomator options blank, setting to 'BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=Jamf Pro'"
-        installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=Jamf Pro"
+        infoOut "Installomator options blank, setting to 'BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore'"
+        installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore"
     fi
 
     infoOut "Installomator Options: $installomatorOptions"
@@ -1368,11 +1377,9 @@ function doInstallations() {
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplayName}"\')
             sleep .5
 
-            infoOut "$currentDisplayName"
             swiftDialogUpdate "icon: /Applications/${currentDisplayName}.app"
             swiftDialogUpdate "progresstext: Checking ${currentDisplayName} …"
             swiftDialogUpdate "listitem: index: $i, status: wait, statustext: Checking …"
-
 
         fi
 
@@ -1398,7 +1405,7 @@ function doInstallations() {
 }
 
 function checkDeferral() {
-
+    
     if [[ $maxDeferrals == "Disabled" || $maxDeferrals == "disabled" ]]; then
         notice "Deferral workflow disabled, moving on to Installs"
     else
@@ -1425,47 +1432,53 @@ function checkDeferral() {
             remainingDeferrals=$maxDeferrals
             notice "Deferral previously disabled or set to a higher value. Resetting to Max Deferral count"
         fi
-
+        
         if [[ $remainingDeferrals -gt 0 ]]; then
-            infobuttontext="Defer 1 Day"
+            infobuttontext="Defer"
             infobox="You will automatically defer after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $remainingDeferrals"
-            message="You can **Defer** the updates or **Update Now** to close the applications and apply updates. 
-            Applications will reopen once updates are complete. \n\n The following applications require updates: \n\n $formattedAppNames"
-            height=425
+            message="You can **Defer** the updates or **Continue** to close the applications and apply updates.  \n\n The following applications require updates: "
+            height=700
             width=525
         else
-            infobuttontext="No Deferrals"
+            infobuttontext="Max Deferrals Reached"
             infobox="#### No Deferrals Remaining ####"
-            message="Updates will begin when the timer expires. Applications will reopen once updates are complete. \n\n **_Please save your work before updating_**. \n\n The following applications must be updated: \n\n $formattedAppNames"
-            height=425
+            message="Updates will begin when the timer expires. \n\n **_Please save your work before updating_**. \n\n The following applications must be updated: "
+            height=700
             width=525
         fi
-
-        notice "There are $remainingDeferrals deferrals left"
         
-        $dialogBinary --title "$appTitle" \
-                    --commandfile "$dialogCommandFile" \
-                    --icon "$icon" \
-                    --iconsize 100 \
-                    --overlayicon "$overlayicon" \
-                    --message "$message" \
-                    --helpmessage "$helpMessage" \
-                    --infobuttontext "$infobuttontext" \
-                    --infobox "$infobox" \
-                    --button1text "Update Now" \
-                    --position bottomright \
-                    --quitoninfo \
-                    --moveable \
-                    --quitkey k \
-                    --titlefont size=18 \
-                    --messagefont size=15 \
-                    --height $height \
-                    --width $width \
-                    --timer $deferralTimer \
+        
+        notice "There are $remainingDeferrals deferrals left"
 
-        dialogOutput=$? 
-        infoOut "dialog deferral output: $dialogOutput"
+            deferralDialogContent=(
+                --title "$appTitle"
+                --message "$message"
+                --helpmessage "$helpmessage"
+                --icon "$icon"
+                --overlayicon "$overlayicon"
+                --infobuttontext "$infobuttontext"
+                --infobox "$infobox"
+                --timer $deferralTimer
+                --button1text "Continue"
+            )
 
+            deferralDialogOptions=(
+                --position bottomright
+                --quitoninfo
+                --movable
+                --small
+                --quitkey k
+                --titlefont size=18
+                --messagefont size=15
+                --height $height
+                --commandfile "$dialogCommandFile"
+            )
+        
+            "$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}"
+        
+        
+        dialogOutput=$?
+            
         if [[ $dialogOutput == 3 && $remainingDeferrals -gt 0 ]] ; then
             remainingDeferrals=$(( $remainingDeferrals - 1 ))
             defaults write $aapAutoPatchDeferralFile remainingDeferrals $remainingDeferrals
@@ -1496,7 +1509,9 @@ function checkDeferral() {
         else
             notice "Moving to Installation step"
         fi
+
     fi
+
 }
 
 oldIFS=$IFS
@@ -1533,7 +1548,7 @@ else
 
     # Send a dialog out if all apps are updated and interactiveMode is set
     if [ ${interactiveMode} -gt 1 ]; then
-        $dialogBinary --title "$appTitle" --message "All apps updated." --icon "$icon" --overlayicon "$overlayIcon" --movable --position  --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
+        $dialogBinary --title "$appTitle" --message "All apps updated." --icon "$icon" --overlayicon "$overlayIcon" --movable --position bottomright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
     fi
 
 
