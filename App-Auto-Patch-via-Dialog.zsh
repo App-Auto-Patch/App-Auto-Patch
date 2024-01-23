@@ -214,7 +214,7 @@ outdatedOsAction="/System/Library/CoreServices/Software Update.app"             
 
 ### swiftDialog Options ###
 
-swiftDialogMinimumRequiredVersion="2.3.2.4726"					                # Minimum version of swiftDialog required to use workflow
+swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDialog required to use workflow
 
 ### Deferral Options ###
 
