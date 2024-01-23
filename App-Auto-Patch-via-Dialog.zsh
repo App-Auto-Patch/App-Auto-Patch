@@ -171,6 +171,13 @@
 #   - New feature, `convertAppsInHomeFolder`. If this variable is set to `true` and an app is found within the /Users/* directory, the app will be queued for installation into the default path and removed into from the /Users/* directory
 #   - New feature, `ignoreAppsInHomeFolder`. If this variable is set to `true` apps found within the /Users/* directory will be ignored. If `false` an app discovered with an update will be queued and installed into the default directory. This may may lead to two version of the same app installed. (thanks @gilburns!) 
 #
+#   Version 2.0.7, 01.22.2024
+#   - Added function to list application names needing to update to show users before updates are installed during the deferral window (thanks @AndrewMBarnett)
+#   - Added text to explain the deferral timer during the deferall window
+#   - Text displayed during the deferral period and no deferrals remaining changes depending on how many deferrals are left.
+#   - Deferral window infobox text is now dynamic based on `deferralTimerAction`
+#   - Adjusted size of deferral window based on deferrals remaining (thanks @TechTrekkie)
+#
 # 
 ####################################################################################################
 
@@ -184,7 +191,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.6"
+scriptVersion="2.0.7"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -192,7 +199,7 @@ interactiveMode="${4:="2"}"                                                     
 ignoredLabels="${5:=""}"                                                        # Parameter 5: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
 requiredLabels="${6:=""}"                                                       # Parameter 6: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 optionalLabels="${7:=""}"                                                       # Parameter 7: A space-separated list of optional Installomator labels (i.e., "renew") ** Does not support wildcards **
-installomatorOptions="${8:-""}"    						# Parameter 8: A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore)
+installomatorOptions="${8:-""}"    				                # Parameter 8: A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore)
 maxDeferrals="${9:-"Disabled"}"                                                 # Parameter 9: Number of times a user is allowed to defer before being forced to install updates. A value of "Disabled" will not display the deferral prompt. [ `integer` | Disabled (default) ]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -201,9 +208,9 @@ maxDeferrals="${9:-"Disabled"}"                                                 
 
 ### Script Log and General Behavior Options ###
 
-scriptLog="/var/log/com.company.log"						# Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
-debugMode="false"								# Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
-outdatedOsAction="/System/Library/CoreServices/Software Update.app"		# Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
+scriptLog="/var/log/com.company.log"			                        # Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
+debugMode="false"				                                # Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
+outdatedOsAction="/System/Library/CoreServices/Software Update.app"             # Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
 
 ### swiftDialog Options ###
 
@@ -1309,6 +1316,16 @@ labelsArray=($(tr ' ' '\n' <<< "${labelsArray[@]}" | sort -u | tr '\n' ' '))
 
 labelsArray=${labelsArray:|ignoredLabelsArray}
 
+appNamesArray=()
+# Get App Names for each label in labelsArray
+queuedLabelsForNames=("${(@s/ /)labelsArray}")
+for label in $queuedLabelsForNames; do
+    debugVerbose "Obtaining proper name for $label"
+    appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g')"
+    appName=$(echo $appName | sed -e 's/^[ \t]*//' )
+    appNamesArray+=(--listitem "$appName")
+done
+
 notice "Labels to install: $labelsArray"
 notice "Ignoring labels: $ignoredLabelsArray"
 notice "Required labels: $requiredLabelsArray"
@@ -1419,34 +1436,80 @@ function checkDeferral() {
         fi
         
         if [[ $remainingDeferrals -gt 0 ]]; then
+            action=$( echo $deferralTimerAction | tr '[:upper:]' '[:lower:]' )
             infobuttontext="Defer"
+            infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $remainingDeferrals"
+            message="You can **Defer** the updates or **Continue** to close the applications and apply updates.  \n\n There are ($numberOfUpdates) application(s) that require updates: "
+            height=480
+
+            # Create the deferrals available dialog options and content
+            deferralDialogContent=(
+                --title "$appTitle"
+                --message "$message"
+                --helpmessage "$helpmessage"
+                --icon "$icon"
+                --overlayicon "$overlayicon"
+                --infobuttontext "$infobuttontext"
+                --infobox "$infobox"
+                --timer $deferralTimer
+                --button1text "Continue"
+            )
+
+            deferralDialogOptions=(
+                --position bottomright
+                --quitoninfo
+                --movable
+                --liststyle compact
+                --small
+                --quitkey k
+                --titlefont size=18
+                --messagefont size=11
+                --height $height
+                --commandfile "$dialogCommandFile"
+            )
+
+
         else
             infobuttontext="Max Deferrals Reached"
+            infobox="#### No Deferrals Remaining ####"
+            message="There are $numberOfUpdates application(s) that require updates\n\n You have $remainingDeferrals deferral(s) remaining."
+            height=280
+
+            # Create the deferrals available dialog options and content
+            appNamesArray=()
+
+            deferralDialogContent=(
+                --title "$appTitle"
+                --message "$message"
+                --helpmessage "$helpmessage"
+                --icon "$icon"
+                --overlayicon "$overlayicon"
+                --infotext "$infobuttontext"
+                --timer $deferralTimer
+                --button1text "Continue"
+            )
+
+            deferralDialogOptions=(
+                --position bottomright
+                --quitoninfo
+                --movable
+                --liststyle compact
+                --small
+                --quitkey k
+                --titlefont size=18
+                --messagefont size=15
+                --height $height
+                --commandfile "$dialogCommandFile"
+            )
+
         fi
         
         
         notice "There are $remainingDeferrals deferrals left"
+
         
-        #--height ${dialogheight} \
-        #--iconsize ${iconsize} \
-        message="There are $numberOfUpdates application(s) that require updates\n\n \
-    You have $remainingDeferrals deferral(s) remaining."
         
-            $dialogBinary --title "${appTitle}" \
-            --icon "$icon" \
-            --overlayicon "$overlayicon" \
-            --message "${message}" \
-            --infobuttontext "$infobuttontext" \
-            --button1text "Continue" \
-            --position bottomright \
-            --quitoninfo \
-            --moveable \
-            --small \
-            --quitkey k \
-            --titlefont size=18 \
-            --messagefont size=15 \
-            --height 280 \
-            --timer $deferralTimer
+        "$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}"
         
         
         dialogOutput=$?
