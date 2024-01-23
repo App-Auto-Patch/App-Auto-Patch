@@ -172,9 +172,11 @@
 #   - New feature, `ignoreAppsInHomeFolder`. If this variable is set to `true` apps found within the /Users/* directory will be ignored. If `false` an app discovered with an update will be queued and installed into the default directory. This may may lead to two version of the same app installed. (thanks @gilburns!) 
 #
 #   Version 2.0.7, 01.22.2024
-#   - Added function to list application names needing to update to show users before updates are installed during the deferral window
+#   - Added function to list application names needing to update to show users before updates are installed during the deferral window (thanks @AndrewMBarnett)
 #   - Added text to explain the deferral timer during the deferall window
 #   - Text displayed during the deferral period and no deferrals remaining changes depending on how many deferrals are left.
+#   - Deferral window infobox text is now dynamic based on `deferralTimerAction`
+#   - Adjusted size of deferral window based on deferrals remaining (thanks @TechTrekkie)
 #
 # 
 ####################################################################################################
@@ -1434,22 +1436,13 @@ function checkDeferral() {
         fi
         
         if [[ $remainingDeferrals -gt 0 ]]; then
+            action=$( echo $deferralTimerAction | tr '[:upper:]' '[:lower:]' )
             infobuttontext="Defer"
-            infobox="You will automatically defer after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $remainingDeferrals"
-            message="You can **Defer** the updates or **Continue** to close the applications and apply updates.  \n\n The following applications require updates: "
-            height=700
-            width=525
-        else
-            infobuttontext="Max Deferrals Reached"
-            infobox="#### No Deferrals Remaining ####"
-            message="Updates will begin when the timer expires. \n\n **_Please save your work before updating_**. \n\n The following applications must be updated: "
-            height=700
-            width=525
-        fi
-        
-        
-        notice "There are $remainingDeferrals deferrals left"
+            infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $remainingDeferrals"
+            message="You can **Defer** the updates or **Continue** to close the applications and apply updates.  \n\n There are ($numberOfUpdates) application(s) that require updates: "
+            height=480
 
+            # Create the deferrals available dialog options and content
             deferralDialogContent=(
                 --title "$appTitle"
                 --message "$message"
@@ -1466,6 +1459,41 @@ function checkDeferral() {
                 --position bottomright
                 --quitoninfo
                 --movable
+                --liststyle compact
+                --small
+                --quitkey k
+                --titlefont size=18
+                --messagefont size=11
+                --height $height
+                --commandfile "$dialogCommandFile"
+            )
+
+
+        else
+            infobuttontext="Max Deferrals Reached"
+            infobox="#### No Deferrals Remaining ####"
+            message="There are $numberOfUpdates application(s) that require updates\n\n You have $remainingDeferrals deferral(s) remaining."
+            height=280
+
+            # Create the deferrals available dialog options and content
+            appNamesArray=()
+
+            deferralDialogContent=(
+                --title "$appTitle"
+                --message "$message"
+                --helpmessage "$helpmessage"
+                --icon "$icon"
+                --overlayicon "$overlayicon"
+                --infotext "$infobuttontext"
+                --timer $deferralTimer
+                --button1text "Continue"
+            )
+
+            deferralDialogOptions=(
+                --position bottomright
+                --quitoninfo
+                --movable
+                --liststyle compact
                 --small
                 --quitkey k
                 --titlefont size=18
@@ -1473,8 +1501,15 @@ function checkDeferral() {
                 --height $height
                 --commandfile "$dialogCommandFile"
             )
+
+        fi
         
-            "$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}"
+        
+        notice "There are $remainingDeferrals deferrals left"
+
+        
+        
+        "$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}"
         
         
         dialogOutput=$?
