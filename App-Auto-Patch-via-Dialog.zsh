@@ -199,7 +199,7 @@ interactiveMode="${4:="2"}"                                                     
 ignoredLabels="${5:=""}"                                                        # Parameter 5: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
 requiredLabels="${6:=""}"                                                       # Parameter 6: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 optionalLabels="${7:=""}"                                                       # Parameter 7: A space-separated list of optional Installomator labels (i.e., "renew") ** Does not support wildcards **
-installomatorOptions="${8:-""}"    						                        # Parameter 8: A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore)
+installomatorOptions="${8:-""}"    				                # Parameter 8: A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore)
 maxDeferrals="${9:-"Disabled"}"                                                 # Parameter 9: Number of times a user is allowed to defer before being forced to install updates. A value of "Disabled" will not display the deferral prompt. [ `integer` | Disabled (default) ]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -208,9 +208,9 @@ maxDeferrals="${9:-"Disabled"}"                                                 
 
 ### Script Log and General Behavior Options ###
 
-scriptLog="/var/log/com.company.log"						                    # Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
-debugMode="false"								                                # Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
-outdatedOsAction="/System/Library/CoreServices/Software Update.app"		        # Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
+scriptLog="/var/log/com.company.log"			                        # Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
+debugMode="false"				                                # Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
+outdatedOsAction="/System/Library/CoreServices/Software Update.app"             # Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
 
 ### swiftDialog Options ###
 
@@ -226,7 +226,7 @@ AAPActivatorFlag=$(defaults read $aapAutoPatchDeferralFile AAPActivatorFlag)    
 ### Unattended Exit Options ###
 
 unattendedExit="false"                                                          # Unattended Exit [ true | false (default) ]
-unattendedExitSeconds="60"							                            # Number of seconds to wait until a kill Dialog command is sent
+unattendedExitSeconds="60"							# Number of seconds to wait until a kill Dialog command is sent
 
 ### App Auto-Patch Path Variables ###
 
@@ -265,7 +265,7 @@ fi
 
 ### Overlay Icon ###
 
-useOverlayIcon="true"								                            # Toggles swiftDialog to use an overlay icon [ true (default) | false ]
+useOverlayIcon="true"								# Toggles swiftDialog to use an overlay icon [ true (default) | false ]
 
 # Create `overlayicon` from Self Service's custom icon (thanks, @meschwartz!)
 if [[ "$useOverlayIcon" == "true" ]]; then
