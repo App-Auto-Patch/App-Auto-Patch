@@ -2,6 +2,19 @@
 
 # Version 2
 
+## 2.0.7
+### 23-Jan-2024
+- Added function to list application names needing to update to show users before updates are installed during the deferral window (thanks @AndrewMBarnett)
+- Added text to explain the deferral timer during the deferall window
+- Text displayed during the deferral period and no deferrals remaining changes depending on how many deferrals are left.
+- Deferral window infobox text is now dynamic based on `deferralTimerAction`
+- Adjusted size of deferral window based on deferrals remaining (thanks @TechTrekkie)
+
+## 2.0.6
+### 22-Jan-2024
+- New feature, `convertAppsInHomeFolder`. If this variable is set to `true` and an app is found within the /Users/* directory, the app will be queued for installation into the default path and removed into from the /Users/* directory
+- New feature, `ignoreAppsInHomeFolder`. If this variable is set to `true` apps found within the /Users/* directory will be ignored. If `false` an app discovered with an update will be queued and installed into the default directory. This may may lead to two version of the same app installed. (thanks @gilburns!) 
+
 ## 2.0.5
 ### 5-Jan-2024
 If `interactiveMode` is greater than 1 (set for Full Interactive), and AAP does not detect any app updates a dialog will be presented to the user letting them know.
