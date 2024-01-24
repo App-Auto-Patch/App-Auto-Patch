@@ -178,6 +178,11 @@
 #   - Deferral window infobox text is now dynamic based on `deferralTimerAction`
 #   - Adjusted size of deferral window based on deferrals remaining (thanks @TechTrekkie)
 #
+#   Version 2.0.8, 01.24.2024
+#   - Fixed helpMessage variable for the deferral window so the helpmessage displays properly
+#   - Added application list to deferral window when 0 deferrals remain to mirror behavior when deferrals greater than 0
+#   - Updated infobox text to indicate "Updates will automatically install after the timer expires" when 0 deferrals remain
+#
 # 
 ####################################################################################################
 
@@ -191,7 +196,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.0.7"
+scriptVersion="2.0.8"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1446,7 +1451,7 @@ function checkDeferral() {
             deferralDialogContent=(
                 --title "$appTitle"
                 --message "$message"
-                --helpmessage "$helpmessage"
+                --helpmessage "$helpMessage"
                 --icon "$icon"
                 --overlayicon "$overlayicon"
                 --infobuttontext "$infobuttontext"
@@ -1471,20 +1476,19 @@ function checkDeferral() {
 
         else
             infobuttontext="Max Deferrals Reached"
-            infobox="#### No Deferrals Remaining ####"
+            infobox="Updates will automatically install after the timer expires. \n\n #### No Deferrals Remaining ####"
             message="There are $numberOfUpdates application(s) that require updates\n\n You have $remainingDeferrals deferral(s) remaining."
-            height=280
+            height=480
 
             # Create the deferrals available dialog options and content
-            appNamesArray=()
-
             deferralDialogContent=(
                 --title "$appTitle"
                 --message "$message"
-                --helpmessage "$helpmessage"
+                --helpmessage "$helpMessage"
                 --icon "$icon"
                 --overlayicon "$overlayicon"
                 --infotext "$infobuttontext"
+                --infobox "$infobox"
                 --timer $deferralTimer
                 --button1text "Continue"
             )
@@ -1497,7 +1501,7 @@ function checkDeferral() {
                 --small
                 --quitkey k
                 --titlefont size=18
-                --messagefont size=15
+                --messagefont size=11
                 --height $height
                 --commandfile "$dialogCommandFile"
             )
