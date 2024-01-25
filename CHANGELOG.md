@@ -2,6 +2,12 @@
 
 # Version 2
 
+## 2.0.8
+### 24-Jan-2024
+- Fixed the case for the `helpMessage` variable for the deferral window so the `helpmessage` displays properly
+- Added application list to deferral window when 0 deferrals remain to mirror the behavior when deferrals are greater than 0
+- Updated infobox text to indicate "Updates will automatically install after the timer expires" when 0 deferrals remain
+
 ## 2.0.7
 ### 23-Jan-2024
 - Added function to list application names needing to update to show users before updates are installed during the deferral window (thanks @AndrewMBarnett)
