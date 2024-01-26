@@ -48,3 +48,8 @@ To everyone who has helped contribute to App Auto-Patch, including but not limit
 - Trevor Sysock ([@bigmacadmin](https://github.com/bigmacadmin))
 - Bart Reardon ([@bartreardon](https://github.com/bartreardon))
 - Charles Mangin ([@option8](https://github.com/option8))
+### And special thanks to the Installomator Team
+- Armin Briegel ([@scriptingosx](https://github.com/scriptingosx))
+- Isaac Ordonez ([@issacatmann](https://github.com/issacatmann))
+- Søren Theilgaard ([@Theile](https://github.com/Theile))
+- Adam Codega ([@acodega](https://github.com/acodega))
