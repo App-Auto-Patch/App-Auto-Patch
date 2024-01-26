@@ -183,6 +183,9 @@
 #   - Added application list to deferral window when 0 deferrals remain to mirror behavior when deferrals greater than 0
 #   - Updated infobox text to indicate "Updates will automatically install after the timer expires" when 0 deferrals remain
 #
+#   Version 2.8.1, 01.26.2024
+#   - Fixed the --moveable flags spelling so the dialog will be set to moveable properly
+#
 # 
 ####################################################################################################
 
@@ -1463,7 +1466,7 @@ function checkDeferral() {
             deferralDialogOptions=(
                 --position bottomright
                 --quitoninfo
-                --movable
+                --moveable
                 --liststyle compact
                 --small
                 --quitkey k
@@ -1496,7 +1499,7 @@ function checkDeferral() {
             deferralDialogOptions=(
                 --position bottomright
                 --quitoninfo
-                --movable
+                --moveable
                 --liststyle compact
                 --small
                 --quitkey k
@@ -1587,7 +1590,7 @@ else
 
     # Send a dialog out if all apps are updated and interactiveMode is set
     if [ ${interactiveMode} -gt 1 ]; then
-        $dialogBinary --title "$appTitle" --message "All apps updated." --icon "$icon" --overlayicon "$overlayIcon" --movable --position bottomright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
+        $dialogBinary --title "$appTitle" --message "All apps updated." --icon "$icon" --overlayicon "$overlayIcon" --moveable --position bottomright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
     fi
 
 
