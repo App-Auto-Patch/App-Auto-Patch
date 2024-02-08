@@ -186,6 +186,12 @@
 #   Version 2.8.1, 01.26.2024
 #   - Fixed the --moveable flags spelling so the dialog will be set to moveable properly
 #
+#   Version 2.8.2, 02.08.2024
+#   - Updated minimum swiftDialog minimum to 2.4.0 for 'windowbuttons min'
+#   - Added Teams and Slack messaging functionality
+#   - Function for finding Jamf Pro URL for computer running AAP
+#   - Added minimize windowbutton to let windows run and minimize
+#
 # 
 ####################################################################################################
 
@@ -199,7 +205,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.8.1"
+scriptVersion="2.8.2"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -222,7 +228,7 @@ outdatedOsAction="/System/Library/CoreServices/Software Update.app"             
 
 ### swiftDialog Options ###
 
-swiftDialogMinimumRequiredVersion="2.3.2.4726"					# Minimum version of swiftDialog required to use workflow
+swiftDialogMinimumRequiredVersion="2.4.0"					# Minimum version of swiftDialog required to use workflow
 
 ### Deferral Options ###
 
@@ -233,7 +239,7 @@ AAPActivatorFlag=$(defaults read $aapAutoPatchDeferralFile AAPActivatorFlag)    
 
 ### Unattended Exit Options ###
 
-unattendedExit="false"                                                          # Unattended Exit [ true | false (default) ]
+unattendedExit="false"                              # Unattended Exit [ true | false (default) ]
 unattendedExitSeconds="60"							# Number of seconds to wait until a kill Dialog command is sent
 
 ### App Auto-Patch Path Variables ###
@@ -247,7 +253,7 @@ fragmentsPath="$installomatorPath/fragments"
 
 ### App Auto-Patch Other Behavior Options ###
 
-runDiscovery="true"                                                             # Re-run discovery of installed applications [ true (default) | false ]
+runDiscovery="false"                                                             # Re-run discovery of installed applications [ true (default) | false ]
 removeInstallomatorPath="false"                                                 # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
 convertAppsInHomeFolder="true"                                                  # Remove apps in /Users/* and install them to do default path [ true (default) | false ]
 ignoreAppsInHomeFolder="false"                                                  # Ignore apps found in '/Users/*'. If an update is found in '/Users/*' and variable is set to `false`, the app will be updated into the application's default path [ true | false (default) ]
@@ -284,6 +290,15 @@ else
 fi
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Webhook URL
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# Teams webhook URL
+teamsURL=""
+# Slack webhook URL                         
+slackURL=""  
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Operating System, Computer Model Name, etc.
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -292,9 +307,13 @@ osVersion=$( sw_vers -productVersion )
 osBuild=$( sw_vers -buildVersion )
 osMajorVersion=$( echo "${osVersion}" | awk -F '.' '{print $1}' )
 serialNumber=$( ioreg -rd1 -c IOPlatformExpertDevice | awk -F'"' '/IOPlatformSerialNumber/{print $4}' )
+modelName=$( /usr/libexec/PlistBuddy -c 'Print :0:_items:0:machine_name' /dev/stdin <<< "$(system_profiler -xml SPHardwareDataType)" )
+
 timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
 dialogVersion=$( /usr/local/bin/dialog --version )
 exitCode="0"
+
+jamfProURL=$(/usr/bin/defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # IT Support Variable (thanks, @AndrewMBarnett)
@@ -557,6 +576,113 @@ optionalLabelsArray=($(echo ${optionalLabels}))
 convertedLabelsArray=($(echo ${convertedLabels}))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Gather Error Log
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+installomatorLogFile="/var/log/Installomator.log"
+duplicate_log_dir=$( mktemp -d /var/tmp/InstallomatorErrors.XXXXXX )
+marker_file="/var/tmp/Installomator_marker.txt"
+
+chmod 655 "$duplicate_log_dir" 
+
+function createMarkerFile(){
+
+if [ ! -f "$marker_file" ]; then
+        preFlight "Marker file not found, creating temp marker file"
+        touch "$marker_file"
+        else
+        preFlight "marker file exist, continuing"
+     fi
+}
+
+function createLastErrorPosition() {
+    
+  # Create a timestamp for the current run
+    timestamp=$(date +%Y%m%d%H%M%S)
+    preFlight "Current time stamp: $timestamp"
+
+    # Create a directory for duplicate log files if it doesn't exist
+     if [ ! -d "$duplicate_log_dir" ]; then
+        mkdir -p "$duplicate_log_dir"
+        preFlight "Creating duplicate log file"
+        else
+        preFlight "Duplicate log directory exists, continuing"
+     fi
+
+     # Create a directory for duplicate log files if it doesn't exist
+     if [ ! -f "$marker_file" ]; then
+        preFlight "Marker file not found, creating temp marker file"
+        touch "$marker_file"
+        else
+        preFlight "marker file exist, continuing"
+     fi
+
+    # Specify the duplicate log file with a timestamp
+    duplicate_installomatorLogFile="$duplicate_log_dir/Installomator_error_$timestamp.log"
+    preFlight "Duplicate Log File location: $duplicate_installomatorLogFile"
+
+    # Find the last position marker or start from the beginning if not found
+    if [ -f "$marker_file" && -f $installomatorLogFile ]; then
+        lastPosition=$(cat "$marker_file")
+    else 
+        preFlight "Creating Installomator log file and setting error position as zero"
+        touch "$installomatorLogFile"
+        chmod 755 "$installomatorLogFile"
+        lastPosition=0
+    fi
+
+    # Copy new entries from Installomator.log to the duplicate log file
+    if [ -f "$installomatorLogFile" ]; then
+        tail -n +$((lastPosition + 1)) "$installomatorLogFile" > "$duplicate_installomatorLogFile"
+        preFlight "Installomator log file exists. Tailing new entries from log file to duplicate log file" 
+    else 
+        preFlight "Installomator log file not found. Creating now"
+        checkInstallomator
+    fi
+
+    # Update the marker file with the new position
+    wc -l "$installomatorLogFile" | awk '{print $1}' > "$marker_file"
+    preFlight "Updating marker file"
+
+    lastPosition=$(cat "$marker_file")
+    preFlight "Last position: $lastPosition"
+}
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Checking Last Error Position
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+function verifyLastPosition(){
+ # Find the last position text in scriptLog
+   lastPosition_line=$(tail -n 400 "$scriptLog" | grep 'Last position:' | tail -n 1)
+
+    if [ -n "$lastPosition_line" ]; then
+        # Extract the last position from the line
+        lastPosition=$(echo "$lastPosition_line" | awk -F 'Last position:' '{print $2}' | tr -d '[:space:]')
+
+        echo "$lastPosition" > "$marker_file"
+
+        # Check if last position is less than or equal to zero
+        if [[ ! -f "{$installomatorLogFile}" ]] || [[ "${lastPosition}" -le 0 ]]; then
+            preFlight "Last position is less than one or Installomator log doesn't exist. Creating position."
+            createLastErrorPosition
+        else
+            preFlight "Last position is greater than zero and Installomator log file exists. Continuing."
+            lastPositionUpdated=$(cat "$marker_file")
+            preFlight "Last position: $lastPositionUpdated"
+        fi
+    else
+        preFlight "Last position not found. Setting it to zero and continuing."
+        createLastErrorPosition
+    fi
+}
+
+preFlight "Creating Marker file and checking if last error position exists"
+createMarkerFile
+verifyLastPosition
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Pre-flight Check: Complete
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -609,6 +735,7 @@ dialogListConfigurationOptions=(
     --helpmessage "$helpMessage"
     --infobox "#### Computer Name: #### \n\n $computerName \n\n #### macOS Version: #### \n\n $osVersion \n\n #### macOS Build: #### \n\n $osBuild \n\n "
     --infotext "${infoTextScriptVersion}"
+    --windowbuttons min
     --liststyle compact
     --titlefont size=18
     --messagefont size=11
@@ -634,6 +761,7 @@ dialogWriteConfigurationOptions=(
     --overlayicon "$overlayicon"
     --commandfile "$dialogCommandFile"
     --moveable
+    --windowbuttons min
     --mini
     --position bottomright
     --progress
@@ -664,6 +792,138 @@ function killProcess() {
     else
         infoOut "The '$process' process isn't running."
     fi
+
+}
+
+function check_and_echo_errors() {
+
+
+    # Create a timestamp for the current run
+    timestamp=$(date +%Y%m%d%H%M%S)
+    infoOut "Current time stamp: $timestamp"
+
+     # Create a directory for duplicate log files if it doesn't exist
+     if [ ! -d "$duplicate_log_dir" ]; then
+        mkdir -p "$duplicate_log_dir"
+        infoOut "Creating duplicate log file"
+        else
+        infoOut "Duplicate log directory exists, continuing"
+     fi
+
+    # Specify the duplicate log file with a timestamp
+    duplicate_installomatorLogFile="$duplicate_log_dir/Installomator_error_$timestamp.log"
+    infoOut "Duplicate Log File location: $duplicate_installomatorLogFile"
+
+    # Find the last position marker or start from the beginning if not found
+     if [ -f "$marker_file" ]; then
+        lastPosition=$(cat "$marker_file")
+    else 
+        lastPosition=0
+    fi
+
+    # Copy new entries from Installomator.log to the duplicate log file
+    tail -n +$((lastPosition + 1)) "$installomatorLogFile" > "$duplicate_installomatorLogFile"
+    infoOut "tailing new entries from log file to duplicate log file" 
+
+    # Update the marker file with the new position
+    wc -l "$installomatorLogFile" | awk '{print $1}' > "$marker_file"
+    infoOut "Updating marker file"
+
+    lastPosition=$(cat "$marker_file")
+    infoOut "Last position: $lastPosition"
+
+    result=$(grep -a 'ERROR\s\+:\s\+\S\+\s\+:\s\+ERROR:' "$duplicate_installomatorLogFile" | awk -F 'ERROR :' '{print $2}')
+    #infoOut "Install Error Result: $result"
+
+    #Function to print with bullet points
+    print_with_bullet() {
+         local input_text="$1"
+        while IFS= read -r line; do
+            echo "• $line"
+            echo   # Add a space after each line
+        done <<< "$input_text"
+    }
+
+    # Print the formatted result with bullet points in the terminal
+    formatted_error_result=$(print_with_bullet "$result")
+    
+    # Print the formatted result with bullet points in the infoOut message
+    infoOut "Install Error Result: $formatted_error_result"
+
+}
+
+function appsUpToDate(){
+ # Find the last position text in scriptLog
+    appsUpToDate=$(tail -n 200 "$scriptLog" | grep 'All apps are up to date. Nothing to do.' | tail -n 1)
+
+    errorsCount=$(echo $errorCount)
+
+#Function to print with bullet points
+    print_with_bullet() {
+         local input_text="$1"
+        while IFS= read -r line; do
+            #echo "• $line"
+            echo   # Add a space after each line
+        done <<< "$input_text"
+    }
+
+   if [ -n "$appsUpToDate" ]; then
+    formatted_app_result=$(echo "$appsUpToDate" | awk -F 'All apps are up to date. Nothing to do.' '{print $2}' | tr -d '[:space:]')
+    notice $formatted_app_result
+    else
+    notice "Apps were updated"
+    fi
+
+    # Extract the App up to date info from the AAP log
+    if [[ $errorsCount -le 0 && ! -n $appsUpToDate ]]; then
+        infoOut "Applications updates were installed with no errors"
+        webhookStatus="Success, All Apps Up to Date"
+        formatted_result=$(echo "$queuedLabelsArray")
+        formatted_error_result="None"
+    elif
+        if [[ $errorsCount -gt 0 && ! -n $appsUpToDate ]]; then
+        infoOut "Applications updates were installed with some errors"
+        webhookStatus="Errors detected, applications were updated with errors"
+        formatted_result=$(echo "$queuedLabelsArray")
+        check_and_echo_errors
+    else
+        infoOut "Applications were all up to date, nothing to install"
+        webhookStatus="Success, All Apps Up to Date and Nothing Installed"
+        formatted_result="None"
+        formatted_error_result="None"
+    fi
+
+}
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Jamf Pro URL
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+function jamfProURL(){
+
+search_text="Jamf Computer URL:"
+
+if grep -q "$search_text" "$scriptLog" ; then
+    jamfProComputerURL=$(grep "$search_text" "$scriptLog"| tail -n 1| awk -F 'Jamf Computer URL:' '{print $2}' | awk '{$1=$1};1')
+
+        if [ -n "$jamfProComputerURL" ]; then
+        infoOut "Jamf Computer URL: $jamfProComputerURL"
+        else
+        infoOut "Jamf Computer URL not found in the latest line."
+        fi
+    
+else
+    infoOut "Jamf Pro URL not found, searching now"
+
+    jamfBinary="/usr/local/bin/jamf"
+    reconRaw=$( eval "${jamfBinary} recon ${reconOptions} -verbose | tee -a ${scriptLog}" )
+    computerID=$( echo "${reconRaw}" | grep '<computer_id>' | xmllint --xpath xmllint --xpath '/computer_id/text()' - )
+    jamfProComputerURL="${jamfProURL}computers.html?id=${computerID}&o=r"
+
+infoOut "Jamf Computer URL: $jamfProComputerURL"
+
+fi
 
 }
 
@@ -721,6 +981,13 @@ function dialogExit() {
 # Quit Script
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+function rm_if_exists()
+{
+    if [ -n "${1}" ] && [ -e "${1}" ];then
+        /bin/rm -r "${1}"
+    fi
+}
+
 function quitScript() {
 
     quitOut "Exiting …"
@@ -742,7 +1009,22 @@ function quitScript() {
         quitOut "Removing ${dialogCommandFile} …"
         rm "${dialogCommandFile}"
     fi
-    
+
+    # Remove duplicate log file
+    if [[ -d "${duplicate_log_dir}" ]]; then
+        quitOut "Removing "${duplicate_log_dir}" …"
+        rm_if_exists "${duplicate_log_dir}"
+        else
+        quitOut "Could not delete "${duplicate_log_dir}""
+
+    fi
+
+     # Remove Marker File
+    if [[ -e ${marker_file} ]]; then
+        quitOut "Removing ${marker_file} …"
+        rm "${marker_file}"
+    fi
+
     exit $exitCode
 
 }
@@ -1389,7 +1671,7 @@ function doInstallations() {
 
             swiftDialogUpdate "icon: /Applications/${currentDisplayName}.app"
             swiftDialogUpdate "progresstext: Checking ${currentDisplayName} …"
-            swiftDialogUpdate "listitem: index: $i, status: wait, statustext: Checking …"
+            swiftDialogUpdate "listitem: index: $i, icon: /Applications/${currentDisplayName}.app, status: wait, statustext: Checking …"
 
         fi
 
@@ -1468,6 +1750,7 @@ function checkDeferral() {
                 --quitoninfo
                 --moveable
                 --liststyle compact
+                --windowbuttons min
                 --small
                 --quitkey k
                 --titlefont size=18
@@ -1484,6 +1767,7 @@ function checkDeferral() {
             height=480
 
             # Create the deferrals available dialog options and content
+
             deferralDialogContent=(
                 --title "$appTitle"
                 --message "$message"
@@ -1501,6 +1785,7 @@ function checkDeferral() {
                 --quitoninfo
                 --moveable
                 --liststyle compact
+                --windowbuttons min
                 --small
                 --quitkey k
                 --titlefont size=18
@@ -1556,6 +1841,142 @@ function checkDeferral() {
 
 }
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Webhook Message (Microsoft Teams or Slack) 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+function webHookMessage() {
+
+if [[ $slackURL == "" ]]; then
+    updateScriptLog "No slack URL configured"
+else
+    if [[ $supportTeamHyperlink == "" ]]; then
+        supportTeamHyperlink="https://www.slack.com"
+    fi
+    updateScriptLog "Sending Slack WebHook"
+    curl -s -X POST -H 'Content-type: application/json' \
+        -d \
+        '{
+	"blocks": [
+		{
+			"type": "header",
+			"text": {
+				"type": "plain_text",
+				"text": "App Auto-Patch: '${webhookStatus}'",
+			}
+		},
+		{
+			"type": "divider"
+		},
+		{
+			"type": "section",
+			"fields": [
+				{
+					"type": "mrkdwn",
+					"text": ">*Serial Number and Computer Name:*\n>'"$serialNumber"' on '"$computerName"'"
+				},
+                {
+					"type": "mrkdwn",
+					"text": ">*Computer Model:*\n>'"$modelName"'"
+				},
+				{
+					"type": "mrkdwn",
+					"text": ">*Current User:*\n>'"$loggedInUser"'"
+				},
+
+					"type": "mrkdwn",
+					"text": ">*Application Install Labels:*\n>'"$formatted_result"'"
+				},
+				{
+					"type": "mrkdwn",
+					"text": ">*Application Install Errors:*\n>'"$formatted_error_result"'"
+				},
+                {
+					"type": "mrkdwn",
+					"text": ">*Computer Record:*\n>'"$jamfProComputerURL"'"
+				},
+			]
+		},
+		{
+		"type": "actions",
+			"elements": [
+				{
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "View computer in Jamf Pro",
+						"emoji": true
+					},
+					"style": "primary",
+					"action_id": "actionId-0",
+					"url": "'"$jamfProComputerURL"'"
+				}
+			]
+		}
+	]
+}' \
+        $6
+fi
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Teams notification (Credit to https://github.com/nirvanaboi10 for the Teams code)
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+if [[ $teamsURL == "" ]]; then
+    updateScriptLog "No teams Webhook configured"
+else
+    if [[ $supportTeamHyperlink == "" ]]; then
+        supportTeamHyperlink="https://www.microsoft.com/en-us/microsoft-teams/"
+    fi
+    updateScriptLog "Sending Teams WebHook"
+    jsonPayload='{
+	"@type": "MessageCard",
+	"@context": "http://schema.org/extensions",
+	"themeColor": "0076D7",
+	"summary": "App Auto-Patch: '${webhookStatus}'",
+	"sections": [{
+		"activityTitle": "App Auto-Patch: '${webhookStatus}'",
+		"activityImage": "https://usw2.ics.services.jamfcloud.com/icon/hash_2927020b3ba74fa8cf07c3304770a6276c6b1e95a2b87e8c4e8cb49c010763ed",
+		"facts": [{
+			"name": "Serial Number and Computer Name:",
+			"value": "'"$serialNumber"' on '"$computerName"'"
+		}, {
+			"name": "Computer Model:",
+			"value": "'"$modelName"'"
+		}, {
+			"name": "Current User:",
+			"value": "'"$loggedInUser"'"
+		}, {
+			"name": "Application Install Labels:",
+			"value": "'"$formatted_result"'"
+        }, {
+			"name": "Application Install Errors:",
+			"value": "'"$formatted_error_result"'"
+        }, {
+			"name": "Computer Record:",
+			"value": "'"$jamfProComputerURL"'"
+		}],
+		"markdown": true
+	}],
+	"potentialAction": [{
+		"@type": "OpenUri",
+		"name": "View Computer in Jamf Pro",
+		"targets": [{
+			"os": "default",
+			"uri":
+			"'"$jamfProComputerURL"'"
+		}]
+	}]
+}'
+
+    # Send the JSON payload using curl
+    curl -s -X POST -H "Content-Type: application/json" -d "$jsonPayload" "$teamsURL"
+
+fi
+
+}
+
+
 oldIFS=$IFS
 IFS=' '
 
@@ -1590,7 +2011,7 @@ else
 
     # Send a dialog out if all apps are updated and interactiveMode is set
     if [ ${interactiveMode} -gt 1 ]; then
-        $dialogBinary --title "$appTitle" --message "All apps updated." --icon "$icon" --overlayicon "$overlayIcon" --moveable --position bottomright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
+        $dialogBinary --title "$appTitle" --message "All apps are up to date." --windowbuttons min --icon "$icon" --overlayicon "$overlayIcon" --moveable --position topright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
     fi
 
 
@@ -1608,9 +2029,15 @@ IFS=$oldIFS
 
 if [ "$errorCount" -gt 0 ]; then
     warning "Completed with $errorCount errors."
+    jamfProURL
+    appsUpToDate
+    webHookMessage
     removeInstallomator
 else
     infoOut "Done."
+    jamfProURL
+    appsUpToDate
+    webHookMessage
     removeInstallomator
 fi
 
