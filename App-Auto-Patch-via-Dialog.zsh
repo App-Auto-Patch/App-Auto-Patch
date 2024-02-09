@@ -186,7 +186,7 @@
 #   Version 2.8.1, 01.26.2024
 #   - Fixed the --moveable flags spelling so the dialog will be set to moveable properly
 #
-#   Version 2.8.2, 02.08.2024
+#   Version 2.9.0, 02.08.2024
 #   - Updated minimum swiftDialog minimum to 2.4.0 for 'windowbuttons min'
 #   - Added Teams and Slack messaging functionality
 #   - Function for finding Jamf Pro URL for computer running AAP
@@ -205,7 +205,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.8.2"
+scriptVersion="2.9.0"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -239,7 +239,7 @@ AAPActivatorFlag=$(defaults read $aapAutoPatchDeferralFile AAPActivatorFlag)    
 
 ### Unattended Exit Options ###
 
-unattendedExit="false"                              # Unattended Exit [ true | false (default) ]
+unattendedExit="false"                              				# Unattended Exit [ true | false (default) ]
 unattendedExitSeconds="60"							# Number of seconds to wait until a kill Dialog command is sent
 
 ### App Auto-Patch Path Variables ###
@@ -253,7 +253,7 @@ fragmentsPath="$installomatorPath/fragments"
 
 ### App Auto-Patch Other Behavior Options ###
 
-runDiscovery="false"                                                             # Re-run discovery of installed applications [ true (default) | false ]
+runDiscovery="true"                                                             # Re-run discovery of installed applications [ true (default) | false ]
 removeInstallomatorPath="false"                                                 # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
 convertAppsInHomeFolder="true"                                                  # Remove apps in /Users/* and install them to do default path [ true (default) | false ]
 ignoreAppsInHomeFolder="false"                                                  # Ignore apps found in '/Users/*'. If an update is found in '/Users/*' and variable is set to `false`, the app will be updated into the application's default path [ true | false (default) ]
@@ -881,7 +881,7 @@ function appsUpToDate(){
         formatted_result=$(echo "$queuedLabelsArray")
         formatted_error_result="None"
     elif
-        if [[ $errorsCount -gt 0 && ! -n $appsUpToDate ]]; then
+        [[ $errorsCount -gt 0 && ! -n $appsUpToDate ]]; then
         infoOut "Applications updates were installed with some errors"
         webhookStatus="Errors detected, applications were updated with errors"
         formatted_result=$(echo "$queuedLabelsArray")
@@ -1875,7 +1875,7 @@ else
 					"type": "mrkdwn",
 					"text": ">*Serial Number and Computer Name:*\n>'"$serialNumber"' on '"$computerName"'"
 				},
-                {
+                		{
 					"type": "mrkdwn",
 					"text": ">*Computer Model:*\n>'"$modelName"'"
 				},
@@ -1883,7 +1883,7 @@ else
 					"type": "mrkdwn",
 					"text": ">*Current User:*\n>'"$loggedInUser"'"
 				},
-
+				{
 					"type": "mrkdwn",
 					"text": ">*Application Install Labels:*\n>'"$formatted_result"'"
 				},
@@ -1891,10 +1891,10 @@ else
 					"type": "mrkdwn",
 					"text": ">*Application Install Errors:*\n>'"$formatted_error_result"'"
 				},
-                {
+                		{
 					"type": "mrkdwn",
 					"text": ">*Computer Record:*\n>'"$jamfProComputerURL"'"
-				},
+				}
 			]
 		},
 		{
@@ -1915,7 +1915,7 @@ else
 		}
 	]
 }' \
-        $6
+        $slackURL
 fi
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
