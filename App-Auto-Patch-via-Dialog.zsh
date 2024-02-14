@@ -171,7 +171,7 @@
 #   - New feature, `convertAppsInHomeFolder`. If this variable is set to `true` and an app is found within the /Users/* directory, the app will be queued for installation into the default path and removed into from the /Users/* directory
 #   - New feature, `ignoreAppsInHomeFolder`. If this variable is set to `true` apps found within the /Users/* directory will be ignored. If `false` an app discovered with an update will be queued and installed into the default directory. This may may lead to two version of the same app installed. (thanks @gilburns!) 
 #
-#   Version 2.0.7, 01.22.2024
+#   Version 2.0.7, 01.22.2024, Robert Schroeder (@robjschroeder)
 #   - Added function to list application names needing to update to show users before updates are installed during the deferral window (thanks @AndrewMBarnett)
 #   - Added text to explain the deferral timer during the deferall window
 #   - Text displayed during the deferral period and no deferrals remaining changes depending on how many deferrals are left.
@@ -183,14 +183,15 @@
 #   - Added application list to deferral window when 0 deferrals remain to mirror behavior when deferrals greater than 0
 #   - Updated infobox text to indicate "Updates will automatically install after the timer expires" when 0 deferrals remain
 #
-#   Version 2.8.1, 01.26.2024
+#   Version 2.8.1, 01.26.2024, Andrew Spokes (@TechTrekkie)
 #   - Fixed the --moveable flags spelling so the dialog will be set to moveable properly
 #
-#   Version 2.9.0, 02.08.2024
-#   - Updated minimum swiftDialog minimum to 2.4.0 for 'windowbuttons min'
-#   - Added Teams and Slack messaging functionality
-#   - Function for finding Jamf Pro URL for computer running AAP
-#   - Added minimize windowbutton to let windows run and minimize
+#   Version 2.9.0, 02.08.2024, Robert Schroeder (@robjschroeder)
+#   - Updated minimum swiftDialog minimum to 2.4.0 (thanks @AndrewMBarnett)
+#   - Added Teams and Slack webhook messaging functionality (thanks @AndrewMBarnett and @TechTrekkie)
+#   - Function for finding Jamf Pro URL for computer running AAP (thanks @AndrewMBarnett and @TechTrekkie)
+#   - Added minimize windowbutton to let windows run and minimize to applicable dialogs
+#   - Added script version number to help message (thanks @dan-snelson)
 #
 # 
 ####################################################################################################
@@ -258,6 +259,14 @@ removeInstallomatorPath="false"                                                 
 convertAppsInHomeFolder="true"                                                  # Remove apps in /Users/* and install them to do default path [ true (default) | false ]
 ignoreAppsInHomeFolder="false"                                                  # Ignore apps found in '/Users/*'. If an update is found in '/Users/*' and variable is set to `false`, the app will be updated into the application's default path [ true | false (default) ]
 
+### Webhook Options ###
+
+webhookEnabled="false"                                                          # Enables the webhook feature [ all | failures | false (default) ]
+# Teams webhook URL
+teamsURL=""
+# Slack webhook URL                         
+slackURL=""  
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Custom Branding, Overlay Icon, etc
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -290,15 +299,6 @@ else
 fi
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# Webhook URL
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-# Teams webhook URL
-teamsURL=""
-# Slack webhook URL                         
-slackURL=""  
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Operating System, Computer Model Name, etc.
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -328,7 +328,7 @@ supportTeamWebsite="Add IT Help site"
 supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
 
 # Create the help message based on Support Team variables
-helpMessage="If you need assistance, please contact ${supportTeamName}:  \n- **Telephone:** ${supportTeamPhone}  \n- **Email:** ${supportTeamEmail}  \n- **Help Website:** ${supportTeamHyperlink}  \n\n**Computer Information:**  \n- **Operating System:**  $osVersion ($osBuild)  \n- **Serial Number:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Started:** $timestamp"
+helpMessage="If you need assistance, please contact ${supportTeamName}:  \n- **Telephone:** ${supportTeamPhone}  \n- **Email:** ${supportTeamEmail}  \n- **Help Website:** ${supportTeamHyperlink}  \n\n**Computer Information:**  \n- **Operating System:**  $osVersion ($osBuild)  \n- **Serial Number:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Started:** $timestamp  \n- **Script Version:** $scriptVersion"
 
 ####################################################################################################
 #
@@ -876,18 +876,18 @@ function appsUpToDate(){
 
     # Extract the App up to date info from the AAP log
     if [[ $errorsCount -le 0 && ! -n $appsUpToDate ]]; then
-        infoOut "Applications updates were installed with no errors"
+        infoOut "SUCCESS: Applications updates were installed with no errors"
         webhookStatus="Success, All Apps Up to Date"
         formatted_result=$(echo "$queuedLabelsArray")
         formatted_error_result="None"
     elif
         [[ $errorsCount -gt 0 && ! -n $appsUpToDate ]]; then
-        infoOut "Applications updates were installed with some errors"
-        webhookStatus="Errors detected, applications were updated with errors"
+        infoOut "FAILURES DETECTED: Applications updates were installed with some errors"
+        webhookStatus="Errors detected, some application patches failed with errors"
         formatted_result=$(echo "$queuedLabelsArray")
         check_and_echo_errors
     else
-        infoOut "Applications were all up to date, nothing to install"
+        infoOut "SUCCESS: Applications were all up to date, nothing to install"
         webhookStatus="Success, All Apps Up to Date and Nothing Installed"
         formatted_result="None"
         formatted_error_result="None"
@@ -2031,13 +2031,33 @@ if [ "$errorCount" -gt 0 ]; then
     warning "Completed with $errorCount errors."
     jamfProURL
     appsUpToDate
-    webHookMessage
+    if [[ ${webhookEnabled} == "false" ]]; then
+        infoOut "Webhook Enabled flag set to: ${webhookEnabled}, skipping ..."
+    elif [[ ${webhookEnabled} == "all" ]]; then
+        infoOut "Webhook Enabled flag set to: ${webhookEnabled}, continuing ..."
+        webHookMessage
+    elif [[ ${webhookEnabled} == "failures" && ${errorCount} -gt 0 ]]; then
+        infoOut "Webhook Enabled flag set to: ${webhookEnabled} with error count: ${errorCount}, continuing ..."
+        webHookMessage
+    else
+        infoOut "Webhook Enabled flag set to: ${webhookEnabled}, but conditions not met for running webhookMessage."
+    fi
     removeInstallomator
 else
     infoOut "Done."
     jamfProURL
     appsUpToDate
-    webHookMessage
+    if [[ ${webhookEnabled} == "false" ]]; then
+        infoOut "Webhook Enabled flag set to: ${webhookEnabled}, skipping ..."
+    elif [[ ${webhookEnabled} == "all" ]]; then
+        infoOut "Webhook Enabled flag set to: ${webhookEnabled}, continuing ..."
+        webHookMessage
+    elif [[ ${webhookEnabled} == "failures" && ${errorCount} -gt 0 ]]; then
+        infoOut "Webhook Enabled flag set to: ${webhookEnabled} with error count: ${errorCount}, continuing ..."
+        webHookMessage
+    else
+        infoOut "Webhook Enabled flag set to: ${webhookEnabled}, but conditions not met for running webhookMessage."
+    fi
     removeInstallomator
 fi
 
