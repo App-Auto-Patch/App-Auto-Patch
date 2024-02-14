@@ -262,10 +262,8 @@ ignoreAppsInHomeFolder="false"                                                  
 ### Webhook Options ###
 
 webhookEnabled="false"                                                          # Enables the webhook feature [ all | failures | false (default) ]
-# Teams webhook URL
-teamsURL=""
-# Slack webhook URL                         
-slackURL=""  
+teamsURL=""                                                                     # Teams webhook URL                         
+slackURL=""                                                                     # Slack webhook URL
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Custom Branding, Overlay Icon, etc
