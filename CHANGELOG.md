@@ -2,6 +2,16 @@
 
 # Version 2
 
+## Version 2.9.0, 02.08.2024, Robert Schroeder (@robjschroeder)
+- Updated minimum swiftDialog minimum to 2.4.0 (thanks @AndrewMBarnett)
+- Added Teams and Slack webhook messaging functionality (thanks @AndrewMBarnett and @TechTrekkie)
+- Function for finding Jamf Pro URL for computer running AAP (thanks @AndrewMBarnett and @TechTrekkie)
+- Added minimize windowbutton to let windows run and minimize to applicable dialogs
+- Added script version number to help message (thanks @dan-snelson)
+
+## 2.8.1
+- Fixed the --moveable flags spelling so the dialog will be set to moveable properly
+
 ## 2.0.8
 ### 24-Jan-2024
 - Fixed the case for the `helpMessage` variable for the deferral window so the `helpmessage` displays properly
