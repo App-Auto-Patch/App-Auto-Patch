@@ -8,126 +8,6 @@
 #
 # HISTORY
 #
-#   Version 1.0.5, 05.15.2023, Robert Schroeder (@robjschroeder)
-#   - Trying to rewrite the script for better readability
-#   - Adding direct support to deploy within Jamf Pro
-#
-#   Version 1.0.6, 16-May-2023 Dan K. Snelson (@dan-snelson)
-#   - Reduced size of main dialog
-#   - Added `progress` and `progresstext`
-#
-#   Version 1.0.7, 05.16.2023, Robert Schroeder (@robjschroeder)
-#   - Additional cleanup
-#
-#   Version 1.0.8, 17-May-2023 Dan K. Snelson (@dan-snelson)
-#   - Changed extension to `.zsh` (to quiet Shellcheck)
-#   - More dialog tweaks
-#
-#   Version 1.0.9, 05.18.2023 Robert Schroeder (@robjschroeder)
-#   - Removed debugMode (was not being utilized throughout the script)
-#   - Changed `useswiftdialog` variable to `interactiveMode`
-#   - Added variable `useOverlayIcon`
-#   - Moved scriptVersion to infotext on swiftDialog windows
-#   - Changed icon used for desktop computers to match platform (would like to grab the model name and match accordingly: MacBook, Mac, Mac Mini, etc.)
-#   - Changed `discovery` variable to `runDiscovery`
-#   - Changed repository to App-Auto-Patch and script name to App-Auto-Patch-via-Dialog.zsh
-#
-#   Version 1.0.10, 05.23.2023 Robert Schroeder (@robjschroeder)
-#   - Moved the creation of the overlay icon in the IF statement if useOverlayIcon is set to true
-#
-#   Version 1.0.11, 06.21.2023 Robert Schroeder (@robjschroeder)
-#   - Added more options for running silently (Issue #3, thanks @beatlemike)
-#   - Commented out the update count in the List dialog infobox until an accurate count can be used
-#
-#   Version 1.0.12, 06.29.2023 Robert Schroeder (@robjschroeder)
-#   - Added variables for computer name and macOS version (Issue #6, thanks @AndrewMBarnett)
-#   - Added computer variables to the infobox of the dialog
-#
-#   Version 1.0.13, 09.16.2023 Robert Schroeder (@robjschroeder)
-#   - Fixed repo URL for swiftDialog
-#
-#   Version 1.0.14, 10.16.2023 Robert Schroeder (@robjschroeder)
-#   - Made file path changes
-#   - App Auto Patch version checking is now more accurate than before, if an app has an update available, it 
-#   will be written to the plist at /Library/Application Support/AppAutoPatch/
-#   - Some `Latest Versions` of apps cannot be identified during discovery. These apps will be added to the 
-#   plist and will be caught when Installomator goes to install the update. These will show that the latest version
-#   is already installed. 
-#
-#   Version 2.0-beta2, 10.18.2023 Robert Schroeder (@robjschroeder)
-#   - Reworked workflow
-#   - Added an unattended exit of the Dialog parameter. If set to `true` and `unattendedExitSeconds` is defined, the Dialog process will be killed after the duration. 
-#   - Added ability to add wildcards to ignoredLabels and requiredLabels (thanks, @jako)
-#   - Added a swiftDialogMinimumRequiredVersion variable
-#   - Updated the minimum required OS for swiftDialog installation
-#   - Updated logging functions
-#   
-#   Version 2.0-beta3, 10.19.2023 Robert Schroeder (@robjschroeder)
-#   - Added plist created in /Library/Application Support/AppAutoPatch, this additional plist can be used to pull data from or build extension attributes for Jamf Pro
-#
-#   Version 2.0.0b4, 10.20.2023 Robert Schroeder (@robjschroeder)
-#   - Changed versioning schema from `0.0-beta0` to `0.0.0b0` (thanks, @dan-snelson)
-#   - Modified --infotext box, removed $scriptFunctionalName and `Version:` (thanks, @dan-snelson)
-#   - Removed app version number from discovery dialog (to be added later as a verboseMode)
-#   - Various typo fixes
-#
-#   Version 2.0.0b5, 10.20.2023 Robert Schroeder (@robjschroeder)
-#   - AAP now uses its directory in `/Library/Application Support` to store Installomator. This directory gets removed after processing (thanks for the suggestion @dan-snelson!)
-#   - Had to update some of the hardcoded Installomator paths. 
-#
-#   Version 2.0.0b6, 10.23.2023 Robert Schroeder (@robjschroeder)
-#   - Added a function to create the App Auto-Patch directory, if it doesn't already exist. ( /Library/Application Support/AppAutoPatch )
-#
-#   Version 2.0.0b7, 10.23.2023 Robert Schroeder (@robjschroeder)
-#   - Fixed some logic during discovery that prevented some apps from being queued. (Issue #14, thanks @Apfelpom)
-#   - Added more checks when determining available version vs installed version. Some Installomator app labels do not report an accurate appNewVersion variable, those will be found in the logs as "[WARNING] --- Latest version could not be determined from Installomator app label". These apps will be queued regardless of having a properly updated app. [Line No. ~851-870]
-#   - With the added checks for versioning, if an app with a higher version is installed vs the available version from Installomator, the app will not be queued. (thanks, @dan-snelson)
-#  
-#   Version 2.0.0b8, 10.24.2023 Robert Schroeder (@robjschroeder)
-#   - Removed the extra checks for versioning, this became more of a hindrance and caused issues. Better to queue the label and not need it than to not queue an app that needs an update. Addresses issue #20 (thanks @Apfelpom)
-#   - If a wildcard is used for `IgnoredLabels` you can override an individual label by placing it in the required labels. 
-#   - Addressed issue where wildcards wrote additional plist entry 'Application'
-#   - Merged PR #21, Added a help message with variables for the update window. (thanks, @AndrewMBarnett)
-#   - Issue #13, `Discovering firefoxpkg_intl but installing firefoxpkgintl`, fixed.
-#
-#   Version 2.0.0b9, 10.24.2023 Robert Schroeder (@robjschroeder)
-#   - Worked on the issue with the number of updates not being correct
-#   - Fixed #15, Progress Bar Early Incrementation (thanks @dan-snelson)
-#   - Added warnings into logs that labels will not get replaced if there are multiple labels for the same app (i.e. zoom, zoomclient, zoomgov), please make sure you are targeting the appropriate labels for your org
-#   - Removed duplicate variables
-#
-#   Version 2.0.0b10, 10.25.2023 Robert Schroeder (@robjschroeder)
-#   - Fixed osBuild variable
-#   - Added countOfElementsArray variable, this should accurately notify of the number of updates that AAP will attempt regardless of `runDiscovery` being true or false (Issue #4, thanks @beatlemike)
-#
-#   Version 2.0.0b11, 10.28.2023 Robert Schroeder (@robjschroeder)
-#   - Progress bar set to 0 when updates begin
-#   - Added option to set title shown to end-user customizable (thanks @wakco)
-#   - Added option to keep Installomator if desired (thanks @wakco)
-#   - By default, swiftDialog is now ignored since the PreFlight will install as a pre-requisite (thanks @wakco)
-#   - Added Verbose Mode (Adds additional logging)
-#   - Added Deubg mode (Turns Installomator to DEBUG 2, does not install or remove applications)
-#
-#   Version 2.0.0b12, 10.30.2023 Robert Schroeder (@robjschroeder)
-#   - Cleaned up some additional GUI items (thanks @dan-snelson)
-#   - The team website shown in the help message is now a hyperlink (thanks @dan-snelson)
-#   - Changing the progress bar to a continuous bouncing bar until we can accurately control the progress incrementation (if you'd like to re-enable, uncomment lines 1299 & 1308 ( swiftDialogUpdate "progress: increment ... )
-#   - The number of updates should now show in the infobox
-#
-#   Version 2.0.0rc1, 11.07.2023 Robert Schroeder (@robjschroeder)
-#   - Adjusting all references of `MacAdmins Slack)` to `MacAdmins Slack )` to fix the Slack label coming up as `Asana` (thanks @TechTrekkie)
-#
-#   Version 2.0.0rc1-A, 11.27.2023 Andrew Spokes (@techtrekkie)
-#   - Added the ability to allow users to defer installing updates using the 'maxDeferrals' variable. A value of 'disabled' will not display the deferral prompt
-#
-#   Version 2.0.0rc1-B, 11.29.2023 Andrew Spokes (@techtrekkie)
-#   - Changed deferral plist to use the aapPath folder to facilitate creating an EA to populate remaining deferrals in Jamf
-#   - Added deferralTimerAction to indicate whether the default action when the timer expires is to Defer or continue with installs
-#   - Moved deferral reset to after installation step to confirm the user completed the process without skipping it (force shutdown/reboot)
-#
-#   Version 2.0.0rc2, 12.13.2023 Robert Schroeder (@robjschroeder)
-#   - Adjusting script version, preparing for version 2.0 release
-#
 #   Version 2.0.0, 12.19.2023 Robert Schroeder (@robjschroeder)
 #   - **Breaking Change** for users of App Auto-Patch before `2.0.0`
 #       - Removed the unattendExit variable out of Jamf Pro Script parameters, this is now under the ### Unattended Exit Options ###
@@ -189,10 +69,22 @@
 #   Version 2.9.0, 02.08.2024, Robert Schroeder (@robjschroeder)
 #   - Updated minimum swiftDialog minimum to 2.4.0 (thanks @AndrewMBarnett)
 #   - Added Teams and Slack webhook messaging functionality (thanks @AndrewMBarnett and @TechTrekkie)
+#   - Use the `webhookEnabled` variable and webhook URLs to set this functionality
 #   - Function for finding Jamf Pro URL for computer running AAP (thanks @AndrewMBarnett and @TechTrekkie)
 #   - Added minimize windowbutton to let windows run and minimize to applicable dialogs
 #   - Added script version number to help message (thanks @dan-snelson)
 #
+#   Version 2.9.1, 02.14.2024, Robert Schroeder (@robjschroeder)
+#   - Fixed issue where compact list style was being used during update progress and increased font size
+#   - Analyzing Apps window now shows app logos during discovery (thanks @dan-snelson)
+#   - Removed all notes from script history previous to version 2.0.0, see changelog to reference any prior changes. 
+#   - Updated jamfProComputerURL variable to a search by serial vs. running a recon to get JSS ID, an extra click but saves a recon (thanks @dan-snelson)
+#   - Removed minimize windowbutton from the deferral dialog to avoid confusion from users mistakenly hiding the dialog (Thanks @TechTrekkie)
+#   - Updated webhook JSON to utilize appTitle variable vs. direct App Auto-Patch name (thanks @Tech-Trekkie)
+#
+#   Version 2.9.2, 02.15.2024, Robert Schroeder (@robjschroeder)
+#   - Fixed an issue that would cause a blank list to appear in the patching dialog if `runDiscovery` was set to `false`, a placeholder will be used for now
+#   ** This issue was introduced in version 2.9.1 ** Issue #59
 # 
 ####################################################################################################
 
@@ -206,7 +98,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.9.0"
+scriptVersion="2.9.2"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -312,6 +204,7 @@ dialogVersion=$( /usr/local/bin/dialog --version )
 exitCode="0"
 
 jamfProURL=$(/usr/bin/defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url)
+jamfProComputerURL="${jamfProURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # IT Support Variable (thanks, @AndrewMBarnett)
@@ -477,7 +370,7 @@ if [[ "${osMajorVersion}" -ge 12 ]] ; then
     preFlight "macOS ${osMajorVersion} installed; proceeding ..."
 else
     # The Mac is running an operating system older than macOS 12 Monterey; exit with an error
-    preFlight "swiftDialog and App Auto-Patch require at least macOS 12 Monterey and this Mac is running ${osVersion} (${osBuild}), exiting with an error."
+    preFlight "swiftDialog and ${appTitle} require at least macOS 12 Monterey and this Mac is running ${osVersion} (${osBuild}), exiting with an error."
     osascript -e 'display dialog "Please advise your Support Representative of the following error:\r\rExpected macOS Monterey (or newer), but found macOS '"${osVersion}"' ('"${osBuild}"').\r\r" with title "'"${scriptFunctionalName}"': Detected Outdated Operating System" buttons {"Open Software Update"} with icon caution'
     preFlight "Executing /usr/bin/open '${outdatedOsAction}' …"
     su - "${loggedInUser}" -c "/usr/bin/open \"${outdatedOsAction}\""
@@ -734,9 +627,8 @@ dialogListConfigurationOptions=(
     --infobox "#### Computer Name: #### \n\n $computerName \n\n #### macOS Version: #### \n\n $osVersion \n\n #### macOS Build: #### \n\n $osBuild \n\n "
     --infotext "${infoTextScriptVersion}"
     --windowbuttons min
-    --liststyle compact
     --titlefont size=18
-    --messagefont size=11
+    --messagefont size=14
     --quitkey k
     --icon "$icon"
     --overlayicon "$overlayicon"
@@ -893,38 +785,6 @@ function appsUpToDate(){
 
 }
 
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# Jamf Pro URL
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-function jamfProURL(){
-
-search_text="Jamf Computer URL:"
-
-if grep -q "$search_text" "$scriptLog" ; then
-    jamfProComputerURL=$(grep "$search_text" "$scriptLog"| tail -n 1| awk -F 'Jamf Computer URL:' '{print $2}' | awk '{$1=$1};1')
-
-        if [ -n "$jamfProComputerURL" ]; then
-        infoOut "Jamf Computer URL: $jamfProComputerURL"
-        else
-        infoOut "Jamf Computer URL not found in the latest line."
-        fi
-    
-else
-    infoOut "Jamf Pro URL not found, searching now"
-
-    jamfBinary="/usr/local/bin/jamf"
-    reconRaw=$( eval "${jamfBinary} recon ${reconOptions} -verbose | tee -a ${scriptLog}" )
-    computerID=$( echo "${reconRaw}" | grep '<computer_id>' | xmllint --xpath xmllint --xpath '/computer_id/text()' - )
-    jamfProComputerURL="${jamfProURL}computers.html?id=${computerID}&o=r"
-
-infoOut "Jamf Computer URL: $jamfProComputerURL"
-
-fi
-
-}
-
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Remove Installomator
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -1049,14 +909,14 @@ function swiftDialogListWindow(){
         if [ "$currentUser" = "root" ] || [ "$currentUser" = "loginwindow" ] || [ "$currentUser" = "_mbsetupuser" ] || [ -z "$currentUser" ]; then
             return 0
         fi
-        
+
         # Build our list of Display Names for the SwiftDialog list
         for label in $queuedLabelsArray; do
             # Get the "name=" value from the current label and use it in our SwiftDialog list
             currentDisplayName=$(sed -n '/# label descriptions/,$p' ${installomatorScript} | grep -i -A 50 "${label})" | grep -m 1 "name=" | sed 's/.*=//' | sed 's/"//g')
             if [ -n "$currentDisplayName" ]; then
                 displayNames+=("--listitem")
-                displayNames+=(${currentDisplayName})
+                displayNames+=(${currentDisplayName},icon=SF=slowmo)
             fi
         done
 
@@ -1290,6 +1150,7 @@ function verifyApp() {
 	debugVerbose "Verifying: $appPath"
     sleep .2
 	swiftDialogUpdate "progresstext: $appPath"
+    swiftDialogUpdate "icon: $appPath"
 	
 	# verify with spctl
 	appVerify=$(spctl -a -vv "$appPath" 2>&1 )
@@ -1748,7 +1609,6 @@ function checkDeferral() {
                 --quitoninfo
                 --moveable
                 --liststyle compact
-                --windowbuttons min
                 --small
                 --quitkey k
                 --titlefont size=18
@@ -1783,7 +1643,6 @@ function checkDeferral() {
                 --quitoninfo
                 --moveable
                 --liststyle compact
-                --windowbuttons min
                 --small
                 --quitkey k
                 --titlefont size=18
@@ -1860,7 +1719,7 @@ else
 			"type": "header",
 			"text": {
 				"type": "plain_text",
-				"text": "App Auto-Patch: '${webhookStatus}'",
+				"text": "'${appTitle}': '${webhookStatus}'",
 			}
 		},
 		{
@@ -1931,16 +1790,13 @@ else
 	"@type": "MessageCard",
 	"@context": "http://schema.org/extensions",
 	"themeColor": "0076D7",
-	"summary": "App Auto-Patch: '${webhookStatus}'",
+	"summary": "'${appTitle}': '${webhookStatus}'",
 	"sections": [{
-		"activityTitle": "App Auto-Patch: '${webhookStatus}'",
-		"activityImage": "https://usw2.ics.services.jamfcloud.com/icon/hash_2927020b3ba74fa8cf07c3304770a6276c6b1e95a2b87e8c4e8cb49c010763ed",
+		"activityTitle": "'${appTitle}': '${webhookStatus}'",
+		"activityImage": "https://ics.services.jamfcloud.com/icon/hash_28ed3420a17f56d084d012e1af310d3aa9bc239b245f47bc8f9cb1603642737d",
 		"facts": [{
-			"name": "Serial Number and Computer Name:",
-			"value": "'"$serialNumber"' on '"$computerName"'"
-		}, {
-			"name": "Computer Model:",
-			"value": "'"$modelName"'"
+			"name": "Computer Name (Serial Number):",
+			"value": "'"$computerName"' ('"$serialNumber"')"
 		}, {
 			"name": "Current User:",
 			"value": "'"$loggedInUser"'"
@@ -1950,15 +1806,12 @@ else
         }, {
 			"name": "Application Install Errors:",
 			"value": "'"$formatted_error_result"'"
-        }, {
-			"name": "Computer Record:",
-			"value": "'"$jamfProComputerURL"'"
-		}],
+        }],
 		"markdown": true
 	}],
 	"potentialAction": [{
 		"@type": "OpenUri",
-		"name": "View Computer in Jamf Pro",
+		"name": "View in Jamf Pro",
 		"targets": [{
 			"os": "default",
 			"uri":
@@ -2027,7 +1880,6 @@ IFS=$oldIFS
 
 if [ "$errorCount" -gt 0 ]; then
     warning "Completed with $errorCount errors."
-    jamfProURL
     appsUpToDate
     if [[ ${webhookEnabled} == "false" ]]; then
         infoOut "Webhook Enabled flag set to: ${webhookEnabled}, skipping ..."
@@ -2043,7 +1895,6 @@ if [ "$errorCount" -gt 0 ]; then
     removeInstallomator
 else
     infoOut "Done."
-    jamfProURL
     appsUpToDate
     if [[ ${webhookEnabled} == "false" ]]; then
         infoOut "Webhook Enabled flag set to: ${webhookEnabled}, skipping ..."

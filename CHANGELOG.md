@@ -2,7 +2,22 @@
 
 # Version 2
 
-## Version 2.9.0, 02.08.2024, Robert Schroeder (@robjschroeder)
+## Version 2.9.2
+### 15-Feb-2024
+- Fixed an issue that would cause a blank list to appear in the patching dialog if `runDiscovery` was set to `false`, a placeholder will be used for now
+- ** This issue was introduced in version 2.9.1 ** Issue #59
+
+## Version 2.9.1
+### 14-Feb-2024
+- Fixed issue where compact list style was being used during update progress and increased font size
+- Analyzing Apps window now shows app logos during discovery (thanks @dan-snelson)
+- Removed all notes from script history previous to version 2.0.0, see changelog to reference any prior changes. 
+- Updated jamfProComputerURL variable to a search by serial vs. running a recon to get JSS ID, an extra click but saves a recon (thanks @dan-snelson)
+- Removed minimize windowbutton from the deferral dialog to avoid confusion from users mistakenly hiding the dialog (Thanks @TechTrekkie)
+- Updated webhook JSON to utilize appTitle variable vs. direct App Auto-Patch name (thanks @Tech-Trekkie)
+
+## Version 2.9.0
+### 08-Feb-2024
 - Updated minimum swiftDialog minimum to 2.4.0 (thanks @AndrewMBarnett)
 - Added Teams and Slack webhook messaging functionality (thanks @AndrewMBarnett and @TechTrekkie)
 - Function for finding Jamf Pro URL for computer running AAP (thanks @AndrewMBarnett and @TechTrekkie)
@@ -10,6 +25,7 @@
 - Added script version number to help message (thanks @dan-snelson)
 
 ## 2.8.1
+### 25-Jan-2024
 - Fixed the --moveable flags spelling so the dialog will be set to moveable properly
 
 ## 2.0.8
