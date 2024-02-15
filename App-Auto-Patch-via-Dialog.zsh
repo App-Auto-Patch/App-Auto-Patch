@@ -1793,13 +1793,10 @@ else
 	"summary": "'${appTitle}': '${webhookStatus}'",
 	"sections": [{
 		"activityTitle": "'${appTitle}': '${webhookStatus}'",
-		"activityImage": "https://usw2.ics.services.jamfcloud.com/icon/hash_2927020b3ba74fa8cf07c3304770a6276c6b1e95a2b87e8c4e8cb49c010763ed",
+		"activityImage": "https://ics.services.jamfcloud.com/icon/hash_28ed3420a17f56d084d012e1af310d3aa9bc239b245f47bc8f9cb1603642737d",
 		"facts": [{
-			"name": "Serial Number and Computer Name:",
-			"value": "'"$serialNumber"' on '"$computerName"'"
-		}, {
-			"name": "Computer Model:",
-			"value": "'"$modelName"'"
+			"name": "Computer Name (Serial Number):",
+			"value": "'"$computerName"' ('"$serialNumber"')"
 		}, {
 			"name": "Current User:",
 			"value": "'"$loggedInUser"'"
@@ -1809,15 +1806,12 @@ else
         }, {
 			"name": "Application Install Errors:",
 			"value": "'"$formatted_error_result"'"
-        }, {
-			"name": "Computer Record:",
-			"value": "'"$jamfProComputerURL"'"
-		}],
+        }],
 		"markdown": true
 	}],
 	"potentialAction": [{
 		"@type": "OpenUri",
-		"name": "View Computer in Jamf Pro",
+		"name": "View in Jamf Pro",
 		"targets": [{
 			"os": "default",
 			"uri":
