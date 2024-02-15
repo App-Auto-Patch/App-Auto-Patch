@@ -69,7 +69,7 @@
 #   Version 2.9.0, 02.08.2024, Robert Schroeder (@robjschroeder)
 #   - Updated minimum swiftDialog minimum to 2.4.0 (thanks @AndrewMBarnett)
 #   - Added Teams and Slack webhook messaging functionality (thanks @AndrewMBarnett and @TechTrekkie)
-#   -- Use the `webhookEnabled` variable and webhook URLs to set this functionality
+#   - Use the `webhookEnabled` variable and webhook URLs to set this functionality
 #   - Function for finding Jamf Pro URL for computer running AAP (thanks @AndrewMBarnett and @TechTrekkie)
 #   - Added minimize windowbutton to let windows run and minimize to applicable dialogs
 #   - Added script version number to help message (thanks @dan-snelson)
@@ -79,6 +79,9 @@
 #   - Analyzing Apps window now shows app logos during discovery (thanks @dan-snelson)
 #   - The app patching dialog window now shows all apps' icons when the dialog is presented (thanks @dan-snelson)
 #   - Removed all notes from script history previous to version 2.0.0, see changelog to reference any prior changes. 
+#   - Updated jamfProComputerURL variable to a search by serial vs. running a recon to get JSS ID, an extra click but saves a recon (thanks @dan-snelson)
+#   - Removed minimize windowbutton from the deferral dialog to avoid confusion from users mistakenly hiding the dialog
+#   - Updated webhook JSON to utilize appTitle variable vs. direct App Auto-Patch name
 #
 # 
 ####################################################################################################
@@ -93,7 +96,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.9.0"
+scriptVersion="2.9.1"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -199,6 +202,7 @@ dialogVersion=$( /usr/local/bin/dialog --version )
 exitCode="0"
 
 jamfProURL=$(/usr/bin/defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url)
+jamfProComputerURL="${jamfProURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # IT Support Variable (thanks, @AndrewMBarnett)
@@ -364,7 +368,7 @@ if [[ "${osMajorVersion}" -ge 12 ]] ; then
     preFlight "macOS ${osMajorVersion} installed; proceeding ..."
 else
     # The Mac is running an operating system older than macOS 12 Monterey; exit with an error
-    preFlight "swiftDialog and App Auto-Patch require at least macOS 12 Monterey and this Mac is running ${osVersion} (${osBuild}), exiting with an error."
+    preFlight "swiftDialog and ${appTitle} require at least macOS 12 Monterey and this Mac is running ${osVersion} (${osBuild}), exiting with an error."
     osascript -e 'display dialog "Please advise your Support Representative of the following error:\r\rExpected macOS Monterey (or newer), but found macOS '"${osVersion}"' ('"${osBuild}"').\r\r" with title "'"${scriptFunctionalName}"': Detected Outdated Operating System" buttons {"Open Software Update"} with icon caution'
     preFlight "Executing /usr/bin/open '${outdatedOsAction}' …"
     su - "${loggedInUser}" -c "/usr/bin/open \"${outdatedOsAction}\""
@@ -776,38 +780,6 @@ function appsUpToDate(){
         formatted_result="None"
         formatted_error_result="None"
     fi
-
-}
-
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# Jamf Pro URL
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-function jamfProURL(){
-
-search_text="Jamf Computer URL:"
-
-if grep -q "$search_text" "$scriptLog" ; then
-    jamfProComputerURL=$(grep "$search_text" "$scriptLog"| tail -n 1| awk -F 'Jamf Computer URL:' '{print $2}' | awk '{$1=$1};1')
-
-        if [ -n "$jamfProComputerURL" ]; then
-        infoOut "Jamf Computer URL: $jamfProComputerURL"
-        else
-        infoOut "Jamf Computer URL not found in the latest line."
-        fi
-    
-else
-    infoOut "Jamf Pro URL not found, searching now"
-
-    jamfBinary="/usr/local/bin/jamf"
-    reconRaw=$( eval "${jamfBinary} recon ${reconOptions} -verbose | tee -a ${scriptLog}" )
-    computerID=$( echo "${reconRaw}" | grep '<computer_id>' | xmllint --xpath xmllint --xpath '/computer_id/text()' - )
-    jamfProComputerURL="${jamfProURL}computers.html?id=${computerID}&o=r"
-
-infoOut "Jamf Computer URL: $jamfProComputerURL"
-
-fi
 
 }
 
@@ -1631,7 +1603,6 @@ function checkDeferral() {
                 --quitoninfo
                 --moveable
                 --liststyle compact
-                --windowbuttons min
                 --small
                 --quitkey k
                 --titlefont size=18
@@ -1666,7 +1637,6 @@ function checkDeferral() {
                 --quitoninfo
                 --moveable
                 --liststyle compact
-                --windowbuttons min
                 --small
                 --quitkey k
                 --titlefont size=18
@@ -1743,7 +1713,7 @@ else
 			"type": "header",
 			"text": {
 				"type": "plain_text",
-				"text": "App Auto-Patch: '${webhookStatus}'",
+				"text": "'${appTitle}': '${webhookStatus}'",
 			}
 		},
 		{
@@ -1814,9 +1784,9 @@ else
 	"@type": "MessageCard",
 	"@context": "http://schema.org/extensions",
 	"themeColor": "0076D7",
-	"summary": "App Auto-Patch: '${webhookStatus}'",
+	"summary": "'${appTitle}': '${webhookStatus}'",
 	"sections": [{
-		"activityTitle": "App Auto-Patch: '${webhookStatus}'",
+		"activityTitle": "'${appTitle}': '${webhookStatus}'",
 		"activityImage": "https://usw2.ics.services.jamfcloud.com/icon/hash_2927020b3ba74fa8cf07c3304770a6276c6b1e95a2b87e8c4e8cb49c010763ed",
 		"facts": [{
 			"name": "Serial Number and Computer Name:",
@@ -1910,7 +1880,6 @@ IFS=$oldIFS
 
 if [ "$errorCount" -gt 0 ]; then
     warning "Completed with $errorCount errors."
-    jamfProURL
     appsUpToDate
     if [[ ${webhookEnabled} == "false" ]]; then
         infoOut "Webhook Enabled flag set to: ${webhookEnabled}, skipping ..."
@@ -1926,7 +1895,6 @@ if [ "$errorCount" -gt 0 ]; then
     removeInstallomator
 else
     infoOut "Done."
-    jamfProURL
     appsUpToDate
     if [[ ${webhookEnabled} == "false" ]]; then
         infoOut "Webhook Enabled flag set to: ${webhookEnabled}, skipping ..."
