@@ -83,7 +83,7 @@
 #   - Updated webhook JSON to utilize appTitle variable vs. direct App Auto-Patch name (thanks @Tech-Trekkie)
 #
 #   Version 2.9.2, 02.15.2024, Robert Schroeder (@robjschroeder)
-#   - Fixed an issue that would cause a blank list to appear in the patching dialog if `runDiscovery` was set to false, a placeholder will be used for now
+#   - Fixed an issue that would cause a blank list to appear in the patching dialog if `runDiscovery` was set to `false`, a placeholder will be used for now
 #   ** This issue was introduced in version 2.9.1 ** Issue #59
 # 
 ####################################################################################################
