@@ -4,7 +4,7 @@
 
 ## Version 2.9.2
 ### 15-Feb-2024
-- Fixed an issue that would cause a blank list to appear in the patching dialog if `runDiscovery` was set to false, a placeholder will be used for now
+- Fixed an issue that would cause a blank list to appear in the patching dialog if `runDiscovery` was set to `false`, a placeholder will be used for now
 - ** This issue was introduced in version 2.9.1 ** Issue #59
 
 ## Version 2.9.1
