@@ -75,14 +75,16 @@
 #   - Added script version number to help message (thanks @dan-snelson)
 #
 #   Version 2.9.1, 02.14.2024, Robert Schroeder (@robjschroeder)
-#   - Fixed issue where compact list style was being used during update progress
+#   - Fixed issue where compact list style was being used during update progress and increased font size
 #   - Analyzing Apps window now shows app logos during discovery (thanks @dan-snelson)
-#   - The app patching dialog window now shows all apps' icons when the dialog is presented (thanks @dan-snelson)
 #   - Removed all notes from script history previous to version 2.0.0, see changelog to reference any prior changes. 
 #   - Updated jamfProComputerURL variable to a search by serial vs. running a recon to get JSS ID, an extra click but saves a recon (thanks @dan-snelson)
-#   - Removed minimize windowbutton from the deferral dialog to avoid confusion from users mistakenly hiding the dialog
-#   - Updated webhook JSON to utilize appTitle variable vs. direct App Auto-Patch name
+#   - Removed minimize windowbutton from the deferral dialog to avoid confusion from users mistakenly hiding the dialog (Thanks @TechTrekkie)
+#   - Updated webhook JSON to utilize appTitle variable vs. direct App Auto-Patch name (thanks @Tech-Trekkie)
 #
+#   Version 2.9.2, 02.15.2024, Robert Schroeder (@robjschroeder)
+#   - Fixed an issue which would cause a blank list to appear in the patching dialog if `runDiscovery` was set to false, a placeholder will be used for now
+#   ** This issue was introduced in version 2.9.1 ** Issue #59
 # 
 ####################################################################################################
 
@@ -96,7 +98,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.9.1"
+scriptVersion="2.9.2"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -626,7 +628,7 @@ dialogListConfigurationOptions=(
     --infotext "${infoTextScriptVersion}"
     --windowbuttons min
     --titlefont size=18
-    --messagefont size=11
+    --messagefont size=14
     --quitkey k
     --icon "$icon"
     --overlayicon "$overlayicon"
@@ -908,6 +910,16 @@ function swiftDialogListWindow(){
             return 0
         fi
 
+        # Build our list of Display Names for the SwiftDialog list
+        for label in $queuedLabelsArray; do
+            # Get the "name=" value from the current label and use it in our SwiftDialog list
+            currentDisplayName=$(sed -n '/# label descriptions/,$p' ${installomatorScript} | grep -i -A 50 "${label})" | grep -m 1 "name=" | sed 's/.*=//' | sed 's/"//g')
+            if [ -n "$currentDisplayName" ]; then
+                displayNames+=("--listitem")
+                displayNames+=(${currentDisplayName},icon=SF=slowmo)
+            fi
+        done
+
         if [[ ! -f $dialogCommandFile ]]; then
             touch "$dialogCommandFile"
         fi
@@ -915,7 +927,7 @@ function swiftDialogListWindow(){
         # Create our running swiftDialog window
         $dialogBinary \
         ${dialogListConfigurationOptions[@]} \
-        ${displayNamesWithLogo[@]} \
+        ${displayNames[@]} \
         &
     fi
 
@@ -1220,12 +1232,6 @@ function verifyApp() {
 function queueLabel() {
     
     notice "Queueing $label_name"
-
-    currentDisplayName=$(sed -n '/# label descriptions/,$p' ${installomatorScript} | grep -i -A 50 "${label_name})" | grep -m 1 "name=" | sed 's/.*=//' | sed 's/"//g')
-    if [ -n "$currentDisplayName" ]; then
-        displayNamesWithLogo+=("--listitem")
-        displayNamesWithLogo+=(${currentDisplayName},icon=${appPath})
-    fi
 
     labelsArray+="$label_name "
     debugVerbose "$labelsArray"
