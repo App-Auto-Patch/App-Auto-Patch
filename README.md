@@ -43,7 +43,7 @@ To everyone who has helped contribute to App Auto-Patch, including but not limit
 
 - Dan Snelson ([@dan-snelson](https://github.com/dan-snelson))
 - Andrew Spokes ([@TechTrekkie](https://github.com/TechTrekkie))
-- Andrew Clarke ([@drtaru](https://github.com/drtaru))
+- Andrew Clark ([@drtaru](https://github.com/drtaru))
 - Andrew Barnett ([@andrewmbarnett](https://github.com/AndrewMBarnett))
 - Trevor Sysock ([@bigmacadmin](https://github.com/bigmacadmin))
 - Bart Reardon ([@bartreardon](https://github.com/bartreardon))
