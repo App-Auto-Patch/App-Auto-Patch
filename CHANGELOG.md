@@ -2,6 +2,13 @@
 
 # Version 2
 
+## Version 2.9.3
+### 17-Feb-2024
+- Added case for on-prem, multi-node, or clustered environments (thanks @dan-snelson)
+- Webhook logic now uses case statement for evaluation (thanks @dan-snelson)
+- Improved webhook messaging (thanks @dan-snelson)
+- Improved infobox informaiton for patching dialog (thanks @dan-snelson)
+
 ## Version 2.9.2
 ### 15-Feb-2024
 - Fixed an issue that would cause a blank list to appear in the patching dialog if `runDiscovery` was set to `false`, a placeholder will be used for now
