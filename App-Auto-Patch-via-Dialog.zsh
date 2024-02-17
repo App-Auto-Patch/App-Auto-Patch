@@ -53,7 +53,7 @@
 #
 #   Version 2.0.7, 01.22.2024, Robert Schroeder (@robjschroeder)
 #   - Added function to list application names needing to update to show users before updates are installed during the deferral window (thanks @AndrewMBarnett)
-#   - Added text to explain the deferral timer during the deferall window
+#   - Added text to explain the deferral timer during the deferral window
 #   - Text displayed during the deferral period and no deferrals remaining changes depending on how many deferrals are left.
 #   - Deferral window infobox text is now dynamic based on `deferralTimerAction`
 #   - Adjusted size of deferral window based on deferrals remaining (thanks @TechTrekkie)
@@ -70,13 +70,13 @@
 #   - Updated minimum swiftDialog minimum to 2.4.0 (thanks @AndrewMBarnett)
 #   - Added Teams and Slack webhook messaging functionality (thanks @AndrewMBarnett and @TechTrekkie)
 #   - Use the `webhookEnabled` variable and webhook URLs to set this functionality
-#   - Function for finding Jamf Pro URL for computer running AAP (thanks @AndrewMBarnett and @TechTrekkie)
+#   - Function for finding Jamf Pro URL for the computer running AAP (thanks @AndrewMBarnett and @TechTrekkie)
 #   - Added minimize windowbutton to let windows run and minimize to applicable dialogs
 #   - Added script version number to help message (thanks @dan-snelson)
 #
 #   Version 2.9.1, 02.14.2024, Robert Schroeder (@robjschroeder)
 #   - Fixed issue where compact list style was being used during update progress and increased font size
-#   - Analyzing Apps window now shows app logos during discovery (thanks @dan-snelson)
+#   - The analyzing Apps window now shows app logos during discovery (thanks @dan-snelson)
 #   - Removed all notes from script history previous to version 2.0.0, see changelog to reference any prior changes. 
 #   - Updated jamfProComputerURL variable to a search by serial vs. running a recon to get JSS ID, an extra click but saves a recon (thanks @dan-snelson)
 #   - Removed minimize windowbutton from the deferral dialog to avoid confusion from users mistakenly hiding the dialog (Thanks @TechTrekkie)
@@ -85,6 +85,12 @@
 #   Version 2.9.2, 02.15.2024, Robert Schroeder (@robjschroeder)
 #   - Fixed an issue that would cause a blank list to appear in the patching dialog if `runDiscovery` was set to `false`, a placeholder will be used for now
 #   ** This issue was introduced in version 2.9.1 ** Issue #59
+#
+#   Version 2.9.3, 02.17.2024, Robert Schroeder (@robjschroeder)
+#   - An added case for on-prem, multi-node, or clustered environments (thanks @dan-snelson)
+#   - Webhook logic now uses case statements for evaluation (thanks @dan-snelson)
+#   - Improved webhook messaging (thanks @dan-snelson)
+#   - Improved infobox information for patching dialog (thanks @dan-snelson)
 # 
 ####################################################################################################
 
@@ -98,7 +104,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.9.2"
+scriptVersion="2.9.3"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -204,6 +210,14 @@ dialogVersion=$( /usr/local/bin/dialog --version )
 exitCode="0"
 
 jamfProURL=$(/usr/bin/defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url)
+
+# Jamf Pro URL for on-prem, multi-node, clustered environments
+case ${jamfProURL} in
+    *"dev"*     ) jamfProURL="https://jamfpro-dev.company.com" ;;
+    *"beta"*    ) jamfProURL="https://jamfpro-beta.company.com" ;;
+    *           ) jamfProURL="https://jamfpro-prod.company.com" ;;
+esac
+
 jamfProComputerURL="${jamfProURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -624,7 +638,7 @@ dialogListConfigurationOptions=(
     --position bottomright
     --progress
     --helpmessage "$helpMessage"
-    --infobox "#### Computer Name: #### \n\n $computerName \n\n #### macOS Version: #### \n\n $osVersion \n\n #### macOS Build: #### \n\n $osBuild \n\n "
+    --infobox "**Computer Name:**  \n\n- $computerName  \n\n**macOS Version:**  \n\n- $osVersion ($osBuild)"
     --infotext "${infoTextScriptVersion}"
     --windowbuttons min
     --titlefont size=18
@@ -765,22 +779,24 @@ function appsUpToDate(){
     fi
 
     # Extract the App up to date info from the AAP log
-    if [[ $errorsCount -le 0 && ! -n $appsUpToDate ]]; then
+    if [[ $errorsCount -le 0 ]] && [[ ! -n $appsUpToDate ]]; then
         infoOut "SUCCESS: Applications updates were installed with no errors"
-        webhookStatus="Success, All Apps Up to Date"
+        webhookStatus="Success: Apps updated (S/N ${serialNumber})"
         formatted_result=$(echo "$queuedLabelsArray")
         formatted_error_result="None"
+        errorCount="0"
     elif
-        [[ $errorsCount -gt 0 && ! -n $appsUpToDate ]]; then
+        [[ $errorsCount -gt 0 ]] && [[ ! -n $appsUpToDate ]]; then
         infoOut "FAILURES DETECTED: Applications updates were installed with some errors"
-        webhookStatus="Errors detected, some application patches failed with errors"
+        webhookStatus="Error: Update(s) failed (S/N ${serialNumber})"
         formatted_result=$(echo "$queuedLabelsArray")
         check_and_echo_errors
     else
         infoOut "SUCCESS: Applications were all up to date, nothing to install"
-        webhookStatus="Success, All Apps Up to Date and Nothing Installed"
+        webhookStatus="Success: Apps already up-to-date (S/N ${serialNumber})"
         formatted_result="None"
         formatted_error_result="None"
+        errorCount="0"
     fi
 
 }
@@ -1509,7 +1525,8 @@ function doInstallations() {
         sleep 1
         queuedLabelsArrayLength=$((${#countOfElementsArray[@]}))
         progressIncrementValue=$(( 100 / queuedLabelsArrayLength ))
-	sleep 1
+	    sleep 1
+        swiftDialogUpdate "infobox: + <br><br>"
         swiftDialogUpdate "infobox: + **Updates:** $queuedLabelsArrayLength"
     fi
 
@@ -1529,7 +1546,7 @@ function doInstallations() {
             sleep .5
 
             swiftDialogUpdate "icon: /Applications/${currentDisplayName}.app"
-            swiftDialogUpdate "progresstext: Checking ${currentDisplayName} …"
+            swiftDialogUpdate "progresstext: Processing ${currentDisplayName} …"
             swiftDialogUpdate "listitem: index: $i, icon: /Applications/${currentDisplayName}.app, status: wait, statustext: Checking …"
 
         fi
@@ -1742,11 +1759,11 @@ else
 				},
 				{
 					"type": "mrkdwn",
-					"text": ">*Application Install Labels:*\n>'"$formatted_result"'"
+					"text": ">*Updates:*\n>'"$formatted_result"'"
 				},
 				{
 					"type": "mrkdwn",
-					"text": ">*Application Install Errors:*\n>'"$formatted_error_result"'"
+					"text": ">*Errors:*\n>'"$formatted_error_result"'"
 				},
                 		{
 					"type": "mrkdwn",
@@ -1792,19 +1809,19 @@ else
 	"themeColor": "0076D7",
 	"summary": "'${appTitle}': '${webhookStatus}'",
 	"sections": [{
-		"activityTitle": "'${appTitle}': '${webhookStatus}'",
+		"activityTitle": "'${webhookStatus}'",
 		"activityImage": "https://ics.services.jamfcloud.com/icon/hash_28ed3420a17f56d084d012e1af310d3aa9bc239b245f47bc8f9cb1603642737d",
 		"facts": [{
 			"name": "Computer Name (Serial Number):",
 			"value": "'"$computerName"' ('"$serialNumber"')"
 		}, {
-			"name": "Current User:",
+			"name": "User:",
 			"value": "'"$loggedInUser"'"
 		}, {
-			"name": "Application Install Labels:",
+			"name": "Updates:",
 			"value": "'"$formatted_result"'"
         }, {
-			"name": "Application Install Errors:",
+			"name": "Errors:",
 			"value": "'"$formatted_error_result"'"
         }],
 		"markdown": true
@@ -1826,7 +1843,6 @@ else
 fi
 
 }
-
 
 oldIFS=$IFS
 IFS=' '
@@ -1878,36 +1894,47 @@ fi
 
 IFS=$oldIFS
 
-if [ "$errorCount" -gt 0 ]; then
-    warning "Completed with $errorCount errors."
-    appsUpToDate
-    if [[ ${webhookEnabled} == "false" ]]; then
-        infoOut "Webhook Enabled flag set to: ${webhookEnabled}, skipping ..."
-    elif [[ ${webhookEnabled} == "all" ]]; then
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# webHookMessage
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+case ${webhookEnabled} in
+
+    "all" ) # Notify on sucess and failure 
         infoOut "Webhook Enabled flag set to: ${webhookEnabled}, continuing ..."
-        webHookMessage
-    elif [[ ${webhookEnabled} == "failures" && ${errorCount} -gt 0 ]]; then
+    appsUpToDate
+            webHookMessage
+    ;;
+
+    "failures" ) # Notify on failures
+        appsUpToDate
+        if [[ "${errorCount}" -gt 0 ]]; then
+        warning "Completed with $errorCount errors."
         infoOut "Webhook Enabled flag set to: ${webhookEnabled} with error count: ${errorCount}, continuing ..."
         webHookMessage
     else
         infoOut "Webhook Enabled flag set to: ${webhookEnabled}, but conditions not met for running webhookMessage."
     fi
-    removeInstallomator
-else
-    infoOut "Done."
-    appsUpToDate
-    if [[ ${webhookEnabled} == "false" ]]; then
+    ;;
+
+    "false" ) # Don't notify
         infoOut "Webhook Enabled flag set to: ${webhookEnabled}, skipping ..."
-    elif [[ ${webhookEnabled} == "all" ]]; then
-        infoOut "Webhook Enabled flag set to: ${webhookEnabled}, continuing ..."
-        webHookMessage
-    elif [[ ${webhookEnabled} == "failures" && ${errorCount} -gt 0 ]]; then
-        infoOut "Webhook Enabled flag set to: ${webhookEnabled} with error count: ${errorCount}, continuing ..."
-        webHookMessage
-    else
-        infoOut "Webhook Enabled flag set to: ${webhookEnabled}, but conditions not met for running webhookMessage."
-    fi
+    ;;
+
+    * ) # Catch-all
+        infoOut "Webhook Enabled flag set to: ${webhookEnabled}, skipping ..."
+        ;;
+
+esac
+
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Exit
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
     removeInstallomator
-fi
 
 quitScript
