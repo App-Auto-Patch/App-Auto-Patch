@@ -13,7 +13,7 @@ AAP_plist="${AAP_folder}/AppAutoPatchDeferrals.plist"
 # Report if the App Auto Patch preference file exists.
 if [[ -f "${AAP_plist}" ]]; then
     displayAssertionCount=$(defaults read "${AAP_plist}" "AAPDisplayAssertionCount" 2> /dev/null)
-    [[ -n "${displayAssertionCount}" ]] && echo "<result>${remainingDeferrals}</result>"
+    [[ -n "${displayAssertionCount}" ]] && echo "<result>${displayAssertionCount}</result>"
     [[ -z "${displayAssertionCount}" ]] && echo "<result>No display assertion deferrals</result>"
 else
     echo "<result>No AAP Deferral preference file.</result>"
