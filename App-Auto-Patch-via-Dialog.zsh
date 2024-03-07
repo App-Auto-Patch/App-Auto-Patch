@@ -932,7 +932,7 @@ function swiftDialogListWindow(){
             currentDisplayName=$(sed -n '/# label descriptions/,$p' ${installomatorScript} | grep -i -A 50 "${label})" | grep -m 1 "name=" | sed 's/.*=//' | sed 's/"//g')
             if [ -n "$currentDisplayName" ]; then
                 displayNames+=("--listitem")
-                displayNames+=(${currentDisplayName},icon=SF=slowmo)
+                displayNames+=(${currentDisplayName},icon="/Applications/${currentDisplayName}.app")
             fi
         done
 
@@ -1488,7 +1488,8 @@ for label in $queuedLabelsForNames; do
     debugVerbose "Obtaining proper name for $label"
     appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g')"
     appName=$(echo $appName | sed -e 's/^[ \t]*//' )
-    appNamesArray+=(--listitem "$appName")
+    appNamesArray+=(--listitem)
+    appNamesArray+=(${appName},icon="/Applications/${appName}.app")
 done
 
 notice "Labels to install: $labelsArray"
