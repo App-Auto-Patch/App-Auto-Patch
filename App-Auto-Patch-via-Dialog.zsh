@@ -94,7 +94,10 @@
 # 
 #   Version 2.9.4, 03.07.2024
 #   - Added functionality for icons to show up in the deferral window and installing/updating window before they are processing (thanks @AndrewMBarnett)
-#
+# 
+#   Version 2.9.5, 03.07.2024
+#   - Added logic to display AAP Logo for the App Icon if the app does not exist (thanks @TechTrekkie)
+# 
 ####################################################################################################
 
 ####################################################################################################
@@ -107,7 +110,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.9.4"
+scriptVersion="2.9.5"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -115,7 +118,7 @@ interactiveMode="${4:="2"}"                                                     
 ignoredLabels="${5:=""}"                                                        # Parameter 5: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
 requiredLabels="${6:=""}"                                                       # Parameter 6: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
 optionalLabels="${7:=""}"                                                       # Parameter 7: A space-separated list of optional Installomator labels (i.e., "renew") ** Does not support wildcards **
-installomatorOptions="${8:-""}"    				                # Parameter 8: A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore)
+installomatorOptions="${8:-""}"                                                 # Parameter 8: A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore)
 maxDeferrals="${9:-"Disabled"}"                                                 # Parameter 9: Number of times a user is allowed to defer before being forced to install updates. A value of "Disabled" will not display the deferral prompt. [ `integer` | Disabled (default) ]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -124,13 +127,13 @@ maxDeferrals="${9:-"Disabled"}"                                                 
 
 ### Script Log and General Behavior Options ###
 
-scriptLog="/var/log/com.company.log"			                        # Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
-debugMode="false"				                                # Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
+scriptLog="/var/log/com.company.log"                                            # Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
+debugMode="false"                                                               # Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
 outdatedOsAction="/System/Library/CoreServices/Software Update.app"             # Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
 
 ### swiftDialog Options ###
 
-swiftDialogMinimumRequiredVersion="2.4.0"					# Minimum version of swiftDialog required to use workflow
+swiftDialogMinimumRequiredVersion="2.4.0"                                       # Minimum version of swiftDialog required to use workflow
 
 ### Deferral Options ###
 
@@ -141,8 +144,8 @@ AAPActivatorFlag=$(defaults read $aapAutoPatchDeferralFile AAPActivatorFlag)    
 
 ### Unattended Exit Options ###
 
-unattendedExit="false"                              				# Unattended Exit [ true | false (default) ]
-unattendedExitSeconds="60"							# Number of seconds to wait until a kill Dialog command is sent
+unattendedExit="false"                                                          # Unattended Exit [ true | false (default) ]
+unattendedExitSeconds="60"                                                      # Number of seconds to wait until a kill Dialog command is sent
 
 ### App Auto-Patch Path Variables ###
 
@@ -187,7 +190,7 @@ fi
 
 ### Overlay Icon ###
 
-useOverlayIcon="true"								# Toggles swiftDialog to use an overlay icon [ true (default) | false ]
+useOverlayIcon="true"                                                           # Toggles swiftDialog to use an overlay icon [ true (default) | false ]
 
 # Create `overlayicon` from Self Service's custom icon (thanks, @meschwartz!)
 if [[ "$useOverlayIcon" == "true" ]]; then
@@ -196,6 +199,15 @@ if [[ "$useOverlayIcon" == "true" ]]; then
 else
     overlayicon=""
 fi
+
+#Checking for AAPLogo
+if [[ ! -e "/Library/Application Support/AppAutoPatch/AAPLogo.png" ]]; then
+    echo "downloading AAP Logo"
+    logoImage="https://raw.githubusercontent.com/robjschroeder/App-Auto-Patch/main/Images/AAPLogo.png"
+    logoImageFileName=$( echo ${logoImage} | awk -F '/' '{print $NF}' )
+    curl -L --location --silent "$logoImage" -o "/Library/Application Support/AppAutoPatch/${logoImageFileName}"
+fi
+logoImage="/Library/Application Support/AppAutoPatch/AAPLogo.png"
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Operating System, Computer Model Name, etc.
@@ -935,7 +947,11 @@ function swiftDialogListWindow(){
             currentDisplayName=$(sed -n '/# label descriptions/,$p' ${installomatorScript} | grep -i -A 50 "${label})" | grep -m 1 "name=" | sed 's/.*=//' | sed 's/"//g')
             if [ -n "$currentDisplayName" ]; then
                 displayNames+=("--listitem")
-                displayNames+=(${currentDisplayName},icon="/Applications/${currentDisplayName}.app")
+                if [[ ! -e "/Applications/${currentDisplayName}.app" ]]; then
+                    displayNames+=(${currentDisplayName},icon="${logoImage}")
+                else 
+                    displayNames+=(${currentDisplayName},icon="/Applications/${currentDisplayName}.app")
+                fi
             fi
         done
 
@@ -1492,7 +1508,11 @@ for label in $queuedLabelsForNames; do
     appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g')"
     appName=$(echo $appName | sed -e 's/^[ \t]*//' )
     appNamesArray+=(--listitem)
-    appNamesArray+=(${appName},icon="/Applications/${appName}.app")
+    if [[ ! -e "/Applications/${appName}.app" ]]; then
+    appNamesArray+=(${appName},icon="${logoImage}")
+    else 
+        appNamesArray+=(${appName},icon="/Applications/${appName}.app")
+    fi
 done
 
 notice "Labels to install: $labelsArray"
