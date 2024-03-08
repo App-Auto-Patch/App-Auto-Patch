@@ -92,6 +92,9 @@
 #   - Improved webhook messaging (thanks @dan-snelson)
 #   - Improved infobox information for patching dialog (thanks @dan-snelson)
 # 
+#   Version 2.9.4, 03.07.2024
+#   - Added functionality for icons to show up in the deferral window and installing/updating window before they are processing (thanks @AndrewMBarnett)
+#
 ####################################################################################################
 
 ####################################################################################################
@@ -104,7 +107,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.9.3"
+scriptVersion="2.9.4"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
