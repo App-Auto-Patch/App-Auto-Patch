@@ -1571,7 +1571,12 @@ function doInstallations() {
 
             swiftDialogUpdate "icon: /Applications/${currentDisplayName}.app"
             swiftDialogUpdate "progresstext: Processing ${currentDisplayName} …"
-            swiftDialogUpdate "listitem: index: $i, icon: /Applications/${currentDisplayName}.app, status: wait, statustext: Checking …"
+            if [[ ! -e "/Applications/${currentDisplayName}.app" ]]; then
+                displayNames+=(${currentDisplayName},icon="${icon}")
+                swiftDialogUpdate "listitem: index: $i, icon: $icon, status: wait, statustext: Checking …"
+             else 
+                swiftDialogUpdate "listitem: index: $i, icon: /Applications/${currentDisplayName}.app, status: wait, statustext: Checking …"
+            fi
 
         fi
 
