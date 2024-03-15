@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/zsh --no-rcs
 
 ####################################################################################################
 #
@@ -92,11 +92,14 @@
 #   - Improved webhook messaging (thanks @dan-snelson)
 #   - Improved infobox information for patching dialog (thanks @dan-snelson)
 # 
-#   Version 2.9.4, 03.07.2024
+#   Version 2.9.4, 03.07.2024, Andrew Barnett (@AndrewMBarnett)
 #   - Added functionality for icons to show up in the deferral window and installing/updating window before they are processing (thanks @AndrewMBarnett)
 # 
-#   Version 2.9.5, 03.07.2024
+#   Version 2.9.5, 03.07.2024, Andrew Spokes (@TechTrekkie)
 #   - Added logic to display AAP Logo for the App Icon if the app does not exist (thanks @TechTrekkie)
+#
+#   Version 2.9.6, 03.15.2024, Robert Schroeder (@robjschroeder)
+#   - Added `--no-rcs` to shebang of script. This addresses CVE-2024-27301. https://nvd.nist.gov/vuln/detail/CVE-2024-27301/change-record?changeRecordedOn=03/14/2024T15:15:50.680-0400
 # 
 ####################################################################################################
 
@@ -110,7 +113,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.9.5"
+scriptVersion="2.9.6"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
