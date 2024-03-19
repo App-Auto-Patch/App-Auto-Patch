@@ -2,6 +2,22 @@
 
 # Version 2
 
+## Version 2.9.7
+### 19-Mar-2024
+- Added a new options flag, `useLatestAvailableInstallomatorScriptVersion`. If set to true, AAP will validate the VERSIONDATE from the latest Installomator script and will replace if they don't match. If `false` only Release version of Installomator will be used for comparision.
+
+## Version 2.9.6
+### 15-Mar-2024
+- Added `--no-rcs` to shebang of script. This addresses CVE-2024-27301. https://nvd.nist.gov/vuln/detail/CVE-2024-27301/change-record?changeRecordedOn=03/14/2024T15:15:50.680-0400
+
+## Version 2.9.5
+### 07-Mar-2024
+- Added logic to display AAP Logo for the App Icon if the app does not exist (thanks @TechTrekkie)
+
+## Version 2.9.4
+### 07-Mar-20204
+- Added functionality for icons to show up in the deferral window and installing/updating window before they are processing (thanks @AndrewMBarnett)
+
 ## Version 2.9.3
 ### 17-Feb-2024
 - Added case for on-prem, multi-node, or clustered environments (thanks @dan-snelson)
