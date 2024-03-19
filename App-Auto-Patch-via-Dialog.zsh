@@ -100,6 +100,9 @@
 #
 #   Version 2.9.6, 03.15.2024, Robert Schroeder (@robjschroeder)
 #   - Added `--no-rcs` to shebang of script. This addresses CVE-2024-27301. https://nvd.nist.gov/vuln/detail/CVE-2024-27301/change-record?changeRecordedOn=03/14/2024T15:15:50.680-0400
+#
+#   Version 2.9.7, 03.19.2024, Robert Schroeder (@robjschroeder)
+#   - Added a new options flag, `useLatestAvailableInstallomatorScriptVersion`. If set to true, AAP will validate the VERSIONDATE from the latest Installomator script and will replace if they don't match. If `false` only Release version of Installomator will be used for comparision.
 # 
 ####################################################################################################
 
@@ -165,6 +168,7 @@ runDiscovery="true"                                                             
 removeInstallomatorPath="false"                                                 # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
 convertAppsInHomeFolder="true"                                                  # Remove apps in /Users/* and install them to do default path [ true (default) | false ]
 ignoreAppsInHomeFolder="false"                                                  # Ignore apps found in '/Users/*'. If an update is found in '/Users/*' and variable is set to `false`, the app will be updated into the application's default path [ true | false (default) ]
+useLatestAvailableInstallomatorScriptVersion="true"                             # Will compare the VERSIONDATE of the local Installomator script against the VERSIONDATE of the latest available on GitHub, if they don't match, AAP will download and replace the local Installomator script with the latest
 
 ### Webhook Options ###
 
@@ -1083,9 +1087,29 @@ function checkInstallomator() {
 
 }
 
+function checkInstallomatorScriptDate() {
+    # At this point we should have Installomator there, lets check what the script version date is
+
+    if [[ "${useLatestAvailableInstallomatorScriptVersion}" == "true" ]]; then
+        # Check lastest available
+        availableVersionDate=$(curl -s https://raw.githubusercontent.com/Installomator/Installomator/main/Installomator.sh | grep VERSIONDATE= | sed 's/VERSIONDATE=//; s/"//g')
+        localVersionDate=$(grep VERSIONDATE= $installomatorScript | sed 's/VERSIONDATE=//; s/"//g')
+
+        if [[ $availableVersionDate == $localVersionDate ]]; then
+            infoOut "$localVersionDate = $availableVersionDate, continuing ..."
+        else
+            infoOut "$localVersionDate != $availableVersionDate, replacing ..."
+            curl -o "$installomatorScript" https://raw.githubusercontent.com/Installomator/Installomator/main/Installomator.sh
+        fi
+    fi
+
+}
+
 infoOut "Checking for Installomator Pre-Requisite"
 
 checkInstallomator
+
+checkInstallomatorScriptDate
 
 # Set Installomator script to production
 if [[ "$debugMode" == "true" ]]; then
