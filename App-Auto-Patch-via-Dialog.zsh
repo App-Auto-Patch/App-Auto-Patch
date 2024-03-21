@@ -104,6 +104,17 @@
 #   Version 2.9.7, 03.19.2024, Robert Schroeder (@robjschroeder)
 #   - Added a new options flag, `useLatestAvailableInstallomatorScriptVersion`. If set to true, AAP will validate the VERSIONDATE from the latest Installomator script and will replace if they don't match. If `false` only Release version of Installomator will be used for comparision.
 # 
+#   Version 2.10.0
+#   - Merged AAP Activator functionality into main AAP Sript. Activator (Deferral Workflow) will execute if maxDeferrals is set to an integer. Disabled will execute "On-Demand" workflow
+#   - Added Activator/Deferral Workflow variables:
+#       - daysUntilReset = The number of days until the Activator/Deferral Workflow resets the patching status to false (ex: 7 days resets weekly)
+#       - patchWeekStartDay = Day of the week to set the start date for weekly patching/daysUntilReset count (1=Mon 2=Tue...7=Sun), leave blank to disable
+#       - maxDisplayAssertionCount = The maximum number of deferred attempts from Display Assertions (integer, leave blank to disable)
+#   - New Variable = selfServicePatchingStatusModeReset - Determins if the weekly patching status should be set to True when running in "On-Demand/Self Service" mode (when deferrals are disabled) [1=Never, 2=Always, 3=On Success (no errors)]
+#   - New Variable = ignoreDNDApps - Comma separated list of app names to ignore when evaluating DND/Display Assertions (ex: ignoreDNDApps="firefox,Google Chrome,caffeinate")
+#   - Consolidated AppAutoPatchDeferrals config file into AppAutoPatchStatus config file - Any existing Extension Attributes will need to be updated
+#   - Moved Caffeinate function to run after Activator/Deferral Workflow to not be included as a false positive display assertion
+# 
 ####################################################################################################
 
 ####################################################################################################
@@ -116,7 +127,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.9.7"
+scriptVersion="2.10.0"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -145,8 +156,14 @@ swiftDialogMinimumRequiredVersion="2.4.0"                                       
 
 deferralTimer=300                                                               # Time given to the user to respond to deferral prompt if enabled
 deferralTimerAction="Defer"                                                     # What happens when the deferral timer expires [ Defer | Continue ]
-aapAutoPatchDeferralFile="/Library/Application Support/AppAutoPatch/AppAutoPatchDeferrals.plist"
-AAPActivatorFlag=$(defaults read $aapAutoPatchDeferralFile AAPActivatorFlag)    # Flag to indicate if using AAPActivator to launch App Auto-Patch. AAP Activator will set this value to True prior to launching AAP
+daysUntilReset=7																# The number of days until the activator resets the patching status to False
+patchWeekStartDay=""															# Patch Week Start Day of Week (1-7, blank to disable): The day of week to set the start date for weekly patching: (1=Mon 2=Tue...7=Sun)
+maxDisplayAssertionCount=""														# The maximum number of deferred attempts from Display Assertions (Integer, blank to disable)
+selfServicePatchingStatusModeReset="1"                                          # Determines if weekly patching status should be set to true when running in Self Service mode (deferrals disabled) [1=Never, 2=Always, 3=On Success (no errors)]
+
+ignoreDNDApps=""                                                                # Comma separated list of app names to ignore when evaluating DND (ex: ignoreDNDApps="firefox,Google Chrome,Safari,Amphetamine,caffeinate")
+
+
 
 ### Unattended Exit Options ###
 
@@ -241,6 +258,29 @@ case ${jamfProURL} in
 esac
 
 jamfProComputerURL="${jamfProURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Deferral Workflow Date Calculations
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+CurrentDate=$(date +"%Y-%m-%d")
+CurrentDateEpoch=$(date -j -f "%Y-%m-%d" "$CurrentDate" "+%s")
+
+#### Calculate Patch Week Start Date ####
+if [[ $patchWeekStartDay != "" ]]; then
+    # Get the current day of the week
+    current_day=$(date +%u)
+    # Calculate the number of days to subtract to get to the most recent patch week start date
+    days_to_subtract=$((current_day - $patchWeekStartDay))
+    if [ $days_to_subtract -lt 0 ]; then
+        days_to_subtract=$((days_to_subtract + 7))
+    fi
+    
+    # Calculate the date of the most recent patch week start date
+    Patch_Week_Start_Date=$(date -v "-$days_to_subtract"d "+%Y-%m-%d")
+else
+    Patch_Week_Start_Date=$CurrentDate
+fi 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # IT Support Variable (thanks, @AndrewMBarnett)
@@ -418,8 +458,9 @@ fi
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 aapPID="$$"
-preFlight "Caffeinating this script (PID: $aapPID)"
-caffeinate -dimsu -w $aapPID &
+#Moved this to after the new Activator workflow so it doesn't detect itself as a valid display assertion
+#preFlight "Caffeinating this script (PID: $aapPID)"
+#caffeinate -dimsu -w $aapPID &
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Pre-flight Check: Validate/install swiftDialog (Thanks big bunches, @acodega!)
@@ -1311,12 +1352,134 @@ if [[ ! -f $appAutoPatchStatusConfigFile ]]; then
     timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
     defaults write $appAutoPatchStatusConfigFile AAPVersion -string "$scriptVersion"
     defaults write $appAutoPatchStatusConfigFile AAPLastRun -date "$timestamp"
+debugVerbose "Writing Deferral Workflow Values to AAP Status Configuration Profile..."
+    defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool false
+    defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatchingStatusDate "$Patch_Week_Start_Date"
+    defaults write $appAutoPatchStatusConfigFile AAPDisplayAssertionCount 0
+    if [[ $maxDeferrals == "Disabled" || $maxDeferrals == "disabled" ]]; then
+        debugVerbose "Deferral workflow disabled - Setting activator flag to False"
+        defaults write $appAutoPatchStatusConfigFile AAPActivatorFlag -bool false
+    else
+        debugVerbose "Deferral workflow enabled - Setting activator flag to True"
+        defaults write $appAutoPatchStatusConfigFile AAPActivatorFlag -bool true
+    fi
 else
     debugVerbose "AAP Status configuration already exists, continuing..."
     timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
     defaults write $appAutoPatchStatusConfigFile AAPVersion -string "$scriptVersion"
     defaults write $appAutoPatchStatusConfigFile AAPLastRun -date "$timestamp"
+debugVerbose "Writing Deferral Workflow Values to AAP Status Configuration Profile..."
+    if [[ $maxDeferrals == "Disabled" || $maxDeferrals == "disabled" ]]; then
+        debugVerbose "Deferral workflow disabled - Setting activator flag to False"
+        defaults write $appAutoPatchStatusConfigFile AAPActivatorFlag -bool false
+    else
+        debugVerbose "Deferral workflow enabled - Setting activator flag to True"
+        defaults write $appAutoPatchStatusConfigFile AAPActivatorFlag -bool true
+    fi
 fi
+
+
+AAPActivatorFlag=$(defaults read $appAutoPatchStatusConfigFile AAPActivatorFlag)
+weeklyPatchingComplete=$(defaults read $appAutoPatchStatusConfigFile AAPWeeklyPatching)
+weeklyPatchingStatusDate=$(defaults read $appAutoPatchStatusConfigFile AAPWeeklyPatchingStatusDate)
+DisplayAssertionCount=$(defaults read $appAutoPatchStatusConfigFile AAPDisplayAssertionCount)
+if [[ -z $weeklyPatchingComplete || -z $weeklyPatchingStatusDate ]]; then
+    debug "Patching Completion Status or Start Date not set, setting values"
+    defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool false
+    defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatchingStatusDate "$Patch_Week_Start_Date"
+    weeklyPatchingComplete=$(defaults read $appAutoPatchStatusConfigFile AAPWeeklyPatching)
+    weeklyPatchingStatusDate=$(defaults read $appAutoPatchStatusConfigFile AAPWeeklyPatchingStatusDate)
+fi
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Deferral Workflow Activator
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+function AAPActivator(){
+    
+    hasDisplaySleepAssertion() {
+        # Get the names of all apps with active display sleep assertions
+        local apps="$(/usr/bin/pmset -g assertions | /usr/bin/awk '/NoDisplaySleepAssertion | PreventUserIdleDisplaySleep/ && match($0,/\(.+\)/) && ! /coreaudiod/ {gsub(/^.*\(/,"",$0); gsub(/\).*$/,"",$0); print};')"
+        if [[ ! "${apps}" ]]; then
+            # No display sleep assertions detected
+            return 1
+        fi
+        # Create an array of apps that need to be ignored
+        local ignore_array=("${(@s/,/)ignoreDNDApps}")
+        
+        for app in ${(f)apps}; do
+            if (( ! ${ignore_array[(Ie)${app}]} )); then
+                # Relevant app with display sleep assertion detected
+                #printlog "Display sleep assertion detected by ${app}."
+                infoOut  "Display sleep assertion detected by ${app}."
+                return 0
+            fi
+        done
+        # No relevant display sleep assertion detected
+        return 1
+    }
+    
+    statusDateEpoch=$(date -j -f "%Y-%m-%d" "$weeklyPatchingStatusDate" "+%s")
+    EpochTimeSinceStatus=$(($CurrentDateEpoch - $statusDateEpoch))
+    DaysSinceStatus=$(($EpochTimeSinceStatus / 86400))
+    
+    infoOut "Patching Completion Status is $weeklyPatchingComplete"
+    infoOut "Patching Start Date is $weeklyPatchingStatusDate"
+    infoOut "Current Date: $CurrentDate"
+    infoOut "Days Since Patching Start Date: $DaysSinceStatus"
+    
+    if [ ${DaysSinceStatus} -ge $daysUntilReset ]; then
+        infoOut "Resetting Completion Status to False"
+        defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool false
+        infoOut "Setting Patch Week Start Date as $Patch_Week_Start_Date"
+        defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatchingStatusDate "$Patch_Week_Start_Date"
+        weeklyPatchingComplete=$(defaults read $appAutoPatchStatusConfigFile AAPWeeklyPatching)
+        defaults write $appAutoPatchStatusConfigFile AAPDisplayAssertionCount 0
+    fi
+    
+    if hasDisplaySleepAssertion; then
+        infoOut  "active display sleep assertion detected"
+        DisplayAssertionCount=$((DisplayAssertionCount+1))
+        defaults write $appAutoPatchStatusConfigFile AAPDisplayAssertionCount $DisplayAssertionCount
+        infoOut "Display Assertion Count: $DisplayAssertionCount"
+        DisplayAssertionCount=$(defaults read $appAutoPatchStatusConfigFile AAPDisplayAssertionCount)
+    else
+        infoOut  "No Assertions Detected"
+        defaults write $appAutoPatchStatusConfigFile AAPDisplayAssertionCount 0
+        DisplayAssertionCount=$(defaults read $appAutoPatchStatusConfigFile AAPDisplayAssertionCount)
+    fi
+    
+    
+    if [[  $weeklyPatchingComplete == 1 ]]; then
+        infoOut "Patching Status already Complete... Exiting"
+        defaults write $appAutoPatchStatusConfigFile AAPDisplayAssertionCount 0
+        quitScript
+    elif [[ ${DisplayAssertionCount} -ge 1 && ${DisplayAssertionCount} -le $maxDisplayAssertionCount ]]; then
+        infoOut "Display Assertions Detected. Assertion Count $DisplayAssertionCount .... Exiting"
+        quitScript
+    elif [[  $weeklyPatchingComplete == 0 ]]; then
+        infoOut "Continuing App Auto-Patch Workflow"
+        #/usr/local/bin/jamf policy -trigger $aapPolicyTrigger
+    else
+        debug "Unknown Status... Setting status to False"
+        defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool false
+        defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatchingStatusDate "$Patch_Week_Start_Date"
+        weeklyPatchingComplete=$(defaults read $appAutoPatchStatusConfigFile AAPWeeklyPatching)
+        infoOut "Continuing App Auto-Patch Workflow"
+        #/usr/local/bin/jamf policy -trigger $aapPolicyTrigger
+    fi
+    
+}    
+
+if [[ "$AAPActivatorFlag" == 1 ]]; then
+    infoOut "Running Activator Workflow"
+    AAPActivator
+fi
+
+infoOut "Caffeinating this script (PID: $aapPID)"
+caffeinate -dimsu -w $aapPID &
+
 
 if [[ "${runDiscovery}" == "true" ]]; then
     timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
@@ -1628,26 +1791,26 @@ function checkDeferral() {
     if [[ $maxDeferrals == "Disabled" || $maxDeferrals == "disabled" ]]; then
         notice "Deferral workflow disabled, moving on to Installs"
     else
-        if [[ ! -f $aapAutoPatchDeferralFile ]]; then
+        if [[ ! -f $appAutoPatchStatusConfigFile ]]; then
             echo "AAP Status configuration profile does  not exist, creating now..."
-            defaults write $aapAutoPatchDeferralFile AAPDefaultDeferrals "$maxDeferrals"
+            defaults write $appAutoPatchStatusConfigFile AAPDefaultDeferrals "$maxDeferrals"
         else
             echo "AAP Status configuration already exists, continuing..."
-            defaults write $aapAutoPatchDeferralFile AAPDefaultDeferrals "$maxDeferrals"
+            defaults write $appAutoPatchStatusConfigFile AAPDefaultDeferrals "$maxDeferrals"
         fi
     
         notice "Max Deferrals set to $maxDeferrals"
     
         ##Calculate remaining deferrals
         ##Check the Plist and find remaining deferrals from prior executions
-        remainingDeferrals=$(defaults read $aapAutoPatchDeferralFile remainingDeferrals)
+        remainingDeferrals=$(defaults read $appAutoPatchStatusConfigFile remainingDeferrals)
         ##Check that remainingDeferrals isn't empty (aka pulled back an empty value), if so set it to $maxDeferrals
         if [ -z $remainingDeferrals ]; then
-            defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
+            defaults write $appAutoPatchStatusConfigFile remainingDeferrals $maxDeferrals
             remainingDeferrals=$maxDeferrals
             notice "Deferral has not yet been set. Setting to Max Deferral count."
         elif [[ $remainingDeferrals == "Disabled" || $remainingDeferrals == "disabled" || $remainingDeferrals -gt $maxDeferrals ]]; then
-            defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
+            defaults write $appAutoPatchStatusConfigFile remainingDeferrals $maxDeferrals
             remainingDeferrals=$maxDeferrals
             notice "Deferral previously disabled or set to a higher value. Resetting to Max Deferral count"
         fi
@@ -1733,11 +1896,11 @@ function checkDeferral() {
             
         if [[ $dialogOutput == 3 && $remainingDeferrals -gt 0 ]] ; then
             remainingDeferrals=$(( $remainingDeferrals - 1 ))
-            defaults write $aapAutoPatchDeferralFile remainingDeferrals $remainingDeferrals
+            defaults write $appAutoPatchStatusConfigFile remainingDeferrals $remainingDeferrals
             notice "There are $remainingDeferrals deferrals left"
             if [[ "$AAPActivatorFlag" == 1 ]]; then
                 infoOut "Setting AAPActivatorFlag to False"
-                defaults write $aapAutoPatchDeferralFile AAPActivatorFlag -bool false
+                defaults write $appAutoPatchStatusConfigFile AAPActivatorFlag -bool false
             fi
             removeInstallomator
             quitScript
@@ -1746,11 +1909,11 @@ function checkDeferral() {
             if [[ $deferralTimerAction == "Defer" ]]; then
                 notice "Timer expired and action set to Defer... Adjusting remaining deferrals"
                 remainingDeferrals=$(( $remainingDeferrals - 1 ))
-                defaults write $aapAutoPatchDeferralFile remainingDeferrals $remainingDeferrals
+                defaults write $appAutoPatchStatusConfigFile remainingDeferrals $remainingDeferrals
                 notice "There are $remainingDeferrals deferrals left"
                 if [[ "$AAPActivatorFlag" == 1 ]]; then
                     infoOut "Setting AAPActivatorFlag to False"
-                    defaults write $aapAutoPatchDeferralFile AAPActivatorFlag -bool false
+                    defaults write $appAutoPatchStatusConfigFile AAPActivatorFlag -bool false
                 fi
                 removeInstallomator
                 quitScript
@@ -1911,19 +2074,14 @@ if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
     notice "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
     updateScriptLog "----"
     doInstallations
-    if [[ $maxDeferrals == "Disabled" || $maxDeferrals == "disabled" ]]; then
-        infoOut "Installs Complete"
+    if [[ "$AAPActivatorFlag" == 1 ]] || [[ "$AAPActivatorFlag" == 0 && "$selfServicePatchingStatusModeReset" == 2 ]] || [[ "$AAPActivatorFlag" == 0 && "$selfServicePatchingStatusModeReset" == 3 && "${errorCount}" == 0 ]]; then
+        infoOut "Installs Complete... Setting weekly patching to Complete and Resetting Deferrals"
+        defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool true
+        defaults write $appAutoPatchStatusConfigFile remainingDeferrals $maxDeferrals
     else
-        infoOut "Installs Complete... Resetting Deferrals"
-        defaults write $aapAutoPatchDeferralFile remainingDeferrals $maxDeferrals
+        infoOut "Installs Complete"
     fi
-
-    #AAP-Activator - Setting weekly patching status to True
-    if [[ "$AAPActivatorFlag" == 1 ]]; then
-    infoOut "Setting Weekly Completion Status to True"
-    defaults write $aapAutoPatchDeferralFile AAPWeeklyPatching -bool true
-    defaults write $aapAutoPatchDeferralFile AAPActivatorFlag -bool false
-    fi
+    
 else
     infoOut "All apps are up to date. Nothing to do."
 
@@ -1933,11 +2091,10 @@ else
     fi
 
 
-    #AAP-Activator - Setting weekly patching status to True
-    if [[ "$AAPActivatorFlag" == 1 ]]; then
-        infoOut "Setting Weekly Completion Status to True"
-        defaults write $aapAutoPatchDeferralFile AAPWeeklyPatching -bool true
-        defaults write $aapAutoPatchDeferralFile AAPActivatorFlag -bool false
+    if [[ "$AAPActivatorFlag" == 1 ]] || [[ "$AAPActivatorFlag" == 0 && "$selfServicePatchingStatusModeReset" == 2 ]] || [[ "$AAPActivatorFlag" == 0 && "$selfServicePatchingStatusModeReset" == 3 && "${errorCount}" == 0 ]]; then
+        infoOut "Setting weekly patching to Complete and Resetting Deferrals"
+        defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool true
+        defaults write $appAutoPatchStatusConfigFile remainingDeferrals $maxDeferrals
     fi
 
     removeInstallomator 
