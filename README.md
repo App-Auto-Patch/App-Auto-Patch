@@ -27,8 +27,6 @@ Please visit the [App Auto-Patch Wiki](https://github.com/robjschroeder/App-Auto
 
 - [Jamf Pro Deployment](https://github.com/robjschroeder/App-Auto-Patch/wiki/Jamf-Pro-Deployment)
 
-- [AAP Activator](https://github.com/robjschroeder/App-Auto-Patch/wiki/AAP-Activator)
-
 - [End-User Experience](https://github.com/robjschroeder/App-Auto-Patch/wiki/End-User-Experience)
 
 
