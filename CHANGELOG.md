@@ -2,6 +2,18 @@
 
 # Version 2
 
+## Version 2.10.0
+### 20-Mar-2024
+- Merged AAP Activator functionality into main AAP Script. Activator (Deferral Workflow) will execute if `maxDeferrals` is set to an integer. Setting to `Disabled` will execute "On-Demand" workflow
+- Added Activator/Deferral Workflow variables:
+    - `daysUntilReset` = The number of days until the Activator/Deferral Workflow resets the patching status to false (ex: 7 days resets weekly)
+    - `patchWeekStartDay` = Day of the week to set the start date for weekly patching/daysUntilReset count (1=Mon 2=Tue...7=Sun), leave blank to disable
+    - `maxDisplayAssertionCount` = The maximum number of deferred attempts from Display Assertions (integer, leave blank to disable)
+- New Variable = `selfServicePatchingStatusModeReset` - Determines if the weekly patching status should be set to True when running in "On-Demand/Self Service" mode (when deferrals are disabled) [1=Never, 2=Always, 3=On Success (no errors)]
+- New Variable = `ignoreDNDApps` - Comma-separated list of app names to ignore when evaluating DND/Display Assertions (ex: ignoreDNDApps="firefox,Google Chrome,caffeinate")
+- Consolidated AppAutoPatchDeferrals config file into AppAutoPatchStatus config file - The logic for any Extension Attributes pulling from AppAutoPatchDeferrals.plist have been updated
+- Moved Caffeinate function to run after Activator/Deferral Workflow so as not to be included as a false positive display assertion
+
 ## Version 2.9.7
 ### 19-Mar-2024
 - Added a new options flag, `useLatestAvailableInstallomatorScriptVersion`. If set to true, AAP will validate the VERSIONDATE from the latest Installomator script and will replace if they don't match. If `false` only Release version of Installomator will be used for comparision.
