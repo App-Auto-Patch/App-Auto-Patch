@@ -2,6 +2,11 @@
 
 # Version 2
 
+## Version 2.11.0
+### 25-Mar-2024
+- Added AAPPatchingCompleteDate to PLIST to populate the last date/time patching was completed for a device. Added new EA to pull this value
+- Fixed an issue where debug Installomator may not be applied
+
 ## Version 2.10.0
 ### 20-Mar-2024
 - Merged AAP Activator functionality into main AAP Script. Activator (Deferral Workflow) will execute if `maxDeferrals` is set to an integer. Setting to `Disabled` will execute "On-Demand" workflow
