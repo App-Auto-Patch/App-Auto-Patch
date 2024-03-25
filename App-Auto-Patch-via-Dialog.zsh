@@ -115,6 +115,9 @@
 #   - Consolidated AppAutoPatchDeferrals config file into AppAutoPatchStatus config file - Any existing Extension Attributes will need to be updated
 #   - Moved Caffeinate function to run after Activator/Deferral Workflow to not be included as a false positive display assertion
 # 
+#   Version 2.11.0
+#   - Added AAPPatchingCompleteDate to PLIST to populate the last date/time patching was completed for a device. Added new EA to pull this value
+# 
 ####################################################################################################
 
 ####################################################################################################
@@ -2078,6 +2081,9 @@ if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         infoOut "Installs Complete... Setting weekly patching to Complete and Resetting Deferrals"
         defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool true
         defaults write $appAutoPatchStatusConfigFile remainingDeferrals $maxDeferrals
+        timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
+        notice "Patching Complete Date: $timestamp"
+        defaults write $appAutoPatchStatusConfigFile AAPPatchingCompleteDate -date "$timestamp"
     else
         infoOut "Installs Complete"
     fi
@@ -2095,6 +2101,9 @@ else
         infoOut "Setting weekly patching to Complete and Resetting Deferrals"
         defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool true
         defaults write $appAutoPatchStatusConfigFile remainingDeferrals $maxDeferrals
+        timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
+        notice "Patching Complete Date: $timestamp"
+        defaults write $appAutoPatchStatusConfigFile AAPPatchingCompleteDate -date "$timestamp"
     fi
 
     removeInstallomator 
