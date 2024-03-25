@@ -104,7 +104,7 @@
 #   Version 2.9.7, 03.19.2024, Robert Schroeder (@robjschroeder)
 #   - Added a new options flag, `useLatestAvailableInstallomatorScriptVersion`. If set to true, AAP will validate the VERSIONDATE from the latest Installomator script and will replace if they don't match. If `false` only Release version of Installomator will be used for comparision.
 # 
-#   Version 2.10.0
+#   Version 2.10.0, 03.20.2024, Andrew Spokes (@TechTrekkie)
 #   - Merged AAP Activator functionality into main AAP Sript. Activator (Deferral Workflow) will execute if maxDeferrals is set to an integer. Disabled will execute "On-Demand" workflow
 #   - Added Activator/Deferral Workflow variables:
 #       - daysUntilReset = The number of days until the Activator/Deferral Workflow resets the patching status to false (ex: 7 days resets weekly)
@@ -114,6 +114,10 @@
 #   - New Variable = ignoreDNDApps - Comma separated list of app names to ignore when evaluating DND/Display Assertions (ex: ignoreDNDApps="firefox,Google Chrome,caffeinate")
 #   - Consolidated AppAutoPatchDeferrals config file into AppAutoPatchStatus config file - Any existing Extension Attributes will need to be updated
 #   - Moved Caffeinate function to run after Activator/Deferral Workflow to not be included as a false positive display assertion
+# 
+#   Version 2.11.0, 03.25.2024, Andrew Spokes (@TechTrekkie)
+#   - Added AAPPatchingCompleteDate to PLIST to populate the last date/time patching was completed for a device. Added new EA to pull this value
+#   - Fixed an issue where debug Installomator may not be applied. (@robjschroeder)
 # 
 ####################################################################################################
 
@@ -127,7 +131,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.10.0"
+scriptVersion="2.11.0"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1157,18 +1161,24 @@ if [[ "$debugMode" == "true" ]]; then
     debug "Setting Installomator to Debug Mode"
     /usr/bin/sed -i.backup1 "s|DEBUG=1|DEBUG=2|g" $installomatorScript
     sleep .2
+    /usr/bin/sed -i.backup1 "s|DEBUG=0|DEBUG=2|g" $installomatorScript
+    sleep .2
     /usr/bin/sed -i.backup1 "s|MacAdmins Slack)|MacAdmins Slack )|g" $installomatorScript
     sleep .2
     /usr/bin/sed -i.backup1 "s|There is no newer version available|same as installed|g" $installomatorScript
     sleep .2
+    rm -rf $installomatorScript.backup1
 else
     infoOut "Setting Installomator to Production Mode"
     /usr/bin/sed -i.backup1 "s|DEBUG=1|DEBUG=0|g" $installomatorScript
     sleep .2
+    /usr/bin/sed -i.backup1 "s|DEBUG=2|DEBUG=0|g" $installomatorScript
+    sleep .2
     /usr/bin/sed -i.backup1 "s|MacAdmins Slack)|MacAdmins Slack )|g" $installomatorScript
     sleep .2
     /usr/bin/sed -i.backup1 "s|There is no newer version available|same as installed|g" $installomatorScript
     sleep .2
+    rm -rf $installomatorScript.backup1
 fi
 
 infoOut "Installomator Pre-Requisite Complete"
@@ -1885,7 +1895,7 @@ function checkDeferral() {
         fi
         
         
-        notice "There are $remainingDeferrals deferrals left"
+        notice "Current remaining deferrals is set to $remainingDeferrals"
 
         
         
@@ -1897,7 +1907,7 @@ function checkDeferral() {
         if [[ $dialogOutput == 3 && $remainingDeferrals -gt 0 ]] ; then
             remainingDeferrals=$(( $remainingDeferrals - 1 ))
             defaults write $appAutoPatchStatusConfigFile remainingDeferrals $remainingDeferrals
-            notice "There are $remainingDeferrals deferrals left"
+            notice "User chose to defer, reducing remaining deferrals to $remainingDeferrals"
             if [[ "$AAPActivatorFlag" == 1 ]]; then
                 infoOut "Setting AAPActivatorFlag to False"
                 defaults write $appAutoPatchStatusConfigFile AAPActivatorFlag -bool false
@@ -2078,6 +2088,9 @@ if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         infoOut "Installs Complete... Setting weekly patching to Complete and Resetting Deferrals"
         defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool true
         defaults write $appAutoPatchStatusConfigFile remainingDeferrals $maxDeferrals
+        timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
+        notice "Patching Complete Date: $timestamp"
+        defaults write $appAutoPatchStatusConfigFile AAPPatchingCompleteDate -date "$timestamp"
     else
         infoOut "Installs Complete"
     fi
@@ -2095,6 +2108,9 @@ else
         infoOut "Setting weekly patching to Complete and Resetting Deferrals"
         defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool true
         defaults write $appAutoPatchStatusConfigFile remainingDeferrals $maxDeferrals
+        timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
+        notice "Patching Complete Date: $timestamp"
+        defaults write $appAutoPatchStatusConfigFile AAPPatchingCompleteDate -date "$timestamp"
     fi
 
     removeInstallomator 
