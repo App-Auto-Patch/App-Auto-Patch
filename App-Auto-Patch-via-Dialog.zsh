@@ -1888,7 +1888,7 @@ function checkDeferral() {
         fi
         
         
-        notice "There are $remainingDeferrals deferrals left"
+        notice "Current remaining deferrals is set to $remainingDeferrals"
 
         
         
@@ -1900,7 +1900,7 @@ function checkDeferral() {
         if [[ $dialogOutput == 3 && $remainingDeferrals -gt 0 ]] ; then
             remainingDeferrals=$(( $remainingDeferrals - 1 ))
             defaults write $appAutoPatchStatusConfigFile remainingDeferrals $remainingDeferrals
-            notice "There are $remainingDeferrals deferrals left"
+            notice "User chose to defer, reducing remaining deferrals to $remainingDeferrals"
             if [[ "$AAPActivatorFlag" == 1 ]]; then
                 infoOut "Setting AAPActivatorFlag to False"
                 defaults write $appAutoPatchStatusConfigFile AAPActivatorFlag -bool false
