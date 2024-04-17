@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# This script returns the count of days to skip for App Auto Patch to Jamf inventory. 
+# Make sure to set the Extension Attribute Data Type to "Integer".
+# 04.17.24 @AndrewMBarnett - updated to read from AppAutoPatchStatus.plist
+
+# Path to the App Auto Patch working folder:
+AAP_folder="/Library/Application Support/AppAutoPatch"
+
+# Path to the local property list file:
+AAP_plist="${AAP_folder}/AppAutoPatchStatus.plist"
+
+# Report if the App Auto Patch preference file exists.
+if [[ -f "${AAP_plist}" ]]; then
+    daysToSkipCount=$(defaults read "${AAP_plist}" "AAPDaysToSkipCount" 2> /dev/null)
+    [[ -n "${daysToSkipCount}" ]] && echo "<result>${daysToSkipCount}</result>"
+    [[ -z "${daysToSkipCount}" ]] && echo "<result>No days to skip count</result>"
+else
+    echo "<result>No AAP preference file.</result>"
+fi
+
+exit 0
