@@ -119,6 +119,10 @@
 #   - Added AAPPatchingCompleteDate to PLIST to populate the last date/time patching was completed for a device. Added new EA to pull this value
 #   - Fixed an issue where debug Installomator may not be applied. (@robjschroeder)
 # 
+#   Version 2.12.0, 04.17.2024, Andrew Barnett (@AndrewMBarnett)
+#   - Added variable to be able to skip cycles in between swiftDialog deferral prompts
+#   - Added variable to run Discovery and Installs silently
+#
 ####################################################################################################
 
 ####################################################################################################
@@ -131,7 +135,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.11.0"
+scriptVersion="2.12.0"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -141,6 +145,7 @@ requiredLabels="${6:=""}"                                                       
 optionalLabels="${7:=""}"                                                       # Parameter 7: A space-separated list of optional Installomator labels (i.e., "renew") ** Does not support wildcards **
 installomatorOptions="${8:-""}"                                                 # Parameter 8: A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore)
 maxDeferrals="${9:-"Disabled"}"                                                 # Parameter 9: Number of times a user is allowed to defer before being forced to install updates. A value of "Disabled" will not display the deferral prompt. [ `integer` | Disabled (default) ]
+daysToSkip="${10:-"Disabled"}"                                                  # Days to skip in between prompts [ `integer` | Disabled (default) ]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Various Feature Variables
@@ -186,6 +191,7 @@ fragmentsPath="$installomatorPath/fragments"
 ### App Auto-Patch Other Behavior Options ###
 
 runDiscovery="true"                                                             # Re-run discovery of installed applications [ true (default) | false ]
+runDiscoverySilent="true"                                                      # Re-run discovery of installed applications silently with no logged in user [ true (default) | false ]
 removeInstallomatorPath="false"                                                 # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
 convertAppsInHomeFolder="true"                                                  # Remove apps in /Users/* and install them to do default path [ true (default) | false ]
 ignoreAppsInHomeFolder="false"                                                  # Ignore apps found in '/Users/*'. If an update is found in '/Users/*' and variable is set to `false`, the app will be updated into the application's default path [ true | false (default) ]
@@ -403,8 +409,13 @@ preFlight "Initiating …"
 # Pre-flight Check: Confirm script is running as root
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-if [[ $(id -u) -ne 0 ]]; then
+if [[ $runDiscoverySilent == "true" && ${interactiveMode} -eq 0 ]]; then
+    preFlight "Run Discovery Silent with no logged in user is true and Interactive mode is silent"
+elif [[ $(id -u) -ne 0 ]]; then
     preFlight "This script must be run as root; exiting."
+    exit 1
+else
+    preFlight "The script could not verify the script running as root or silent; exiting"
     exit 1
 fi
 
@@ -412,10 +423,14 @@ fi
 # Pre-flight Check: Confirm Dock is running / user is at Desktop
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+if [[ $runDiscoverySilent == "true" && ${interactiveMode} -eq 0 ]]; then
+    preFlight "Run Discovery Silent with no logged in user is true and Interactive mode is silent"
+else
 until pgrep -q -x "Finder" && pgrep -q -x "Dock"; do
     preFlight "Finder & Dock are NOT running; pausing for 1 second"
     sleep 1
 done
+fi
 
 preFlight "Finder & Dock are running; proceeding …"
 
@@ -426,6 +441,9 @@ preFlight "Finder & Dock are running; proceeding …"
 preFlight "Check for Logged-in System Accounts …"
 currentLoggedInUser
 
+if [[ $runDiscoverySilent == "true" && ${interactiveMode} -eq 0 ]]; then
+    preFlight "Run Discovery Silent with no logged in user is true and Interactive mode is silent"
+else
 counter="1"
 
 until { [[ "${loggedInUser}" != "_mbsetupuser" ]] || [[ "${counter}" -gt "180" ]]; } && { [[ "${loggedInUser}" != "loginwindow" ]] || [[ "${counter}" -gt "30" ]]; } ; do
@@ -434,6 +452,8 @@ until { [[ "${loggedInUser}" != "_mbsetupuser" ]] || [[ "${counter}" -gt "180" ]
     sleep 2
     ((counter++))
 done
+
+fi
 
 loggedInUserFullname=$( id -F "${loggedInUser}" )
 loggedInUserFirstname=$( echo "$loggedInUserFullname" | sed -E 's/^.*, // ; s/([^ ]*).*/\1/' | sed 's/\(.\{25\}\).*/\1…/' | awk '{print ( $0 == toupper($0) ? toupper(substr($0,1,1))substr(tolower($0),2) : toupper(substr($0,1,1))substr($0,2) )}' )
@@ -1366,6 +1386,7 @@ debugVerbose "Writing Deferral Workflow Values to AAP Status Configuration Profi
     defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool false
     defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatchingStatusDate "$Patch_Week_Start_Date"
     defaults write $appAutoPatchStatusConfigFile AAPDisplayAssertionCount 0
+    defaults write $appAutoPatchStatusConfigFile AAPDaysToSkip "$daysToSkip"
     if [[ $maxDeferrals == "Disabled" || $maxDeferrals == "disabled" ]]; then
         debugVerbose "Deferral workflow disabled - Setting activator flag to False"
         defaults write $appAutoPatchStatusConfigFile AAPActivatorFlag -bool false
@@ -1393,12 +1414,15 @@ AAPActivatorFlag=$(defaults read $appAutoPatchStatusConfigFile AAPActivatorFlag)
 weeklyPatchingComplete=$(defaults read $appAutoPatchStatusConfigFile AAPWeeklyPatching)
 weeklyPatchingStatusDate=$(defaults read $appAutoPatchStatusConfigFile AAPWeeklyPatchingStatusDate)
 DisplayAssertionCount=$(defaults read $appAutoPatchStatusConfigFile AAPDisplayAssertionCount)
-if [[ -z $weeklyPatchingComplete || -z $weeklyPatchingStatusDate ]]; then
+DaysToSkipCount=$(defaults read $appAutoPatchStatusConfigFile AAPDaysToSkipCount)
+if [[ -z $weeklyPatchingComplete || -z $weeklyPatchingStatusDate || -z $daysToSkipCount ]]; then
     debug "Patching Completion Status or Start Date not set, setting values"
     defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool false
     defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatchingStatusDate "$Patch_Week_Start_Date"
+    defaults write $appAutoPatchStatusConfigFile AAPDaysToSkip "$daysToSkip"
     weeklyPatchingComplete=$(defaults read $appAutoPatchStatusConfigFile AAPWeeklyPatching)
     weeklyPatchingStatusDate=$(defaults read $appAutoPatchStatusConfigFile AAPWeeklyPatchingStatusDate)
+    DaysToSkipCount=$(defaults read $appAutoPatchStatusConfigFile AAPDaysToSkipCount)
 fi
 
 
@@ -1823,6 +1847,25 @@ function checkDeferral() {
             defaults write $appAutoPatchStatusConfigFile remainingDeferrals $maxDeferrals
             remainingDeferrals=$maxDeferrals
             notice "Deferral previously disabled or set to a higher value. Resetting to Max Deferral count"
+             else
+            notice "Remaining Deferrals is currently: $remainingDeferrals"
+        fi
+        
+        remainingDaysToSkip=$(defaults read $appAutoPatchStatusConfigFile AAPDaysToSkipCount)
+        infoOut "Max Days to Skip Patch Window: $daysToSkip"
+        infoOut "Days Left to Skip Patch Window: $remainingDaysToSkip"
+        
+        if [[ $daysToSkip == "Disabled" || $daysToSkip == "disabled" || $remainingDaysToSkip -lt 1 ]] ; then
+            infoOut "Remaining Days to Skip disabled or remaining days is less than one, checking deferrals"
+        elif [[ ${remainingDaysToSkip} -gt 0 ]] ; then 
+            remainingDaysToSkip=$(( $remainingDaysToSkip - 1 ))
+            defaults write $appAutoPatchStatusConfigFile AAPDaysToSkipCount "$remainingDaysToSkip"
+            infoOut "Days to skip Detected. Days to Skip Count $remainingDaysToSkip .... Exiting"
+            removeInstallomator
+            quitScript
+            exit 0
+        else 
+            error "Something went wrong with checking Days to Skip, resetting after deferrals"
         fi
         
         if [[ $remainingDeferrals -gt 0 ]]; then
@@ -1908,6 +1951,19 @@ function checkDeferral() {
             remainingDeferrals=$(( $remainingDeferrals - 1 ))
             defaults write $appAutoPatchStatusConfigFile remainingDeferrals $remainingDeferrals
             notice "User chose to defer, reducing remaining deferrals to $remainingDeferrals"
+            if [ -z $remainingDaysToSkip ]; then
+                defaults write $appAutoPatchStatusConfigFile AAPDaysToSkipCount "$daysToSkip"
+                remainingDaysToSkip=$daysToSkip
+                notice "Days to Skip has not yet been set. Setting to Max Days to Skip count."
+            elif [[ $daysToSkip == "Disabled" || $daysToSkip == "disabled"|| $remainingDaysToSkip -gt $daysToSkip ]]; then
+                defaults write $appAutoPatchStatusConfigFile AAPDaysToSkipCount "$remainingDaysToSkip"
+                remainingDaysToSkip=$daysToSkip
+                notice "Days to Skip previously disabled or set to a higher value. Resetting to Max Days to Skip count"
+            else 
+                error "Something went wrong with checking Days to Skip, please check"
+            fi
+            defaults write $appAutoPatchStatusConfigFile AAPDaysToSkipCount "$daysToSkip"
+            notice "Resetting Days to Skip to $daysToSkip"
             if [[ "$AAPActivatorFlag" == 1 ]]; then
                 infoOut "Setting AAPActivatorFlag to False"
                 defaults write $appAutoPatchStatusConfigFile AAPActivatorFlag -bool false
@@ -1920,7 +1976,20 @@ function checkDeferral() {
                 notice "Timer expired and action set to Defer... Adjusting remaining deferrals"
                 remainingDeferrals=$(( $remainingDeferrals - 1 ))
                 defaults write $appAutoPatchStatusConfigFile remainingDeferrals $remainingDeferrals
+                    if [ -z $remainingDaysToSkip ]; then
+                        defaults write $appAutoPatchStatusConfigFile AAPDaysToSkipCount "$daysToSkip"
+                        remainingDaysToSkip=$daysToSkip
+                        notice "Days to Skip has not yet been set. Setting to Max Days to Skip count."
+                    elif [[ $daysToSkip == "Disabled" || $daysToSkip == "disabled"|| $remainingDaysToSkip -gt $daysToSkip ]]; then
+                        defaults write $appAutoPatchStatusConfigFile AAPDaysToSkipCount "$remainingDaysToSkip"
+                        remainingDaysToSkip=$daysToSkip
+                        notice "Days to Skip previously disabled or set to a higher value. Resetting to Max Days to Skip count"
+                    else 
+                        error "Something went wrong with checking Days to Skip, please check"
+                    fi
+                defaults write $appAutoPatchStatusConfigFile AAPDaysToSkipCount "$daysToSkip"
                 notice "There are $remainingDeferrals deferrals left"
+                notice "Resetting Days to Skip to $daysToSkip"
                 if [[ "$AAPActivatorFlag" == 1 ]]; then
                     infoOut "Setting AAPActivatorFlag to False"
                     defaults write $appAutoPatchStatusConfigFile AAPActivatorFlag -bool false
@@ -2085,9 +2154,10 @@ if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
     updateScriptLog "----"
     doInstallations
     if [[ "$AAPActivatorFlag" == 1 ]] || [[ "$AAPActivatorFlag" == 0 && "$selfServicePatchingStatusModeReset" == 2 ]] || [[ "$AAPActivatorFlag" == 0 && "$selfServicePatchingStatusModeReset" == 3 && "${errorCount}" == 0 ]]; then
-        infoOut "Installs Complete... Setting weekly patching to Complete and Resetting Deferrals"
+        infoOut "Installs Complete... Setting weekly patching to Complete, Resetting Days to Skip, and Resetting Deferrals"
         defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool true
         defaults write $appAutoPatchStatusConfigFile remainingDeferrals $maxDeferrals
+        defaults write $appAutoPatchStatusConfigFile AAPDaysToSkip "0"
         timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
         notice "Patching Complete Date: $timestamp"
         defaults write $appAutoPatchStatusConfigFile AAPPatchingCompleteDate -date "$timestamp"
@@ -2105,9 +2175,10 @@ else
 
 
     if [[ "$AAPActivatorFlag" == 1 ]] || [[ "$AAPActivatorFlag" == 0 && "$selfServicePatchingStatusModeReset" == 2 ]] || [[ "$AAPActivatorFlag" == 0 && "$selfServicePatchingStatusModeReset" == 3 && "${errorCount}" == 0 ]]; then
-        infoOut "Setting weekly patching to Complete and Resetting Deferrals"
+        infoOut "Setting weekly patching to Complete, Resetting Days to Skip, and Resetting Deferrals"
         defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool true
         defaults write $appAutoPatchStatusConfigFile remainingDeferrals $maxDeferrals
+        defaults write $appAutoPatchStatusConfigFile AAPDaysToSkipCount "0"
         timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
         notice "Patching Complete Date: $timestamp"
         defaults write $appAutoPatchStatusConfigFile AAPPatchingCompleteDate -date "$timestamp"
