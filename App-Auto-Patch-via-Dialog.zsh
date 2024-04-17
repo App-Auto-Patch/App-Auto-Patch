@@ -191,7 +191,7 @@ fragmentsPath="$installomatorPath/fragments"
 ### App Auto-Patch Other Behavior Options ###
 
 runDiscovery="true"                                                             # Re-run discovery of installed applications [ true (default) | false ]
-runDiscoverySilent="true"                                                      # Re-run discovery of installed applications silently with no logged in user [ true (default) | false ]
+runDiscoverySilent="false"                                                      # Re-run discovery of installed applications silently with no logged in user [ true | false (default) ]
 removeInstallomatorPath="false"                                                 # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
 convertAppsInHomeFolder="true"                                                  # Remove apps in /Users/* and install them to do default path [ true (default) | false ]
 ignoreAppsInHomeFolder="false"                                                  # Ignore apps found in '/Users/*'. If an update is found in '/Users/*' and variable is set to `false`, the app will be updated into the application's default path [ true | false (default) ]
