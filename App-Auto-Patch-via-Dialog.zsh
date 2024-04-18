@@ -1415,7 +1415,7 @@ weeklyPatchingComplete=$(defaults read $appAutoPatchStatusConfigFile AAPWeeklyPa
 weeklyPatchingStatusDate=$(defaults read $appAutoPatchStatusConfigFile AAPWeeklyPatchingStatusDate)
 DisplayAssertionCount=$(defaults read $appAutoPatchStatusConfigFile AAPDisplayAssertionCount)
 DaysToSkipCount=$(defaults read $appAutoPatchStatusConfigFile AAPDaysToSkipCount)
-if [[ -z $weeklyPatchingComplete || -z $weeklyPatchingStatusDate || -z $daysToSkipCount ]]; then
+if [[ -z $weeklyPatchingComplete || -z $weeklyPatchingStatusDate ]]; then
     debug "Patching Completion Status or Start Date not set, setting values"
     defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatching -bool false
     defaults write $appAutoPatchStatusConfigFile AAPWeeklyPatchingStatusDate "$Patch_Week_Start_Date"
