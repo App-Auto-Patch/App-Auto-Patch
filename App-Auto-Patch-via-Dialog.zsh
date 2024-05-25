@@ -119,6 +119,9 @@
 #   - Added AAPPatchingCompleteDate to PLIST to populate the last date/time patching was completed for a device. Added new EA to pull this value
 #   - Fixed an issue where debug Installomator may not be applied. (@robjschroeder)
 # 
+#   Version 2.11.1, 05.25.2024, Andrew Spokes (@TechTrekkie)
+#   - Added BLOCKING_PROCESS_ACTION="ignore" to the installomator test when populating option labels. Without this the script was prompting users to quit some apps during the discovery phase for optional labels.
+# 
 ####################################################################################################
 
 ####################################################################################################
@@ -131,7 +134,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.11.0"
+scriptVersion="2.11.1"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1573,7 +1576,7 @@ if [[ "${runDiscovery}" == "true" ]]; then
         for optionalLabel in "${optionalLabelsArray[@]}"; do
             if [[ -f "${fragmentsPath}/labels/${optionalLabel}.sh" ]]; then
                 /usr/libexec/PlistBuddy -c "add \":OptionalLabels:\" string \"${optionalLabel}\"" "${appAutoPatchConfigFile}"
-                if ${installomatorScript} ${optionalLabel} DEBUG=2 NOTIFY="silent" | grep "No previous app found" >/dev/null 2>&1
+                if ${installomatorScript} ${optionalLabel} DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" | grep "No previous app found" >/dev/null 2>&1
                 then
                     notice "$optionalLabel is not installed, skipping ..."
                 else
