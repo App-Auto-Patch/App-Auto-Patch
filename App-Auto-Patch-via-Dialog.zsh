@@ -152,7 +152,8 @@ maxDeferrals="${9:-"Disabled"}"                                                 
 ### Script Log and General Behavior Options ###
 
 scriptLog="/var/log/com.company.log"                                            # Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
-debugMode="false"                                                               # Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
+# TODO: change debug back to false
+debugMode="verbose"                                                               # Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
 outdatedOsAction="/System/Library/CoreServices/Software Update.app"             # Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
 
 ### swiftDialog Options ###
@@ -181,6 +182,7 @@ unattendedExitSeconds="60"                                                      
 
 aapPath="/Library/Application Support/AppAutoPatch"
 appAutoPatchConfigFile="/Library/Application Support/AppAutoPatch/AppAutoPatch.plist"
+appAutoPatchExceptionsConfigFile="/Library/Application Support/AppAutoPatch/AppAutoPatchExceptions.plist"
 appAutoPatchStatusConfigFile="/Library/Application Support/AppAutoPatch/AppAutoPatchStatus.plist"
 installomatorPath="/Library/Application Support/AppAutoPatch/Installomator"
 installomatorScript="$installomatorPath/Installomator.sh"
@@ -422,6 +424,7 @@ done
 
 preFlight "Finder & Dock are running; proceeding …"
 
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Pre-flight Check: Validate Logged-in System Accounts
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -539,6 +542,26 @@ else
 fi
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Pre-flight Check: Check for Exceptions Config
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+if [[ -f "${appAutoPatchExceptionsConfigFile}" ]]; then
+    # If the exceptions config file exists then we build the exceptions array
+    preFlight "Reading Exception Labels:"
+
+    # Extract the array contents and store them in an array
+    exceptionsLabels=($(plutil -convert xml1 -o - "$appAutoPatchExceptionsConfigFile" | xmllint --xpath "//dict[key='ExceptionsLabels']/array/string/text()" - 2>/dev/null))
+
+    # Output the exempt labels
+    for label in "${exceptionsLabels[@]}"; do
+        preFlight "The following label will NOT receive updates: $label"
+    done
+
+else
+    preFlight "Exceptions config file does not exists" 
+fi
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Pre-flight Check: Declare configArray
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -546,6 +569,7 @@ preFlight "Declaring configArray and setting ignoredLabelsArray and requiredLabe
 
 declare -A configArray=()
 ignoredLabelsArray=($(echo ${ignoredLabels}))
+exceptionsLabelsArray=($(echo ${exceptionsLabels}))
 requiredLabelsArray=($(echo ${requiredLabels}))
 optionalLabelsArray=($(echo ${optionalLabels}))
 convertedLabelsArray=($(echo ${convertedLabels}))
@@ -1302,40 +1326,44 @@ function verifyApp() {
 
     if [[ -n $name ]]; then
         if [[ ! " ${ignoredLabelsArray[@]} " =~ " ${label_name} " ]]; then
-            if [[ -n "$configArray[$appPath]" ]]; then
-                exists="$configArray[$appPath]"
+            if [[ ! " ${exceptionsLabelsArray[@]} " =~ " ${label_name} " ]]; then
+                if [[ -n "$configArray[$appPath]" ]]; then
+                    exists="$configArray[$appPath]"
 
-                notice "${appPath} already linked to label ${exists}, ignoring label ${label_name}"
-                warning "Modify your ignored label list if you are not getting the desired results"
+                    notice "${appPath} already linked to label ${exists}, ignoring label ${label_name}"
+                    warning "Modify your ignored label list if you are not getting the desired results"
 
-                return
-            else
-                configArray[$appPath]=$label_name
-
-                appNewVersion=$( echo "${appNewVersion}" | sed 's/[^a-zA-Z0-9]*$//g' )
-                previousVersion=$( echo "${appversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
-                previousVersionLong=$( echo "${appversionLong}" | sed 's/[^a-zA-Z0-9]*$//g' )
-
-                # Compare version strings
-                if [[ "$previousVersion" == "$appNewVersion" ]]; then
-                    notice "--- Latest version installed."
-                elif [[ "$previousVersionLong" == "$appNewVersion" ]]; then
-                    notice "--- Latest version installed."
+                    return
                 else
-                    # Lastly, verify with Installomator before queueing the label
-                    if ${installomatorScript} ${label_name} DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" | grep "same as installed" >/dev/null 2>&1
-                    then
+                    configArray[$appPath]=$label_name
+
+                    appNewVersion=$( echo "${appNewVersion}" | sed 's/[^a-zA-Z0-9]*$//g' )
+                    previousVersion=$( echo "${appversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
+                    previousVersionLong=$( echo "${appversionLong}" | sed 's/[^a-zA-Z0-9]*$//g' )
+
+                    # Compare version strings
+                    if [[ "$previousVersion" == "$appNewVersion" ]]; then
+                        notice "--- Latest version installed."
+                    elif [[ "$previousVersionLong" == "$appNewVersion" ]]; then
                         notice "--- Latest version installed."
                     else
-                        notice "--- New version: ${appNewVersion}"
-                        /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
-                        queueLabel
+                        # Lastly, verify with Installomator before queueing the label
+                        if ${installomatorScript} ${label_name} DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" | grep "same as installed" >/dev/null 2>&1
+                        then
+                            notice "--- Latest version installed."
+                        else
+                            notice "--- New version: ${appNewVersion}"
+                            /usr/libexec/PlistBuddy -c "add \":${appPath}\" string ${label_name}" "$appAutoPatchConfigFile"
+                            queueLabel
+                        fi
                     fi
-                fi
 
+                fi
             fi
         fi
     fi
+
+    # TODO: EXCEPTIONS PIECE OF CODE
 
     unset appNewVersion
     unset name
@@ -1515,6 +1543,7 @@ if [[ "${runDiscovery}" == "true" ]]; then
 
     /usr/libexec/PlistBuddy -c "clear dict" "${appAutoPatchConfigFile}"
     /usr/libexec/PlistBuddy -c 'add ":IgnoredLabels" array' "${appAutoPatchConfigFile}"
+    /usr/libexec/PlistBuddy -c 'add ":ExceptionsLabels" array' "${appAutoPatchConfigFile}"
     /usr/libexec/PlistBuddy -c 'add ":RequiredLabels" array' "${appAutoPatchConfigFile}"
     /usr/libexec/PlistBuddy -c 'add ":OptionalLabels" array' "${appAutoPatchConfigFile}"
     /usr/libexec/PlistBuddy -c 'add ":ConvertedLabels" array' "${appAutoPatchConfigFile}"
@@ -1541,6 +1570,32 @@ if [[ "${runDiscovery}" == "true" ]]; then
                     done 
                 else
                     debugVerbose "No such label ${ignoredLabel}"
+                fi
+            fi
+        done
+
+    # Populate Exceptions Labels
+        infoOut "Attempting to populate exempt labels"
+        for exceptionsLabel in "${exceptionsLabelsArray[@]}"; do
+            if [[ -f "${fragmentsPath}/labels/${exceptionsLabel}.sh" ]]; then
+                debugVerbose "Writing exempt label $exceptionsLabel to configuration plist"
+                /usr/libexec/PlistBuddy -c "add \":ExceptionsLabels:\" string \"${exceptionsLabel}\"" "${appAutoPatchConfigFile}"
+            else
+                if [[ "${exceptionsLabel}" == *"*"* ]]; then
+                    debugVerbose "Ignoring all labels with $exceptionsLabel"
+                    wildIgnored=( $(find $fragmentsPath/labels -name "$exceptionsLabel") )
+                    for i in "${wildIgnored[@]}"; do
+                        exempt=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
+                        if [[ ! "$exempt" == "Application" ]]; then
+                            debugVerbose "Writing ignored label $exempt to configuration plist"
+                            /usr/libexec/PlistBuddy -c "add \":ExceptionsLabels:\" string \"${exempt}\"" "${appAutoPatchConfigFile}"
+                            exceptionsLabelsArray+=($exempt)
+                        else
+                            sleep .1
+                        fi
+                    done 
+                else
+                    debugVerbose "No such label ${exceptionsLabel}"
                 fi
             fi
         done
@@ -1621,6 +1676,11 @@ if [[ "${runDiscovery}" == "true" ]]; then
             debugVerbose "Ignoring label $labelFile."
             continue
         fi
+
+        if [[ $exceptionsLabelsArray =~ ${labelFile} ]]; then
+            debugVerbose "Exempting label $labelFile."
+            continue
+        fi
         
         exec 3< "${labelFragment}"
         
@@ -1677,10 +1737,12 @@ fi
 
 labelsFromConfig=($(defaults read "$appAutoPatchConfigFile" | grep -e ';$' | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
 ignoredLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" IgnoredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+ignoredLabelsFromExceptionsConfig=($(defaults read "$appAutoPatchConfigFile" ExceptionsLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
 requiredLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" RequiredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
 optionalLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" OptionalLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
 convertedLabelsFromConfig=($(defaults read "$appAutoPatchConfigFile" ConvertedLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
 ignoredLabelsArray+=($ignoredLabelsFromConfig)
+exceptionsLabelsArray+=($ignoredLabelsFromExceptionsConfig)
 requiredLabelsArray+=($requiredLabelsFromConfig)
 optionalLabelsArray+=($optionalLabelsFromConfig)
 convertedLabelsArray+=($convertedLabelsFromConfig)
@@ -1688,6 +1750,9 @@ labelsArray+=($labelsFromConfig $requiredLabels $requiredLabelsFromConfig $conve
 
 # Deduplicate ignored labels
 ignoredLabelsArray=($(tr ' ' '\n' <<< "${ignoredLabelsArray[@]}" | sort -u | tr '\n' ' '))
+
+# Deduplicate ignored labels
+exceptionsLabelsArray=($(tr ' ' '\n' <<< "${exceptionsLabelsArray[@]}" | sort -u | tr '\n' ' '))
 
 # Deduplicate required labels
 requiredLabelsArray=($(tr ' ' '\n' <<< "${requiredLabelsArray[@]}" | sort -u | tr '\n' ' '))
@@ -1702,6 +1767,8 @@ convertedLabelsArray=($(tr ' ' '\n' <<< "${convertedLabelsArray[@]}" | sort -u |
 labelsArray=($(tr ' ' '\n' <<< "${labelsArray[@]}" | sort -u | tr '\n' ' '))
 
 labelsArray=${labelsArray:|ignoredLabelsArray}
+
+labelsArray=${labelsArray:|exceptionsLabelsArray}
 
 appNamesArray=()
 # Get App Names for each label in labelsArray
@@ -1720,6 +1787,7 @@ done
 
 notice "Labels to install: $labelsArray"
 notice "Ignoring labels: $ignoredLabelsArray"
+notice "Exempting labels: $exceptionsLabelsArray"
 notice "Required labels: $requiredLabelsArray"
 notice "Optional Labels: $optionalLabelsArray"
 notice "Converted Labels: $convertedLabelsArray"
