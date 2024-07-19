@@ -44,9 +44,33 @@ else
     echo "Exceptions config file already exists"
 fi
 
-# Add the new exception label
-/usr/bin/defaults write "${appAutoPatchExceptionsConfigFile}" ExceptionsLabels -array-add "${exceptionsLabel}"
-echo "Added $exceptionsLabel label to exceptions."
+# Function to check if the exceptionsLabel is already in the array
+function label_exists {
+    # Escape asterisks in the exceptionsLabel for grep
+    escapedExceptionsLabel=$(echo "${exceptionsLabel}" | sed 's/\*/\\*/g')
+
+    # Find the index of the label to delete
+    index=$(/usr/libexec/PlistBuddy -c "Print :ExceptionsLabels" "${appAutoPatchExceptionsConfigFile}" | grep -n "^[ \t]*${escapedExceptionsLabel}$" | cut -d: -f1 | head -n 1)
+
+    # Check if the label was found
+    if [[ -z "${index}" ]]; then
+        # Return true because it exists
+        return 1
+    fi
+
+    # Return false if it did not
+    return 0
+}
+
+# Check if the label already exists in the array
+if label_exists; then
+    echo "Label ${exceptionsLabel} already exists in the exceptions list."
+    exit 0
+else
+    # Add the new exception label
+    /usr/bin/defaults write "${appAutoPatchExceptionsConfigFile}" ExceptionsLabels -array-add "${exceptionsLabel}"
+    echo "Added ${exceptionsLabel} label to exceptions."
+fi
 
 # Convert the plist to XML format
 /usr/bin/plutil -convert xml1 "${appAutoPatchExceptionsConfigFile}"
