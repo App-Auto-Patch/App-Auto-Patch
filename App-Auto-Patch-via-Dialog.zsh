@@ -122,6 +122,9 @@
 #   Version 2.11.1, 05.25.2024, Andrew Spokes (@TechTrekkie)
 #   - Added BLOCKING_PROCESS_ACTION="ignore" to the installomator test when populating option labels. Without this the script was prompting users to quit some apps during the discovery phase for optional labels.
 # 
+#   Version 2.11.2, 09.05.2024, Andrew Spokes (@TechTrekkie)
+#   - Added logic to ignore apps cached from iPhone Mirroring in macOS 15. Some iOS apps share the same bundle identifier as their macOS counterpart and iPhone Mirroring caches all iOS apps locally when iPhone mirroring is enabled and paired with an iOS 18 device
+# 
 ####################################################################################################
 
 ####################################################################################################
@@ -1210,7 +1213,10 @@ function PgetAppVersion() {
         applist="/Applications/Utilities/$appName"
     else
         applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0)
-            if ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "true" ]]); then
+            if ([[ "$applist" == *"/Daemon Containers/"* ]]); then
+                infoOut "App found in the iPhone Mirroring folder: $applist, ignoring"
+                appList=""
+            elif ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "true" ]]); then
                 debugVerbose "App found in User directory: $applist, coverting to default directory"
                 # Adding the label to the converted labels
                 /usr/libexec/PlistBuddy -c "add \":ConvertedLabels:\" string \"${label_name}\"" "${appAutoPatchConfigFile}"
