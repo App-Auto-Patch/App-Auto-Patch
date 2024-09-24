@@ -125,6 +125,10 @@
 #   Version 2.11.2, 09.05.2024, Andrew Spokes (@TechTrekkie)
 #   - Added logic to ignore apps cached from iPhone Mirroring in macOS 15. Some iOS apps share the same bundle identifier as their macOS counterpart and iPhone Mirroring caches all iOS apps locally when iPhone mirroring is enabled and paired with an iOS 18 device
 # 
+#   Version 2.11.3, 09.24.2024, Andrew Spokes (@TechTrekkie)
+#   - Fixed a bug in the createLastErrorPosition function (Thanks @dan-snelson)
+#   - Updated the help URL to point to the Github
+# 
 ####################################################################################################
 
 ####################################################################################################
@@ -402,7 +406,7 @@ function currentLoggedInUser() {
 # Pre-flight Check: Logging Preamble
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-updateScriptLog "\n\n###\n# ${scriptFunctionalName} (${scriptVersion})\n# https://techitout.xyz/app-auto-patch\n###\n"
+updateScriptLog "\n\n###\n# ${scriptFunctionalName} (${scriptVersion})\n# https://github.com/App-Auto-Patch\n###\n"
 preFlight "Initiating …"
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -600,7 +604,7 @@ function createLastErrorPosition() {
     preFlight "Duplicate Log File location: $duplicate_installomatorLogFile"
 
     # Find the last position marker or start from the beginning if not found
-    if [ -f "$marker_file" && -f $installomatorLogFile ]; then
+    if [[ -f "$marker_file" ]] && [[ -f "$installomatorLogFile" ]]; then
         lastPosition=$(cat "$marker_file")
     else 
         preFlight "Creating Installomator log file and setting error position as zero"
