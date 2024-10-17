@@ -129,6 +129,9 @@
 #   - Fixed a bug in the createLastErrorPosition function (Thanks @dan-snelson)
 #   - Updated the help URL to point to the Github
 # 
+#   Version 2.11.4, 10.17.2024, Andrew Spokes (@TechTrekkie)
+#   - Updated the logic that populates the app name and icon to pull from fragments/labels/ to resolve issues populating swiftDialog list
+# 
 ####################################################################################################
 
 ####################################################################################################
@@ -141,7 +144,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.11.3"
+scriptVersion="2.11.4"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1006,7 +1009,7 @@ function swiftDialogListWindow(){
         # Build our list of Display Names for the SwiftDialog list
         for label in $queuedLabelsArray; do
             # Get the "name=" value from the current label and use it in our SwiftDialog list
-            currentDisplayName=$(sed -n '/# label descriptions/,$p' ${installomatorScript} | grep -i -A 50 "${label})" | grep -m 1 "name=" | sed 's/.*=//' | sed 's/"//g')
+            currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
             if [ -n "$currentDisplayName" ]; then
                 displayNames+=("--listitem")
                 if [[ ! -e "/Applications/${currentDisplayName}.app" ]]; then
@@ -1718,8 +1721,7 @@ appNamesArray=()
 queuedLabelsForNames=("${(@s/ /)labelsArray}")
 for label in $queuedLabelsForNames; do
     debugVerbose "Obtaining proper name for $label"
-    appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g')"
-    appName=$(echo $appName | sed -e 's/^[ \t]*//' )
+    appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
     appNamesArray+=(--listitem)
     if [[ ! -e "/Applications/${appName}.app" ]]; then
     appNamesArray+=(${appName},icon="${logoImage}")
@@ -1777,7 +1779,7 @@ function doInstallations() {
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
             
             # Get the "name=" value from the current label and use it in our swiftDialog list
-            currentDisplayName=$(sed -n '/# label descriptions/,$p' ${installomatorScript} | grep -i -A 50 "${label})" | grep -m 1 "name=" | sed 's/.*=//' | sed 's/"//g')
+            currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
             # There are some weird \' shenanigans here because Installomator passes this through eval
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplayName}"\')
             sleep .5
