@@ -1,0 +1,42 @@
+<key>interactiveMode</key>
+<string>2</string>
+<key>ignoredLabels</key>
+<string>microsoft* googlechrome*</string>
+<key>requiredLabels</key>
+<string></string>
+<key>optionalLabels</key>
+<string></string>
+<key>installomatorOptions</key>
+<string>BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=microsoft</string>
+<key>maxDeferrals</key>
+<string>Disabled</string>
+<key>scriptLog</key>
+<string>/var/log/com.company-intune.log</string>
+<key>runDiscovery</key>
+<string>true</string>
+<key>removeInstallomatorPath</key>
+<string>false</string>
+<key>convertAppsInHomeFolder</key>
+<string>true</string>
+<key>ignoreAppsInHomeFolder</key>
+<string>false</string>
+<key>useLatestAvailableInstallomatorScriptVersion</key>
+<string>true</string>
+<key>webhookEnabled</key>
+<string>false</string>
+<key>slackURL</key>
+<string></string>
+<key>teamsURL</key>
+<string></string>
+<key>supportTeamName</key>
+<string>Super Support Team</string>
+<key>supportTeamPhone</key>
+<string>555-555-5555</string>
+<key>supportTeamEmail</key>
+<string>support@company.com</string>
+<key>supportTeamWebsite</key>
+<string>https://www.google.com</string>
+<key>appTitle</key>
+<string>App Auto-Patch via Intune</string>
+<key>useOverlayIcon</key>
+<string>true</string>

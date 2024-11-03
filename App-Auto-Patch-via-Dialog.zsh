@@ -131,6 +131,9 @@
 # 
 #   Version 2.11.4, 10.17.2024, Andrew Spokes (@TechTrekkie)
 #   - Updated the logic that populates the app name and icon to pull from fragments/labels/ to resolve issues populating swiftDialog list
+#
+#   Version next
+#   - Added icon support for Intune overlay. Added logic for webhook messages to support Intune as an alternate MDM provider. Intune can't pass arguments to scripts, so added logic to read settings from MDM configuration instead. (This is usable with any MDM solution.)
 # 
 ####################################################################################################
 
@@ -148,12 +151,30 @@ scriptVersion="2.11.4"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
-interactiveMode="${4:="2"}"                                                     # Parameter 4: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) (default) ]
-ignoredLabels="${5:=""}"                                                        # Parameter 5: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
-requiredLabels="${6:=""}"                                                       # Parameter 6: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
-optionalLabels="${7:=""}"                                                       # Parameter 7: A space-separated list of optional Installomator labels (i.e., "renew") ** Does not support wildcards **
-installomatorOptions="${8:-""}"                                                 # Parameter 8: A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore)
-maxDeferrals="${9:-"Disabled"}"                                                 # Parameter 9: Number of times a user is allowed to defer before being forced to install updates. A value of "Disabled" will not display the deferral prompt. [ `integer` | Disabled (default) ]
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Check for MDM delivered settings
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+aapManagedSettings="/Library/Managed Preferences/com.github.appautopatch"
+
+### Script Argument Variables ###
+interactiveModeMDM=${$(/usr/bin/defaults read "$aapManagedSettings" interactiveMode 2>/dev/null):-"3"}
+ignoredLabelsMDM=${$(/usr/bin/defaults read "$aapManagedSettings" ignoredLabels 2>/dev/null):-""}
+requiredLabelsMDM=${$(/usr/bin/defaults read "$aapManagedSettings" requiredLabels 2>/dev/null):-""}
+optionalLabelsMDM=${$(/usr/bin/defaults read "$aapManagedSettings" optionalLabels 2>/dev/null):-""}
+installomatorOptionsMDM=${$(/usr/bin/defaults read "$aapManagedSettings" installomatorOptions 2>/dev/null):-""}
+maxDeferralsMDM=${$(/usr/bin/defaults read "$aapManagedSettings" maxDeferrals 2>/dev/null):-"Disabled"}
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Check for script argument delivered settings (Argument values override MDM settings)
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+interactiveMode="${4-"$interactiveModeMDM"}"                                   # Parameter 4: Interactive Mode [ 0 (Completely Silent) | 1 (Silent Discovery, Interactive Patching) | 2 (Full Interactive) (default) ]
+ignoredLabels="${5-"$ignoredLabelsMDM"}"                                       # Parameter 5: A space-separated list of Installomator labels to ignore (i.e., "microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog")
+requiredLabels="${6-"$requiredLabelsMDM"}"                                     # Parameter 6: A space-separated list of required Installomator labels (i.e., "firefoxpkg_intl")
+optionalLabels="${7-"$optionalLabelsMDM"}"                                     # Parameter 7: A space-separated list of optional Installomator labels (i.e., "renew") ** Does not support wildcards **
+installomatorOptions="${8-"$installomatorOptionsMDM"}"                         # Parameter 8: A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore)
+maxDeferrals="${9-"$maxDeferralsMDM"}"                                         # Parameter 9: Number of times a user is allowed to defer before being forced to install updates. A value of "Disabled" will not display the deferral prompt. [ `integer` | Disabled (default) ]
+
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Various Feature Variables
@@ -161,7 +182,9 @@ maxDeferrals="${9:-"Disabled"}"                                                 
 
 ### Script Log and General Behavior Options ###
 
-scriptLog="/var/log/com.company.log"                                            # Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
+scriptLogDefault="/var/log/com.company.log"                                            # Script Log Location [ /var/log/com.company.log ] (i.e., Your organization's default location for client-side logs)
+scriptLog=${$(/usr/bin/defaults read "$aapManagedSettings" scriptLog 2>/dev/null):-"$scriptLogDefault"}
+
 debugMode="false"                                                               # Debug Mode [ true | false (default) | verbose ] Verbose adds additional logging, debug turns Installomator script to DEBUG 2, false for production
 outdatedOsAction="/System/Library/CoreServices/Software Update.app"             # Outdated OS Action [ /System/Library/CoreServices/Software Update.app (default) | jamfselfservice://content?entity=policy&id=117&action=view ] (i.e., Jamf Pro Self Service policy ID for operating system upgrades)
 
@@ -198,17 +221,35 @@ fragmentsPath="$installomatorPath/fragments"
 
 ### App Auto-Patch Other Behavior Options ###
 
-runDiscovery="true"                                                             # Re-run discovery of installed applications [ true (default) | false ]
-removeInstallomatorPath="false"                                                 # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
-convertAppsInHomeFolder="true"                                                  # Remove apps in /Users/* and install them to do default path [ true (default) | false ]
-ignoreAppsInHomeFolder="false"                                                  # Ignore apps found in '/Users/*'. If an update is found in '/Users/*' and variable is set to `false`, the app will be updated into the application's default path [ true | false (default) ]
-useLatestAvailableInstallomatorScriptVersion="true"                             # Will compare the VERSIONDATE of the local Installomator script against the VERSIONDATE of the latest available on GitHub, if they don't match, AAP will download and replace the local Installomator script with the latest
+runDiscoveryDefault="true"                                                      # Re-run discovery of installed applications [ true (default) | false ]
+removeInstallomatorPathDefault="false"                                          # Remove Installomator after App Auto-Patch is completed [ true | false (default) ]
+convertAppsInHomeFolderDefault="true"                                           # Remove apps in /Users/* and install them to do default path [ true (default) | false ]
+ignoreAppsInHomeFolderDefault="false"                                           # Ignore apps found in '/Users/*'. If an update is found in '/Users/*' and variable is set to `false`, the app will be updated into the application's default path [ true | false (default) ]
+useLatestAvailableInstallomatorScriptVersionDefault="true"                      # Will compare the VERSIONDATE of the local Installomator script against the VERSIONDATE of the latest available on GitHub, if they don't match, AAP will download and replace the local Installomator script with the latest
+
+### Check for MDM delivered Behavior settings ###
+#
+### Behavior Options Variables ###
+runDiscovery=${$(/usr/bin/defaults read "$aapManagedSettings" runDiscovery 2>/dev/null):-"$runDiscoveryDefault"}
+removeInstallomatorPath=${$(/usr/bin/defaults read "$aapManagedSettings" removeInstallomatorPath 2>/dev/null):-"$removeInstallomatorPathDefault"}
+convertAppsInHomeFolder=${$(/usr/bin/defaults read "$aapManagedSettings" convertAppsInHomeFolder 2>/dev/null):-"$convertAppsInHomeFolderDefault"}
+ignoreAppsInHomeFolder=${$(/usr/bin/defaults read "$aapManagedSettings" ignoreAppsInHomeFolder 2>/dev/null):-"$ignoreAppsInHomeFolderDefault"}
+useLatestAvailableInstallomatorScriptVersion=${$(/usr/bin/defaults read "$aapManagedSettings" useLatestAvailableInstallomatorScriptVersion 2>/dev/null):-"$useLatestAvailableInstallomatorScriptVersionDefault"}
+
 
 ### Webhook Options ###
 
-webhookEnabled="false"                                                          # Enables the webhook feature [ all | failures | false (default) ]
-teamsURL=""                                                                     # Teams webhook URL                         
-slackURL=""                                                                     # Slack webhook URL
+webhookEnabledDefault="false"                                                   # Enables the webhook feature [ all | failures | false (default) ]
+teamsURLDefault=""                                                              # Teams webhook URL                         
+slackURLDefault=""                                                              # Slack webhook URL
+
+### Check for MDM delivered webhook settings ###
+#
+### Webhook Options Variables ###
+webhookEnabled=${$(/usr/bin/defaults read "$aapManagedSettings" webhookEnabled 2>/dev/null):-"$webhookEnabledDefault"}
+teamsURL=${$(/usr/bin/defaults read "$aapManagedSettings" teamsURL 2>/dev/null):-"$teamsURLDefault"}
+slackURL=${$(/usr/bin/defaults read "$aapManagedSettings" slackURL 2>/dev/null):-"$slackURLDefault"}
+
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Custom Branding, Overlay Icon, etc
@@ -218,7 +259,7 @@ slackURL=""                                                                     
 
 # If you desire to customize `App Auto-Patch` to be named something else
 
-appTitle="App Auto-Patch"
+appTitleDefault="App Auto-Patch"
 
 ### Desktop/Laptop Icon ###
 
@@ -233,10 +274,33 @@ fi
 
 useOverlayIcon="true"                                                           # Toggles swiftDialog to use an overlay icon [ true (default) | false ]
 
+
+### Check for MDM delivered branding settings ###
+#
+### Custom Branding, Overlay Icon Variables ###
+appTitle=${$(/usr/bin/defaults read "$aapManagedSettings" appTitle 2>/dev/null):-"$appTitleDefault"}
+useOverlayIcon=${$(/usr/bin/defaults read "$aapManagedSettings" useOverlayIcon 2>/dev/null):-"$useOverlayIcon"}
+
+
 # Create `overlayicon` from Self Service's custom icon (thanks, @meschwartz!)
 if [[ "$useOverlayIcon" == "true" ]]; then
-    xxd -p -s 260 "$(defaults read /Library/Preferences/com.jamfsoftware.jamf self_service_app_path)"/Icon$'\r'/..namedfork/rsrc | xxd -r -p > /var/tmp/overlayicon.icns
-    overlayicon="/var/tmp/overlayicon.icns"
+    # Jamf is installed
+    if [[ -f "/Library/Preferences/com.jamfsoftware.jamf" ]]; then
+        xxd -p -s 260 "$(defaults read /Library/Preferences/com.jamfsoftware.jamf self_service_app_path)"/Icon$'\r'/..namedfork/rsrc | xxd -r -p > /var/tmp/overlayicon.icns
+        overlayicon="/var/tmp/overlayicon.icns"
+    # Intune is installed
+    elif [[ "$(profiles show | grep -A4 "Management Profile" | sed -n -e 's/^.*profileIdentifier: //p')" == "Microsoft.Profiles.MDM" ]]; then
+        if [[ -e "/Library/Intune/Microsoft Intune Agent.app" ]]; then
+            xxd -p "/Library/Intune/Microsoft Intune Agent.app/Contents/Resources/AppIcon.icns"| xxd -r -p > /var/tmp/overlayicon.icns
+            overlayicon="/var/tmp/overlayicon.icns"
+        # Intune agent is not present… try for Company Portal
+        elif [[ -e "/Applications/Company Portal.app" ]]; then
+            xxd -p "/Applications/Company Portal.app/Contents/Resources/AppIcon.icns"| xxd -r -p > /var/tmp/overlayicon.icns
+            overlayicon="/var/tmp/overlayicon.icns"
+        fi
+    else
+        overlayicon=""
+    fi
 else
     overlayicon=""
 fi
@@ -265,16 +329,30 @@ timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
 dialogVersion=$( /usr/local/bin/dialog --version )
 exitCode="0"
 
-jamfProURL=$(/usr/bin/defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url)
 
-# Jamf Pro URL for on-prem, multi-node, clustered environments
-case ${jamfProURL} in
-    *"dev"*     ) jamfProURL="https://jamfpro-dev.company.com" ;;
-    *"beta"*    ) jamfProURL="https://jamfpro-beta.company.com" ;;
-    *           ) jamfProURL="https://jamfpro-prod.company.com" ;;
-esac
+if [[ -f "/Library/Preferences/com.jamfsoftware.jamf.plist" ]]; then
+    mdmURL=$(/usr/bin/defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url)
 
-jamfProComputerURL="${jamfProURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
+    # Jamf Pro URL for on-prem, multi-node, clustered environments
+    case ${mdmURL} in
+        *"dev"*     ) mdmURL="https://jamfpro-dev.company.com" ;;
+        *"beta"*    ) mdmURL="https://jamfpro-beta.company.com" ;;
+        *           ) mdmURL="https://jamfpro-prod.company.com" ;;
+    esac
+    
+    mdmComputerURL="${mdmURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
+    mdmName="Jamf Pro"
+elif [[ "$(profiles show | grep -A4 "Management Profile" | sed -n -e 's/^.*profileIdentifier: //p')" == "Microsoft.Profiles.MDM" ]]; then
+    mdmURL="https://intune.microsoft.com/#view/Microsoft_Intune_Devices/DeviceSettingsMenuBlade/~/overview/mdmDeviceId"
+    mdmComputerID="$(grep -rnwi '/Library/Logs/Microsoft/Intune' -e 'DeviceId:' | head -1 | grep -E -o 'DeviceId.{0,38}' | cut -d ' ' -f2)"
+    if [[ ! -z "$mdmComputerID" ]]; then
+        mdmComputerURL="${mdmURL}/${mdmComputerID}"
+    else
+        # For cases when the device id is not found in the logs
+        mdmComputerURL="https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMacOsMenu/~/macOsDevices"
+    fi
+    mdmName="Intune"
+fi
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Deferral Workflow Date Calculations
@@ -303,12 +381,21 @@ fi
 # IT Support Variable (thanks, @AndrewMBarnett)
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-### Support Team Details ###
+### Support Team Default Details ###
+supportTeamNameDefault="Add IT Support"
+supportTeamPhoneDefault="Add IT Phone Number"
+supportTeamEmailDefault="Add email"
+supportTeamWebsiteDefault="Add IT Help site"
 
-supportTeamName="Add IT Support"
-supportTeamPhone="Add IT Phone Number"
-supportTeamEmail="Add email"
-supportTeamWebsite="Add IT Help site"
+
+### Check for MDM delivered brand settings ###
+#
+### Support Team Details Variables ###
+supportTeamName=${$(/usr/bin/defaults read "$aapManagedSettings" supportTeamName 2>/dev/null):-"$supportTeamNameDefault"}
+supportTeamPhone=${$(/usr/bin/defaults read "$aapManagedSettings" supportTeamPhone 2>/dev/null):-"$supportTeamPhoneDefault"}
+supportTeamEmail=${$(/usr/bin/defaults read "$aapManagedSettings" supportTeamEmail 2>/dev/null):-"$supportTeamEmailDefault"}
+supportTeamWebsite=${$(/usr/bin/defaults read "$aapManagedSettings" supportTeamWebsite 2>/dev/null):-"$supportTeamWebsiteDefault"}
+
 supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
 
 # Create the help message based on Support Team variables
@@ -2006,7 +2093,7 @@ else
 				},
                 		{
 					"type": "mrkdwn",
-					"text": ">*Computer Record:*\n>'"$jamfProComputerURL"'"
+					"text": ">*Computer Record:*\n>'"$mdmComputerURL"'"
 				}
 			]
 		},
@@ -2017,12 +2104,12 @@ else
 					"type": "button",
 					"text": {
 						"type": "plain_text",
-						"text": "View computer in Jamf Pro",
+						"text": "View computer in $mdmName",
 						"emoji": true
 					},
 					"style": "primary",
 					"action_id": "actionId-0",
-					"url": "'"$jamfProComputerURL"'"
+					"url": "'"$mdmComputerURL"'"
 				}
 			]
 		}
@@ -2067,11 +2154,11 @@ else
 	}],
 	"potentialAction": [{
 		"@type": "OpenUri",
-		"name": "View in Jamf Pro",
+		"name": "View in $mdmName",
 		"targets": [{
 			"os": "default",
 			"uri":
-			"'"$jamfProComputerURL"'"
+			"'"$mdmComputerURL"'"
 		}]
 	}]
 }'
