@@ -19,7 +19,22 @@ The script simplifies the process of taking an inventory of installed applicatio
 
 This project has since been applied to MDMs outside of Jamf Pro, showcasing its versatility and adaptability. 
 
-## Learn More
+## Getting Started with 3.0
+
+- Run the script with script parameters to configure as you'd like. Examples:
+
+`./App-Auto-Patch-via-Dialog.zsh --interactiveMode=2 --workflow-install-now --deadline-count-focus=2 --deadline-count-hard=4 --ignored-lables="microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog" --verbose-mode`
+
+- To reset AAP to defaults:
+  `./App-Auto-Patch-via-Dialog.zsh --reset-defaults`
+
+- Clear Ignored, Required, and Optional Labels:
+  `./App-Auto-Patch-via-Dialog.zsh --reset-labels`
+
+- Uninstall App Auto Patch:
+  `./App-Auto-Patch-via-Dialog.zsh --uninstall`
+
+## Learn More (Below documentation is for version 2)
 
 Please visit the [App Auto-Patch Wiki](https://github.com/robjschroeder/App-Auto-Patch/wiki) for detailed documentation!
 
