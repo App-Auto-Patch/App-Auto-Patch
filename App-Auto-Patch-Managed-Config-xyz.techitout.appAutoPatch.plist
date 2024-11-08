@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>InteractiveMode</key>
+  <integer>3</integer>
+  <key>PatchWeekStartDay</key>
+  <integer>1</integer>
+  <key>DeferralTimerFocus</key>
+  <integer>60</integer>
+  <key>DeferralTimerError</key>
+  <integer>60</integer>
+  <key>DeadlineCountFocus</key>
+  <integer>3</integer>
+  <key>DeadlineHardCount</key>
+  <integer>3</integer>
+  <key>DeferralNextLaunchMinutes</key>
+  <integer>60</integer>
+  <key>WorkflowDisableAppDiscovery</key>
+  <string>FALSE</string>
+  <key>WebhookFeature</key>
+  <string>FALSE,ALL,FAILURES</string>
+  <key>WebhookURLSlack</key>
+  <string>longURL</string>
+  <key>WebhookURLTeams</key>
+  <string>longerURL</string>
+</dict>
+</plist>
