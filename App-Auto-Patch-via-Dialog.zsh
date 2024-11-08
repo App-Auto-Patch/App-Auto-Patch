@@ -8,7 +8,7 @@
 #
 # HISTORY
 #
-#   Version 3.0.0, [07.15.2024]
+#   Version 3.0.0-beta1, [11.08.2024]
 #
 #
 ####################################################################################################
@@ -23,8 +23,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.0"
-scriptDate="2024/07/15"
+scriptVersion="3.0.0-beta1"
+scriptDate="2024/11/08"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
