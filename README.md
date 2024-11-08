@@ -23,7 +23,7 @@ This project has since been applied to MDMs outside of Jamf Pro, showcasing its 
 
 - Run the script with script parameters to configure as you'd like. Examples:
 
-`./App-Auto-Patch-via-Dialog.zsh --interactiveMode=2 --workflow-install-now --deadline-count-focus=2 --deadline-count-hard=4 --ignored-lables="microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog" --verbose-mode`
+`./App-Auto-Patch-via-Dialog.zsh --interactiveMode=2 --workflow-install-now --deadline-count-focus=2 --deadline-count-hard=4 --ignored-labels="microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog" --verbose-mode`
 
 - To reset AAP to defaults:
   `./App-Auto-Patch-via-Dialog.zsh --reset-defaults`
