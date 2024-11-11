@@ -8,7 +8,7 @@
 #
 # HISTORY
 #
-#   Version 3.0.0-beta1, [11.08.2024]
+#   Version 3.0.0-beta2, [11.10.2024]
 #
 #
 ####################################################################################################
@@ -23,8 +23,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.0-beta1"
-scriptDate="2024/11/08"
+scriptVersion="3.0.0-beta2"
+scriptDate="2024/11/10"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -35,10 +35,10 @@ echo "
 
     Version ${scriptVersion}
     ${scriptDate}
-    https://techitout.xyz/app-auto-patch
+    https://github.com/App-Auto-Patch
 
     Wiki:
-    https://github.com/robjschroeder/App-Auto-Patch/wiki
+    https://github.com/App-Auto-Patch/App-Auto-Patch/wiki
 
     Usage:
     sudo ./AppAutoPatch
@@ -99,7 +99,7 @@ show_help() {
     get_logged_in_user
     if [[ "${currentUserAccountName}" != "FALSE" ]]; then
         log_echo "[STATUS] Opening App Auto-Patch wiki for user account: ${currentUserAccountName}"
-        sudo -u "${currentUserAccountName}" open "https://github.com/robjschroeder/App-Auto-Patch/wiki" &
+        sudo -u "${currentUserAccountName}" open "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki" &
         log_echo "#### ${scriptFunctionalName} ${scriptVersion} - HELP EXIT ####"
     else
         log_echo "Warning: Unable to open App Auto-Patch Wiki because there is no user logged in"
@@ -754,7 +754,7 @@ gather_error_log(){
         log_install "Duplicate Log File location: $duplicate_installomatorLogFile"
         
         # Find the last position marker or start from the beginning if not found
-        if [ -f "$marker_file" && -f $installomatorLogFile ]; then
+        if [[ -f "$marker_file" ]] && [[ -f "$installomatorLogFile" ]]; then
             lastPosition=$(cat "$marker_file")
         else 
             log_install "Creating Installomator log file and setting error position as zero"
@@ -875,7 +875,7 @@ workflow_startup() {
 	#Checking for AAPLogo
     if [[ ! -e "${appAutoPatchFolder}/AAPLogo.png" ]]; then
         log_info "downloading AAP Logo"
-        logoImage="https://raw.githubusercontent.com/robjschroeder/App-Auto-Patch/main/Images/AAPLogo.png"
+        logoImage="https://raw.githubusercontent.com/App-Auto-Patch/App-Auto-Patch/main/Images/AAPLogo.png"
         logoImageFileName=$( echo ${logoImage} | awk -F '/' '{print $NF}' )
         curl -L --location --silent "$logoImage" -o "${appAutoPatchFolder}/${logoImageFileName}"
     fi
@@ -1319,6 +1319,7 @@ get_installomator() {
     if [[ "$debug_mode_option" == "TRUE" ]]; then
         log_debug "Setting Installomator to Debug Mode"
         /usr/bin/sed -i.backup1 "s|DEBUG=1|DEBUG=2|g" $installomatorScript
+        sleep .2
         /usr/bin/sed -i.backup1 "s|DEBUG=0|DEBUG=2|g" $installomatorScript
         sleep .2
         /usr/bin/sed -i.backup1 "s|MacAdmins Slack)|MacAdmins Slack )|g" $installomatorScript
@@ -1328,6 +1329,7 @@ get_installomator() {
     else
         log_info "Setting Installomator to Production Mode"
         /usr/bin/sed -i.backup1 "s|DEBUG=1|DEBUG=0|g" $installomatorScript
+        sleep .2
         /usr/bin/sed -i.backup1 "s|DEBUG=2|DEBUG=0|g" $installomatorScript
         sleep .2
         /usr/bin/sed -i.backup1 "s|MacAdmins Slack)|MacAdmins Slack )|g" $installomatorScript
@@ -1750,7 +1752,7 @@ swiftDialogPatchingWindow(){
         # Build our list of Display Names for the SwiftDialog list
         for label in $queuedLabelsArray; do
             # Get the "name=" value from the current label and use it in our SwiftDialog list
-            currentDisplayName=$(sed -n '/# label descriptions/,$p' ${installomatorScript} | grep -i -A 50 "${label})" | grep -m 1 "name=" | sed 's/.*=//' | sed 's/"//g')
+            currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
             if [ -n "$currentDisplayName" ]; then
                 displayNames+=("--listitem")
                 if [[ ! -e "/Applications/${currentDisplayName}.app" ]]; then
@@ -1952,7 +1954,10 @@ function PgetAppVersion() {
         applist="/Applications/Utilities/$appName"
     else
         applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0)
-        if ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "TRUE" ]]); then
+        if ([[ "$applist" == *"/Daemon Containers/"* ]]); then
+                log_info "App found in the iPhone Mirroring folder: $applist, ignoring"
+                appList=""
+            elif ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "TRUE" ]]); then
             log_verbose "App found in User directory: $applist, coverting to default directory"
             # Adding the label to the converted labels
             /usr/libexec/PlistBuddy -c "add \":ConvertedLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
@@ -2123,7 +2128,7 @@ workflow_do_Installations() {
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
             
             # Get the "name=" value from the current label and use it in our swiftDialog list
-            currentDisplayName=$(sed -n '/# label descriptions/,$p' ${installomatorScript} | grep -i -A 50 "${label})" | grep -m 1 "name=" | sed 's/.*=//' | sed 's/"//g')
+            currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
             # There are some weird \' shenanigans here because Installomator passes this through eval
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplayName}"\')
             sleep .5
@@ -2567,8 +2572,7 @@ main() {
     queuedLabelsForNames=("${(@s/ /)labelsArray}")
     for label in $queuedLabelsForNames; do
         log_verbose "Obtaining proper name for $label"
-        appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g')"
-        appName=$(echo $appName | sed -e 's/^[ \t]*//' )
+        appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
         appNamesArray+=(--listitem)
     if [[ ! -e "/Applications/${appName}.app" ]]; then
         appNamesArray+=(${appName},icon="${logoImage}")
