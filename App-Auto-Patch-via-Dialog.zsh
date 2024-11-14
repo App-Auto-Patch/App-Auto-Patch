@@ -110,10 +110,11 @@ show_help() {
 }
 
 ### App Auto-Patch Path Variables ###
+### MDM Enabled Config Noted Below ##
 
 set_defaults() {
 
-    appTitle="App Auto-Patch"
+    appTitle="App Auto-Patch" # MDM Enabled
 
     appAutoPatchFolder="/Library/Management/AppAutoPatch"
 
@@ -129,7 +130,7 @@ set_defaults() {
 
     appAutoPatchPIDfile="/var/run/aap.pid"
 
-    interactiveMode="2"
+    interactiveMode="2" # MDM Enabled
 
     installomatorPath="${appAutoPatchFolder}/Installomator"
 
@@ -137,25 +138,25 @@ set_defaults() {
 
     fragmentsPath="${installomatorPath}/fragments"
 
-    convertAppsInHomeFolder="TRUE"
+    convertAppsInHomeFolder="TRUE" # MDM Enabled
 
-    ignoreAppsInHomeFolder="FALSE"
+    ignoreAppsInHomeFolder="FALSE" # MDM Enabled
 
-    installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore"
+    installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore" # MDM Enabled
 
-    deferralTimer="300"
+    deferralTimer="300" # MDM Enabled
 
-    deferralTimerAction="Defer"
+    deferralTimerAction="Defer" # MDM Enabled
 
-    patch_week_start_day_default="2"
+    patch_week_start_day_default="2" # MDM Enabled
 
-    daysUntilReset="7"
+    daysUntilReset="7" # MDM Enabled
 
     selfServicePatchingStatusModeReset="1"
 
-    unattendedExit="FALSE"
+    unattendedExit="FALSE" # MDM Enabled
 
-    unattendedExitSeconds="60"
+    unattendedExitSeconds="60" # MDM Enabled
 
     appAutoPatchLocalPLIST="${appAutoPatchFolder}/xyz.techitout.appAutoPatch"
 
@@ -175,25 +176,23 @@ set_defaults() {
 
     reset_defaults_option="FALSE"
 
-    useOverlayIcon="TRUE"
+    useOverlayIcon="TRUE" # MDM Enabled
 
     debug_mode_option="FALSE"
 
-    removeInstallomatorPath="FALSE"
+    removeInstallomatorPath="FALSE" # MDM Enabled
 
     NEXT_AUTO_LAUNCH_DEFAULT="60"
 
     REGEX_ANY_WHOLE_NUMBER="^[0-9]+$"
 
-    supportTeamName="Add IT Support"
+    supportTeamName="Add IT Support" # MDM Enabled
 
-    supportTeamPhone="Add IT Phone Number"
+    supportTeamPhone="Add IT Phone Number" # MDM Enabled
 
-    supportTeamEmail="Add email"
+    supportTeamEmail="Add email" # MDM Enabled
 
-    supportTeamWebsite="Add IT Help site"
-
-    supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
+    supportTeamWebsite="Add IT Help site" # MDM Enabled
 
     computerName=$( scutil --get ComputerName )
 
@@ -215,8 +214,8 @@ get_options() {
 
     write_status "Running: Getting parameter options"
     if [[ "$1" == "/" ]] || [[ $(ps -p "${PPID}" | grep -c -e 'bin/jamf' -e 'jamf/bin' -e '\sjamf\s') -gt 0 ]]; then
-	    shift 3
-	    parent_process_is_jamf="TRUE"
+        shift 3
+        parent_process_is_jamf="TRUE"
     fi
 
     while [[ -n "$1" ]]; do
@@ -240,13 +239,13 @@ get_options() {
                 reset_labels_option="TRUE"
             ;;
             --ignored-labels=*)
-                ignoredLabels="${1##*=}"
+                ignored_labels_option="${1##*=}"
             ;;
             --required-labels=*)
-                requiredLabels="${1##*=}"
+                required_labels_option="${1##*=}"
             ;;
             --optional-labels=*)
-                optionalLabels="${1##*=}"
+                optional_labels_option="${1##*=}"
             ;;
             -V|--verbose-mode)
                 verbose_mode_option="TRUE"
@@ -270,10 +269,10 @@ get_options() {
                 deferral_timer_reset_all_option="TRUE"
             ;;
             --deadline-count-focus=*)
-			    deadline_count_focus_option="${1##*=}"
+                deadline_count_focus_option="${1##*=}"
             ;;
             --deadline-count-hard=*)
-			    deadline_count_hard_option="${1##*=}"
+                deadline_count_hard_option="${1##*=}"
             ;;
             --deadline-count-delete-all)
                 deadline_count_delete_all_option="TRUE"
@@ -351,10 +350,237 @@ get_preferences() {
         log_status "Continuing to gather new preferences"
     fi
 
+
+    # Collect Managed PLIST preferences if any
+    if [[ -f ${appAutoPatchManagedPLIST}.plist ]]; then
+        log_verbose "Managed preference file: ${appAutoPatchManagedPLIST}:\n$(defaults read "${appAutoPatchManagedPLIST}" 2> /dev/null)"
+        local deferral_timer_focus_managed
+        deferral_timer_focus_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerFocus 2> /dev/null)
+        local deferral_timer_error_managed
+        deferral_timer_error_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerError 2> /dev/null)
+        local deadline_count_focus_managed
+        deadline_count_focus_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeadlineCountFocus 2> /dev/null)
+        local deadline_count_hard_managed
+        deadline_count_hard_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeadlineCountHard 2> /dev/null)
+        local deferral_next_launch_managed
+        deferral_next_launch_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralNextLaunchMinutes 2> /dev/null)
+        local interactive_mode_managed
+        interactive_mode_managed=$(defaults read "${appAutoPatchManagedPLIST}" InteractiveMode 2> /dev/null)
+        local patch_week_start_day_managed
+        patch_week_start_day_managed=$(defaults read "${appAutoPatchManagedPLIST}" PatchWeekStartDay 2> /dev/null)
+        local workflow_disable_app_discovery_managed
+        workflow_disable_app_discovery_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableAppDiscovery 2> /dev/null)
+        local webhook_feature_managed
+        webhook_feature_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookFeature 2> /dev/null)
+        local webhook_url_slack_managed
+        webhook_url_slack_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLSlack 2> /dev/null)
+        local webhook_url_teams_managed
+        webhook_url_teams_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLTeams 2> /dev/null)
+        local ignored_labels_managed
+        ignored_labels_managed=$(defaults read "${appAutoPatchManagedPLIST}" IgnoredLabels 2> /dev/null)
+        local required_labels_managed
+        required_labels_managed=$(defaults read "${appAutoPatchManagedPLIST}" RequiredLabels 2> /dev/null)
+        local optional_labels_managed
+        optional_labels_managed=$(defaults read "${appAutoPatchManagedPLIST}" OptionalLabels 2> /dev/null)
+        local app_title_managed
+        app_title_managed=$(defaults read "${appAutoPatchManagedPLIST}" AppTitle 2> /dev/null)
+        local convert_apps_in_home_folder_managed
+        convert_apps_in_home_folder_managed=$(defaults read "${appAutoPatchManagedPLIST}" ConvertAppsInHomeFolder 2> /dev/null)
+        local ignore_apps_in_home_folder_managed
+        ignore_apps_in_home_folder_managed=$(defaults read "${appAutoPatchManagedPLIST}" IgnoreAppsInHomeFolder 2> /dev/null)
+        local installomator_options_managed
+        installomator_options_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorOptions 2> /dev/null)
+        local deferral_timer_managed
+        deferral_timer_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimer 2> /dev/null)
+        local deferral_timer_action_managed
+        deferral_timer_action_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerAction 2> /dev/null)
+        local days_until_reset_managed
+        days_until_reset_managed=$(defaults read "${appAutoPatchManagedPLIST}" DaysUntilReset 2> /dev/null)
+        local unattended_exit_managed
+        unattended_exit_managed=$(defaults read "${appAutoPatchManagedPLIST}" UnattendedExit 2> /dev/null)
+        local unattended_exit_seconds_managed
+        unattended_exit_seconds_managed=$(defaults read "${appAutoPatchManagedPLIST}" UnattendedExitSeconds 2> /dev/null)
+        local use_overlay_icon_managed
+        use_overlay_icon_managed=$(defaults read "${appAutoPatchManagedPLIST}" UseOverlayIcon 2> /dev/null)
+        local remove_installomator_path_managed
+        remove_installomator_path_managed=$(defaults read "${appAutoPatchManagedPLIST}" RemoveInstallomatorPath 2> /dev/null)
+        local support_team_name_managed
+        support_team_name_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamName 2> /dev/null)
+        local support_team_phone_managed
+        support_team_phone_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamPhone 2> /dev/null)
+        local support_team_email_managed
+        support_team_email_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamEmail 2> /dev/null)
+        local support_team_website_managed
+        support_team_website_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamWebsite 2> /dev/null)
+    else
+        log_verbose "No managed preference file found for App Auto-Patch"
+    fi
+
+    # Collect any local preferences from ${appAutoPatchLocalPLIST}
+    if [[ -f ${appAutoPatchLocalPLIST}.plist ]]; then
+        # This is where any preferences locally would be collected, example below
+        local script_version_local
+        script_version_local=$(defaults read "${appAutoPatchLocalPLIST}" AAPVersion 2> /dev/null)
+        local deferral_timer_focus_local
+        deferral_timer_focus_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerFocus 2> /dev/null)
+        local deferral_timer_error_local
+        deferral_timer_error_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerError 2> /dev/null)
+        local deadline_count_focus_local
+        deadline_count_focus_local=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineCountFocus 2> /dev/null)
+        local deadline_count_hard_local
+        deadline_count_hard_local=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineCountHard 2> /dev/null)
+        local deferral_next_launch_local
+        deferral_next_launch_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralNextLaunchMinutes 2> /dev/null)
+        local interactive_mode_local
+        interactive_mode_local=$(defaults read "${appAutoPatchLocalPLIST}" InteractiveMode 2> /dev/null)
+        local patch_week_start_day_local
+        patch_week_start_day_local=$(defaults read "${appAutoPatchLocalPLIST}" PatchWeekStartDay 2> /dev/null)
+        local workflow_disable_app_discovery_local
+        workflow_disable_app_discovery_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableAppDiscovery 2> /dev/null)
+        local webhook_feature_local
+        webhook_feature_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookFeature 2> /dev/null)
+        local webhook_url_slack_local
+        webhook_url_slack_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLSlack 2> /dev/null)
+        local webhook_url_teams_local
+        webhook_url_teams_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLTeams 2> /dev/null)
+        local ignored_labels_local
+        ignored_labels_local=$(defaults read "${appAutoPatchLocalPLIST}" IgnoredLabels 2> /dev/null)
+        local required_labels_local
+        required_labels_local=$(defaults read "${appAutoPatchLocalPLIST}" RequiredLabels 2> /dev/null)
+        local optional_labels_local
+        optional_labels_local=$(defaults read "${appAutoPatchLocalPLIST}" OptionalLabels 2> /dev/null)
+        local app_title_local
+        app_title_local=$(defaults read "${appAutoPatchLocalPLIST}" AppTitle 2> /dev/null)
+        local convert_apps_in_home_folder_local
+        convert_apps_in_home_folder_local=$(defaults read "${appAutoPatchLocalPLIST}" ConvertAppsInHomeFolder 2> /dev/null)
+        local ignore_apps_in_home_folder_local
+        ignore_apps_in_home_folder_local=$(defaults read "${appAutoPatchLocalPLIST}" IgnoreAppsInHomeFolder 2> /dev/null)
+        local installomator_options_local
+        installomator_options_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorOptions 2> /dev/null)
+        local deferral_timer_local
+        deferral_timer_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimer 2> /dev/null)
+        local deferral_timer_action_local
+        deferral_timer_action_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerAction 2> /dev/null)
+        local days_until_reset_local
+        days_until_reset_local=$(defaults read "${appAutoPatchLocalPLIST}" DaysUntilReset 2> /dev/null)
+        local unattended_exit_local
+        unattended_exit_local=$(defaults read "${appAutoPatchLocalPLIST}" UnattendedExit 2> /dev/null)
+        local unattended_exit_seconds_local
+        unattended_exit_seconds_local=$(defaults read "${appAutoPatchLocalPLIST}" UnattendedExitSeconds 2> /dev/null)
+        local use_overlay_icon_local
+        use_overlay_icon_local=$(defaults read "${appAutoPatchLocalPLIST}" UseOverlayIcon 2> /dev/null)
+        local remove_installomator_path_local
+        remove_installomator_path_local=$(defaults read "${appAutoPatchLocalPLIST}" RemoveInstallomatorPath 2> /dev/null)
+        local support_team_name_local
+        support_team_name_local=$(defaults read "${appAutoPatchLocalPLIST}" SupportTeamName 2> /dev/null)
+        local support_team_phone_local
+        support_team_phone_local=$(defaults read "${appAutoPatchLocalPLIST}" SupportTeamPhone 2> /dev/null)
+        local support_team_email_local
+        support_team_email_local=$(defaults read "${appAutoPatchLocalPLIST}" SupportTeamEmail 2> /dev/null)
+        local support_team_website_local
+        support_team_website_local=$(defaults read "${appAutoPatchLocalPLIST}" SupportTeamWebsite 2> /dev/null)
+    fi
+    
+    log_verbose  "Local preference file before startup validation: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
+
+    # Need logic to ensures the priority order of managed preference overrides the new input option which overrides the saved local preference.
+    [[ -n "${deferral_timer_focus_managed}" ]] && deferral_timer_focus_option="${deferral_timer_focus_managed}"
+    { [[ -z "${deferral_timer_focus_managed}" ]] && [[ -z "${deferral_timer_focus_option}" ]] && [[ -n "${deferral_timer_focus_local}" ]]; } && deferral_timer_focus_option="${deferral_timer_focus_local}"
+    [[ -n "${deferral_timer_error_managed}" ]] && deferral_timer_error_option="${deferral_timer_error_managed}"
+    { [[ -z "${deferral_timer_error_managed}" ]] && [[ -z "${deferral_timer_error_option}" ]] && [[ -n "${deferral_timer_error_local}" ]]; } && deferral_timer_error_option="${deferral_timer_error_local}"
+    [[ -n "${deadline_count_focus_managed}" ]] && deadline_count_focus_option="${deadline_count_focus_managed}"
+    { [[ -z "${deadline_count_focus_managed}" ]] && [[ -z "${deadline_count_focus_option}" ]] && [[ -n "${deadline_count_focus_local}" ]]; } && deadline_count_focus_option="${deadline_count_focus_local}"
+    [[ -n "${deadline_count_hard_managed}" ]] && deadline_count_hard_option="${deadline_count_hard_managed}"
+    { [[ -z "${deadline_count_hard_managed}" ]] && [[ -z "${deadline_count_hard_option}" ]] && [[ -n "${deadline_count_hard_local}" ]]; } && deadline_count_hard_option="${deadline_count_hard_local}"
+    [[ -n "${deferral_next_launch_managed}" ]] && deferral_next_launch_default_option="${deferral_next_launch_managed}"
+    { [[ -z "${deferral_next_launch_managed}" ]] && [[ -z "${deferral_next_launch_default_option}" ]] && [[ -n "${deferral_next_launch_local}" ]]; } && deferral_next_launch_default_option="${deferral_next_launch_local}"
+    [[ -n "${interactive_mode_managed}" ]] && interactiveModeOption="${interactive_mode_managed}"
+    { [[ -z "${interactive_mode_managed}" ]] && [[ -z "${interactiveModeOption}" ]] && [[ -n "${interactive_mode_local}" ]]; } && interactiveModeOption="${interactive_mode_local}"
+    [[ -n "${patch_week_start_day_managed}" ]] && patch_week_start_day_option="${patch_week_start_day_managed}"
+    { [[ -z "${patch_week_start_day_managed}" ]] && [[ -z "${patch_week_start_day_option}" ]] && [[ -n "${patch_week_start_day_local}" ]]; } && patch_week_start_day_option="${patch_week_start_day_local}"
+    [[ -n "${workflow_disable_app_discovery_managed}" ]] && workflow_disable_app_discovery_option="${workflow_disable_app_discovery_managed}"
+    { [[ -z "${workflow_disable_app_discovery_managed}" ]] && [[ -z "${workflow_disable_app_discovery_option}" ]] && [[ -n "${workflow_disable_app_discovery_local}" ]]; } && workflow_disable_app_discovery_option="${workflow_disable_app_discovery_local}"
+    [[ -n "${webhook_feature_managed}" ]] && webhook_feature_option="${webhook_feature_managed}"
+    { [[ -z "${webhook_feature_managed}" ]] && [[ -z "${webhook_feature_option}" ]] && [[ -n "${webhook_feature_local}" ]]; } && webhook_feature_option="${webhook_feature_local}"
+    [[ -n "${webhook_url_slack_managed}" ]] && webhook_url_slack_option="${webhook_url_slack_managed}"
+    { [[ -z "${webhook_url_slack_managed}" ]] && [[ -z "${webhook_url_slack_option}" ]] && [[ -n "${webhook_url_slack_local}" ]]; } && webhook_url_slack_option="${webhook_url_slack_local}"
+    [[ -n "${webhook_url_teams_managed}" ]] && webhook_url_teams_option="${webhook_url_teams_managed}"
+    { [[ -z "${webhook_url_teams_managed}" ]] && [[ -z "${webhook_url_teams_option}" ]] && [[ -n "${webhook_url_teams_local}" ]]; } && webhook_url_teams_option="${webhook_url_teams_local}"
+    [[ -n "${ignored_labels_managed}" ]] && ignored_labels_option="${ignored_labels_managed}"
+    { [[ -z "${ignored_labels_managed}" ]] && [[ -z "${ignored_labels_option}" ]] && [[ -n "${ignored_labels_local}" ]]; } && ignored_labels_option="${ignored_labels_local}"
+    [[ -n "${required_labels_managed}" ]] && required_labels_option="${required_labels_managed}"
+    { [[ -z "${required_labels_managed}" ]] && [[ -z "${required_labels_option}" ]] && [[ -n "${required_labels_local}" ]]; } && required_labels_option="${required_labels_local}"
+    [[ -n "${optional_labels_managed}" ]] && optional_labels_option="${optional_labels_managed}"
+    { [[ -z "${optional_labels_managed}" ]] && [[ -z "${optional_labels_option}" ]] && [[ -n "${optional_labels_local}" ]]; } && optional_labels_option="${optional_labels_local}"
+
+    # Need logic to ensures the priority order of managed preference overrides the saved local preference which overrides the script embedded variables .
+    [[ -n "${app_title_managed}" ]] && appTitle="${app_title_managed}"
+    { [[ -z "${app_title_managed}" ]] && [[ -n "${appTitle}" ]] && [[ -n "${app_title_local}" ]]; } && appTitle="${app_title_local}"
+    [[ -n "${convert_apps_in_home_folder_managed}" ]] && convertAppsInHomeFolder="${convert_apps_in_home_folder_managed}"
+    { [[ -z "${convert_apps_in_home_folder_managed}" ]] && [[ -n "${convertAppsInHomeFolder}" ]] && [[ -n "${convert_apps_in_home_folder_local}" ]]; } && convertAppsInHomeFolder="${convert_apps_in_home_folder_local}"
+    [[ -n "${ignore_apps_in_home_folder_managed}" ]] && ignoreAppsInHomeFolder="${ignore_apps_in_home_folder_managed}"
+    { [[ -z "${ignore_apps_in_home_folder_managed}" ]] && [[ -n "${ignoreAppsInHomeFolder}" ]] && [[ -n "${ignore_apps_in_home_folder_local}" ]]; } && ignoreAppsInHomeFolder="${ignore_apps_in_home_folder_local}"
+    [[ -n "${installomator_options_managed}" ]] && installomatorOptions="${installomator_options_managed}"
+    { [[ -z "${installomator_options_managed}" ]] && [[ -n "${installomatorOptions}" ]] && [[ -n "${installomator_options_local}" ]]; } && installomatorOptions="${installomator_options_local}"
+    [[ -n "${deferral_timer_managed}" ]] && deferralTimer="${deferral_timer_managed}"
+    { [[ -z "${deferral_timer_managed}" ]] && [[ -n "${deferralTimer}" ]] && [[ -n "${deferral_timer_local}" ]]; } && deferralTimer="${deferral_timer_local}"
+    [[ -n "${deferral_timer_action_managed}" ]] && deferralTimerAction="${deferral_timer_action_managed}"
+    { [[ -z "${deferral_timer_action_managed}" ]] && [[ -n "${deferralTimerAction}" ]] && [[ -n "${deferral_timer_action_local}" ]]; } && deferralTimerAction="${deferral_timer_action_local}"
+    [[ -n "${days_until_reset_managed}" ]] && daysUntilReset="${days_until_reset_managed}"
+    { [[ -z "${days_until_reset_managed}" ]] && [[ -n "${daysUntilReset}" ]] && [[ -n "${days_until_reset_local}" ]]; } && daysUntilReset="${days_until_reset_local}"
+    [[ -n "${unattended_exit_managed}" ]] && unattendedExit="${unattended_exit_managed}"
+    { [[ -z "${unattended_exit_managed}" ]] && [[ -n "${unattendedExit}" ]] && [[ -n "${unattended_exit_local}" ]]; } && unattendedExit="${unattended_exit_local}"
+    [[ -n "${unattended_exit_seconds_managed}" ]] && unattendedExitSeconds="${unattended_exit_seconds_managed}"
+    { [[ -z "${unattended_exit_seconds_managed}" ]] && [[ -n "${unattendedExitSeconds}" ]] && [[ -n "${unattended_exit_seconds_local}" ]]; } && unattendedExitSeconds="${unattended_exit_seconds_local}"
+    [[ -n "${use_overlay_icon_managed}" ]] && useOverlayIcon="${use_overlay_icon_managed}"
+    { [[ -z "${use_overlay_icon_managed}" ]] && [[ -n "${useOverlayIcon}" ]] && [[ -n "${use_overlay_icon_local}" ]]; } && useOverlayIcon="${use_overlay_icon_local}"
+    [[ -n "${remove_installomator_path_managed}" ]] && removeInstallomatorPath="${remove_installomator_path_managed}"
+    { [[ -z "${remove_installomator_path_managed}" ]] && [[ -n "${removeInstallomatorPath}" ]] && [[ -n "${remove_installomator_path_local}" ]]; } && removeInstallomatorPath="${remove_installomator_path_local}"
+    [[ -n "${support_team_name_managed}" ]] && supportTeamName="${support_team_name_managed}"
+    { [[ -z "${support_team_name_managed}" ]] && [[ -n "${supportTeamName}" ]] && [[ -n "${support_team_name_local}" ]]; } && supportTeamName="${support_team_name_local}"
+    [[ -n "${support_team_phone_managed}" ]] && supportTeamPhone="${support_team_phone_managed}"
+    { [[ -z "${support_team_phone_managed}" ]] && [[ -n "${supportTeamPhone}" ]] && [[ -n "${support_team_phone_local}" ]]; } && supportTeamPhone="${support_team_phone_local}"
+    [[ -n "${support_team_email_managed}" ]] && supportTeamEmail="${support_team_email_managed}"
+    { [[ -z "${support_team_email_managed}" ]] && [[ -n "${supportTeamEmail}" ]] && [[ -n "${support_team_email_local}" ]]; } && supportTeamEmail="${support_team_email_local}"
+    [[ -n "${support_team_website_managed}" ]] && supportTeamWebsite="${support_team_website_managed}"
+    { [[ -z "${support_team_website_managed}" ]] && [[ -n "${supportTeamWebsite}" ]] && [[ -n "${support_team_website_local}" ]]; } && supportTeamWebsite="${support_team_website_local}"
+    
+    #Temporary verbose output testing stuff
+    log_verbose  "deadline_count_focus_option: $deadline_count_focus_option"
+    log_verbose  "deadline_count_hard_option: $deadline_count_hard_option"
+    log_verbose  "deferral_next_launch_default_option: $deferral_next_launch_default_option"
+    log_verbose  "interactiveModeOption: $interactiveModeOption"
+    log_verbose  "patch_week_start_day_option: $patch_week_start_day_option"
+    log_verbose  "workflow_disable_app_discovery_option: $workflow_disable_app_discovery_option"
+    log_verbose  "webhook_feature_option: $webhook_feature_option"
+    log_verbose  "webhook_url_slack_option: $webhook_url_slack_option"
+    log_verbose  "webhook_url_teams_option: $webhook_url_teams_option"
+    
+    log_verbose  "ignored_labels_option: $ignored_labels_option"
+    log_verbose  "required_labels_option: $required_labels_option"
+    log_verbose  "optional_labels_option: $optional_labels_option"
+
+    log_verbose  "appTitle: $appTitle"
+    log_verbose  "convertAppsInHomeFolder: $convertAppsInHomeFolder"
+    log_verbose  "ignoreAppsInHomeFolder: $ignoreAppsInHomeFolder"
+    log_verbose  "installomatorOptions: $installomatorOptions"
+    log_verbose  "deferralTimer: $deferralTimer"
+    log_verbose  "deferralTimerAction: $deferralTimerAction"
+    log_verbose  "daysUntilReset: $daysUntilReset"
+    log_verbose  "unattendedExit: $unattendedExit"
+    log_verbose  "unattendedExitSeconds: $unattendedExitSeconds"
+    log_verbose  "useOverlayIcon: $useOverlayIcon"
+    log_verbose  "removeInstallomatorPath: $removeInstallomatorPath"
+    log_verbose  "supportTeamName: $supportTeamName"
+    log_verbose  "supportTeamPhone: $supportTeamPhone"
+    log_verbose  "supportTeamEmail: $supportTeamEmail"
+    log_verbose  "supportTeamWebsite: $supportTeamWebsite"
+    
+    
     # Write App Labels to PLIST
-    ignoredLabelsArray=($(echo ${ignoredLabels}))
-    requiredLabelsArray=($(echo ${requiredLabels}))
-    optionalLabelsArray=($(echo ${optionalLabels}))
+    ignoredLabelsArray=($(echo ${ignored_labels_option}))
+    requiredLabelsArray=($(echo ${required_labels_option}))
+    optionalLabelsArray=($(echo ${optional_labels_option}))
     convertedLabelsArray=($(echo ${convertedLabels}))
 
     /usr/libexec/PlistBuddy -c 'add ":DiscoveredLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
@@ -452,103 +678,8 @@ get_preferences() {
         /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"swiftdialog\"" "${appAutoPatchLocalPLIST}.plist"
         ignoredLabelsArray+=("swiftdialog")
     fi
-
-
-    # Collect Managed PLIST preferences if any
-    if [[ -f ${appAutoPatchManagedPLIST}.plist ]]; then
-        log_verbose "Managed preference file: ${appAutoPatchManagedPLIST}:\n$(defaults read "${appAutoPatchManagedPLIST}" 2> /dev/null)"
-        local deferral_timer_focus_managed
-        deferral_timer_focus_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerFocus 2> /dev/null)
-        local deferral_timer_error_managed
-        deferral_timer_error_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerError 2> /dev/null)
-        local deadline_count_focus_managed
-        deadline_count_focus_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeadlineCountFocus 2> /dev/null)
-        local deadline_count_hard_managed
-        deadline_count_hard_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeadlineCountHard 2> /dev/null)
-        local deferral_next_launch_managed
-        deferral_next_launch_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralNextLaunchMinutes 2> /dev/null)
-        local interactive_mode_managed
-        interactive_mode_managed=$(defaults read "${appAutoPatchManagedPLIST}" InteractiveMode 2> /dev/null)
-        local patch_week_start_day_managed
-        patch_week_start_day_managed=$(defaults read "${appAutoPatchManagedPLIST}" PatchWeekStartDay 2> /dev/null)
-        local workflow_disable_app_discovery_managed
-        workflow_disable_app_discovery_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableAppDiscovery 2> /dev/null)
-        local webhook_feature_managed
-        webhook_feature_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookFeature 2> /dev/null)
-        local webhook_url_slack_managed
-        webhook_url_slack_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLSlack 2> /dev/null)
-        local webhook_url_teams_managed
-        webhook_url_teams_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLTeams 2> /dev/null)
-    else
-        log_verbose "No managed preference file found for App Auto-Patch"
-    fi
-
-    # Collect any local preferences from ${appAutoPatchLocalPLIST}
-    if [[ -f ${appAutoPatchLocalPLIST}.plist ]]; then
-        # This is where any preferences locally would be collected, example below
-        local script_version_local
-        script_version_local=$(defaults read "${appAutoPatchLocalPLIST}" AAPVersion 2> /dev/null)
-        local deferral_timer_focus_local
-        deferral_timer_focus_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerFocus 2> /dev/null)
-        local deferral_timer_error_local
-        deferral_timer_error_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerError 2> /dev/null)
-        local deadline_count_focus_local
-        deadline_count_focus_local=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineCountFocus 2> /dev/null)
-        local deadline_count_hard_local
-        deadline_count_hard_local=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineCountHard 2> /dev/null)
-        local deferral_next_launch_local
-        deferral_next_launch_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralNextLaunchMinutes 2> /dev/null)
-        local interactive_mode_local
-        interactive_mode_local=$(defaults read "${appAutoPatchLocalPLIST}" InteractiveMode 2> /dev/null)
-        local patch_week_start_day_local
-        patch_week_start_day_local=$(defaults read "${appAutoPatchLocalPLIST}" PatchWeekStartDay 2> /dev/null)
-        local workflow_disable_app_discovery_local
-        workflow_disable_app_discovery_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableAppDiscovery 2> /dev/null)
-        local webhook_feature_local
-        webhook_feature_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookFeature 2> /dev/null)
-        local webhook_url_slack_local
-        webhook_url_slack_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLSlack 2> /dev/null)
-        local webhook_url_teams_local
-        webhook_url_teams_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLTeams 2> /dev/null)
-    fi
     
-    log_verbose  "Local preference file before startup validation: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
-
-    # Need logic to ensures the priority order of managed preference overrides the new input option which overrides the saved local preference.
-    [[ -n "${deferral_timer_focus_managed}" ]] && deferral_timer_focus_option="${deferral_timer_focus_managed}"
-    { [[ -z "${deferral_timer_focus_managed}" ]] && [[ -z "${deferral_timer_focus_option}" ]] && [[ -n "${deferral_timer_focus_local}" ]]; } && deferral_timer_focus_option="${deferral_timer_focus_local}"
-    [[ -n "${deferral_timer_error_managed}" ]] && deferral_timer_error_option="${deferral_timer_error_managed}"
-    { [[ -z "${deferral_timer_error_managed}" ]] && [[ -z "${deferral_timer_error_option}" ]] && [[ -n "${deferral_timer_error_local}" ]]; } && deferral_timer_error_option="${deferral_timer_error_local}"
-    [[ -n "${deadline_count_focus_managed}" ]] && deadline_count_focus_option="${deadline_count_focus_managed}"
-    { [[ -z "${deadline_count_focus_managed}" ]] && [[ -z "${deadline_count_focus_option}" ]] && [[ -n "${deadline_count_focus_local}" ]]; } && deadline_count_focus_option="${deadline_count_focus_local}"
-    [[ -n "${deadline_count_hard_managed}" ]] && deadline_count_hard_option="${deadline_count_hard_managed}"
-    { [[ -z "${deadline_count_hard_managed}" ]] && [[ -z "${deadline_count_hard_option}" ]] && [[ -n "${deadline_count_hard_local}" ]]; } && deadline_count_hard_option="${deadline_count_hard_local}"
-    [[ -n "${deferral_next_launch_managed}" ]] && deferral_next_launch_default_option="${deferral_next_launch_managed}"
-    { [[ -z "${deferral_next_launch_managed}" ]] && [[ -z "${deferral_next_launch_default_option}" ]] && [[ -n "${deferral_next_launch_local}" ]]; } && deferral_next_launch_default_option="${deferral_next_launch_local}"
-    [[ -n "${interactive_mode_managed}" ]] && interactiveModeOption="${interactive_mode_managed}"
-    { [[ -z "${interactive_mode_managed}" ]] && [[ -z "${interactiveModeOption}" ]] && [[ -n "${interactive_mode_local}" ]]; } && interactiveModeOption="${interactive_mode_local}"
-    [[ -n "${patch_week_start_day_managed}" ]] && patch_week_start_day_option="${patch_week_start_day_managed}"
-    { [[ -z "${patch_week_start_day_managed}" ]] && [[ -z "${patch_week_start_day_option}" ]] && [[ -n "${patch_week_start_day_local}" ]]; } && patch_week_start_day_option="${patch_week_start_day_local}"
-    [[ -n "${workflow_disable_app_discovery_managed}" ]] && workflow_disable_app_discovery_option="${workflow_disable_app_discovery_managed}"
-    { [[ -z "${workflow_disable_app_discovery_managed}" ]] && [[ -z "${workflow_disable_app_discovery_option}" ]] && [[ -n "${workflow_disable_app_discovery_local}" ]]; } && workflow_disable_app_discovery_option="${workflow_disable_app_discovery_local}"
-    [[ -n "${webhook_feature_managed}" ]] && webhook_feature_option="${webhook_feature_managed}"
-    { [[ -z "${webhook_feature_managed}" ]] && [[ -z "${webhook_feature_option}" ]] && [[ -n "${webhook_feature_local}" ]]; } && webhook_feature_option="${webhook_feature_local}"
-    [[ -n "${webhook_url_slack_managed}" ]] && webhook_url_slack_option="${webhook_url_slack_managed}"
-    { [[ -z "${webhook_url_slack_managed}" ]] && [[ -z "${webhook_url_slack_option}" ]] && [[ -n "${webhook_url_slack_local}" ]]; } && webhook_url_slack_option="${webhook_url_slack_local}"
-    [[ -n "${webhook_url_teams_managed}" ]] && webhook_url_teams_option="${webhook_url_teams_managed}"
-    { [[ -z "${webhook_url_teams_managed}" ]] && [[ -z "${webhook_url_teams_option}" ]] && [[ -n "${webhook_url_teams_local}" ]]; } && webhook_url_teams_option="${webhook_url_teams_local}"
     
-    #Temporary verbose output testing stuff
-    log_verbose  "deadline_count_focus_option: $deadline_count_focus_option"
-    log_verbose  "deadline_count_hard_option: $deadline_count_hard_option"
-    log_verbose  "deferral_next_launch_default_option: $deferral_next_launch_default_option"
-    log_verbose  "interactiveModeOption: $interactiveModeOption"
-    log_verbose  "patch_week_start_day_option: $patch_week_start_day_option"
-    log_verbose  "workflow_disable_app_discovery_option: $workflow_disable_app_discovery_option"
-    log_verbose  "webhook_feature_option: $webhook_feature_option"
-    log_verbose  "webhook_url_slack_option: $webhook_url_slack_option"
-    log_verbose  "webhook_url_teams_option: $webhook_url_teams_option"
-
     write_status "Completed: Collecting preferences"
 }
 
@@ -1024,8 +1155,14 @@ workflow_startup() {
             overlayicon="/Applications/Manager.app/Contents/Resources/AppIcon.icns"
         elif [[ -e "/Library/Addigy/macmanage/MacManage.app" ]]; then
             overlayicon="/Library/Addigy/macmanage/MacManage.app/Contents/Resources/atom.icns"
-        elif [[ -e "/Library/Intune/Microsoft Intune Agent.app" ]]; then
-            overlayicon="/Library/Intune/Microsoft Intune Agent.app/Contents/Resources/AppIcon.icns"
+        elif [[ "$(profiles show | grep -A4 "Management Profile" | sed -n -e 's/^.*profileIdentifier: //p')" == "Microsoft.Profiles.MDM" ]]; then
+            # Managed by Intune
+            if [[ -e "/Library/Intune/Microsoft Intune Agent.app" ]]; then
+                overlayicon="/Library/Intune/Microsoft Intune Agent.app/Contents/Resources/AppIcon.icns"
+            elif [[ -e "/Applications/Company Portal.app" ]]; then
+            # Added for cases when the Intune Agent is not yet present
+                overlayicon="/Applications/Company Portal.app/Contents/Resources/AppIcon.icns"
+            fi
         elif [[ -e "/Applications/Workspace ONE Intelligent Hub.app" ]]; then
             overlayicon="/Applications/Workspace ONE Intelligent Hub.app/Contents/Resources/AppIcon.icns"
         elif [[ -e "/Applications/Kandji Self Service.app" ]]; then
@@ -1048,7 +1185,8 @@ workflow_startup() {
     else
         infoTextScriptVersion="${scriptVersion}"
     fi
-
+    
+    supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
     helpMessage="If you need assistance, please contact ${supportTeamName}:  \n- **Telephone:** ${supportTeamPhone}  \n- **Email:** ${supportTeamEmail}  \n- **Help Website:** ${supportTeamHyperlink}  \n\n**Computer Information:**  \n- **Operating System:**  $osVersion ($osBuild)  \n- **Serial Number:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Started:** $timestamp  \n- **Script Version:** $scriptVersion"
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -1417,7 +1555,7 @@ get_mdm(){
     # Check MDM server enrollment
     if [[ -n "$(profiles list -output stdout-xml | awk '/com.apple.mdm/ {print $1}' | tail -1)" ]]; then
         # If enrolled in an MDM server, get the MDM's server_url
-        server_url=$(/usr/bin/profiles list -output stdout-xml | grep 'ServerURL' | sed -n 's/.*<string>\(https:\/\/[^\/]*\).*/\1/p' )
+        server_url=$(/usr/bin/profiles list -output stdout-xml | grep -a1 'ServerURL' | sed -n 's/.*<string>\(https:\/\/[^\/]*\).*/\1/p' )
         if [[ -n "$server_url" ]]; then
             log_info "MDM server address: $server_url"
         else
@@ -1430,6 +1568,11 @@ get_mdm(){
     case "${server_url}" in
 		*jamf*)
 			log_info "MDM is Jamf"
+			mdmName="Jamf Pro"
+		;;
+		*microsoft*)
+			log_info "MDM is Intune"
+			mdmName="Microsoft Intune"
 		;;
 		*)
 			log_info "Unsure of MDM"
@@ -2266,11 +2409,23 @@ webHookMessage() {
     else
         if [[ $supportTeamHyperlink == "" ]]; then
             supportTeamHyperlink="https://www.slack.com"
+        else
+            supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
         fi
         # If Mac is managed by Jamf, get the Jamf URL to the computer
         if defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url &> /dev/null; then
             jamfProURL=$(/usr/bin/defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url)
-            jamfProComputerURL="${jamfProURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
+            mdmComputerURL="${jamfProURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
+        # If Mac is managed by Intune, get the Intune URL to the computer
+        elif [[ "$(profiles show | grep -A4 "Management Profile" | sed -n -e 's/^.*profileIdentifier: //p')" == "Microsoft.Profiles.MDM" ]]; then
+            mdmURL="https://intune.microsoft.com/#view/Microsoft_Intune_Devices/DeviceSettingsMenuBlade/~/overview/mdmDeviceId"
+            mdmComputerID="$(grep -rnwi '/Library/Logs/Microsoft/Intune' -e 'DeviceId:' | head -1 | grep -E -o 'DeviceId.{0,38}' | cut -d ' ' -f2)"
+            if [[ ! -z "$mdmComputerID" ]]; then
+                mdmComputerURL="${mdmURL}/${mdmComputerID}"
+            else
+            # For cases when the device id is not found in the logs
+                mdmComputerURL="https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMacOsMenu/~/macOsDevices"
+            fi
         fi
         log_info "Sending Slack WebHook"
         curl -s -X POST -H 'Content-type: application/json' \
@@ -2312,7 +2467,7 @@ webHookMessage() {
                 },
                         {
                     "type": "mrkdwn",
-                    "text": ">*Computer Record:*\n>'"$jamfProComputerURL"'"
+                    "text": ">*Computer Record:*\n>'"$mdmComputerURL"'"
                 }
             ]
         },
@@ -2323,12 +2478,12 @@ webHookMessage() {
                     "type": "button",
                     "text": {
                         "type": "plain_text",
-                        "text": "View computer in Jamf Pro",
+                        "text": "View computer in $mdmName",
                         "emoji": true
                     },
                     "style": "primary",
                     "action_id": "actionId-0",
-                    "url": "'"$jamfProComputerURL"'"
+                    "url": "'"$mdmComputerURL"'"
                 }
             ]
         }
@@ -2346,11 +2501,23 @@ webHookMessage() {
     else
         if [[ $supportTeamHyperlink == "" ]]; then
             supportTeamHyperlink="https://www.microsoft.com/en-us/microsoft-teams/"
+        else
+            supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
         fi
         # If Mac is managed by Jamf, get the Jamf URL to the computer
         if defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url &> /dev/null; then
             jamfProURL=$(/usr/bin/defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url)
-            jamfProComputerURL="${jamfProURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
+            mdmComputerURL="${jamfProURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
+        # If Mac is managed by Intune, get the Intune URL to the computer
+        elif [[ "$(profiles show | grep -A4 "Management Profile" | sed -n -e 's/^.*profileIdentifier: //p')" == "Microsoft.Profiles.MDM" ]]; then
+            mdmURL="https://intune.microsoft.com/#view/Microsoft_Intune_Devices/DeviceSettingsMenuBlade/~/overview/mdmDeviceId"
+            mdmComputerID="$(grep -rnwi '/Library/Logs/Microsoft/Intune' -e 'DeviceId:' | head -1 | grep -E -o 'DeviceId.{0,38}' | cut -d ' ' -f2)"
+            if [[ ! -z "$mdmComputerID" ]]; then
+                mdmComputerURL="${mdmURL}/${mdmComputerID}"
+            else
+            # For cases when the device id is not found in the logs
+                mdmComputerURL="https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMacOsMenu/~/macOsDevices"
+            fi
         fi
         log_info "Sending Teams WebHook"
         jsonPayload='{
@@ -2378,11 +2545,11 @@ webHookMessage() {
     }],
     "potentialAction": [{
         "@type": "OpenUri",
-        "name": "View in Jamf Pro",
+        "name": "View in $mdmName",
         "targets": [{
             "os": "default",
             "uri":
-            "'"$jamfProComputerURL"'"
+            "'"$mdmComputerURL"'"
         }]
     }]
 }'
