@@ -8,7 +8,7 @@
 #
 # HISTORY
 #
-#   Version 3.0.0-beta3, [11.14.2024]
+#   Version 3.0.0-beta4, [11.14.2024]
 #
 #
 ####################################################################################################
@@ -23,7 +23,7 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.0-beta3"
+scriptVersion="3.0.0-beta4"
 scriptDate="2024/11/14"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
@@ -65,6 +65,7 @@ echo "
 
     Deferral Timer Options:
     [--deferral-next-launch=minutes]
+    [--deferral-timer-menu=minutes,minutes,etc...]
     [--deferral-timer-focus=minutes]  [--deferral-timer-error=minutes]
     [--deferral-timer-reset-all]
 
@@ -147,8 +148,6 @@ set_defaults() {
     deferralTimer="300" # MDM Enabled
     
     deferral_timer_minutes=1440
-    
-    deferral_timer_menu_minutes=""
 
     deferralTimerAction="Defer" # MDM Enabled
 
@@ -803,8 +802,13 @@ manage_parameter_options() {
         previous_ifs="${IFS}"
         IFS=','
         local deferral_timer_menu_option_array
-        read -r -a deferral_timer_menu_option_array <<<"${deferral_timer_menu_option}"
-        for array_index in "${!deferral_timer_menu_option_array[@]}"; do
+        
+        # Split the string into an array, splitting on ','
+        deferral_timer_menu_option_array=("${(@s/,/)deferral_timer_menu_option}")
+        
+        array_length=${#deferral_timer_menu_option_array[@]}
+        
+        for (( array_index = 1; array_index <= array_length; array_index++ )); do
             if [[ "${deferral_timer_menu_option_array[array_index]}" -lt 2 ]]; then
                 log_status "Parameter Warning: Specified --deferral-timer-menu=minutes value of ${deferral_timer_menu_option_array[array_index]} minutes is too low, rounding up to 2 minutes."
                 deferral_timer_menu_option_array[array_index]=2
@@ -813,7 +817,10 @@ manage_parameter_options() {
                 deferral_timer_menu_option_array[array_index]=10080
             fi
         done
-        deferral_timer_menu_minutes="${deferral_timer_menu_option_array[*]}"
+        
+        # Join the array elements into a string separated by spaces
+        deferral_timer_menu_minutes="${(j:,:)deferral_timer_menu_option_array}"
+        
         defaults write "${appAutoPatchLocalPLIST}" DeferralTimerMenu -string "${deferral_timer_menu_minutes}"
         IFS="${previous_ifs}"
     elif [[ -n "${deferral_timer_menu_option}" ]] && ! [[ "${deferral_timer_menu_option}" =~ ${REGEX_CSV_WHOLE_NUMBERS} ]]; then
