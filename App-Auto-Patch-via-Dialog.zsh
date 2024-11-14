@@ -803,8 +803,6 @@ manage_parameter_options() {
         IFS=','
         local deferral_timer_menu_option_array
         
-        
-        
         # Split the string into an array, splitting on ','
         deferral_timer_menu_option_array=("${(@s/,/)deferral_timer_menu_option}")
         
@@ -822,11 +820,6 @@ manage_parameter_options() {
         
         # Join the array elements into a string separated by spaces
         deferral_timer_menu_minutes="${(j:,:)deferral_timer_menu_option_array}"
-        
-        
-        
-        
-        
         
         defaults write "${appAutoPatchLocalPLIST}" DeferralTimerMenu -string "${deferral_timer_menu_minutes}"
         IFS="${previous_ifs}"
