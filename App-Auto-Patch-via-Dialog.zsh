@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/zsh --no-rcs
 
 ####################################################################################################
 #
@@ -8,7 +8,7 @@
 #
 # HISTORY
 #
-#   Version 3.0.0-beta2, [11.10.2024]
+#   Version 3.0.0-beta3, [11.14.2024]
 #
 #
 ####################################################################################################
@@ -23,8 +23,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.0-beta2"
-scriptDate="2024/11/10"
+scriptVersion="3.0.0-beta3"
+scriptDate="2024/11/14"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -145,6 +145,10 @@ set_defaults() {
     installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore" # MDM Enabled
 
     deferralTimer="300" # MDM Enabled
+    
+    deferral_timer_minutes=1440
+    
+    deferral_timer_menu_minutes=""
 
     deferralTimerAction="Defer" # MDM Enabled
 
@@ -185,6 +189,8 @@ set_defaults() {
     NEXT_AUTO_LAUNCH_DEFAULT="60"
 
     REGEX_ANY_WHOLE_NUMBER="^[0-9]+$"
+    
+    REGEX_CSV_WHOLE_NUMBERS="^[0-9*,]+$"
 
     supportTeamName="Add IT Support" # MDM Enabled
 
@@ -207,6 +213,26 @@ set_defaults() {
     modelName=$( /usr/libexec/PlistBuddy -c 'Print :0:_items:0:machine_name' /dev/stdin <<< "$(system_profiler -xml SPHardwareDataType)" )
 
     timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
+    
+    # Deadline date display format.
+    DISPLAY_STRING_FORMAT_DATE="%a %b %d" # Formatting options can be found in the man page for the date command.
+    readonly DISPLAY_STRING_FORMAT_DATE
+    
+    #### Language for the defer button in dialogs when the deferral time is sometime today.
+    display_string_defer_today_button="Defer"
+    
+    #### Language for the defer button in dialogs when the deferral time is tomorrow.
+    display_string_defer_tomorrow_button="Defer Until Tomorrow"
+    
+    #### Language for the defer button in dialogs when the deferral time is in the future.
+    display_string_defer_future_button="Defer Until"
+    
+    ### Language for various deferral timer durations.
+    display_string_minutes="Minutes"
+    display_string_hour="Hour"
+    display_string_hours="Hours"
+    display_string_and="and"
+
 
 }
 
@@ -258,6 +284,9 @@ get_options() {
             ;;
             -d|--debug-mode-off)
                 debug_mode_option="FALSE"
+            ;;
+            --deferral-timer-menu=*)
+                deferral_timer_menu_option="${1##*=}"
             ;;
             --deferral-timer-focus=*)
                 deferral_timer_focus_option="${1##*=}"
@@ -354,6 +383,8 @@ get_preferences() {
     # Collect Managed PLIST preferences if any
     if [[ -f ${appAutoPatchManagedPLIST}.plist ]]; then
         log_verbose "Managed preference file: ${appAutoPatchManagedPLIST}:\n$(defaults read "${appAutoPatchManagedPLIST}" 2> /dev/null)"
+        local deferral_timer_menu_managed
+        deferral_timer_menu_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerMenu 2>/dev/null)
         local deferral_timer_focus_managed
         deferral_timer_focus_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerFocus 2> /dev/null)
         local deferral_timer_error_managed
@@ -421,6 +452,8 @@ get_preferences() {
         # This is where any preferences locally would be collected, example below
         local script_version_local
         script_version_local=$(defaults read "${appAutoPatchLocalPLIST}" AAPVersion 2> /dev/null)
+        local deferral_timer_menu_local
+        deferral_timer_menu_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerMenu 2>/dev/null)
         local deferral_timer_focus_local
         deferral_timer_focus_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerFocus 2> /dev/null)
         local deferral_timer_error_local
@@ -484,6 +517,8 @@ get_preferences() {
     log_verbose  "Local preference file before startup validation: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
 
     # Need logic to ensures the priority order of managed preference overrides the new input option which overrides the saved local preference.
+    [[ -n "${deferral_timer_menu_managed}" ]] && deferral_timer_menu_option="${deferral_timer_menu_managed}"
+    { [[ -z "${deferral_timer_menu_managed}" ]] && [[ -z "${deferral_timer_menu_option}" ]] && [[ -n "${deferral_timer_menu_local}" ]]; } && deferral_timer_menu_option="${deferral_timer_menu_local}"
     [[ -n "${deferral_timer_focus_managed}" ]] && deferral_timer_focus_option="${deferral_timer_focus_managed}"
     { [[ -z "${deferral_timer_focus_managed}" ]] && [[ -z "${deferral_timer_focus_option}" ]] && [[ -n "${deferral_timer_focus_local}" ]]; } && deferral_timer_focus_option="${deferral_timer_focus_local}"
     [[ -n "${deferral_timer_error_managed}" ]] && deferral_timer_error_option="${deferral_timer_error_managed}"
@@ -758,7 +793,34 @@ manage_parameter_options() {
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${patch_week_start_day}" ]]; } && log_verbose "patch_week_start_day is: ${patch_week_start_day}"
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${workflow_disable_app_discovery_option}" ]]; } && log_verbose "workflow_disable_app_discovery_option is: ${workflow_disable_app_discovery_option}"
     
-
+    # Validate ${deferral_timer_menu_option} input and if valid set ${deferral_timer_menu_minutes} and save to ${appAutoPatchLocalPLIST}.
+    local previous_ifs
+    if [[ "${deferral_timer_menu_option}" == "X" ]]; then
+        log_status "Status: Deleting local preference for the --deferral-timer-menu option, defaulting to ${deferral_timer_minutes} minutes."
+        defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerMenu 2>/dev/null
+        unset deferral_timer_menu_option
+    elif [[ -n "${deferral_timer_menu_option}" ]] && [[ "${deferral_timer_menu_option}" =~ ${REGEX_CSV_WHOLE_NUMBERS} ]]; then
+        previous_ifs="${IFS}"
+        IFS=','
+        local deferral_timer_menu_option_array
+        read -r -a deferral_timer_menu_option_array <<<"${deferral_timer_menu_option}"
+        for array_index in "${!deferral_timer_menu_option_array[@]}"; do
+            if [[ "${deferral_timer_menu_option_array[array_index]}" -lt 2 ]]; then
+                log_status "Parameter Warning: Specified --deferral-timer-menu=minutes value of ${deferral_timer_menu_option_array[array_index]} minutes is too low, rounding up to 2 minutes."
+                deferral_timer_menu_option_array[array_index]=2
+            elif [[ "${deferral_timer_menu_option_array[array_index]}" -gt 10080 ]]; then
+                log_status "Parameter Warning: Specified --deferral-timer-menu=minutes value of ${deferral_timer_menu_option_array[array_index]} minutes is too high, rounding down to 10080 minutes (1 week)."
+                deferral_timer_menu_option_array[array_index]=10080
+            fi
+        done
+        deferral_timer_menu_minutes="${deferral_timer_menu_option_array[*]}"
+        defaults write "${appAutoPatchLocalPLIST}" DeferralTimerMenu -string "${deferral_timer_menu_minutes}"
+        IFS="${previous_ifs}"
+    elif [[ -n "${deferral_timer_menu_option}" ]] && ! [[ "${deferral_timer_menu_option}" =~ ${REGEX_CSV_WHOLE_NUMBERS} ]]; then
+        log_status "Parameter Error: The --deferral-timer-menu=minutes,minutes,etc... value must only contain numbers and commas (no spaces)."
+        option_error="TRUE"
+    fi
+    
     # Validate ${deferral_timer_focus_option} input and if valid set ${deferral_timer_focus_minutes} and save to ${appAutoPatchLocalPLIST}. If there is no ${deferral_timer_focus_minutes} then set it to ${next_auto_launch_minutes}.
     if [[ "${deferral_timer_focus_option}" == "X" ]]; then
         log_status "Deleting local preference for the --deferral-timer-focus option, defaulting to ${next_auto_launch_minutes} minutes."
@@ -1965,11 +2027,58 @@ swiftDialogUpdate(){
     
 }
 
+set_deferral_menu() {
+    # Split the deferral_timer_menu_minutes into an array
+    deferral_timer_menu_minutes_array=("${(@s/,/)deferral_timer_menu_minutes}")
+    
+    # Check if deferral_timer_menu_minutes is not empty
+    if [[ -n "${deferral_timer_menu_minutes}" ]]; then
+        # Initialize deferral_timer_menu_display_array as empty array
+        deferral_timer_menu_display_array=()
+        # Set the current workflow time epoch
+        workflow_time_epoch=$(date +%s)
+        # Loop over the array indices
+        for array_index in {1..${#deferral_timer_menu_minutes_array[@]}}; do
+            minutes=${deferral_timer_menu_minutes_array[array_index]}
+            deferral_timer_epoch_temp=$((workflow_time_epoch + minutes * 60))
+            # Calculate the number of days between now and deferral time
+            deferral_timer_days_away=$(((deferral_timer_epoch_temp - workflow_time_epoch) / 86400))
+            
+            if [[ $minutes -lt 60 ]]; then
+                deferral_timer_menu_display_array+=("${display_string_defer_today_button} ${minutes} ${display_string_minutes}")
+            elif [[ $minutes -eq 60 ]]; then
+                deferral_timer_menu_display_array+=("${display_string_defer_today_button} 1 ${display_string_hour}")
+            elif [[ $minutes -gt 60 && $minutes -lt 1440 ]]; then
+                hours=$((minutes / 60))
+                remaining_minutes=$((minutes % 60))
+                if [[ $remaining_minutes -eq 0 ]]; then
+                    deferral_timer_menu_display_array+=("${display_string_defer_today_button} ${hours} ${display_string_hours}")
+                else
+                    deferral_timer_menu_display_array+=("${display_string_defer_today_button} ${hours} ${display_string_hours} ${display_string_and} ${remaining_minutes} ${display_string_minutes}")
+                fi
+            elif [[ $minutes -ge 1440 && $minutes -lt 2880 ]]; then
+                deferral_timer_menu_display_array+=("${display_string_defer_tomorrow_button}")
+            else
+                # Format the future date
+                formatted_date=$(date -r "${deferral_timer_epoch_temp}" "+${DISPLAY_STRING_FORMAT_DATE}")
+                # For testing purposes, override the date to match expected output
+                #formatted_date="Fri Jan 02"
+                deferral_timer_menu_display_array+=("${display_string_defer_future_button} ${formatted_date}")
+            fi
+        done
+        # Join the array elements into a single string with commas
+        display_string_deferral_menu="${(j:, :)deferral_timer_menu_display_array}"
+        display_string_defer_button="${display_string_defer_today_button}"
+    fi
+}
+
 dialog_install_or_defer() {
     if [[ -z $display_string_deadline_count ]]; then 
         display_string_deadline_count="Unlimited"
     fi
-	
+
+    [[ -n "${deferral_timer_menu_minutes}" ]] && set_deferral_menu
+    
 	action=$( echo $deferralTimerAction | tr '[:upper:]' '[:lower:]' )
 	infobuttontext="Defer"
 	infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $display_string_deadline_count"
@@ -1977,17 +2086,32 @@ dialog_install_or_defer() {
 	height=480
 	
 	# Create the deferrals available dialog options and content
-	deferralDialogContent=(
-		--title "$appTitle"
-		--message "$message"
-		--helpmessage "$helpMessage"
-		--icon "$icon"
-		--overlayicon "$overlayicon"
-		--infobuttontext "$infobuttontext"
-		--infobox "$infobox"
-		--timer $deferralTimer
-		--button1text "Continue"
-	)
+    if [[ -n "${deferral_timer_menu_minutes}" ]]; then
+        deferralDialogContent=(
+            --title "$appTitle"
+            --message "$message"
+            --helpmessage "$helpMessage"
+            --icon "$icon"
+            --overlayicon "$overlayicon"
+            --infobuttontext "$infobuttontext"
+            --infobox "$infobox"
+            --timer $deferralTimer
+            --button1text "Continue"
+            --selecttitle "Defer updates for:" --selectvalues $display_string_deferral_menu
+        )
+    else
+        deferralDialogContent=(
+            --title "$appTitle"
+            --message "$message"
+            --helpmessage "$helpMessage"
+            --icon "$icon"
+            --overlayicon "$overlayicon"
+            --infobuttontext "$infobuttontext"
+            --infobox "$infobox"
+            --timer $deferralTimer
+            --button1text "Continue"
+        )
+    fi
 			
 	deferralDialogOptions=(
 		--position bottomright
@@ -1999,16 +2123,19 @@ dialog_install_or_defer() {
 		--titlefont size=18
 		--messagefont size=11
 		--height $height
+        --alwaysreturninput
 		--commandfile "$dialogCommandFile"
 	)
-	"$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}"
+	SELECTION=$("$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}")
 	dialogOutput=$?
 	
 	case "${dialogOutput}" in
 		3)
 			dialog_user_choice_install="FALSE"
 			if [[ -n "${deferral_timer_menu_minutes}" ]]; then
-				deferral_timer_minutes="${deferral_timer_menu_minutes_array[${dialog_response}]}"
+                INDEX_CHOICE=$(echo "$SELECTION" | grep "SelectedIndex" | awk -F ": " '{print $NF}')
+                INDEX_CHOICE=$((INDEX_CHOICE+1))
+				deferral_timer_minutes="${deferral_timer_menu_minutes_array[${INDEX_CHOICE}]}"
 				log_status "User chose to defer update for ${deferral_timer_minutes} minutes."
 				write_status "Pending: User chose to defer update for ${deferral_timer_minutes} minutes."
 			else
@@ -2019,7 +2146,9 @@ dialog_install_or_defer() {
 		4)
 			dialog_user_choice_install="FALSE"
 			if [[ -n "${deferral_timer_menu_minutes}" ]]; then
-				deferral_timer_minutes="${deferral_timer_menu_minutes_array[${dialog_response}]}"
+                INDEX_CHOICE=$(echo "$SELECTION" | grep "SelectedIndex" | awk -F ": " '{print $NF}')
+                INDEX_CHOICE=$((INDEX_CHOICE+1))
+                deferral_timer_minutes="${deferral_timer_menu_minutes_array[${INDEX_CHOICE}]}"
 				log_status "Display timeout automatically chose to defer update for ${deferral_timer_minutes} minutes."
 				write_status "Pending: Display timeout automatically chose to defer update for ${deferral_timer_minutes} minutes."
 			else
@@ -2813,8 +2942,8 @@ main() {
                     log_notice "Will auto launch in ${next_auto_launch_minutes} minutes."
                     set_auto_launch_deferral
                 else # The user chose to defer. 
-                    next_auto_launch_minutes="1440" #Set auto launch for 24 hours
-                    log_notice "User chose to defer, trying again in ${next_auto_launch_minutes} minutes."
+                    next_auto_launch_minutes=${deferral_timer_minutes} 
+                    log_notice "User chose to defer, trying again in ${deferral_timer_minutes} minutes."
                     set_auto_launch_deferral
                 fi
             fi
