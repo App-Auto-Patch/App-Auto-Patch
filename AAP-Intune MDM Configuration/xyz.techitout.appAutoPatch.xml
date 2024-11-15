@@ -25,7 +25,7 @@
 <key>DeferralTimerAction</key>
 <string>Defer</string>
 <key>DeferralTimerMenu</key>
-<integer>30,60,90,480,720,1440,2880</integer>
+<string>30,60,90,480,720,1440,2880</string>
 <key>DeadlineCountFocus</key>
 <integer>3</integer>
 <key>DeadlineHardCount</key>
