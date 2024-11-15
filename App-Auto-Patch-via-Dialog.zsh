@@ -177,6 +177,8 @@ set_defaults() {
 
     dialogTargetVersion="2.4.0"
 
+    dialogOnTop="FALSE" # MDM Enabled
+
     reset_defaults_option="FALSE"
 
     useOverlayIcon="TRUE" # MDM Enabled
@@ -430,6 +432,8 @@ get_preferences() {
         unattended_exit_managed=$(defaults read "${appAutoPatchManagedPLIST}" UnattendedExit 2> /dev/null)
         local unattended_exit_seconds_managed
         unattended_exit_seconds_managed=$(defaults read "${appAutoPatchManagedPLIST}" UnattendedExitSeconds 2> /dev/null)
+        local dialog_on_top_managed
+        dialog_on_top_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogOnTop 2> /dev/null)
         local use_overlay_icon_managed
         use_overlay_icon_managed=$(defaults read "${appAutoPatchManagedPLIST}" UseOverlayIcon 2> /dev/null)
         local remove_installomator_path_managed
@@ -499,6 +503,8 @@ get_preferences() {
         unattended_exit_local=$(defaults read "${appAutoPatchLocalPLIST}" UnattendedExit 2> /dev/null)
         local unattended_exit_seconds_local
         unattended_exit_seconds_local=$(defaults read "${appAutoPatchLocalPLIST}" UnattendedExitSeconds 2> /dev/null)
+        local dialog_on_top_local
+        dialog_on_top_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogOnTop 2> /dev/null)
         local use_overlay_icon_local
         use_overlay_icon_local=$(defaults read "${appAutoPatchLocalPLIST}" UseOverlayIcon 2> /dev/null)
         local remove_installomator_path_local
@@ -566,6 +572,8 @@ get_preferences() {
     { [[ -z "${unattended_exit_managed}" ]] && [[ -n "${unattendedExit}" ]] && [[ -n "${unattended_exit_local}" ]]; } && unattendedExit="${unattended_exit_local}"
     [[ -n "${unattended_exit_seconds_managed}" ]] && unattendedExitSeconds="${unattended_exit_seconds_managed}"
     { [[ -z "${unattended_exit_seconds_managed}" ]] && [[ -n "${unattendedExitSeconds}" ]] && [[ -n "${unattended_exit_seconds_local}" ]]; } && unattendedExitSeconds="${unattended_exit_seconds_local}"
+    [[ -n "${dialog_on_top_managed}" ]] && dialogOnTop="${dialog_on_top_managed}"
+    { [[ -z "${dialog_on_top_managed}" ]] && [[ -n "${dialogOnTop}" ]] && [[ -n "${dialog_on_top_local}" ]]; } && dialogOnTop="${dialog_on_top_local}"
     [[ -n "${use_overlay_icon_managed}" ]] && useOverlayIcon="${use_overlay_icon_managed}"
     { [[ -z "${use_overlay_icon_managed}" ]] && [[ -n "${useOverlayIcon}" ]] && [[ -n "${use_overlay_icon_local}" ]]; } && useOverlayIcon="${use_overlay_icon_local}"
     [[ -n "${remove_installomator_path_managed}" ]] && removeInstallomatorPath="${remove_installomator_path_managed}"
@@ -603,6 +611,7 @@ get_preferences() {
     log_verbose  "daysUntilReset: $daysUntilReset"
     log_verbose  "unattendedExit: $unattendedExit"
     log_verbose  "unattendedExitSeconds: $unattendedExitSeconds"
+    log_verbose  "dialogOnTop: $dialogOnTop"
     log_verbose  "useOverlayIcon: $useOverlayIcon"
     log_verbose  "removeInstallomatorPath: $removeInstallomatorPath"
     log_verbose  "supportTeamName: $supportTeamName"
@@ -1283,6 +1292,10 @@ workflow_startup() {
         --icon "$icon"
         --overlayicon "$overlayicon"
     )
+
+	if [[ "$dialogOnTop" == "TRUE" ]]; then
+		dialogPatchingConfigurationOptions+=(--ontop)
+	fi
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # "Discover" dialog Title, Message and Icon
@@ -1303,6 +1316,10 @@ workflow_startup() {
         --quitkey k
     )
     
+	if [[ "$dialogOnTop" == "TRUE" ]]; then
+		dialogDiscoverConfigurationOptions+=(--ontop)
+	fi
+
     #Running this function for something webhook related
     gather_error_log
 
@@ -2133,6 +2150,11 @@ dialog_install_or_defer() {
         --alwaysreturninput
 		--commandfile "$dialogCommandFile"
 	)
+
+	if [[ "$dialogOnTop" == "TRUE" ]]; then
+		deferralDialogOptions+=(--ontop)
+	fi
+
 	SELECTION=$("$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}")
 	dialogOutput=$?
 	
@@ -2200,6 +2222,11 @@ dialog_install_hard_deadline() {
 		--height $height
 		--commandfile "$dialogCommandFile"
 	)
+	
+	if [[ "$dialogOnTop" == "TRUE" ]]; then
+		deferralDialogOptions+=(--ontop)
+	fi
+
 	"$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}"
 	dialogOutput=$?
 	

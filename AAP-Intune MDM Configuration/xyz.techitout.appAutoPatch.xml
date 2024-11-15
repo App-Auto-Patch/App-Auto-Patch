@@ -24,6 +24,8 @@
 <integer>300</integer>
 <key>DeferralTimerAction</key>
 <string>Defer</string>
+<key>DeferralTimerMenu</key>
+<string>30,60,90,480,720,1440,2880</string>
 <key>DeadlineCountFocus</key>
 <integer>3</integer>
 <key>DeadlineHardCount</key>
@@ -36,6 +38,8 @@
 <string>FALSE</string>
 <key>UnattendedExitSeconds</key>
 <integer>60</integer>
+<key>DialogOnTop</key>
+<string>TRUE</string>
 <key>UseOverlayIcon</key>
 <string>TRUE</string>
 <key>RemoveInstallomatorPath</key>
