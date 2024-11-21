@@ -209,6 +209,7 @@ useLatestAvailableInstallomatorScriptVersion="true"                             
 webhookEnabled="false"                                                          # Enables the webhook feature [ all | failures | false (default) ]
 teamsURL=""                                                                     # Teams webhook URL                         
 slackURL=""                                                                     # Slack webhook URL
+googlechatURL=""								# Google Chat webhook URL
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Custom Branding, Overlay Icon, etc
@@ -2081,6 +2082,126 @@ else
 
 fi
 
+}
+
+ # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+ # Google Chat notification
+ # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    
+    if [[ -z "$googleChatURL" ]]; then
+        updateScriptLog "No Google Chat Webhook configured"
+    else
+        updateScriptLog "Sending Google Chat WebHook"
+        # Remove First blank line in results if it exists. This is for formatting and prettifying the results       
+        if [[ "${formatted_result:0:4}" != "None" ]]; then
+            formatted_result=$(echo "$formatted_result" | sed '1d')
+        fi
+        if [[ "${formatted_error_result:0:4}" != "None" ]]; then
+            formatted_error_result=$(echo "$formatted_error_result" | sed '1d')
+        fi
+
+        # Construct the JSON payload
+        jsonPayload=$(cat <<EOF
+{
+    "cardsV2": [
+        {
+            "cardId": "ruffwearaap",
+            "card": {
+                "header": {
+                    "title": "${appTitle}",
+                    "subtitle": "${webhookStatus}",
+                    "imageUrl": "https://developers.google.com/chat/images/quickstart-app-avatar.png", #link to an image of your liking
+                    "imageType": "SQUARE"
+                },
+                "sections": [
+                    {
+                        "widgets": [
+                            {
+                                "columns": {
+                                    "columnItems": [
+                                        {
+                                            "horizontalSizeStyle": "FILL_AVAILABLE_SPACE",
+                                            "horizontalAlignment": "START",
+                                            "verticalAlignment": "TOP",
+                                            "widgets": [
+                                                {
+                                                    "decoratedText": {
+                                                        "topLabel": "Computer Name",
+                                                        "text": "${computerName}"
+                                                    }
+                                                },
+                                                {
+                                                    "decoratedText": {
+                                                        "topLabel": "Computer Model",
+                                                        "text": "${modelName}"
+                                                    }
+                                                },
+                                                {
+                                                    "decoratedText": {
+                                                        "topLabel": "Current User",
+                                                        "text": "${loggedInUser}"
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "verticalAlignment": "TOP",
+                                            "widgets": [
+                                                {
+                                                    "decoratedText": {
+                                                        "topLabel": "Updated"
+                                                    }
+                                                },
+                                                {
+                                                    "textParagraph": {
+                                                        "text": "$formatted_result"
+                                                    }
+                                                },
+                                                {
+                                                    "decoratedText": {
+                                                        "topLabel": "Errors"
+                                                    }
+                                                },
+                                                {
+                                                    "textParagraph": {
+                                                        "text": "$formatted_error_result"
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "divider": {}
+                            },
+                            {
+                                "buttonList": {
+                                    "buttons": [
+                                        {
+                                            "text": "View Computer in Jamf Pro",
+                                            "type": "FILLED_TONAL",
+                                            "onClick": {
+                                                "openLink": {
+                                                    "url": "$jamfProComputerURL"
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}
+EOF
+)
+        # Send the JSON payload using curl
+        curl -s -X POST -H "Content-Type: application/json; charset=UTF-8" -d "$jsonPayload" "$googleChatURL"
+    fi
 }
 
 oldIFS=$IFS
