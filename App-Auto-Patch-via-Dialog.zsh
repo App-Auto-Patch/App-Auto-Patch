@@ -2105,7 +2105,7 @@ fi
 {
     "cardsV2": [
         {
-            "cardId": "ruffwearaap",
+            "cardId": "appautopatch",
             "card": {
                 "header": {
                     "title": "${appTitle}",
