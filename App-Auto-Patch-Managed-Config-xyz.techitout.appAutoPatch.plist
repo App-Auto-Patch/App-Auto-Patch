@@ -24,5 +24,317 @@
   <string>longURL</string>
   <key>WebhookURLTeams</key>
   <string>longerURL</string>
+  <key>IgnoredLabels</key>
+  <string>microsoft* googlechrome*</string>
+  <key>RequiredLabels</key>
+  <string>desktoppr dockutil nudgesuite</string>
+  <key>OptionalLabels</key>
+  <string>1password8 adobereaderdc amazonchime apparency firefoxpkg vlc zoom</string>
+  <key>AppTitle</key>
+  <string>App Auto-Patch</string>
+  <key>ConvertAppsInHomeFolder</key>
+  <string>TRUE</string>
+  <key>IgnoreAppsInHomeFolder</key>
+  <string>FALSE</string>
+  <key>InstallomatorOptions</key>
+  <string>BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=microsoft</string>
+  <key>DeferralTimer</key>
+  <integer>300</integer>
+  <key>DeferralTimerAction</key>
+  <string>Defer</string>
+  <key>DeferralTimerMenu</key>
+  <string>30,60,90,480,720,1440,2880</string>
+  <key>DaysUntilReset</key>
+  <integer>7</integer>
+  <key>UnattendedExit</key>
+  <string>FALSE</string>
+  <key>UnattendedExitSeconds</key>
+  <integer>60</integer>
+  <key>DialogOnTop</key>
+  <string>TRUE</string>
+  <key>UseOverlayIcon</key>
+  <string>TRUE</string>
+  <key>RemoveInstallomatorPath</key>
+  <string>FALSE</string>
+  <key>VerboseMode</key>
+  <string>TRUE</string>
+  <key>SupportTeamName</key>
+  <string>Company Support Team</string>
+  <key>SupportTeamPhone</key>
+  <string>555-555-5555</string>
+  <key>SupportTeamEmail</key>
+  <string>support@company.com</string>
+  <key>SupportTeamWebsite</key>
+  <string>support.company.com</string>
+  <key>userInterface</key>
+  <dict>
+    <key>fallbackLanguage</key>
+    <string>en</string>
+    <key>updateElements</key>
+    <dict>
+      <key>en</key>
+      <dict>
+        <key>AppTitle</key>
+        <string>App Auto-Patch via Intune</string>
+        <key>deferral</key>
+        <dict>
+          <key>DISPLAY_STRING_FORMAT_DATE</key>
+          <string>%a %b %d</string>
+          <key>display_string_defer_today_button</key>
+          <string>Defer</string>
+          <key>display_string_defer_tomorrow_button</key>
+          <string>Defer Until Tomorrow</string>
+          <key>display_string_defer_future_button</key>
+          <string>Defer Until</string>
+          <key>display_string_minutes</key>
+          <string>Analyzing</string>
+          <key>display_string_hour</key>
+          <string>Hour</string>
+          <key>display_string_hours</key>
+          <string>Hours</string>
+          <key>display_string_and</key>
+          <string>and</string>
+          <key>display_string_deferral_button1</key>
+          <string>Continue</string>
+          <key>display_string_deferral_infobox1</key>
+          <string>After the timer expires, updates will automatically</string>
+          <key>display_string_deferral_infobox2</key>
+          <string>Deferrals Remaining:</string>
+          <key>display_string_deferral_infobutton</key>
+          <string>Defer</string>
+          <key>display_string_deferral_message</key>
+          <string>You can **Defer** the updates or **Continue** to close the applications and apply updates.  \n\n There are ($numberOfUpdates) application(s) that require updates:</string>
+          <key>display_string_deferral_selecttitle</key>
+          <string>Defer updates for:</string>
+          <key>display_string_deferral_unlimited</key>
+          <string>Unlimited</string>
+        </dict>
+        <key>deferraldeadline</key>
+        <dict>
+          <key>display_string_deferraldeadline_button1</key>
+          <string>Continue</string>
+          <key>display_string_deferraldeadline_infobox</key>
+          <string>Updates will automatically install after the timer expires. \n\n #### No Deferrals Remaining ####</string>
+          <key>display_string_deferraldeadline_infobutton</key>
+          <string>Max Deferrals Reached</string>
+          <key>display_string_deferraldeadline_message</key>
+          <string>There are $numberOfUpdates application(s) that require updates\n\n You have deferred the maximum number of ${display_string_deadline_count_maximum} times.</string>
+        </dict>
+        <key>discovery</key>
+        <dict>
+          <key>display_string_discovery_message</key>
+          <string>Analyzing installed apps</string>
+          <key>display_string_discovery_message2</key>
+          <string>Analyzing</string>
+          <key>display_string_discovery_progress</key>
+          <string>Scanning</string>
+        </dict>
+        <key>installomator</key>
+        <dict>
+          <key>display_string_installomator_alreadyinstalled</key>
+          <string>Already installed from App Store. Not replaced.</string>
+          <key>display_string_installomator_error</key>
+          <string>Error</string>
+          <key>display_string_installomator_finishing</key>
+          <string>Finishing</string>
+          <key>display_string_installomator_downloading</key>
+          <string>Downloading</string>
+          <key>display_string_installomator_installing</key>
+          <string>Installing</string>
+          <key>display_string_installomator_latestversion</key>
+          <string>Latest version already installed</string>
+          <key>display_string_installomator_updating</key>
+          <string>Updating</string>
+          <key>display_string_installomator_verifying</key>
+          <string>Verifying</string>
+        </dict>
+        <key>help_message</key>
+        <dict>
+          <key>display_string_help_message</key>
+          <string>If you need assistance, please contact ${supportTeamName}:  \n- **Telephone:** ${supportTeamPhone}  \n- **Email:** ${supportTeamEmail}  \n- **Help Website:** ${supportTeamHyperlink}  \n\n**Computer Information:**  \n- **Operating System:**  $osVersion ($osBuild)  \n- **Serial Number:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Started:** $timestamp  \n- **Script Version:** $scriptVersion</string>
+        </dict>
+        <key>patching</key>
+        <dict>
+          <key>display_string_complete_progress</key>
+          <string>Updates Complete!</string>
+          <key>display_string_patching_button1</key>
+          <string>Done</string>
+          <key>display_string_patching_checking</key>
+          <string>Checking</string>
+          <key>display_string_patching_infobox</key>
+          <string>**Computer Name:**  \n\n- $computerName  \n\n**macOS Version:**  \n\n- $osVersion ($osBuild)</string>
+          <key>display_string_patching_infobox_updates</key>
+          <string>Updates:</string>
+          <key>display_string_patching_message</key>
+          <string>Updating the following apps …</string>
+          <key>display_string_patching_progress</key>
+          <string>Processing</string>
+        </dict>
+        <key>uptodate</key>
+        <dict>
+          <key>display_string_uptodate_button1</key>
+          <string>Close</string>
+          <key>display_string_uptodate_message</key>
+          <string>All apps are up to date.</string>
+        </dict>
+        <key>webhook</key>
+        <dict>
+          <key>display_string_webhook_computermodel</key>
+          <string>Computer Model:</string>
+          <key>display_string_webhook_computerrecord</key>
+          <string>Computer Record:</string>
+          <key>display_string_webhook_computerserial</key>
+          <string>Computer Name (Serial Number):</string>
+          <key>display_string_webhook_currentuser</key>
+          <string>Current User:</string>
+          <key>display_string_webhook_errors</key>
+          <string>Errors:</string>
+          <key>display_string_webhook_status_error</key>
+          <string>FAILURES DETECTED: Applications updates were installed with some errors</string>
+          <key>display_string_webhook_status_success</key>
+          <string>Success: Apps updated (S/N ${serialNumber})</string>
+          <key>display_string_webhook_status_uptodate</key>
+          <string>Success: Apps already up-to-date (S/N ${serialNumber})</string>
+          <key>display_string_webhook_updates</key>
+          <string>Updates:</string>
+          <key>display_string_webhook_user</key>
+          <string>User:</string>
+          <key>display_string_webhook_viewin</key>
+          <string>View computer in</string>
+        </dict>
+      </dict>
+      <key>es</key>
+      <dict>
+        <key>AppTitle</key>
+        <string>App Parche Automático via Intune</string>
+        <key>deferral</key>
+        <dict>
+          <key>DISPLAY_STRING_FORMAT_DATE</key>
+          <string>%a %b %d</string>
+          <key>display_string_defer_today_button</key>
+          <string>Aplazar</string>
+          <key>display_string_defer_tomorrow_button</key>
+          <string>Aplazar hasta mañana</string>
+          <key>display_string_defer_future_button</key>
+          <string>Aplazar hasta</string>
+          <key>display_string_minutes</key>
+          <string>Analizando</string>
+          <key>display_string_hour</key>
+          <string>Hora</string>
+          <key>display_string_hours</key>
+          <string>Horas</string>
+          <key>display_string_and</key>
+          <string>y</string>
+          <key>display_string_deferral_button1</key>
+          <string>Continuar</string>
+          <key>display_string_deferral_infobox1</key>
+          <string>Una vez que expire el temporizador, las actualizaciones se automáticamente</string>
+          <key>display_string_deferral_infobox2</key>
+          <string>Aplazamientos restantes:</string>
+          <key>display_string_deferral_infobutton</key>
+          <string>Aplazar</string>
+          <key>display_string_deferral_message</key>
+          <string>Puede **Aplazar** las actualizaciones o **Continuar** para cerrar las aplicaciones y aplicar las actualizaciones..  \n\n Hay ($numberOfUpdates) aplicaciones que requieren actualizaciones:</string>
+          <key>display_string_deferral_selecttitle</key>
+          <string>Aplazar actualizaciones para:</string>
+          <key>display_string_deferral_unlimited</key>
+          <string>Ilimitado</string>
+        </dict>
+        <key>deferraldeadline</key>
+        <dict>
+          <key>display_string_deferraldeadline_button1</key>
+          <string>Continuar</string>
+          <key>display_string_deferraldeadline_infobox</key>
+          <string>Las actualizaciones se instalarán automáticamente después de que expire el temporizador.. \n\n #### No quedan aplazamientos ####</string>
+          <key>display_string_deferraldeadline_infobutton</key>
+          <string>Se alcanzaron los aplazamientos máximos</string>
+          <key>display_string_deferraldeadline_message</key>
+          <string>Hay $numberOfUpdates aplicacion(es) que requieren actualizaciones\n\n Has aplazado el número máximo de ${display_string_deadline_count_maximum} veces.</string>
+        </dict>
+        <key>discovery</key>
+        <dict>
+          <key>display_string_discovery_message</key>
+          <string>Analizando aplicaciones instaladas</string>
+          <key>display_string_discovery_message2</key>
+          <string>Analizando</string>
+          <key>display_string_discovery_progress</key>
+          <string>Exploración</string>
+        </dict>
+        <key>installomator</key>
+        <dict>
+          <key>display_string_installomator_alreadyinstalled</key>
+          <string>Ya instalado desde App Store. No reemplazado.</string>
+          <key>display_string_installomator_error</key>
+          <string>ErrorES</string>
+          <key>display_string_installomator_finishing</key>
+          <string>Refinamiento</string>
+          <key>display_string_installomator_downloading</key>
+          <string>Descargando</string>
+          <key>display_string_installomator_installing</key>
+          <string>Instalación</string>
+          <key>display_string_installomator_latestversion</key>
+          <string>Última versión ya instalada</string>
+          <key>display_string_installomator_updating</key>
+          <string>Actualizando</string>
+          <key>display_string_installomator_verifying</key>
+          <string>Verificando</string>
+        </dict>
+        <key>help_message</key>
+        <dict>
+          <key>display_string_help_message</key>
+          <string>Si necesita ayuda, póngase en contacto con ${supportTeamName}:  \n- **Teléfono:** ${supportTeamPhone}  \n- **Correo electrónico:** ${supportTeamEmail}  \n- **Sitio web de ayuda:** ${supportTeamHyperlink}  \n\n**Información de la computadora:**  \n- **Sistema operativo:**  $osVersion ($osBuild)  \n- **Número de serie:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Comenzó:** $timestamp  \n- **Versión del guión:** $scriptVersion</string>
+        </dict>
+        <key>patching</key>
+        <dict>
+          <key>display_string_complete_progress</key>
+          <string>Actualizaciones completas!</string>
+          <key>display_string_patching_button1</key>
+          <string>Hecho</string>
+          <key>display_string_patching_checking</key>
+          <string>De Cheques</string>
+          <key>display_string_patching_infobox</key>
+          <string>**Nombre de la Computadora:**  \n\n- $computerName  \n\n**Versión de macOS:**  \n\n- $osVersion ($osBuild)</string>
+          <key>display_string_patching_infobox_updates</key>
+          <string>Actualizaciones:</string>
+          <key>display_string_patching_message</key>
+          <string>Actualizando las siguientes aplicaciones …</string>
+          <key>display_string_patching_progress</key>
+          <string>Tratamiento</string>
+        </dict>
+        <key>uptodate</key>
+        <dict>
+          <key>display_string_uptodate_button1</key>
+          <string>Cerca</string>
+          <key>display_string_uptodate_message</key>
+          <string>Todas las aplicaciones están actualizadas.</string>
+        </dict>
+        <key>webhook</key>
+        <dict>
+          <key>display_string_webhook_computermodel</key>
+          <string>Modelo de Computadora:</string>
+          <key>display_string_webhook_computerrecord</key>
+          <string>Registro de Computadora:</string>
+          <key>display_string_webhook_computerserial</key>
+          <string>Nombre de la Computadora (Número de Serie):</string>
+          <key>display_string_webhook_currentuser</key>
+          <string>Usuario Actual:</string>
+          <key>display_string_webhook_errors</key>
+          <string>Errores:</string>
+          <key>display_string_webhook_status_error</key>
+          <string>FALLAS DETECTADAS: Las actualizaciones de aplicaciones se instalaron con algunos errores.</string>
+          <key>display_string_webhook_status_success</key>
+          <string>Éxito: Aplicaciones actualizadas (S/N ${serialNumber})</string>
+          <key>display_string_webhook_status_uptodate</key>
+          <string>Éxito: Aplicaciones ya actualizadas (S/N ${serialNumber})</string>
+          <key>display_string_webhook_updates</key>
+          <string>Actualizaciones:</string>
+          <key>display_string_webhook_user</key>
+          <string>Usuario:</string>
+          <key>display_string_webhook_viewin</key>
+          <string>Ver la computadora en la</string>
+        </dict>
+      </dict>
+    </dict>  
+  </dict>
 </dict>
 </plist>

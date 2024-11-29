@@ -214,26 +214,572 @@ set_defaults() {
     modelName=$( /usr/libexec/PlistBuddy -c 'Print :0:_items:0:machine_name' /dev/stdin <<< "$(system_profiler -xml SPHardwareDataType)" )
 
     timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
-    
+
     # Deadline date display format.
     DISPLAY_STRING_FORMAT_DATE="%a %b %d" # Formatting options can be found in the man page for the date command.
     readonly DISPLAY_STRING_FORMAT_DATE
-    
+
     #### Language for the defer button in dialogs when the deferral time is sometime today.
     display_string_defer_today_button="Defer"
-    
+
     #### Language for the defer button in dialogs when the deferral time is tomorrow.
     display_string_defer_tomorrow_button="Defer Until Tomorrow"
-    
+
     #### Language for the defer button in dialogs when the deferral time is in the future.
     display_string_defer_future_button="Defer Until"
-    
+
     ### Language for various deferral timer durations.
     display_string_minutes="Minutes"
     display_string_hour="Hour"
     display_string_hours="Hours"
     display_string_and="and"
 
+    #### dialogPatchingConfigurationOptions
+    display_string_patching_button1="Done"
+    display_string_patching_checking="Checking"
+    display_string_patching_infobox="**Computer Name:**  \n\n- $computerName  \n\n**macOS Version:**  \n\n- $osVersion ($osBuild)"
+    display_string_patching_infobox_updates="Updates:"
+    display_string_patching_message="Updating the following apps …"
+    display_string_patching_progress="Processing"
+
+    #### dialogDiscoverConfigurationOptions
+    display_string_discovery_message="Analyzing installed apps …"
+    display_string_discovery_message2="Analyzing"
+    display_string_discovery_progress="Scanning …"
+
+    #### swiftDialogCompleteDialogPatching
+    display_string_complete_progress="Updates Complete!"
+
+    #### deferralDialogContent
+    display_string_deferral_button1="Continue"
+    display_string_deferral_infobox1="After the timer expires, updates will automatically:"
+    display_string_deferral_infobox2="Deferrals Remaining:"
+    display_string_deferral_infobutton="Defer"
+    display_string_deferral_message="You can **Defer** the updates or **Continue** to close the applications and apply updates.  \n\n There are ($numberOfUpdates) application(s) that require updates:"
+    display_string_deferral_selecttitle="Defer updates for:"
+    display_string_deferral_unlimited="Unlimited"
+
+    #### deferralDialogDeadlineContent
+    display_string_deferraldeadline_button1="Continue"
+    display_string_deferraldeadline_infobox="Updates will automatically install after the timer expires. \n\n #### No Deferrals Remaining ####"
+    display_string_deferraldeadline_infobutton="Max Deferrals Reached"
+    display_string_deferraldeadline_message="There are ${numberOfUpdates} application(s) that require updates\n\nYou have deferred the maximum number of ${display_string_deadline_count_maximum} times."
+
+    #### All apps up to date
+    display_string_uptodate_button1="Close"
+    display_string_uptodate_message="All apps are up to date."
+
+    #### Help Message
+    display_string_help_message="If you need assistance, please contact ${supportTeamName}:  \n- **Telephone:** ${supportTeamPhone}  \n- **Email:** ${supportTeamEmail}  \n- **Help Website:** ${supportTeamHyperlink}  \n\n**Computer Information:**  \n- **Operating System:**  $osVersion ($osBuild)  \n- **Serial Number:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Started:** $timestamp  \n- **Script Version:** $scriptVersion"
+
+    #### Localization
+    userInterfaceFallbackLanguage="en"
+}
+
+get_localized_strings() {
+    ####################################################
+    ##              Language Strings                  ##
+    ####################################################
+    # Get current local user
+    currentUserAccountName=$(scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ {$1=$2="";print $0;}' | xargs)
+    # Get language setting for current local user
+    langUser=$(su - ${currentUserAccountName} -c "/usr/bin/defaults read -g AppleLocale | cut -d'_' -f1")
+    
+    # Override the detected language here to test things out.
+    # uncomment the line below to test with an alternate language (Use the two letter code)
+    # langUser="es"
+    
+    # Check for the default fallback language (if the user's set langage is not provided)
+    # Check local settings
+    if [[ -f ${appAutoPatchLocalPLIST}.plist ]]; then
+        userInterfaceFallbackLanguage_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:fallbackLanguage"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+    fi
+    # Check managed settings
+    if [[ -f ${appAutoPatchManagedPLIST}.plist ]]; then
+        userInterfaceFallbackLanguage_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:fallbackLanguage"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+    fi
+    # Managed settings override local settings, local settings override embedded script which is generally "en"
+    [[ -n "${userInterfaceFallbackLanguage_managed}" ]] && userInterfaceFallbackLanguage="${userInterfaceFallbackLanguage_managed}"
+    { [[ -z "${userInterfaceFallbackLanguage_managed}" ]] && [[ -z "${userInterfaceFallbackLanguage}" ]] && [[ -n "${userInterfaceFallbackLanguage_local}" ]]; } && userInterfaceFallbackLanguage="${userInterfaceFallbackLanguage_local}"
+        
+    # Collect any local preferences from ${appAutoPatchLocalPLIST}
+    if [[ -f ${appAutoPatchLocalPLIST}.plist ]]; then
+        # This is where any preferences locally would be collected, example below
+        langCheck=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        if [[ -z "{langCheck}" ]]; then
+            langUser="${userInterfaceFallbackLanguage}"
+        fi
+
+        # AppTitle
+        local display_string_localized_apptitle_local
+        display_string_localized_apptitle_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:AppTitle"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        # Deferral
+        local DISPLAY_STRING_FORMAT_DATE_local
+        DISPLAY_STRING_FORMAT_DATE_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:DISPLAY_STRING_FORMAT_DATE"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_defer_today_button_local
+        display_string_defer_today_button_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_defer_today_button"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_defer_tomorrow_button_local
+        display_string_defer_tomorrow_button_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_defer_tomorrow_button"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_defer_future_button_local
+        display_string_defer_future_button_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_defer_future_button"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_minutes_local
+        display_string_minutes_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_minutes"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_hour_local
+        display_string_hour_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_hour"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_hours_local
+        display_string_hours_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_hours"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_and_local
+        display_string_and_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_and"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_deferral_button1_local
+        display_string_deferral_button1_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_deferral_button1"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_deferral_infobox1_local
+        display_string_deferral_infobox1_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_deferral_infobox1"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_deferral_infobox2_local
+        display_string_deferral_infobox2_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_deferral_infobox2"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_deferral_infobutton_local
+        display_string_deferral_infobutton_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_deferral_infobutton"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_deferral_message_local
+        display_string_deferral_message_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_deferral_message"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_deferral_selecttitle_local
+        display_string_deferral_selecttitle_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_deferral_selecttitle"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_deferral_unlimited_local
+        display_string_deferral_unlimited_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_deferral_unlimited"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        # DeferralDeadline
+        local display_string_deferraldeadline_button1_local
+        display_string_deferraldeadline_button1_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferraldeadline:display_string_deferraldeadline_button1"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_deferraldeadline_infobox_local
+        display_string_deferraldeadline_infobox_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferraldeadline:display_string_deferraldeadline_infobox"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_deferraldeadline_infobutton_local
+        display_string_deferraldeadline_infobutton_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferraldeadline:display_string_deferraldeadline_infobutton"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_deferraldeadline_message_local
+        display_string_deferraldeadline_message_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferraldeadline:display_string_deferraldeadline_message"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        # Discovery
+        local display_string_discovery_message_local
+        display_string_discovery_message_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:discovery:display_string_discovery_message"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_discovery_message2_local
+        display_string_discovery_message2_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:discovery:display_string_discovery_message2"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_discovery_progress_local
+        display_string_discovery_progress_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:discovery:display_string_discovery_progress"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        # Installomator
+        local display_string_installomator_alreadyinstalled_local
+        display_string_installomator_alreadyinstalled_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_alreadyinstalled"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_installomator_error_local
+        display_string_installomator_error_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_error"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_installomator_downloading_local
+        display_string_installomator_downloading_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_downloading"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_installomator_finishing_local
+        display_string_installomator_finishing_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_finishing"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_installomator_installing_local
+        display_string_installomator_installing_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_installing"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_installomator_latestversion_local
+        display_string_installomator_latestversion_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_latestversion"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_installomator_updating_local
+        display_string_installomator_updating_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_updating"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_installomator_verifying_local
+        display_string_installomator_verifying_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_verifying"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        # Help_Message
+        local display_string_help_message_local
+        display_string_help_message_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:help_message:display_string_help_message"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        # Patching
+        local display_string_complete_progress_local
+        display_string_complete_progress_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:patching:display_string_complete_progress"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_patching_button1_local
+        display_string_patching_button1_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:patching:display_string_patching_button1"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_patching_checking_local
+        display_string_patching_checking_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:patching:display_string_patching_checking"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_patching_infobox_local
+        display_string_patching_infobox_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:patching:display_string_patching_infobox"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_patching_infobox_updates_local
+        display_string_patching_infobox_updates_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:patching:display_string_patching_infobox_updates"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_patching_message_local
+        display_string_patching_message_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:patching:display_string_patching_message"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_patching_progress_local
+        display_string_patching_progress_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:patching:display_string_patching_progress"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        # Up To Date
+        local display_string_uptodate_button1_local
+        display_string_uptodate_button1_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:uptodate:display_string_uptodate_button1"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_uptodate_message_local
+        display_string_uptodate_message_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:uptodate:display_string_uptodate_message"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        # Webhook
+        local display_string_webhook_computermodel_local
+        display_string_webhook_computermodel_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_computermodel"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_webhook_computerrecord_local
+        display_string_webhook_computerrecord_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_computerrecord"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_webhook_computerserial_local
+        display_string_webhook_computerserial_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_computerserial"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_webhook_currentuser_local
+        display_string_webhook_currentuser_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_currentuser"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_webhook_errors_local
+        display_string_webhook_errors_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_errors"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_webhook_status_error_local
+        display_string_webhook_status_error_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_status_error"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_webhook_status_success_local
+        display_string_webhook_status_success_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_status_success"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_webhook_status_uptodate_local
+        display_string_webhook_status_uptodate_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_status_uptodate"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_webhook_updates_local
+        display_string_webhook_updates_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_updates"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_webhook_user_local
+        display_string_webhook_user_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_user"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+        local display_string_webhook_viewin_local
+        display_string_webhook_viewin_local=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_viewin"" "$appAutoPatchLocalPLIST.plist" 2>/dev/null)
+    fi
+
+    # Collect Managed PLIST preferences if any
+    if [[ -f ${appAutoPatchManagedPLIST}.plist ]]; then
+        langCheck=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        if [[ -z "{langCheck}" ]]; then
+            langUser="${userInterfaceFallbackLanguage}"
+        fi
+        # AppTitle
+        local display_string_localized_apptitle_managed
+        display_string_localized_apptitle_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:AppTitle"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        # Deferral
+        local DISPLAY_STRING_FORMAT_DATE_managed
+        DISPLAY_STRING_FORMAT_DATE_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:DISPLAY_STRING_FORMAT_DATE"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_defer_today_button_managed
+        display_string_defer_today_button_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_defer_today_button"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_defer_tomorrow_button_managed
+        display_string_defer_tomorrow_button_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_defer_tomorrow_button"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_defer_future_button_managed
+        display_string_defer_future_button_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_defer_future_button"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_minutes_managed
+        display_string_minutes_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_minutes"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_hour_managed
+        display_string_hour_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_hour"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_hours_managed
+        display_string_hours_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_hours"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_and_managed
+        display_string_and_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_and"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_deferral_button1_managed
+        display_string_deferral_button1_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_deferral_button1"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_deferral_infobox1_managed
+        display_string_deferral_infobox1_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_deferral_infobox1"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_deferral_infobox2_managed
+        display_string_deferral_infobox2_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_deferral_infobox2"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_deferral_infobutton_managed
+        display_string_deferral_infobutton_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_deferral_infobutton"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_deferral_message_managed
+        display_string_deferral_message_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_deferral_message"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_deferral_selecttitle_managed
+        display_string_deferral_selecttitle_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_deferral_selecttitle"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_deferral_unlimited_managed
+        display_string_deferral_unlimited_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferral:display_string_deferral_unlimited"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        # DeferralDeadline
+        local display_string_deferraldeadline_button1_managed
+        display_string_deferraldeadline_button1_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferraldeadline:display_string_deferraldeadline_button1"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_deferraldeadline_infobox_managed
+        display_string_deferraldeadline_infobox_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferraldeadline:display_string_deferraldeadline_infobox"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_deferraldeadline_infobutton_managed
+        display_string_deferraldeadline_infobutton_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferraldeadline:display_string_deferraldeadline_infobutton"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_deferraldeadline_message_managed
+        display_string_deferraldeadline_message_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:deferraldeadline:display_string_deferraldeadline_message"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        # Up To Date
+        local display_string_uptodate_button1_managed
+        display_string_uptodate_button1_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:uptodate:display_string_uptodate_button1"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_uptodate_message_managed
+        display_string_uptodate_message_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:uptodate:display_string_uptodate_message"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        # Discovery
+        local display_string_discovery_message_managed
+        display_string_discovery_message_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:discovery:display_string_discovery_message"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_discovery_message2_managed
+        display_string_discovery_message2_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:discovery:display_string_discovery_message2"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_discovery_progress_managed
+        display_string_discovery_progress_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:discovery:display_string_discovery_progress"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        # Installomator
+        local display_string_installomator_alreadyinstalled_managed
+        display_string_installomator_alreadyinstalled_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_alreadyinstalled"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_installomator_error_managed
+        display_string_installomator_error_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_error"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_installomator_downloading_managed
+        display_string_installomator_downloading_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_downloading"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_installomator_finishing_managed
+        display_string_installomator_finishing_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_finishing"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_installomator_installing_managed
+        display_string_installomator_installing_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_installing"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_installomator_latestversion_managed
+        display_string_installomator_latestversion_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_latestversion"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_installomator_updating_managed
+        display_string_installomator_updating_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_updating"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_installomator_verifying_managed
+        display_string_installomator_verifying_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:installomator:display_string_installomator_verifying"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        # Help_Message
+        local display_string_help_message_managed
+        display_string_help_message_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:help_message:display_string_help_message"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        # Patching
+        local display_string_complete_progress_managed
+        display_string_complete_progress_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:patching:display_string_complete_progress"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_patching_button1_managed
+        display_string_patching_button1_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:patching:display_string_patching_button1"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_patching_checking_managed
+        display_string_patching_checking_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:patching:display_string_patching_checking"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_patching_infobox_managed
+        display_string_patching_infobox_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:patching:display_string_patching_infobox"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_patching_infobox_updates_managed
+        display_string_patching_infobox_updates_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:patching:display_string_patching_infobox_updates"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_patching_message_managed
+        display_string_patching_message_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:patching:display_string_patching_message"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_patching_progress_managed
+        display_string_patching_progress_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:patching:display_string_patching_progress"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        # Up To Date
+        local display_string_uptodate_button1_managed
+        display_string_uptodate_button1_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:uptodate:display_string_uptodate_button1"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_uptodate_message_managed
+        display_string_uptodate_message_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:uptodate:display_string_uptodate_message"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        # Webhook
+        local display_string_webhook_computermodel_managed
+        display_string_webhook_computermodel_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_computermodel"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_webhook_computerrecord_managed
+        display_string_webhook_computerrecord_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_computerrecord"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_webhook_computerserial_managed
+        display_string_webhook_computerserial_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_computerserial"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_webhook_currentuser_managed
+        display_string_webhook_currentuser_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_currentuser"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_webhook_errors_managed
+        display_string_webhook_errors_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_errors"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_webhook_status_error_managed
+        display_string_webhook_status_error_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_status_error"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_webhook_status_success_managed
+        display_string_webhook_status_success_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_status_success"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_webhook_status_uptodate_managed
+        display_string_webhook_status_uptodate_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_status_uptodate"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_webhook_updates_managed
+        display_string_webhook_updates_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_updates"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_webhook_user_managed
+        display_string_webhook_user_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_user"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+        local display_string_webhook_viewin_managed
+        display_string_webhook_viewin_managed=$(/usr/libexec/PlistBuddy  -c "print ":userInterface:updateElements:${langUser}:webhook:display_string_webhook_viewin"" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+    fi
+
+    # Need logic to ensures the priority order of managed preference overrides the new input option which overrides the saved local preference.
+    # AppTitle (Localized)
+    [[ -n "${display_string_localized_apptitle_managed}" ]] && appTitle="${display_string_localized_apptitle_managed}"
+    { [[ -z "${display_string_localized_apptitle_managed}" ]] && [[ -z "${appTitle}" ]] && [[ -n "${display_string_localized_apptitle_local}" ]]; } && appTitle="${display_string_localized_apptitle_local}"
+    # Deferral
+    [[ -n "${DISPLAY_STRING_FORMAT_DATE_managed}" ]] && DISPLAY_STRING_FORMAT_DATE="${DISPLAY_STRING_FORMAT_DATE_managed}"
+    { [[ -z "${DISPLAY_STRING_FORMAT_DATE_managed}" ]] && [[ -z "${DISPLAY_STRING_FORMAT_DATE}" ]] && [[ -n "${DISPLAY_STRING_FORMAT_DATE_local}" ]]; } && DISPLAY_STRING_FORMAT_DATE="${DISPLAY_STRING_FORMAT_DATE_local}"
+    [[ -n "${display_string_defer_today_button_managed}" ]] && display_string_defer_today_button="${display_string_defer_today_button_managed}"
+    { [[ -z "${display_string_defer_today_button_managed}" ]] && [[ -z "${display_string_defer_today_button}" ]] && [[ -n "${display_string_defer_today_button_local}" ]]; } && display_string_defer_today_button="${display_string_defer_today_button_local}"
+    [[ -n "${display_string_defer_tomorrow_button_managed}" ]] && display_string_defer_tomorrow_button="${display_string_defer_tomorrow_button_managed}"
+    { [[ -z "${display_string_defer_tomorrow_button_managed}" ]] && [[ -z "${display_string_defer_tomorrow_button}" ]] && [[ -n "${display_string_defer_tomorrow_button_local}" ]]; } && display_string_defer_tomorrow_button="${display_string_defer_tomorrow_button_local}"
+    [[ -n "${display_string_defer_future_button_managed}" ]] && display_string_defer_future_button="${display_string_defer_future_button_managed}"
+    { [[ -z "${display_string_defer_future_button_managed}" ]] && [[ -z "${display_string_defer_future_button}" ]] && [[ -n "${display_string_defer_future_button_local}" ]]; } && display_string_defer_future_button="${display_string_defer_future_button_local}"
+    [[ -n "${display_string_minutes_managed}" ]] && display_string_minutes="${display_string_minutes_managed}"
+    { [[ -z "${display_string_minutes_managed}" ]] && [[ -z "${display_string_minutes}" ]] && [[ -n "${display_string_minutes_local}" ]]; } && display_string_minutes="${display_string_minutes_local}"
+    [[ -n "${display_string_hour_managed}" ]] && display_string_hour="${display_string_hour_managed}"
+    { [[ -z "${display_string_hour_managed}" ]] && [[ -z "${display_string_hour}" ]] && [[ -n "${display_string_hour_local}" ]]; } && display_string_hour="${display_string_hour_local}"
+    [[ -n "${display_string_hours_managed}" ]] && display_string_hours="${display_string_hours_managed}"
+    { [[ -z "${display_string_hours_managed}" ]] && [[ -z "${display_string_hours}" ]] && [[ -n "${display_string_hours_local}" ]]; } && display_string_hours="${display_string_hours_local}"
+    [[ -n "${display_string_and_managed}" ]] && display_string_and="${display_string_and_managed}"
+    { [[ -z "${display_string_and_managed}" ]] && [[ -z "${display_string_and}" ]] && [[ -n "${display_string_and_local}" ]]; } && display_string_and="${display_string_and_local}"
+    [[ -n "${display_string_deferral_button1_managed}" ]] && display_string_deferral_button1="${display_string_deferral_button1_managed}"
+    { [[ -z "${display_string_deferral_button1_managed}" ]] && [[ -z "${display_string_deferral_button1}" ]] && [[ -n "${display_string_deferral_button1_local}" ]]; } && display_string_deferral_button1="${display_string_deferral_button1_local}"
+    [[ -n "${display_string_deferral_infobox1_managed}" ]] && display_string_deferral_infobox1="${display_string_deferral_infobox1_managed}"
+    { [[ -z "${display_string_deferral_infobox1_managed}" ]] && [[ -z "${display_string_deferral_infobox1}" ]] && [[ -n "${display_string_deferral_infobox1_local}" ]]; } && display_string_deferral_infobox1="${display_string_deferral_infobox1_local}"
+    [[ -n "${display_string_deferral_infobox2_managed}" ]] && display_string_deferral_infobox2="${display_string_deferral_infobox2_managed}"
+    { [[ -z "${display_string_deferral_infobox2_managed}" ]] && [[ -z "${display_string_deferral_infobox2}" ]] && [[ -n "${display_string_deferral_infobox2_local}" ]]; } && display_string_deferral_infobox2="${display_string_deferral_infobox2_local}"
+    [[ -n "${display_string_deferral_infobutton_managed}" ]] && display_string_deferral_infobutton="${display_string_deferral_infobutton_managed}"
+    { [[ -z "${display_string_deferral_infobutton_managed}" ]] && [[ -z "${display_string_deferral_infobutton}" ]] && [[ -n "${display_string_deferral_infobutton_local}" ]]; } && display_string_deferral_infobutton="${display_string_deferral_infobutton_local}"
+    [[ -n "${display_string_deferral_message_managed}" ]] && display_string_deferral_message="${display_string_deferral_message_managed}"
+    { [[ -z "${display_string_deferral_message_managed}" ]] && [[ -z "${display_string_deferral_message}" ]] && [[ -n "${display_string_deferral_message_local}" ]]; } && display_string_deferral_message="${display_string_deferral_message_local}"
+    [[ -n "${display_string_deferral_selecttitle_managed}" ]] && display_string_deferral_selecttitle="${display_string_deferral_selecttitle_managed}"
+    { [[ -z "${display_string_deferral_selecttitle_managed}" ]] && [[ -z "${display_string_deferral_selecttitle}" ]] && [[ -n "${display_string_deferral_selecttitle_local}" ]]; } && display_string_deferral_selecttitle="${display_string_deferral_selecttitle_local}"
+    [[ -n "${display_string_deferral_unlimited_managed}" ]] && display_string_deferral_unlimited="${display_string_deferral_unlimited_managed}"
+    { [[ -z "${display_string_deferral_unlimited_managed}" ]] && [[ -z "${display_string_deferral_unlimited}" ]] && [[ -n "${display_string_deferral_unlimited_local}" ]]; } && display_string_deferral_unlimited="${display_string_deferral_unlimited_local}"
+    # DeferralDeadline
+    [[ -n "${display_string_deferraldeadline_button1_managed}" ]] && display_string_deferraldeadline_button1="${display_string_deferraldeadline_button1_managed}"
+    { [[ -z "${display_string_deferraldeadline_button1_managed}" ]] && [[ -z "${display_string_deferraldeadline_button1}" ]] && [[ -n "${display_string_deferraldeadline_button1_local}" ]]; } && display_string_deferraldeadline_button1="${display_string_deferraldeadline_button1_local}"
+    [[ -n "${display_string_deferraldeadline_infobox_managed}" ]] && display_string_deferraldeadline_infobox="${display_string_deferraldeadline_infobox_managed}"
+    { [[ -z "${display_string_deferraldeadline_infobox_managed}" ]] && [[ -z "${display_string_deferraldeadline_infobox}" ]] && [[ -n "${display_string_deferraldeadline_infobox_local}" ]]; } && display_string_deferraldeadline_infobox="${display_string_deferraldeadline_infobox_local}"
+    [[ -n "${display_string_deferraldeadline_infobutton_managed}" ]] && display_string_deferraldeadline_infobutton="${display_string_deferraldeadline_infobutton_managed}"
+    { [[ -z "${display_string_deferraldeadline_infobutton_managed}" ]] && [[ -z "${display_string_deferraldeadline_infobutton}" ]] && [[ -n "${display_string_deferraldeadline_infobutton_local}" ]]; } && display_string_deferraldeadline_infobutton="${display_string_deferraldeadline_infobutton_local}"
+    [[ -n "${display_string_deferraldeadline_message_managed}" ]] && display_string_deferraldeadline_message="${display_string_deferraldeadline_message_managed}"
+    { [[ -z "${display_string_deferraldeadline_message_managed}" ]] && [[ -z "${display_string_deferraldeadline_message}" ]] && [[ -n "${display_string_deferraldeadline_message_local}" ]]; } && display_string_deferraldeadline_message="${display_string_deferraldeadline_message_local}"
+    # UpToDate
+    [[ -n "${display_string_uptodate_button1_managed}" ]] && display_string_uptodate_button1="${display_string_uptodate_button1_managed}"
+    { [[ -z "${display_string_uptodate_button1_managed}" ]] && [[ -z "${display_string_uptodate_button1}" ]] && [[ -n "${display_string_uptodate_button1_local}" ]]; } && display_string_uptodate_button1="${display_string_uptodate_button1_local}"
+    [[ -n "${display_string_uptodate_message_managed}" ]] && display_string_uptodate_message="${display_string_uptodate_message_managed}"
+    { [[ -z "${display_string_uptodate_message_managed}" ]] && [[ -z "${display_string_uptodate_message}" ]] && [[ -n "${display_string_uptodate_message_local}" ]]; } && display_string_uptodate_message="${display_string_uptodate_message_local}"
+    # Discovery
+    [[ -n "${display_string_discovery_message_managed}" ]] && display_string_discovery_message="${display_string_discovery_message_managed}"
+    { [[ -z "${display_string_discovery_message_managed}" ]] && [[ -z "${display_string_discovery_message}" ]] && [[ -n "${display_string_discovery_message_local}" ]]; } && display_string_discovery_message="${display_string_discovery_message_local}"
+    [[ -n "${display_string_discovery_message2_managed}" ]] && display_string_discovery_message2="${display_string_discovery_message2_managed}"
+    { [[ -z "${display_string_discovery_message2_managed}" ]] && [[ -z "${display_string_discovery_message2}" ]] && [[ -n "${display_string_discovery_message2_local}" ]]; } && display_string_discovery_message2="${display_string_discovery_message2_local}"
+    [[ -n "${display_string_discovery_progress_managed}" ]] && display_string_discovery_progress="${display_string_discovery_progress_managed}"
+    { [[ -z "${display_string_discovery_progress_managed}" ]] && [[ -z "${display_string_discovery_progress}" ]] && [[ -n "${display_string_discovery_progress_local}" ]]; } && display_string_discovery_progress="${display_string_discovery_progress_local}"
+    # Installomator
+    [[ -n "${display_string_installomator_installing_managed}" ]] && display_string_installomator_installing="${display_string_installomator_installing_managed}"
+    { [[ -z "${display_string_installomator_installing_managed}" ]] && [[ -z "${display_string_installomator_installing}" ]] && [[ -n "${display_string_installomator_installing_local}" ]]; } && display_string_installomator_installing="${display_string_installomator_installing_local}"
+    [[ -n "${display_string_installomator_downloading_managed}" ]] && display_string_installomator_downloading="${display_string_installomator_downloading_managed}"
+    { [[ -z "${display_string_installomator_downloading_managed}" ]] && [[ -z "${display_string_installomator_downloading}" ]] && [[ -n "${display_string_installomator_downloading_local}" ]]; } && display_string_installomator_downloading="${display_string_installomator_downloading_local}"
+    # Help_Message
+    [[ -n "${display_string_help_message_managed}" ]] && display_string_help_message="${display_string_help_message_managed}"
+    { [[ -z "${display_string_help_message_managed}" ]] && [[ -z "${display_string_help_message}" ]] && [[ -n "${display_string_help_message_local}" ]]; } && display_string_help_message="${display_string_help_message_local}"
+    # Patching
+    [[ -n "${display_string_complete_progress_managed}" ]] && display_string_complete_progress="${display_string_complete_progress_managed}"
+    { [[ -z "${display_string_complete_progress_managed}" ]] && [[ -z "${display_string_complete_progress}" ]] && [[ -n "${display_string_complete_progress_local}" ]]; } && display_string_complete_progress="${display_string_complete_progress_local}"
+    [[ -n "${display_string_patching_button1_managed}" ]] && display_string_patching_button1="${display_string_patching_button1_managed}"
+    { [[ -z "${display_string_patching_button1_managed}" ]] && [[ -z "${display_string_patching_button1}" ]] && [[ -n "${display_string_patching_button1_local}" ]]; } && display_string_patching_button1="${display_string_patching_button1_local}"
+    [[ -n "${display_string_patching_checking_managed}" ]] && display_string_patching_checking="${display_string_patching_checking_managed}"
+    { [[ -z "${display_string_patching_checking_managed}" ]] && [[ -z "${display_string_patching_checking}" ]] && [[ -n "${display_string_patching_checking_local}" ]]; } && display_string_patching_checking="${display_string_patching_checking_local}"
+    [[ -n "${display_string_patching_infobox_managed}" ]] && display_string_patching_infobox="${display_string_patching_infobox_managed}"
+    { [[ -z "${display_string_patching_infobox_managed}" ]] && [[ -z "${display_string_patching_infobox}" ]] && [[ -n "${display_string_patching_infobox_local}" ]]; } && display_string_patching_infobox="${display_string_patching_infobox_local}"
+    [[ -n "${display_string_patching_infobox_updates_managed}" ]] && display_string_patching_infobox_updates="${display_string_patching_infobox_updates_managed}"
+    { [[ -z "${display_string_patching_infobox_updates_managed}" ]] && [[ -z "${display_string_patching_infobox_updates}" ]] && [[ -n "${display_string_patching_infobox_updates_local}" ]]; } && display_string_patching_infobox_updates="${display_string_patching_infobox_updates_local}"
+    [[ -n "${display_string_patching_message_managed}" ]] && display_string_patching_message="${display_string_patching_message_managed}"
+    { [[ -z "${display_string_patching_message_managed}" ]] && [[ -z "${display_string_patching_message}" ]] && [[ -n "${display_string_patching_message_local}" ]]; } && display_string_patching_message="${display_string_patching_message_local}"
+    [[ -n "${display_string_patching_progress_managed}" ]] && display_string_patching_progress="${display_string_patching_progress_managed}"
+    { [[ -z "${display_string_patching_progress_managed}" ]] && [[ -z "${display_string_patching_progress}" ]] && [[ -n "${display_string_patching_progress_local}" ]]; } && display_string_patching_progress="${display_string_patching_progress_local}"
+    # Webhook
+    [[ -n "${display_string_webhook_computermodel_managed}" ]] && display_string_webhook_computermodel="${display_string_webhook_computermodel_managed}"
+    { [[ -z "${display_string_webhook_computermodel_managed}" ]] && [[ -z "${display_string_webhook_computermodel}" ]] && [[ -n "${display_string_webhook_computermodel_local}" ]]; } && display_string_webhook_computermodel="${display_string_webhook_computermodel_local}"
+    [[ -n "${display_string_webhook_computerrecord_managed}" ]] && display_string_webhook_computerrecord="${display_string_webhook_computerrecord_managed}"
+    { [[ -z "${display_string_webhook_computerrecord_managed}" ]] && [[ -z "${display_string_webhook_computerrecord}" ]] && [[ -n "${display_string_webhook_computerrecord_local}" ]]; } && display_string_webhook_computerrecord="${display_string_webhook_computerrecord_local}"
+    [[ -n "${display_string_webhook_computerserial_managed}" ]] && display_string_webhook_computerserial="${display_string_webhook_computerserial_managed}"
+    { [[ -z "${display_string_webhook_computerserial_managed}" ]] && [[ -z "${display_string_webhook_computerserial}" ]] && [[ -n "${display_string_webhook_computerserial_local}" ]]; } && display_string_webhook_computerserial="${display_string_webhook_computerserial_local}"
+    [[ -n "${display_string_webhook_currentuser_managed}" ]] && display_string_webhook_currentuser="${display_string_webhook_currentuser_managed}"
+    { [[ -z "${display_string_webhook_currentuser_managed}" ]] && [[ -z "${display_string_webhook_currentuser}" ]] && [[ -n "${display_string_webhook_currentuser_local}" ]]; } && display_string_webhook_currentuser="${display_string_webhook_currentuser_local}"
+    [[ -n "${display_string_webhook_errors_managed}" ]] && display_string_webhook_errors="${display_string_webhook_errors_managed}"
+    { [[ -z "${display_string_webhook_errors_managed}" ]] && [[ -z "${display_string_webhook_errors}" ]] && [[ -n "${display_string_webhook_errors_local}" ]]; } && display_string_webhook_errors="${display_string_webhook_errors_local}"
+    [[ -n "${display_string_webhook_status_error_managed}" ]] && display_string_webhook_status_error="${display_string_webhook_status_error_managed}"
+    { [[ -z "${display_string_webhook_status_error_managed}" ]] && [[ -z "${display_string_webhook_status_error}" ]] && [[ -n "${display_string_webhook_status_error_local}" ]]; } && display_string_webhook_status_error="${display_string_webhook_status_error_local}"
+    [[ -n "${display_string_webhook_status_success_managed}" ]] && display_string_webhook_status_success="${display_string_webhook_status_success_managed}"
+    { [[ -z "${display_string_webhook_status_success_managed}" ]] && [[ -z "${display_string_webhook_status_success}" ]] && [[ -n "${display_string_webhook_status_success_local}" ]]; } && display_string_webhook_status_success="${display_string_webhook_status_success_local}"
+    [[ -n "${display_string_webhook_status_uptodate_managed}" ]] && display_string_webhook_status_uptodate="${display_string_webhook_status_uptodate_managed}"
+    { [[ -z "${display_string_webhook_status_uptodate_managed}" ]] && [[ -z "${display_string_webhook_status_uptodate}" ]] && [[ -n "${display_string_webhook_status_uptodate_local}" ]]; } && display_string_webhook_status_uptodate="${display_string_webhook_status_uptodate_local}"
+    [[ -n "${display_string_webhook_updates_managed}" ]] && display_string_webhook_updates="${display_string_webhook_updates_managed}"
+    { [[ -z "${display_string_webhook_updates_managed}" ]] && [[ -z "${display_string_webhook_updates}" ]] && [[ -n "${display_string_webhook_updates_local}" ]]; } && display_string_webhook_updates="${display_string_webhook_updates_local}"
+    [[ -n "${display_string_webhook_user_managed}" ]] && display_string_webhook_user="${display_string_webhook_user_managed}"
+    { [[ -z "${display_string_webhook_user_managed}" ]] && [[ -z "${display_string_webhook_user}" ]] && [[ -n "${display_string_webhook_user_local}" ]]; } && display_string_webhook_user="${display_string_webhook_user_local}"
+    [[ -n "${display_string_webhook_viewin_managed}" ]] && display_string_webhook_viewin="${display_string_webhook_viewin_managed}"
+    { [[ -z "${display_string_webhook_viewin_managed}" ]] && [[ -z "${display_string_webhook_viewin}" ]] && [[ -n "${display_string_webhook_viewin_local}" ]]; } && display_string_webhook_viewin="${display_string_webhook_viewin_local}"
+
+
+    #Temporary verbose output testing stuff
+    log_verbose  "appTitle: $appTitle"
+    # Deferral
+    log_verbose  "DISPLAY_STRING_FORMAT_DATE: $DISPLAY_STRING_FORMAT_DATE"
+    log_verbose  "display_string_defer_today_button: $display_string_defer_today_button"
+    log_verbose  "display_string_defer_tomorrow_button: $display_string_defer_tomorrow_button"
+    log_verbose  "display_string_defer_future_button: $display_string_defer_future_button"
+    log_verbose  "display_string_minutes: $display_string_minutes"
+    log_verbose  "display_string_hour: $display_string_hour"
+    log_verbose  "display_string_hours: $display_string_hours"
+    log_verbose  "display_string_and: $display_string_and"
+    log_verbose  "display_string_deferral_button1: $display_string_deferral_button1"
+    log_verbose  "display_string_deferral_infobox1: $display_string_deferral_infobox1"
+    log_verbose  "display_string_deferral_infobox2: $display_string_deferral_infobox2"
+    log_verbose  "display_string_deferral_infobutton: $display_string_deferral_infobutton"
+    log_verbose  "display_string_deferral_message: $display_string_deferral_message"
+    log_verbose  "display_string_deferral_selecttitle: $display_string_deferral_selecttitle"
+    log_verbose  "display_string_deferral_unlimited: $display_string_deferral_unlimited"
+    # Deferral Deadline
+    log_verbose  "display_string_deferraldeadline_button1: $display_string_deferraldeadline_button1"
+    log_verbose  "display_string_deferraldeadline_infobox: $display_string_deferraldeadline_infobox"
+    log_verbose  "display_string_deferraldeadline_infobutton: $display_string_deferraldeadline_infobutton"
+    log_verbose  "display_string_deferraldeadline_message: $display_string_deferraldeadline_message"
+    # Discovery
+    log_verbose  "display_string_discovery_message: $display_string_discovery_message"
+    log_verbose  "display_string_discovery_message2: $display_string_discovery_message2"
+    log_verbose  "display_string_discovery_progress: $display_string_discovery_progress"
+    # Patching
+    log_verbose  "display_string_complete_progress: $display_string_complete_progress"
+    log_verbose  "display_string_patching_button1: $display_string_patching_button1"
+    log_verbose  "display_string_patching_checking: $display_string_patching_checking"
+    log_verbose  "display_string_patching_message: $display_string_patching_message"
+    log_verbose  "display_string_patching_infobox: $display_string_patching_infobox"
+    log_verbose  "display_string_patching_infobox_updates: $display_string_patching_infobox_updates"
+    log_verbose  "display_string_patching_progress: $display_string_patching_progress"
+    # Up To Date
+    log_verbose  "display_string_uptodate_button1: $display_string_uptodate_button1"
+    log_verbose  "display_string_uptodate_message: $display_string_uptodate_message"
+    # Webhooks
+    log_verbose  "display_string_webhook_computermodel: $display_string_webhook_computermodel"
+    log_verbose  "display_string_webhook_computerrecord: $display_string_webhook_computerrecord"
+    log_verbose  "display_string_webhook_computerserial: $display_string_webhook_computerserial"
+    log_verbose  "display_string_webhook_currentuser: $display_string_webhook_currentuser"
+    log_verbose  "display_string_webhook_errors: $display_string_webhook_errors"
+    log_verbose  "display_string_webhook_status_error: $display_string_webhook_status_error"
+    log_verbose  "display_string_webhook_status_success: $display_string_webhook_status_success"
+    log_verbose  "display_string_webhook_status_uptodate: $display_string_webhook_status_uptodate"
+    log_verbose  "display_string_webhook_updates: $display_string_webhook_updates"
+    log_verbose  "display_string_webhook_user: $display_string_webhook_user"
+    log_verbose  "display_string_webhook_viewin: $display_string_webhook_viewin"
+    
+    helpMessage="${(e)display_string_help_message}"
+    log_verbose  "helpMessage: $helpMessage"
+    
+}
+
+get_localized_path() {
+    itemPath=$1
+    langPath="${langUser}"
+    
+    if [[ "${langUser}" == "zh" ]]; then
+        langPath="${langPath}_CN"
+    fi
+    
+    # Check that we have a localization for the detected user language
+    if [[ -d "/System/Library/CoreServices/SystemFolderLocalizations/${langPath}.lproj" ]]; then
+    
+        # Create a temp plist for reading localization values
+        aapTempDir=$(/usr/bin/mktemp -d -t "aap-localization")
+        ln -s "/System/Library/CoreServices/SystemFolderLocalizations/${langPath}.lproj/SystemFolderLocalizations.strings" "${aapTempDir}/SystemFolderLocalizations.plist"
+        
+        # Split the path into an array
+        pathParts=(${(@s:/:)itemPath})
+        for pathItem in $pathParts; do
+                pathItemLocalized=$(/usr/bin/defaults read "${aapTempDir}/SystemFolderLocalizations.plist" "$pathItem" 2>/dev/null)
+                if [[ -n $pathItemLocalized ]]; then 
+                        pathLocalized+="/${pathItemLocalized}"
+                else
+                        pathLocalized+="/${pathItem}"
+                fi
+        done
+        
+        # Clean up the temp directory and symlink plist
+        rm -R "${aapTempDir}"
+    else
+        # No localization available
+        pathLocalized="${itemPath}"
+    fi
+        # return the localized path
+        echo "${pathLocalized}"
+}
+
+localize_installomator() {
+
+    # updateDialog $progress "Downloading..."
+    sleep .2
+    /usr/bin/sed -i.backup1 "s|updateDialog \$progress \"Downloading...\"|updateDialog \$progress \"${display_string_installomator_downloading}...\"|g" $installomatorScript
+    sleep .2
+    # updateDialog $progress "Installing..."
+    /usr/bin/sed -i.backup1 "s|updateDialog \$progress \"Installing...\"|updateDialog \$progress \"${display_string_installomator_installing}...\"|g" $installomatorScript
+    sleep .2
+    # updateDialog "complete" "Latest version already installed..."
+    /usr/bin/sed -i.backup1 "s|updateDialog \"complete\" \"Latest version already installed...\"|updateDialog \"complete\" \"${display_string_installomator_latestversion}...\"|g" $installomatorScript
+    sleep .2
+    # updateDialog "fail" "Error ($1; $2)"
+    /usr/bin/sed -i.backup1 "s|updateDialog \"fail\" \"Error (\$1; \$2)\"|updateDialog \"fail\" \"${display_string_installomator_error} (\$1; \$2)\"|g" $installomatorScript
+    sleep .2
+    # updateDialog "wait" "Already installed from App Store. Not replaced."
+    /usr/bin/sed -i.backup1 "s|updateDialog \"wait\" \"Already installed from App Store. Not replaced.\"|updateDialog \"wait\" \"${display_string_installomator_alreadyinstalled}\"|g" $installomatorScript
+    sleep .2
+    # updateDialog "wait" "Finishing..."
+    /usr/bin/sed -i.backup1 "s|updateDialog \"wait\" \"Finishing...\"|updateDialog \"wait\" \"${display_string_installomator_finishing}...\"|g" $installomatorScript
+    sleep .2
+    # updateDialog "wait" "Installing..."
+    /usr/bin/sed -i.backup1 "s|updateDialog \"wait\" \"Installing...\"|updateDialog \"wait\" \"${display_string_installomator_installing}...\"|g" $installomatorScript
+    sleep .2
+    # updateDialog "wait" "Latest version already installed..."
+    /usr/bin/sed -i.backup1 "s|updateDialog \"wait\" \"Latest version already installed...\"|updateDialog \"wait\" \"${display_string_installomator_latestversion}...\"|g" $installomatorScript
+    sleep .2
+    # updateDialog "wait" "Updating..."
+    /usr/bin/sed -i.backup1 "s|updateDialog \"wait\" \"Updating...\"|updateDialog \"wait\" \"${display_string_installomator_updating}...\"|g" $installomatorScript
+    sleep .2
+    # updateDialog "wait" "Verifying..."
+    /usr/bin/sed -i.backup1 "s|updateDialog \"wait\" \"Verifying...\"|updateDialog \"wait\" \"${display_string_installomator_verifying}...\"|g" $installomatorScript
+    sleep .2
 
 }
 
@@ -1164,6 +1710,12 @@ workflow_startup() {
 	# Initial Parameter and helper validation, if any of these fail then it's unsafe for the workflow to continue.
 	get_preferences
 
+	# Get the language strings to display to the user.
+	get_localized_strings
+
+	# Localize Installomator script for the user language
+	localize_installomator
+
     # Management parameter options
     manage_parameter_options
 
@@ -1265,25 +1817,26 @@ workflow_startup() {
     fi
     
     supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
-    helpMessage="If you need assistance, please contact ${supportTeamName}:  \n- **Telephone:** ${supportTeamPhone}  \n- **Email:** ${supportTeamEmail}  \n- **Help Website:** ${supportTeamHyperlink}  \n\n**Computer Information:**  \n- **Operating System:**  $osVersion ($osBuild)  \n- **Serial Number:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Started:** $timestamp  \n- **Script Version:** $scriptVersion"
-    
+    helpMessage="${(e)display_string_help_message}"
+    infobox="${(e)display_string_patching_infobox}"
+
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # "Patching" dialog Title, Message, and Icon
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
     dialogPatchingConfigurationOptions=(
         --title "${appTitle}"
-        --message "Updating the following apps …"
-        --commandfile "$dialogCommandFile"
+        --message "${display_string_patching_message}" # Updating the following apps …
+        --commandfile "${dialogCommandFile}"
         --moveable
-        --button1text "Done"
+        --button1text "${display_string_patching_button1}" # Done
         --button1disabled
         --height 600
         --width 650
         --position bottomright
         --progress
-        --helpmessage "$helpMessage"
-        --infobox "**Computer Name:**  \n\n- $computerName  \n\n**macOS Version:**  \n\n- $osVersion ($osBuild)"
+        --helpmessage "${helpMessage}"
+        --infobox "${infobox}"
         --infotext "${infoTextScriptVersion}"
         --windowbuttons min
         --titlefont size=18
@@ -1303,7 +1856,7 @@ workflow_startup() {
     
     dialogDiscoverConfigurationOptions=(
         --title "${appTitle}"
-        --message "Analyzing installed apps …"
+        --message "${display_string_discovery_message}" # Analyzing installed apps …
         --icon "$icon"
         --overlayicon "$overlayicon"
         --commandfile "$dialogCommandFile"
@@ -1312,7 +1865,7 @@ workflow_startup() {
         --mini
         --position bottomright
         --progress
-        --progresstext "Scanning …"
+        --progresstext "${display_string_discovery_progress}" # Scanning …
         --quitkey k
     )
     
@@ -1662,6 +2215,7 @@ get_mdm(){
 		;;
 		*)
 			log_info "Unsure of MDM"
+			mdmName="MDM Server"
 		;;
 	esac
 
@@ -2023,7 +2577,7 @@ swiftDialogCompleteDialogPatching(){
         # swiftDialogCommand "listitem: add, title: Updates Complete!,status: success"
         swiftDialogUpdate "icon: SF=checkmark.circle.fill,weight=bold,colour1=#00ff44,colour2=#075c1e"
         swiftDialogUpdate "progress: complete"
-        swiftDialogUpdate "progresstext: Updates Complete!"
+        swiftDialogUpdate "progresstext: ${display_string_complete_progress}"
         
         sleep 1
         # Activate button 1
@@ -2098,30 +2652,30 @@ set_deferral_menu() {
 
 dialog_install_or_defer() {
     if [[ -z $display_string_deadline_count ]]; then 
-        display_string_deadline_count="Unlimited"
+        display_string_deadline_count="${display_string_deferral_unlimited}"
     fi
 
     [[ -n "${deferral_timer_menu_minutes}" ]] && set_deferral_menu
     
 	action=$( echo $deferralTimerAction | tr '[:upper:]' '[:lower:]' )
-	infobuttontext="Defer"
-	infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $display_string_deadline_count"
-	message="You can **Defer** the updates or **Continue** to close the applications and apply updates.  \n\n There are ($numberOfUpdates) application(s) that require updates: "
-	height=480
+	infobuttontext="${display_string_deferral_infobutton}"
+	infobox="${display_string_deferral_infobox1} $action. \n\n #### ${display_string_deferral_infobox2} #### \n\n ${display_string_deadline_count}"
+    message="${(e)display_string_deferral_message}"
+	height=530
 	
 	# Create the deferrals available dialog options and content
     if [[ -n "${deferral_timer_menu_minutes}" ]]; then
         deferralDialogContent=(
-            --title "$appTitle"
-            --message "$message"
-            --helpmessage "$helpMessage"
+            --title "${appTitle}"
+            --message "${message}"
+            --helpmessage "${helpMessage}"
             --icon "$icon"
             --overlayicon "$overlayicon"
-            --infobuttontext "$infobuttontext"
+            --infobuttontext "${infobuttontext}"
             --infobox "$infobox"
             --timer $deferralTimer
-            --button1text "Continue"
-            --selecttitle "Defer updates for:" --selectvalues $display_string_deferral_menu
+            --button1text "${display_string_deferral_button1}"
+            --selecttitle "${display_string_deferral_selecttitle}" --selectvalues $display_string_deferral_menu
         )
     else
         deferralDialogContent=(
@@ -2147,6 +2701,7 @@ dialog_install_or_defer() {
 		--titlefont size=18
 		--messagefont size=11
 		--height $height
+		--width 650
         --alwaysreturninput
 		--commandfile "$dialogCommandFile"
 	)
@@ -2193,10 +2748,10 @@ dialog_install_or_defer() {
 }
 
 dialog_install_hard_deadline() {
-		infobuttontext="Max Deferrals Reached"
+	infobuttontext="Max Deferrals Reached"
 	infobox="Updates will automatically install after the timer expires. \n\n #### No Deferrals Remaining ####"
 	message="There are $numberOfUpdates application(s) that require updates\n\n You have deferred the maximum number of ${display_string_deadline_count_maximum} times."
-	height=480
+	height=530
 	
 	deferralDialogContent=(
 		--title "$appTitle"
@@ -2220,6 +2775,7 @@ dialog_install_hard_deadline() {
 		--titlefont size=18
 		--messagefont size=11
 		--height $height
+		--width 650
 		--commandfile "$dialogCommandFile"
 	)
 	
@@ -2289,9 +2845,9 @@ function PgetAppVersion() {
             
             if [ ${interactiveMode} -gt 1 ]; then
                 if [[ "$debugMode" == "true" || "$debugMode" == "verbose" ]]; then
-                    swiftDialogUpdate "message: Analyzing ${appName//.app/} ($appversion)"
+                    swiftDialogUpdate "message: ${display_string_discovery_message2} ${appName//.app/} ($appversion)" #Analyzing
                 else
-                    swiftDialogUpdate "message: Analyzing ${appName//.app/}"
+                    swiftDialogUpdate "message: ${display_string_discovery_message2} ${appName//.app/}" # Analyzing
                 fi
             fi
             
@@ -2316,7 +2872,7 @@ function verifyApp() {
     appPath=$1
     log_verbose "Verifying: $appPath"
     sleep .2
-    swiftDialogUpdate "progresstext: $appPath"
+    swiftDialogUpdate "progresstext: $(get_localized_path $appPath)"
     swiftDialogUpdate "icon: $appPath"
     
     # verify with spctl
@@ -2421,7 +2977,7 @@ workflow_do_Installations() {
         progressIncrementValue=$(( 100 / queuedLabelsArrayLength ))
         sleep 1
         swiftDialogUpdate "infobox: + <br><br>"
-        swiftDialogUpdate "infobox: + **Updates:** $queuedLabelsArrayLength"
+        swiftDialogUpdate "infobox: + **${display_string_patching_infobox_updates}** ${queuedLabelsArrayLength}"
     fi
     
     i=0
@@ -2440,8 +2996,8 @@ workflow_do_Installations() {
             sleep .5
             
             swiftDialogUpdate "icon: /Applications/${currentDisplayName}.app"
-            swiftDialogUpdate "progresstext: Processing ${currentDisplayName} …"
-            swiftDialogUpdate "listitem: index: $i, icon: /Applications/${currentDisplayName}.app, status: wait, statustext: Checking …"
+            swiftDialogUpdate "progresstext: ${display_string_patching_progress} ${currentDisplayName} …" # Processing
+            swiftDialogUpdate "listitem: index: $i, icon: /Applications/${currentDisplayName}.app, status: wait, statustext: ${display_string_patching_checking} …"
             
         fi
         
@@ -2545,19 +3101,19 @@ appsUpToDate(){
     # Extract the App up to date info from the AAP log
     if [[ $errorsCount -le 0 ]] && [[ ! -n $appsUpToDate ]]; then
         log_info "SUCCESS: Applications updates were installed with no errors"
-        webhookStatus="Success: Apps updated (S/N ${serialNumber})"
+        webhookStatus="${(e)display_string_webhook_status_success}"
         formatted_result=$(echo "$queuedLabelsArray")
         formatted_error_result="None"
         errorCount="0"
     elif
         [[ $errorsCount -gt 0 ]] && [[ ! -n $appsUpToDate ]]; then
             log_info "FAILURES DETECTED: Applications updates were installed with some errors"
-            webhookStatus="Error: Update(s) failed (S/N ${serialNumber})"
+            webhookStatus="${(e)display_string_webhook_status_error}"
             formatted_result=$(echo "$queuedLabelsArray")
             check_and_echo_errors
         else
             log_info "SUCCESS: Applications were all up to date, nothing to install"
-            webhookStatus="Success: Apps already up-to-date (S/N ${serialNumber})"
+            webhookStatus="${(e)display_string_webhook_status_uptodate}"
             formatted_result="None"
             formatted_error_result="None"
             errorCount="0"
@@ -2610,27 +3166,27 @@ webHookMessage() {
             "fields": [
                 {
                     "type": "mrkdwn",
-                    "text": ">*Serial Number and Computer Name:*\n>'"$serialNumber"' on '"$computerName"'"
+                    "text": ">*${display_string_webhook_computerserial}*\n>'"$computerNameserialNumber"' on '"$serialNumber"'"
                 },
                         {
                     "type": "mrkdwn",
-                    "text": ">*Computer Model:*\n>'"$modelName"'"
+                    "text": ">*${display_string_webhook_computermodel}*\n>'"$modelName"'"
                 },
                 {
                     "type": "mrkdwn",
-                    "text": ">*Current User:*\n>'"$currentUserAccountName"'"
+                    "text": ">*${display_string_webhook_currentuser}*\n>'"$currentUserAccountName"'"
                 },
                 {
                     "type": "mrkdwn",
-                    "text": ">*Updates:*\n>'"$formatted_result"'"
+                    "text": ">*${display_string_webhook_updates}*\n>'"$formatted_result"'"
                 },
                 {
                     "type": "mrkdwn",
-                    "text": ">*Errors:*\n>'"$formatted_error_result"'"
+                    "text": ">*${display_string_webhook_errors}:*\n>'"$formatted_error_result"'"
                 },
                         {
                     "type": "mrkdwn",
-                    "text": ">*Computer Record:*\n>'"$mdmComputerURL"'"
+                    "text": ">*${display_string_webhook_computerrecord}*\n>'"$mdmComputerURL"'"
                 }
             ]
         },
@@ -2641,12 +3197,12 @@ webHookMessage() {
                     "type": "button",
                     "text": {
                         "type": "plain_text",
-                        "text": "View computer in $mdmName",
+                        "text": "${display_string_webhook_viewin} ${mdmName}",
                         "emoji": true
                     },
                     "style": "primary",
                     "action_id": "actionId-0",
-                    "url": "'"$mdmComputerURL"'"
+                    "url": "'"${mdmComputerURL}"'"
                 }
             ]
         }
@@ -2692,27 +3248,27 @@ webHookMessage() {
         "activityTitle": "'${webhookStatus}'",
         "activityImage": "https://ics.services.jamfcloud.com/icon/hash_28ed3420a17f56d084d012e1af310d3aa9bc239b245f47bc8f9cb1603642737d",
         "facts": [{
-            "name": "Computer Name (Serial Number):",
+            "name": "${display_string_webhook_computerserial}",
             "value": "'"$computerName"' ('"$serialNumber"')"
         }, {
-            "name": "User:",
+            "name": "${display_string_webhook_user}",
             "value": "'"$currentUserAccountName"'"
         }, {
-            "name": "Updates:",
+            "name": "${display_string_webhook_updates}",
             "value": "'"$formatted_result"'"
         }, {
-            "name": "Errors:",
+            "name": "${display_string_webhook_errors}",
             "value": "'"$formatted_error_result"'"
         }],
         "markdown": true
     }],
     "potentialAction": [{
         "@type": "OpenUri",
-        "name": "View in $mdmName",
+        "name": "${display_string_webhook_viewin} $mdmName",
         "targets": [{
             "os": "default",
             "uri":
-            "'"$mdmComputerURL"'"
+            "'"${mdmComputerURL}"'"
         }]
     }]
 }'
@@ -2987,7 +3543,8 @@ main() {
         defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus -bool true #Set completion status to true
         
         if [ ${interactiveMode} -gt 1 ]; then
-            $dialogBinary --title "$appTitle" --message "All apps are up to date." --windowbuttons min --icon "$icon" --overlayicon "$overlayIcon" --moveable --position topright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
+            # All apps are up to date
+            $dialogBinary --title "$appTitle" --message "${display_string_uptodate_message}" --windowbuttons min --icon "$icon" --overlayicon "$overlayIcon" --moveable --position topright --timer 60 --quitkey k --button1text "${display_string_uptodate_button1}" --style "mini" --hidetimerbar
         fi
         
         next_auto_launch_minutes="1440"
