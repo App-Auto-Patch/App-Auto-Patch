@@ -261,7 +261,7 @@
 				<key>display_string_installomator_alreadyinstalled</key>
 				<string>Ya instalado desde App Store. No reemplazado.</string>
 				<key>display_string_installomator_error</key>
-				<string>ErrorES</string>
+				<string>Error</string>
 				<key>display_string_installomator_finishing</key>
 				<string>Refinamiento</string>
 				<key>display_string_installomator_downloading</key>
