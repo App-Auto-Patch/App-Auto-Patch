@@ -75,7 +75,7 @@
       <key>en</key>
       <dict>
         <key>AppTitle</key>
-        <string>App Auto-Patch via Intune</string>
+        <string>App Auto-Patch</string>
         <key>deferral</key>
         <dict>
           <key>DISPLAY_STRING_FORMAT_DATE</key>
@@ -206,7 +206,7 @@
       <key>es</key>
       <dict>
         <key>AppTitle</key>
-        <string>App Parche Automático via Intune</string>
+        <string>App Parche Automático</string>
         <key>deferral</key>
         <dict>
           <key>DISPLAY_STRING_FORMAT_DATE</key>
