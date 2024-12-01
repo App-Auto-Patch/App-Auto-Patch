@@ -78,6 +78,8 @@ echo "
     [--debug-mode] [--debug-mode-off]
     [--usage] [--help]
     [--uninstall]
+    [--version]
+    [--vers]
 
 "
 # Error log any unrecognized options.
@@ -108,6 +110,22 @@ show_help() {
     fi
     exit 0
 
+}
+
+show_version() {
+echo "
+    App Auto-Patch
+
+    Version ${scriptVersion}
+    ${scriptDate}
+    https://github.com/App-Auto-Patch
+"
+exit 0
+}
+
+show_version_short() {
+    echo "${scriptVersion}"
+    exit 0
 }
 
 ### App Auto-Patch Path Variables ###
@@ -336,6 +354,12 @@ get_options() {
             ;;
             --uninstall)
                 uninstall_app_auto_patch
+            ;;
+            --version)
+                show_version
+            ;;
+            --vers)
+                show_version_short
             ;;
             *)
                 unrecognized_options_array+=("$1")
