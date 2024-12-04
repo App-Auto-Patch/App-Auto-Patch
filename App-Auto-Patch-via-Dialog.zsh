@@ -143,6 +143,8 @@ set_defaults() {
 
     ignoreAppsInHomeFolder="FALSE" # MDM Enabled
 
+    useLaunchDaemon="TRUE" # MDM Enabled
+
     installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore" # MDM Enabled
 
     deferralTimer="300" # MDM Enabled
@@ -420,6 +422,8 @@ get_preferences() {
         convert_apps_in_home_folder_managed=$(defaults read "${appAutoPatchManagedPLIST}" ConvertAppsInHomeFolder 2> /dev/null)
         local ignore_apps_in_home_folder_managed
         ignore_apps_in_home_folder_managed=$(defaults read "${appAutoPatchManagedPLIST}" IgnoreAppsInHomeFolder 2> /dev/null)
+        local use_launch_daemon_managed
+        use_launch_daemon_managed=$(defaults read "${appAutoPatchManagedPLIST}" UseLaunchDaemon 2> /dev/null)
         local installomator_options_managed
         installomator_options_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorOptions 2> /dev/null)
         local deferral_timer_managed
@@ -491,6 +495,8 @@ get_preferences() {
         convert_apps_in_home_folder_local=$(defaults read "${appAutoPatchLocalPLIST}" ConvertAppsInHomeFolder 2> /dev/null)
         local ignore_apps_in_home_folder_local
         ignore_apps_in_home_folder_local=$(defaults read "${appAutoPatchLocalPLIST}" IgnoreAppsInHomeFolder 2> /dev/null)
+        local use_launch_daemon_local
+        use_launch_daemon_local=$(defaults read "${appAutoPatchLocalPLIST}" UseLaunchDaemon 2> /dev/null)
         local installomator_options_local
         installomator_options_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorOptions 2> /dev/null)
         local deferral_timer_local
@@ -560,6 +566,8 @@ get_preferences() {
     { [[ -z "${convert_apps_in_home_folder_managed}" ]] && [[ -n "${convertAppsInHomeFolder}" ]] && [[ -n "${convert_apps_in_home_folder_local}" ]]; } && convertAppsInHomeFolder="${convert_apps_in_home_folder_local}"
     [[ -n "${ignore_apps_in_home_folder_managed}" ]] && ignoreAppsInHomeFolder="${ignore_apps_in_home_folder_managed}"
     { [[ -z "${ignore_apps_in_home_folder_managed}" ]] && [[ -n "${ignoreAppsInHomeFolder}" ]] && [[ -n "${ignore_apps_in_home_folder_local}" ]]; } && ignoreAppsInHomeFolder="${ignore_apps_in_home_folder_local}"
+    [[ -n "${use_launch_daemon_managed}" ]] && useLaunchDaemon="${use_launch_daemon_managed}"
+    { [[ -z "${use_launch_daemon_managed}" ]] && [[ -n "${useLaunchDaemon}" ]] && [[ -n "${use_launch_daemon_local}" ]]; } && useLaunchDaemon="${use_launch_daemon_local}"
     [[ -n "${installomator_options_managed}" ]] && installomatorOptions="${installomator_options_managed}"
     { [[ -z "${installomator_options_managed}" ]] && [[ -n "${installomatorOptions}" ]] && [[ -n "${installomator_options_local}" ]]; } && installomatorOptions="${installomator_options_local}"
     [[ -n "${deferral_timer_managed}" ]] && deferralTimer="${deferral_timer_managed}"
@@ -605,6 +613,7 @@ get_preferences() {
     log_verbose  "appTitle: $appTitle"
     log_verbose  "convertAppsInHomeFolder: $convertAppsInHomeFolder"
     log_verbose  "ignoreAppsInHomeFolder: $ignoreAppsInHomeFolder"
+    log_verbose  "useLaunchDaemon: $useLaunchDaemon"
     log_verbose  "installomatorOptions: $installomatorOptions"
     log_verbose  "deferralTimer: $deferralTimer"
     log_verbose  "deferralTimerAction: $deferralTimerAction"
@@ -1056,10 +1065,12 @@ workflow_startup() {
 	defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
 	
 	# Check for aap installation.
-	local aapCurrentFolder
-	aapCurrentFolder=$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")
-	! { [[ "${aapCurrentFolder}" == "${appAutoPatchFolder}" ]] || [[ "${aapCurrentFolder}" == $(dirname "${appAutoPatchLink}") ]]; } && install_app_auto_patch
-	
+	if [[ "${useLaunchDaemon}" == "TRUE" ]]; then
+		local aapCurrentFolder
+		aapCurrentFolder=$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")
+		! { [[ "${aapCurrentFolder}" == "${appAutoPatchFolder}" ]] || [[ "${aapCurrentFolder}" == $(dirname "${appAutoPatchLink}") ]]; } && install_app_auto_patch
+	fi
+		
     # Check for Installomator
     get_installomator
 
@@ -1167,33 +1178,35 @@ workflow_startup() {
     # Management parameter options
     manage_parameter_options
 
-	#Check if workflow_install_now workflow was triggered
-    if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ -f "${WORKFLOW_INSTALL_NOW_FILE}" ]]; then
-        log_status "Install now alternate workflow enabled."
-        workflow_install_now_option="TRUE" # This is re-set in case the script restarts.
-        touch "${WORKFLOW_INSTALL_NOW_FILE}" # This is created in case the script restarts.
-    fi
-
 	if [[ "${check_error}" == "TRUE" ]] || [[ "${option_error}" == "TRUE" ]] || [[ "${helper_error}" == "TRUE" ]]; then
 		log_exit "Initial startup validation failed."
 		write_status "Inactive Error: Initial startup validation failed."
 		exit_error
 	fi
-	
-	# If aap is running via Jamf, then restart via LaunchDaemon to release the jamf parent process.
-	if [[ "${parent_process_is_jamf}" == "TRUE" ]]; then
-		log_status "Found that Jamf is installing or is the parent process, restarting via App Auto-Patch LaunchDaemon..."
-		{ sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
-		disown
-		exit_clean
-	fi
-	
-	# If aap is running from outside the ${appAutoPatchFolder}, then restart via LaunchDaemon to release any parent installer process.
-	if ! { [[ "${aapCurrentFolder}" == "${appAutoPatchFolder}" ]] || [[ "${aapCurrentFolder}" == $(dirname "${appAutoPatchLink}") ]]; }; then
-		log_status "Found that App Auto-Patch is installing, restarting via App Auto-Patch LaunchDaemon..."
-		{ sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
-        disown
-		exit_clean
+
+	if [[ "${useLaunchDaemon}" == "TRUE" ]]; then
+		#Check if workflow_install_now workflow was triggered
+		if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ -f "${WORKFLOW_INSTALL_NOW_FILE}" ]]; then
+			log_status "Install now alternate workflow enabled."
+			workflow_install_now_option="TRUE" # This is re-set in case the script restarts.
+			touch "${WORKFLOW_INSTALL_NOW_FILE}" # This is created in case the script restarts.
+		fi
+			
+		# If aap is running via Jamf, then restart via LaunchDaemon to release the jamf parent process.
+		if [[ "${parent_process_is_jamf}" == "TRUE" ]]; then
+			log_status "Found that Jamf is installing or is the parent process, restarting via App Auto-Patch LaunchDaemon..."
+			{ sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+			disown
+			exit_clean
+		fi
+		
+		# If aap is running from outside the ${appAutoPatchFolder}, then restart via LaunchDaemon to release any parent installer process.
+		if ! { [[ "${aapCurrentFolder}" == "${appAutoPatchFolder}" ]] || [[ "${aapCurrentFolder}" == $(dirname "${appAutoPatchLink}") ]]; }; then
+			log_status "Found that App Auto-Patch is installing, restarting via App Auto-Patch LaunchDaemon..."
+			{ sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+			disown
+			exit_clean
+		fi
 	fi
 	
 	# Wait for a valid network connection. If there is still no network after two minutes, an automatic deferral is started.
