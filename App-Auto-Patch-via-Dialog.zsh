@@ -143,7 +143,7 @@ set_defaults() {
 
     ignoreAppsInHomeFolder="FALSE" # MDM Enabled
 
-    useLaunchDaemon="TRUE" # MDM Enabled
+    useLaunchDaemon="FALSE" # MDM Enabled
 
     installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore" # MDM Enabled
 
@@ -1065,11 +1065,9 @@ workflow_startup() {
 	defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
 	
 	# Check for aap installation.
-	if [[ "${useLaunchDaemon}" == "TRUE" ]]; then
-		local aapCurrentFolder
-		aapCurrentFolder=$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")
-		! { [[ "${aapCurrentFolder}" == "${appAutoPatchFolder}" ]] || [[ "${aapCurrentFolder}" == $(dirname "${appAutoPatchLink}") ]]; } && install_app_auto_patch
-	fi
+	local aapCurrentFolder
+	aapCurrentFolder=$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")
+	! { [[ "${aapCurrentFolder}" == "${appAutoPatchFolder}" ]] || [[ "${aapCurrentFolder}" == $(dirname "${appAutoPatchLink}") ]]; } && install_app_auto_patch
 		
     # Check for Installomator
     get_installomator
@@ -1344,23 +1342,25 @@ install_app_auto_patch() {
     [[ ! -d "${appAutoPatchLogFolder}" ]] && mkdir -p "${appAutoPatchLogFolder}"
     [[ ! -d "${appAutoPatchLogArchiveFolder}" ]] && mkdir -p "${appAutoPatchLogArchiveFolder}"
 
-    log_notice "###### App Auto-Patch ${scriptVersion} - Installing ... ######"
-    write_status "Running: Installation workflow"
+    if [[ "${useLaunchDaemon}" == "TRUE" ]]; then
 
-    log_install "Copying aap to: ${appAutoPatchFolder}/appautopatch"
-    cp "${BASH_SOURCE[0]:-${(%):-%x}}" "${appAutoPatchFolder}/appautopatch" > /dev/null 2>&1
-    if [[ ! -d "/usr/local/bin" ]]; then
-        log_install "Creating local search path folder: /usr/local/bin"
-        mkdir -p "/usr/local/bin"
-        chmod -R a+rx "/usr/local/bin"
-    fi
+        log_notice "###### App Auto-Patch ${scriptVersion} - Installing ... ######"
+        write_status "Running: Installation workflow"
 
-    log_install "Creating aap search path link: ${appAutoPatchLink}"
-    ln -s "${appAutoPatchFolder}/appautopatch" "${appAutoPatchLink}" > /dev/null 2>&1
+        log_install "Copying aap to: ${appAutoPatchFolder}/appautopatch"
+        cp "${BASH_SOURCE[0]:-${(%):-%x}}" "${appAutoPatchFolder}/appautopatch" > /dev/null 2>&1
+        if [[ ! -d "/usr/local/bin" ]]; then
+            log_install "Creating local search path folder: /usr/local/bin"
+            mkdir -p "/usr/local/bin"
+            chmod -R a+rx "/usr/local/bin"
+        fi
 
-    log_install "Creating AAP LauchDaemon helper: ${appAutoPatchFolder}/aap-starter"
+        log_install "Creating aap search path link: ${appAutoPatchLink}"
+        ln -s "${appAutoPatchFolder}/appautopatch" "${appAutoPatchLink}" > /dev/null 2>&1
 
-    /bin/cat <<EOAS > "${appAutoPatchFolder}/aap-starter"
+        log_install "Creating AAP LauchDaemon helper: ${appAutoPatchFolder}/aap-starter"
+
+        /bin/cat <<EOAS > "${appAutoPatchFolder}/aap-starter"
 #!/bin/bash
 # Exit if App Auto Patch is already running.
 [[ "\$(pgrep -F "${appAutoPatchPIDfile}" 2> /dev/null)" ]] && exit 0
@@ -1384,14 +1384,14 @@ disown
 exit 0
 EOAS
 
-if [[ -f "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" ]]; then
-    log_install "Removing previous AAP Launch Daemon: /Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
-    launchctl bootout system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" 2> /dev/null
-    rm -f "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" 2> /dev/null
-fi
+    if [[ -f "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" ]]; then
+        log_install "Removing previous AAP Launch Daemon: /Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
+        launchctl bootout system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" 2> /dev/null
+        rm -f "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" 2> /dev/null
+    fi
 
-log_install "Creating AAP LaunchDaemon: /Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
-/bin/cat <<EOLD > "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
+    log_install "Creating AAP LaunchDaemon: /Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
+    /bin/cat <<EOLD > "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -1413,22 +1413,26 @@ log_install "Creating AAP LaunchDaemon: /Library/LaunchDaemons/${appAutoPatchLau
 </dict>
 </plist>
 EOLD
-
-log_install "Setting permissions for installed items"
-chown root:wheel "/Library/Management"
-chmod 777 "/Library/Management"
-chown -R root:wheel "${appAutoPatchFolder}"
-chmod -R 777 "${appAutoPatchFolder}"
-chmod -R a+r "${appAutoPatchFolder}"
-chmod -R go-w "${appAutoPatchFolder}"
-chmod a+x "${appAutoPatchFolder}/appautopatch"
-chmod a+x "${appAutoPatchFolder}/aap-starter"
-chown root:wheel "${appAutoPatchLink}"
-chmod a+rx "${appAutoPatchLink}"
-chmod go-w "${appAutoPatchLink}"
-chmod 644 "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
-chown root:wheel "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
-defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "${scriptVersion}"
+    fi
+    
+    log_install "Setting permissions for installed items"
+    chown root:wheel "/Library/Management"
+    chmod 777 "/Library/Management"
+    chown -R root:wheel "${appAutoPatchFolder}"
+    chmod -R 777 "${appAutoPatchFolder}"
+    chmod -R a+r "${appAutoPatchFolder}"
+    chmod -R go-w "${appAutoPatchFolder}"
+    if [[ "${useLaunchDaemon}" == "TRUE" ]]; then
+        chmod a+x "${appAutoPatchFolder}/appautopatch"
+        chmod a+x "${appAutoPatchFolder}/aap-starter"
+        chown root:wheel "${appAutoPatchLink}"
+        chmod a+rx "${appAutoPatchLink}"
+        chmod go-w "${appAutoPatchLink}"
+        chmod 644 "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
+        chown root:wheel "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
+    fi
+    
+    defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "${scriptVersion}"
 
 }
 
