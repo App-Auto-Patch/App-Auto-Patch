@@ -1566,10 +1566,14 @@ get_installomator() {
         log_notice "Installomator was found at $installomatorPath, checking version ..."
         if [[ "$installomatorVersion" == "Release" ]]; then
             appNewVersion=$(curl -sLI "https://github.com/Installomator/Installomator/releases/latest" | grep -i "^location" | tr "/" "\n" | tail -1 | sed 's/[^0-9\.]//g')
+            appVersion="$(cat $fragmentsPath/version.sh)"
         else
-            appNewVersion=$(curl -sL "https://raw.githubusercontent.com/Installomator/Installomator/refs/heads/main/fragments/version.sh")        
+            appNewVersion="$(curl -sL "https://raw.githubusercontent.com/Installomator/Installomator/refs/heads/main/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
+            appVersion="$(cat "/Library/Management/AppAutoPatch/Installomator/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
+            # convert to epoch
+            appNewVersion=$(date -j -f "%Y-%m-%d" "${appNewVersion}" +%s)
+            appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
         fi
-        appVersion="$(cat $fragmentsPath/version.sh)"
         if [[ ${appVersion} -lt ${appNewVersion} ]]; then
             log_error "Installomator is installed but is out of date. Versions before 10.0 function unpredictably with App Auto Patch."
             log_info "Removing previously installed Installomator version ($appVersion) and reinstalling with the latest version ($appNewVersion)"
