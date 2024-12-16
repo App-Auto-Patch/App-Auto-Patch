@@ -163,6 +163,8 @@ set_defaults() {
 
     installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore" # MDM Enabled
 
+    installomatorVersion="Release" # MDM Enabled - Use:  Release|Beta 
+
     deferralTimer="300" # MDM Enabled
     
     deferral_timer_minutes=1440
@@ -446,6 +448,8 @@ get_preferences() {
         ignore_apps_in_home_folder_managed=$(defaults read "${appAutoPatchManagedPLIST}" IgnoreAppsInHomeFolder 2> /dev/null)
         local installomator_options_managed
         installomator_options_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorOptions 2> /dev/null)
+        local installomator_version_managed
+        installomator_version_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorVersion 2> /dev/null)
         local deferral_timer_managed
         deferral_timer_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimer 2> /dev/null)
         local deferral_timer_action_managed
@@ -517,6 +521,8 @@ get_preferences() {
         ignore_apps_in_home_folder_local=$(defaults read "${appAutoPatchLocalPLIST}" IgnoreAppsInHomeFolder 2> /dev/null)
         local installomator_options_local
         installomator_options_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorOptions 2> /dev/null)
+        local installomator_version_local
+        installomator_version_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorVersion 2> /dev/null)
         local deferral_timer_local
         deferral_timer_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimer 2> /dev/null)
         local deferral_timer_action_local
@@ -586,6 +592,8 @@ get_preferences() {
     { [[ -z "${ignore_apps_in_home_folder_managed}" ]] && [[ -n "${ignoreAppsInHomeFolder}" ]] && [[ -n "${ignore_apps_in_home_folder_local}" ]]; } && ignoreAppsInHomeFolder="${ignore_apps_in_home_folder_local}"
     [[ -n "${installomator_options_managed}" ]] && installomatorOptions="${installomator_options_managed}"
     { [[ -z "${installomator_options_managed}" ]] && [[ -n "${installomatorOptions}" ]] && [[ -n "${installomator_options_local}" ]]; } && installomatorOptions="${installomator_options_local}"
+    [[ -n "${installomator_version_managed}" ]] && installomatorVersion="${installomator_version_managed}"
+    { [[ -z "${installomator_version_managed}" ]] && [[ -n "${installomatorVersion}" ]] && [[ -n "${installomator_version_local}" ]]; } && installomatorVersion="${installomator_version_local}"
     [[ -n "${deferral_timer_managed}" ]] && deferralTimer="${deferral_timer_managed}"
     { [[ -z "${deferral_timer_managed}" ]] && [[ -n "${deferralTimer}" ]] && [[ -n "${deferral_timer_local}" ]]; } && deferralTimer="${deferral_timer_local}"
     [[ -n "${deferral_timer_action_managed}" ]] && deferralTimerAction="${deferral_timer_action_managed}"
@@ -630,6 +638,7 @@ get_preferences() {
     log_verbose  "convertAppsInHomeFolder: $convertAppsInHomeFolder"
     log_verbose  "ignoreAppsInHomeFolder: $ignoreAppsInHomeFolder"
     log_verbose  "installomatorOptions: $installomatorOptions"
+    log_verbose  "installomatorVersion: $installomatorVersion"
     log_verbose  "deferralTimer: $deferralTimer"
     log_verbose  "deferralTimerAction: $deferralTimerAction"
     log_verbose  "daysUntilReset: $daysUntilReset"
@@ -1084,9 +1093,6 @@ workflow_startup() {
 	aapCurrentFolder=$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")
 	! { [[ "${aapCurrentFolder}" == "${appAutoPatchFolder}" ]] || [[ "${aapCurrentFolder}" == $(dirname "${appAutoPatchLink}") ]]; } && install_app_auto_patch
 	
-    # Check for Installomator
-    get_installomator
-
     # Since swiftDialog and App Auto-Patch require at least macOS 12 Monterey, first confirm the major OS version
     if [[ "${osMajorVersion}" -ge 12 ]] ; then
         log_info "macOS ${osMajorVersion} installed; proceeding ..."
@@ -1187,6 +1193,9 @@ workflow_startup() {
 	
 	# Initial Parameter and helper validation, if any of these fail then it's unsafe for the workflow to continue.
 	get_preferences
+
+    # Check for Installomator
+    get_installomator
 
     # Management parameter options
     manage_parameter_options
@@ -1533,8 +1542,13 @@ get_installomator() {
     if ! [[ -f $installomatorScript ]]; then
         log_warning "Installomator was not found at $installomatorPath"
         log_info "Attempting to download Installomator.sh at $installomatorPath"
-
-        latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
+        if [[ "$installomatorVersion" == "Release" ]]; then
+            log_info "Attempting to download Installomator release version"
+            latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
+        else
+            log_info "Attempting to download Installomator beta version"
+            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "main" | tail -1 | cut -d'"' -f4)"
+        fi
 
         tarPath="$installomatorPath/installomator.latest.tar.gz"
 
@@ -1550,8 +1564,16 @@ get_installomator() {
         rm -rf $installomatorPath/*.tar.gz
     else
         log_notice "Installomator was found at $installomatorPath, checking version ..."
-        appNewVersion=$(curl -sLI "https://github.com/Installomator/Installomator/releases/latest" | grep -i "^location" | tr "/" "\n" | tail -1 | sed 's/[^0-9\.]//g')
-        appVersion="$(cat $fragmentsPath/version.sh)"
+        if [[ "$installomatorVersion" == "Release" ]]; then
+            appNewVersion=$(curl -sLI "https://github.com/Installomator/Installomator/releases/latest" | grep -i "^location" | tr "/" "\n" | tail -1 | sed 's/[^0-9\.]//g')
+            appVersion="$(cat $fragmentsPath/version.sh)"
+        else
+            appNewVersion="$(curl -sL "https://raw.githubusercontent.com/Installomator/Installomator/refs/heads/main/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
+            appVersion="$(cat "/Library/Management/AppAutoPatch/Installomator/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
+            # convert to epoch
+            appNewVersion=$(date -j -f "%Y-%m-%d" "${appNewVersion}" +%s)
+            appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
+        fi
         if [[ ${appVersion} -lt ${appNewVersion} ]]; then
             log_error "Installomator is installed but is out of date. Versions before 10.0 function unpredictably with App Auto Patch."
             log_info "Removing previously installed Installomator version ($appVersion) and reinstalling with the latest version ($appNewVersion)"

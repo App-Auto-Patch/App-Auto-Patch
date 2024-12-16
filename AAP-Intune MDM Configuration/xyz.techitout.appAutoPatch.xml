@@ -14,6 +14,8 @@
 <string>FALSE</string>
 <key>InstallomatorOptions</key>
 <string>BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=microsoft</string>
+<key>InstallomatorVersion</key>
+<string>Beta</string>
 <key>PatchWeekStartDay</key>
 <integer>1</integer>
 <key>DeferralTimerFocus</key>
