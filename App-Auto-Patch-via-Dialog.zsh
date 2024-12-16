@@ -8,7 +8,7 @@
 #
 # HISTORY
 #
-#   Version 3.0.0-beta4, [11.14.2024]
+#   Version 3.0.0-beta5, [12.16.2024]
 #
 #
 ####################################################################################################
@@ -23,8 +23,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.0-beta4"
-scriptDate="2024/11/14"
+scriptVersion="3.0.0-beta5"
+scriptDate="2024/12/16"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -163,7 +163,7 @@ set_defaults() {
 
     installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore" # MDM Enabled
 
-    installomatorVersion="Release" # MDM Enabled - Use:  Release|Beta 
+    installomatorVersion="Main" # MDM Enabled - Use:  Release|Main 
 
     deferralTimer="300" # MDM Enabled
     
@@ -1546,7 +1546,7 @@ get_installomator() {
             log_info "Attempting to download Installomator release version"
             latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
         else
-            log_info "Attempting to download Installomator beta version"
+            log_info "Attempting to download Installomator main version"
             latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "main" | tail -1 | cut -d'"' -f4)"
         fi
 
