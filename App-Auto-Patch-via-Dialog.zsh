@@ -132,6 +132,9 @@
 #   Version 2.11.4, 10.17.2024, Andrew Spokes (@TechTrekkie)
 #   - Updated the logic that populates the app name and icon to pull from fragments/labels/ to resolve issues populating swiftDialog list
 # 
+#   Version 2.11.5, 12.22.2024, Andrew Spokes (@TechTrekkie)
+#   - Fixed a bug with the Days Since Patching Start Date logic that was causing it to be a day behind
+# 
 ####################################################################################################
 
 ####################################################################################################
@@ -144,7 +147,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.11.4"
+scriptVersion="2.11.5"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1446,9 +1449,27 @@ function AAPActivator(){
         return 1
     }
     
-    statusDateEpoch=$(date -j -f "%Y-%m-%d" "$weeklyPatchingStatusDate" "+%s")
-    EpochTimeSinceStatus=$(($CurrentDateEpoch - $statusDateEpoch))
-    DaysSinceStatus=$(($EpochTimeSinceStatus / 86400))
+    # Commenting out old logic due to issue with timing of caluclation
+    # statusDateEpoch=$(date -j -f "%Y-%m-%d" "$weeklyPatchingStatusDate" "+%s")
+    # EpochTimeSinceStatus=$(($CurrentDateEpoch - $statusDateEpoch))
+    # DaysSinceStatus=$(($EpochTimeSinceStatus / 86400))
+    
+    # New Logic
+    # Load the zsh datetime module
+    zmodload zsh/datetime
+    
+    # Define the two dates (in YYYY-MM-DD format)
+    date1="$weeklyPatchingStatusDate"
+    date2="$CurrentDate"
+    
+    # Convert the dates to seconds since epoch
+    epoch1=$(strftime -r "%Y-%m-%d" $date1)
+    epoch2=$(strftime -r "%Y-%m-%d" $date2)
+    
+    # Calculate the difference in seconds and convert to days
+    diff_in_seconds=$((epoch2 - epoch1))
+    DaysSinceStatus=$((diff_in_seconds / 86400))
+
     
     infoOut "Patching Completion Status is $weeklyPatchingComplete"
     infoOut "Patching Start Date is $weeklyPatchingStatusDate"
