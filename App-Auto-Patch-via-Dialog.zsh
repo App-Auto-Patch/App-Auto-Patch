@@ -8,7 +8,7 @@
 #
 # HISTORY
 #
-#   Version 3.0.0-beta5, [12.16.2024]
+#   Version 3.0.0-beta5, [12.22.2024]
 #
 #
 ####################################################################################################
@@ -24,7 +24,7 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.0.0-beta5"
-scriptDate="2024/12/16"
+scriptDate="2024/12/22"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1747,11 +1747,28 @@ check_completion_status() {
         weeklyPatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus 2> /dev/null)
         weeklyPatchingStartDate=$(defaults read "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingStartDate 2> /dev/null)
     fi
+
+    # Commenting out old logic due to issue with timing of caluclation
+    # statusDateEpoch=$(date -j -f "%Y-%m-%d" "$weeklyPatchingStartDate" "+%s")
+    # EpochTimeSinceStatus=$(($CurrentDateEpoch - $statusDateEpoch))
+    # DaysSinceStatus=$(($EpochTimeSinceStatus / 86400))
+
+    # New Logic
+    # Load the zsh datetime module
+    zmodload zsh/datetime
     
-    statusDateEpoch=$(date -j -f "%Y-%m-%d" "$weeklyPatchingStartDate" "+%s")
-    EpochTimeSinceStatus=$(($CurrentDateEpoch - $statusDateEpoch))
-    DaysSinceStatus=$(($EpochTimeSinceStatus / 86400))
+    # Define the two dates (in YYYY-MM-DD format)
+    date1="$weeklyPatchingStartDate"
+    date2="$CurrentDate"
     
+    # Convert the dates to seconds since epoch
+    epoch1=$(strftime -r "%Y-%m-%d" $date1)
+    epoch2=$(strftime -r "%Y-%m-%d" $date2)
+    
+    # Calculate the difference in seconds and convert to days
+    diff_in_seconds=$((epoch2 - epoch1))
+    DaysSinceStatus=$((diff_in_seconds / 86400))
+
     log_notice "Patching Completion Status is $weeklyPatchingComplete"
     log_notice "Patching Start Date is $weeklyPatchingStartDate"
     log_notice "Current Date: $CurrentDate"
