@@ -8,7 +8,7 @@
 #
 # HISTORY
 #
-#   Version 3.0.0-beta5, [12.22.2024]
+#   Version 3.0.0-beta6, [02.07.2025]
 #
 #
 ####################################################################################################
@@ -23,8 +23,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.0-beta5"
-scriptDate="2024/12/22"
+scriptVersion="3.0.0-beta6"
+scriptDate="2025/02/07"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -2057,6 +2057,7 @@ swiftDialogPatchingWindow(){
         
         if [[ ! -f $dialogCommandFile ]]; then
             touch "$dialogCommandFile"
+            chmod -vv 644 $dialogCommandFile
         fi
         
         # Create our running swiftDialog window
@@ -2072,6 +2073,7 @@ swiftDialogDiscoverWindow(){
     
     # If we are using SwiftDialog
     touch "$dialogCommandFile"
+    chmod -vv 644 $dialogCommandFile
     if [ ${interactiveMode} -gt 1 ]; then
         $dialogBinary \
         ${dialogDiscoverConfigurationOptions[@]} \
