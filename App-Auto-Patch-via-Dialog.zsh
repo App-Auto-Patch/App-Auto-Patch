@@ -138,6 +138,9 @@
 #   Version 2.11.6, 12.29.2024, Andrew Spokes (@TechTrekkie)
 #   - Updated SwiftDialog command file permissions to work with changes made in SwiftDialog 2.5.5
 # 
+#   Version 2.11.7, 02.07.2025, Andrew Spokes (@TechTrekkie)
+#   - Additional updates SwiftDialog command file permissions to work with changes made in SwiftDialog 2.5.5 that were missed in 2.11.6 update
+# 
 ####################################################################################################
 
 ####################################################################################################
@@ -150,7 +153,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.11.6"
+scriptVersion="2.11.7"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1030,6 +1033,7 @@ function swiftDialogListWindow(){
 		
 		if [[ ! -f $dialogCommandFile ]]; then
 			touch "$dialogCommandFile"
+			chmod 644 $dialogCommandFile
 		fi
 		
 		# Create our running swiftDialog window
@@ -1063,6 +1067,7 @@ function swiftDialogWriteWindow(){
 	
 	# If we are using SwiftDialog
 	touch "$dialogCommandFile"
+	chmod 644 $dialogCommandFile
 	if [ ${interactiveMode} -gt 1 ]; then
 		$dialogBinary \
 		${dialogWriteConfigurationOptions[@]} \
