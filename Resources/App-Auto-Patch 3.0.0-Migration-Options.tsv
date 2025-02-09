@@ -1,12 +1,12 @@
 AAP 2.11.7	3.0.0 Configuration Profile	3.0.0 CLI
 interactiveMode	<key>InteractiveMode</key> <integer>number</integer>	--interactiveMode=number
-ignoredLabels	<key>IgnoredLabels</key> <string>label label label etc…</string>	"--ignored-labels=""label1 label2"""
-requiredLabels	<key>RequiredLabels</key> <string>label label label etc…</string>	"--required-labels=""label1 label2"""
-optionalLabels	<key>OptionalLabels</key> <string>label label label etc…</string>	"--optional-labels=""label1 label2""]"
-installomatorOptions	<key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc…</string>	
+ignoredLabels	<key>IgnoredLabels</key> <string>label label label etc√â</string>	"--ignored-labels=""label1 label2"""
+requiredLabels	<key>RequiredLabels</key> <string>label label label etc√â</string>	"--required-labels=""label1 label2"""
+optionalLabels	<key>OptionalLabels</key> <string>label label label etc√â</string>	"--optional-labels=""label1 label2""]"
+installomatorOptions	<key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc√â</string>	
 maxDeferrals	<key>DeadlineCountHard</key> <integer>number</integer>	--deadline-count-hard=number
 debugMode		"[--verbose-mode] [--verbose-mode-off]
-    [--debug-mode] [--debug-mode-off]"
+√ä √ä [--debug-mode] [--debug-mode-off]"
 outdatedOsAction		
 swiftDialogMinimumRequiredVersion		
 deferralTimer	<key>DeferralTimer</key> <integer>minutes</integer>	
@@ -32,7 +32,7 @@ supportTeamName	<key>SupportTeamName</key> <string>name</string>
 supportTeamPhone	<key>SupportTeamPhone</key> <string>phoem</string>	
 supportTeamEmail	<key>SupportTeamEmail</key> <string>email</string>	
 supportTeamWebsite	<key>SupportTeamWebsite</key> <string>URL</string>	
-	<key>DeferralNextLaunchMinutes</key> <integer>minutes</integer>	--deferral-next-launch=minutes
+	<key>DeferralTimerWorkflowRelaunch</key> <integer>minutes</integer>	--deferral-timer-workflow-relaunch=minutes
 	"<key>DeferralTimerMenu</key> <string>minutes,minutes,minutes,etc...</string>"	"--deferral-timer-menu=minutes,minutes,etc..."
 	<key>DeferralTimerFocus</key> <integer>minutes</integer>	--deferral-timer-focus=minutes
 	<key>DeferralTimerError</key> <integer>minutes</integer>	--deferral-timer-error=minutes
