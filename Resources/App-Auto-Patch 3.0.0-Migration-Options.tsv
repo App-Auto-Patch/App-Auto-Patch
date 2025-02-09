@@ -1,12 +1,12 @@
 AAP 2.11.7	3.0.0 Configuration Profile	3.0.0 CLI
 interactiveMode	<key>InteractiveMode</key> <integer>number</integer>	--interactiveMode=number
-ignoredLabels	<key>IgnoredLabels</key> <string>label label label etcÉ</string>	"--ignored-labels=""label1 label2"""
-requiredLabels	<key>RequiredLabels</key> <string>label label label etcÉ</string>	"--required-labels=""label1 label2"""
-optionalLabels	<key>OptionalLabels</key> <string>label label label etcÉ</string>	"--optional-labels=""label1 label2""]"
-installomatorOptions	<key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etcÉ</string>	
+ignoredLabels	<key>IgnoredLabels</key> <string>label label label etc</string>	"--ignored-labels=""label1 label2"""
+requiredLabels	<key>RequiredLabels</key> <string>label label label etc</string>	"--required-labels=""label1 label2"""
+optionalLabels	<key>OptionalLabels</key> <string>label label label etc</string>	"--optional-labels=""label1 label2""]"
+installomatorOptions	<key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc</string>	
 maxDeferrals	<key>DeadlineCountHard</key> <integer>number</integer>	--deadline-count-hard=number
 debugMode		"[--verbose-mode] [--verbose-mode-off]
-Ê Ê [--debug-mode] [--debug-mode-off]"
+ [--debug-mode] [--debug-mode-off]"
 outdatedOsAction		
 swiftDialogMinimumRequiredVersion		
 deferralTimer	<key>DeferralTimer</key> <integer>minutes</integer>	
