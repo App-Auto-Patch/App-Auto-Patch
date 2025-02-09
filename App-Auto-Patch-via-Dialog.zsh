@@ -149,7 +149,7 @@ set_defaults() {
 
     appAutoPatchPIDfile="/var/run/aap.pid"
 
-    interactiveMode="1" # MDM Enabled
+    interactiveMode="2" # MDM Enabled
 
     installomatorPath="${appAutoPatchFolder}/Installomator"
 
@@ -175,7 +175,7 @@ set_defaults() {
 
     daysUntilReset="7" # MDM Enabled
 
-    selfServicePatchingStatusModeReset="3"
+    selfServicePatchingStatusModeReset="1"
 
     unattendedExit="FALSE" # MDM Enabled
 
