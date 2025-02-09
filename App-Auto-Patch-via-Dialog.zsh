@@ -8,7 +8,7 @@
 #
 # HISTORY
 #
-#   Version 3.0.0-beta6, [02.07.2025]
+#   Version 3.0.0-beta7, [02.08.2025]
 #
 #
 ####################################################################################################
@@ -23,8 +23,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.0-beta6"
-scriptDate="2025/02/07"
+scriptVersion="3.0.0-beta7"
+scriptDate="2025/02/08"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -2024,7 +2024,7 @@ archive_logs() {
 
 swiftDialogCommand(){
     
-    if [ ${interactiveMode} -gt 0 ]; then
+    if [ ${interactiveModeOption} -gt 0 ]; then
         echo "$@" > "$dialogCommandFile"
         sleep .2
     fi
@@ -2034,7 +2034,7 @@ swiftDialogCommand(){
 swiftDialogPatchingWindow(){
     
     # If we are using SwiftDialog
-    if [ ${interactiveMode} -ge 1 ]; then
+    if [ ${interactiveModeOption} -ge 1 ]; then
         # Check if there's a valid logged-in user:
         currentUser=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
         if [ "$currentUser" = "root" ] || [ "$currentUser" = "loginwindow" ] || [ "$currentUser" = "_mbsetupuser" ] || [ -z "$currentUser" ]; then
@@ -2074,7 +2074,7 @@ swiftDialogDiscoverWindow(){
     # If we are using SwiftDialog
     touch "$dialogCommandFile"
     chmod -vv 644 $dialogCommandFile
-    if [ ${interactiveMode} -gt 1 ]; then
+    if [ ${interactiveModeOption} -gt 1 ]; then
         $dialogBinary \
         ${dialogDiscoverConfigurationOptions[@]} \
         &
@@ -2084,7 +2084,7 @@ swiftDialogDiscoverWindow(){
 
 swiftDialogCompleteDialogPatching(){
     
-    if [ ${interactiveMode} -ge 1 ]; then
+    if [ ${interactiveModeOption} -ge 1 ]; then
         # swiftDialogCommand "listitem: add, title: Updates Complete!,status: success"
         swiftDialogUpdate "icon: SF=checkmark.circle.fill,weight=bold,colour1=#00ff44,colour2=#075c1e"
         swiftDialogUpdate "progress: complete"
@@ -2102,7 +2102,7 @@ swiftDialogCompleteDialogPatching(){
 
 swiftDialogCompleteDialogDiscover(){
     
-    if [ ${interactiveMode} -gt 1 ]; then
+    if [ ${interactiveModeOption} -gt 1 ]; then
         swiftDialogCommand "quit:"
         rm "$dialogCommandFile"
     fi
@@ -2352,7 +2352,7 @@ function PgetAppVersion() {
             log_info "Found $appName version $appversion"
             sleep .2
             
-            if [ ${interactiveMode} -gt 1 ]; then
+            if [ ${interactiveModeOption} -gt 1 ]; then
                 if [[ "$debugMode" == "true" || "$debugMode" == "verbose" ]]; then
                     swiftDialogUpdate "message: Analyzing ${appName//.app/} ($appversion)"
                 else
@@ -2480,7 +2480,7 @@ workflow_do_Installations() {
     
     swiftDialogPatchingWindow # Create our main "list" swiftDialog Window
     
-    if [ ${interactiveMode} -ge 1 ]; then
+    if [ ${interactiveModeOption} -ge 1 ]; then
         sleep 1
         queuedLabelsArrayLength=$((${#countOfElementsArray[@]}))
         progressIncrementValue=$(( 100 / queuedLabelsArrayLength ))
@@ -2495,7 +2495,7 @@ workflow_do_Installations() {
         
         # Use built-in swiftDialog Installomator integration options (if swiftDialog is being used)
         swiftDialogOptions=()
-        if [ ${interactiveMode} -ge 1 ]; then
+        if [ ${interactiveModeOption} -ge 1 ]; then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
             
             # Get the "name=" value from the current label and use it in our swiftDialog list
@@ -3051,7 +3051,7 @@ main() {
         log_info "All apps are up to date. Nothing to do."
         defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus -bool true #Set completion status to true
         
-        if [ ${interactiveMode} -gt 1 ]; then
+        if [ ${interactiveModeOption} -gt 1 ]; then
             $dialogBinary --title "$appTitle" --message "All apps are up to date." --windowbuttons min --icon "$icon" --overlayicon "$overlayIcon" --moveable --position topright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
         fi
         
