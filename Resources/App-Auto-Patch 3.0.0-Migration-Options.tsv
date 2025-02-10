@@ -1,49 +1,51 @@
 AAP 2.11.7	3.0.0 Configuration Profile	3.0.0 CLI
-interactiveMode	<key>InteractiveMode</key> <integer>number</integer>	--interactiveMode=number
-ignoredLabels	<key>IgnoredLabels</key> <string>label label label etc</string>	"--ignored-labels=""label1 label2"""
-requiredLabels	<key>RequiredLabels</key> <string>label label label etc</string>	"--required-labels=""label1 label2"""
-optionalLabels	<key>OptionalLabels</key> <string>label label label etc</string>	"--optional-labels=""label1 label2"""
-installomatorOptions	<key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc</string>	
-maxDeferrals	<key>DeadlineCountHard</key> <integer>number</integer>	--deadline-count-hard=number
-debugMode		"[--verbose-mode] [--verbose-mode-off]
- [--debug-mode] [--debug-mode-off]"
-outdatedOsAction		
-swiftDialogMinimumRequiredVersion		
-deferralTimer	<key>DeferralTimer</key> <integer>minutes</integer>	
-deferralTimerAction	"<key>DeferralTimerAction</key> <string>Defer,Continue</string>"	
-daysUntilReset	<key>DaysUntilReset</key> <integer>number</integer>	
-patchWeekStartDay	<key>PatchWeekStartDay</key> <integer>number</integer>	--patch-week-start-day=number
-maxDisplayAssertionCount	<key>DeadlineCountFocus</key> <integer>number</integer>	--deadline-count-focus=number
-selfServicePatchingStatusModeReset		<-hard coded within script
-ignoreDNDApps		
-unattendedExit	"<key>UnattendedExit</key> <string>TRUE,FALSE</string>"	
-unattendedExitSeconds	<key>UnattendedExitSeconds</key> <integer>seconds</integer>	
-runDiscovery	"<key>WorkflowDisableAppDiscovery</key> <string>TRUE,FALSE</string>"	[--workflow-disable-app-discovery] [--workflow-disable-app-discovery-off]
-removeInstallomatorPath	"<key>RemoveInstallomatorPath</key> <string>TRUE,FALSE</string>"	
-convertAppsInHomeFolder	"<key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</string>"	
-ignoreAppsInHomeFolder	"<key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>"	
-useLatestAvailableInstallomatorScriptVersion	"<key>InstallomatorVersion</key> <string>Main,Release</string>"	
-webhookEnabled	"<key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>"	[--webhook-feature-all] [--webhook-feature-failures] [--webhook-feature-off]
-teamsURL	<key>WebhookURLTeams</key> <string>URL</string>	--webhook-url-teams=URL
-slackURL	<key>WebhookURLSlack</key> <string>URL</string>	--webhook-url-slack=URL
 appTitle		
-useOverlayIcon	"<key>UseOverlayIcon</key> <string>TRUE,FALSE</string>"	
+convertAppsInHomeFolder	"<key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</string>"	
+daysUntilReset	<key>DaysUntilReset</key> <integer>number</integer>	
+debugMode		"[--verbose-mode] [--verbose-mode-off]
+    [--debug-mode] [--debug-mode-off]"
+deferralTimer	<key>DialogTimeoutDeferral</key> <integer>minutes</integer>	
+deferralTimerAction	"<key>DialogTimeoutDeferralAction</key> <string>Defer,Continue</string>"	
+ignoreAppsInHomeFolder	"<key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>"	
+ignoredLabels	<key>IgnoredLabels</key> <string>label label label etc…</string>	"--ignored-labels=""label1 label2"""
+ignoreDNDApps		
+installomatorOptions	<key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc…</string>	
+interactiveMode	<key>InteractiveMode</key> <integer>number</integer>	--interactiveMode=number
+maxDeferrals	<key>DeadlineCountHard</key> <integer>number</integer>	--deadline-count-hard=number
+maxDisplayAssertionCount	<key>DeadlineCountFocus</key> <integer>number</integer>	--deadline-count-focus=number
+optionalLabels	<key>OptionalLabels</key> <string>label label label etc…</string>	"--optional-labels=""label1 label2""]"
+outdatedOsAction		
+patchWeekStartDay	<key>PatchWeekStartDay</key> <integer>number</integer>	--patch-week-start-day=number
+removeInstallomatorPath	"<key>RemoveInstallomatorPath</key> <string>TRUE,FALSE</string>"	
+requiredLabels	<key>RequiredLabels</key> <string>label label label etc…</string>	"--required-labels=""label1 label2"""
+runDiscovery	<key>WorkflowDisableAppDiscovery</key> <true/> | <false/>	[--workflow-disable-app-discovery] [--workflow-disable-app-discovery-off]
+selfServicePatchingStatusModeReset		<-hard coded within script
+slackURL	<key>WebhookURLSlack</key> <string>URL</string>	--webhook-url-slack=URL
+supportTeamEmail	<key>SupportTeamEmail</key> <string>email</string>	
 supportTeamName	<key>SupportTeamName</key> <string>name</string>	
 supportTeamPhone	<key>SupportTeamPhone</key> <string>phoem</string>	
-supportTeamEmail	<key>SupportTeamEmail</key> <string>email</string>	
 supportTeamWebsite	<key>SupportTeamWebsite</key> <string>URL</string>	
-	<key>DeferralTimerWorkflowRelaunch</key> <integer>minutes</integer>	--deferral-timer-workflow-relaunch=minutes
-	"<key>DeferralTimerMenu</key> <string>minutes,minutes,minutes,etc...</string>"	"--deferral-timer-menu=minutes,minutes,etc..."
-	<key>DeferralTimerFocus</key> <integer>minutes</integer>	--deferral-timer-focus=minutes
+swiftDialogMinimumRequiredVersion		
+teamsURL	<key>WebhookURLTeams</key> <string>URL</string>	--webhook-url-teams=URL
+unattendedExit	"<key>UnattendedExit</key> <string>TRUE,FALSE</string>"	
+unattendedExitSeconds	<key>UnattendedExitSeconds</key> <integer>seconds</integer>	
+useLatestAvailableInstallomatorScriptVersion	"<key>InstallomatorVersion</key> <string>Main,Release</string>"	
+useOverlayIcon	"<key>UseOverlayIcon</key> <string>TRUE,FALSE</string>"	
+webhookEnabled	"<key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>"	[--webhook-feature-all] [--webhook-feature-failures] [--webhook-feature-off]
+	<key>DeferralTimerDefault</key> <integer>minutes</integer>	--deferral-next-launch=minutes
 	<key>DeferralTimerError</key> <integer>minutes</integer>	--deferral-timer-error=minutes
+	<key>DeferralTimerFocus</key> <integer>minutes</integer>	--deferral-timer-focus=minutes
+	"<key>DeferralTimerMenu</key> <string>minutes,minutes,minutes,etc...</string>"	"--deferral-timer-menu=minutes,minutes,etc..."
 	"<key>DialogOnTop</key> <string>TRUE,FALSE</string>"	
-		--reset-defaults
-		--workflow-install-now
+	<key>DeferralTimerWorkflowRelaunch</key> <integer>minutes</integer>	
+	<key>WorkflowDisableRelaunch</key> <true/> | <false/>	[--workflow-disable-relaunch]  [--workflow-disable-relaunch-off]
 		--deadline-count-delete-all
-		--reset-labels
 		--deferral-timer-reset-all
-		--usage
 		--help
+		--reset-defaults
+		--reset-labels
 		--uninstall
-		--version
+		--usage
 		--vers
+		--version
+		--workflow-install-now
