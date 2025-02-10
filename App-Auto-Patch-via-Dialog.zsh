@@ -8,7 +8,11 @@
 #
 # HISTORY
 #
-#   Version 3.0.0-beta7, [02.08.2025]
+#   Version 3.0.0-beta8, [02.09.2025]
+#   - Added WorkflowDisableRelaunch/--workflow-disable-relaunch functionality to prevent AAP from re-launching automatically
+#   - Added DeferralTimerWorkflowRelaunch/--deferral-timer-workflow-relaunch
+#   - Renamed DeferralTimer to DialogTimeoutDeferral, DeferralTimerAction to DialogTimeoutDeferralAction
+#   - Added default menu selection on dialog as first option when using DeferralTimerMenu
 #
 #
 ####################################################################################################
@@ -23,8 +27,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.0-beta7"
-scriptDate="2025/02/08"
+scriptVersion="3.0.0-beta8"
+scriptDate="2025/02/09"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -49,6 +53,7 @@ echo "
     [--patch-week-start-day=number]
 
     Workflow Options:
+    [--workflow-disable-relaunch]  [--workflow-disable-relaunch-off]
     [--workflow-disable-app-discovery] [--workflow-disable-app-discovery-off]
     [--workflow-install-now]
 
@@ -64,10 +69,10 @@ echo "
     [--reset-labels]
 
     Deferral Timer Options:
-    [--deferral-next-launch=minutes]
+    [--deferral-timer-default=minutes]
     [--deferral-timer-menu=minutes,minutes,etc...]
     [--deferral-timer-focus=minutes]  [--deferral-timer-error=minutes]
-    [--deferral-timer-reset-all]
+    [--deferral-timer-workflow-relaunch=minutes]  [--deferral-timer-reset-all]
 
     Webhook Options:
     [--webhook-feature-all] [--webhook-feature-failures] [--webhook-feature-off]
@@ -80,6 +85,43 @@ echo "
     [--uninstall]
     [--version]
     [--vers]
+
+    ** Managed preferences override local options via domain: xyz.techitout.appAutoPatch
+
+    <key>DeferralTimerMenu</key> <string>minutes,minutes,minutes,etc...</string>
+    <key>DeferralTimerFocus</key> <integer>minutes</integer>
+    <key>DeferralTimerError</key> <integer>minutes</integer>
+    <key>DeferralTimerWorkflowRelaunch</key> <integer>minutes</integer>
+    <key>DeadlineCountFocus</key> <integer>number</integer>
+    <key>DeadlineCountHard</key> <integer>number</integer>
+    <key>DeferralTimerDefault</key> <integer>minutes</integer>
+    <key>InteractiveMode</key> <integer>number</integer>
+    <key>PatchWeekStartDay</key> <integer>number</integer>
+    <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
+    <key>WorkflowDisableRelaunch</key> <true/> | <false/>
+    <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
+    <key>WebhookURLTeams</key> <string>URL</string>
+    <key>WebhookURLSlack</key> <string>URL</string>
+    <key>IgnoredLabels</key> <string>label label label etc</string>
+    <key>RequiredLabels</key> <string>label label label etc</string>
+    <key>OptionalLabels</key> <string>label label label etc</string>
+    <key>AppTitle</key> <string>App Auto-Patch</string>
+    <key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</string>
+    <key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>
+    <key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc</string>
+    <key>InstallomatorVersion</key> <string>Main,Release</string>
+    <key>DialogTimeoutDeferral</key> <integer>seconds</integer>
+    <key>DialogTimeoutDeferralAction</key> <string>Defer,Continue</string>
+    <key>DaysUntilReset</key> <integer>number</integer>
+    <key>UnattendedExit</key> <string>TRUE,FALSE</string>
+    <key>UnattendedExitSeconds</key> <integer>seconds</integer>
+    <key>DialogOnTop</key> <string>TRUE,FALSE</string>
+    <key>UseOverlayIcon</key> <string>TRUE,FALSE</string>
+    <key>RemoveInstallomatorPath</key> <string>TRUE,FALSE</string>
+    <key>SupportTeamName</key> <string>name</string>
+    <key>SupportTeamPhone</key> <string>phoem</string>
+    <key>SupportTeamEmail</key> <string>email</string>
+    <key>SupportTeamWebsite</key> <string>URL</string>
 
 "
 # Error log any unrecognized options.
@@ -149,7 +191,7 @@ set_defaults() {
 
     appAutoPatchPIDfile="/var/run/aap.pid"
 
-    interactiveMode="2" # MDM Enabled
+    interactiveMode="1" # MDM Enabled
 
     installomatorPath="${appAutoPatchFolder}/Installomator"
 
@@ -165,17 +207,19 @@ set_defaults() {
 
     installomatorVersion="Main" # MDM Enabled - Use:  Release|Main 
 
-    deferralTimer="300" # MDM Enabled
+    DialogTimeoutDeferral="300" # MDM Enabled
+    
+    DialogTimeoutDeferralAction="Defer" # MDM Enabled
     
     deferral_timer_minutes=1440
 
-    deferralTimerAction="Defer" # MDM Enabled
-
+    DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES=1440
+    
     patch_week_start_day_default="2" # MDM Enabled
 
     daysUntilReset="7" # MDM Enabled
 
-    selfServicePatchingStatusModeReset="1"
+    selfServicePatchingStatusModeReset="3"
 
     unattendedExit="FALSE" # MDM Enabled
 
@@ -207,7 +251,7 @@ set_defaults() {
 
     removeInstallomatorPath="FALSE" # MDM Enabled
 
-    NEXT_AUTO_LAUNCH_DEFAULT="60"
+    DEFERRAL_TIMER_DEFAULT_MINUTES="60"
 
     REGEX_ANY_WHOLE_NUMBER="^[0-9]+$"
     
@@ -276,8 +320,8 @@ get_options() {
             --interactiveMode=*)
                 interactiveModeOption="${1##*=}"
             ;;
-            --deferral-next-launch=*)
-                deferral_next_launch_default_option="${1##*=}"
+            --deferral-timer-default=*)
+                deferral_timer_default_option="${1##*=}"
             ;;
             --reset-defaults)
                 reset_defaults_option="TRUE"
@@ -315,6 +359,9 @@ get_options() {
             --deferral-timer-error=*)
                 deferral_timer_error_option="${1##*=}"
             ;;
+            --deferral-timer-workflow-relaunch=*)
+                deferral_timer_workflow_relaunch_option="${1##*=}"
+            ;;
             --deferral-timer-reset-all)
                 deferral_timer_reset_all_option="TRUE"
             ;;
@@ -338,6 +385,12 @@ get_options() {
             ;;
             --workflow-install-now)
                 workflow_install_now_option="TRUE"
+            ;;
+            --workflow-disable-relaunch)
+                workflow_disable_relaunch_option="TRUE"
+            ;;
+            --workflow-disable-relaunch-off)
+                workflow_disable_relaunch_option="FALSE"
             ;;
             --webhook-feature-off)
                 webhook_feature_option="FALSE"
@@ -392,10 +445,11 @@ get_preferences() {
     else
         if [[ "${deferral_timer_reset_all_option}" == "TRUE" ]]; then
             log_status "Resetting all local deferral timer preferences."
-            defaults delete "${appAutoPatchLocalPLIST}" DeferralNextLaunchMinutes 2> /dev/null
+            defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerDefault 2> /dev/null
             defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerMenu 2> /dev/null
             defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerFocus 2> /dev/null
             defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerError 2> /dev/null
+            defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerWorkflowRelaunch 2> /dev/null
         fi
         if [[ "${deadline_count_delete_all_option}" == "TRUE" ]]; then
             log_status "Deleting all local deadline count preferences."
@@ -410,24 +464,28 @@ get_preferences() {
     # Collect Managed PLIST preferences if any
     if [[ -f ${appAutoPatchManagedPLIST}.plist ]]; then
         log_verbose "Managed preference file: ${appAutoPatchManagedPLIST}:\n$(defaults read "${appAutoPatchManagedPLIST}" 2> /dev/null)"
+        local deferral_timer_default_managed
+        deferral_timer_default_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerDefault 2> /dev/null)
         local deferral_timer_menu_managed
         deferral_timer_menu_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerMenu 2>/dev/null)
         local deferral_timer_focus_managed
         deferral_timer_focus_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerFocus 2> /dev/null)
         local deferral_timer_error_managed
         deferral_timer_error_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerError 2> /dev/null)
+        local deferral_timer_workflow_relaunch_managed
+        deferral_timer_workflow_relaunch_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerWorkflowRelaunch 2>/dev/null)
         local deadline_count_focus_managed
         deadline_count_focus_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeadlineCountFocus 2> /dev/null)
         local deadline_count_hard_managed
         deadline_count_hard_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeadlineCountHard 2> /dev/null)
-        local deferral_next_launch_managed
-        deferral_next_launch_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralNextLaunchMinutes 2> /dev/null)
         local interactive_mode_managed
         interactive_mode_managed=$(defaults read "${appAutoPatchManagedPLIST}" InteractiveMode 2> /dev/null)
         local patch_week_start_day_managed
         patch_week_start_day_managed=$(defaults read "${appAutoPatchManagedPLIST}" PatchWeekStartDay 2> /dev/null)
         local workflow_disable_app_discovery_managed
         workflow_disable_app_discovery_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableAppDiscovery 2> /dev/null)
+        local workflow_disable_relaunch_managed
+        workflow_disable_relaunch_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
         local webhook_feature_managed
         webhook_feature_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookFeature 2> /dev/null)
         local webhook_url_slack_managed
@@ -450,10 +508,10 @@ get_preferences() {
         installomator_options_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_version_managed
         installomator_version_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorVersion 2> /dev/null)
-        local deferral_timer_managed
-        deferral_timer_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimer 2> /dev/null)
-        local deferral_timer_action_managed
-        deferral_timer_action_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerAction 2> /dev/null)
+        local dialog_timeout_deferral_managed
+        dialog_timeout_deferral_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogTimeoutDeferral 2> /dev/null)
+        local dialog_timeout_deferral_action_managed
+        dialog_timeout_deferral_action_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogTimeoutDeferralAction 2> /dev/null)
         local days_until_reset_managed
         days_until_reset_managed=$(defaults read "${appAutoPatchManagedPLIST}" DaysUntilReset 2> /dev/null)
         local unattended_exit_managed
@@ -483,24 +541,28 @@ get_preferences() {
         # This is where any preferences locally would be collected, example below
         local script_version_local
         script_version_local=$(defaults read "${appAutoPatchLocalPLIST}" AAPVersion 2> /dev/null)
+        local deferral_timer_default_local
+        deferral_timer_default_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerDefault 2> /dev/null)
         local deferral_timer_menu_local
         deferral_timer_menu_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerMenu 2>/dev/null)
         local deferral_timer_focus_local
         deferral_timer_focus_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerFocus 2> /dev/null)
         local deferral_timer_error_local
         deferral_timer_error_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerError 2> /dev/null)
+        local deferral_timer_workflow_relaunch_local
+        deferral_timer_workflow_relaunch_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerWorkflowRelaunch 2>/dev/null)
         local deadline_count_focus_local
         deadline_count_focus_local=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineCountFocus 2> /dev/null)
         local deadline_count_hard_local
         deadline_count_hard_local=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineCountHard 2> /dev/null)
-        local deferral_next_launch_local
-        deferral_next_launch_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralNextLaunchMinutes 2> /dev/null)
         local interactive_mode_local
         interactive_mode_local=$(defaults read "${appAutoPatchLocalPLIST}" InteractiveMode 2> /dev/null)
         local patch_week_start_day_local
         patch_week_start_day_local=$(defaults read "${appAutoPatchLocalPLIST}" PatchWeekStartDay 2> /dev/null)
         local workflow_disable_app_discovery_local
         workflow_disable_app_discovery_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableAppDiscovery 2> /dev/null)
+        local workflow_disable_relaunch_local
+        workflow_disable_relaunch_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
         local webhook_feature_local
         webhook_feature_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookFeature 2> /dev/null)
         local webhook_url_slack_local
@@ -523,10 +585,10 @@ get_preferences() {
         installomator_options_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_version_local
         installomator_version_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorVersion 2> /dev/null)
-        local deferral_timer_local
-        deferral_timer_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimer 2> /dev/null)
-        local deferral_timer_action_local
-        deferral_timer_action_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerAction 2> /dev/null)
+        local dialog_timeout_deferral_local
+        dialog_timeout_deferral_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogTimeoutDeferral 2> /dev/null)
+        local dialog_timeout_deferral_action_local
+        dialog_timeout_deferral_action_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogTimeoutDeferralAction 2> /dev/null)
         local days_until_reset_local
         days_until_reset_local=$(defaults read "${appAutoPatchLocalPLIST}" DaysUntilReset 2> /dev/null)
         local unattended_exit_local
@@ -558,18 +620,22 @@ get_preferences() {
     { [[ -z "${deferral_timer_focus_managed}" ]] && [[ -z "${deferral_timer_focus_option}" ]] && [[ -n "${deferral_timer_focus_local}" ]]; } && deferral_timer_focus_option="${deferral_timer_focus_local}"
     [[ -n "${deferral_timer_error_managed}" ]] && deferral_timer_error_option="${deferral_timer_error_managed}"
     { [[ -z "${deferral_timer_error_managed}" ]] && [[ -z "${deferral_timer_error_option}" ]] && [[ -n "${deferral_timer_error_local}" ]]; } && deferral_timer_error_option="${deferral_timer_error_local}"
+    [[ -n "${deferral_timer_workflow_relaunch_managed}" ]] && deferral_timer_workflow_relaunch_option="${deferral_timer_workflow_relaunch_managed}"
+    { [[ -z "${deferral_timer_workflow_relaunch_managed}" ]] && [[ -z "${deferral_timer_workflow_relaunch_option}" ]] && [[ -n "${deferral_timer_workflow_relaunch_local}" ]]; } && deferral_timer_workflow_relaunch_option="${deferral_timer_workflow_relaunch_local}"
     [[ -n "${deadline_count_focus_managed}" ]] && deadline_count_focus_option="${deadline_count_focus_managed}"
     { [[ -z "${deadline_count_focus_managed}" ]] && [[ -z "${deadline_count_focus_option}" ]] && [[ -n "${deadline_count_focus_local}" ]]; } && deadline_count_focus_option="${deadline_count_focus_local}"
     [[ -n "${deadline_count_hard_managed}" ]] && deadline_count_hard_option="${deadline_count_hard_managed}"
     { [[ -z "${deadline_count_hard_managed}" ]] && [[ -z "${deadline_count_hard_option}" ]] && [[ -n "${deadline_count_hard_local}" ]]; } && deadline_count_hard_option="${deadline_count_hard_local}"
-    [[ -n "${deferral_next_launch_managed}" ]] && deferral_next_launch_default_option="${deferral_next_launch_managed}"
-    { [[ -z "${deferral_next_launch_managed}" ]] && [[ -z "${deferral_next_launch_default_option}" ]] && [[ -n "${deferral_next_launch_local}" ]]; } && deferral_next_launch_default_option="${deferral_next_launch_local}"
+    [[ -n "${deferral_timer_default_managed}" ]] && deferral_timer_default_option="${deferral_timer_default_managed}"
+    { [[ -z "${deferral_timer_default_managed}" ]] && [[ -z "${deferral_timer_default_option}" ]] && [[ -n "${deferral_timer_default_local}" ]]; } && deferral_timer_default_option="${deferral_timer_default_local}"
     [[ -n "${interactive_mode_managed}" ]] && interactiveModeOption="${interactive_mode_managed}"
     { [[ -z "${interactive_mode_managed}" ]] && [[ -z "${interactiveModeOption}" ]] && [[ -n "${interactive_mode_local}" ]]; } && interactiveModeOption="${interactive_mode_local}"
     [[ -n "${patch_week_start_day_managed}" ]] && patch_week_start_day_option="${patch_week_start_day_managed}"
     { [[ -z "${patch_week_start_day_managed}" ]] && [[ -z "${patch_week_start_day_option}" ]] && [[ -n "${patch_week_start_day_local}" ]]; } && patch_week_start_day_option="${patch_week_start_day_local}"
     [[ -n "${workflow_disable_app_discovery_managed}" ]] && workflow_disable_app_discovery_option="${workflow_disable_app_discovery_managed}"
     { [[ -z "${workflow_disable_app_discovery_managed}" ]] && [[ -z "${workflow_disable_app_discovery_option}" ]] && [[ -n "${workflow_disable_app_discovery_local}" ]]; } && workflow_disable_app_discovery_option="${workflow_disable_app_discovery_local}"
+    [[ -n "${workflow_disable_relaunch_managed}" ]] && workflow_disable_relaunch_option="${workflow_disable_relaunch_managed}"
+    { [[ -z "${workflow_disable_relaunch_managed}" ]] && [[ -z "${workflow_disable_relaunch_option}" ]] && [[ -n "${workflow_disable_relaunch_local}" ]]; } && workflow_disable_relaunch_option="${workflow_disable_relaunch_local}"
     [[ -n "${webhook_feature_managed}" ]] && webhook_feature_option="${webhook_feature_managed}"
     { [[ -z "${webhook_feature_managed}" ]] && [[ -z "${webhook_feature_option}" ]] && [[ -n "${webhook_feature_local}" ]]; } && webhook_feature_option="${webhook_feature_local}"
     [[ -n "${webhook_url_slack_managed}" ]] && webhook_url_slack_option="${webhook_url_slack_managed}"
@@ -594,10 +660,10 @@ get_preferences() {
     { [[ -z "${installomator_options_managed}" ]] && [[ -n "${installomatorOptions}" ]] && [[ -n "${installomator_options_local}" ]]; } && installomatorOptions="${installomator_options_local}"
     [[ -n "${installomator_version_managed}" ]] && installomatorVersion="${installomator_version_managed}"
     { [[ -z "${installomator_version_managed}" ]] && [[ -n "${installomatorVersion}" ]] && [[ -n "${installomator_version_local}" ]]; } && installomatorVersion="${installomator_version_local}"
-    [[ -n "${deferral_timer_managed}" ]] && deferralTimer="${deferral_timer_managed}"
-    { [[ -z "${deferral_timer_managed}" ]] && [[ -n "${deferralTimer}" ]] && [[ -n "${deferral_timer_local}" ]]; } && deferralTimer="${deferral_timer_local}"
-    [[ -n "${deferral_timer_action_managed}" ]] && deferralTimerAction="${deferral_timer_action_managed}"
-    { [[ -z "${deferral_timer_action_managed}" ]] && [[ -n "${deferralTimerAction}" ]] && [[ -n "${deferral_timer_action_local}" ]]; } && deferralTimerAction="${deferral_timer_action_local}"
+    [[ -n "${dialog_timeout_deferral_managed}" ]] && DialogTimeoutDeferral="${dialog_timeout_deferral_managed}"
+    { [[ -z "${dialog_timeout_deferral_managed}" ]] && [[ -n "${DialogTimeoutDeferral}" ]] && [[ -n "${dialog_timeout_deferral_local}" ]]; } && DialogTimeoutDeferral="${dialog_timeout_deferral_local}"
+    [[ -n "${dialog_timeout_deferral_action_managed}" ]] && DialogTimeoutDeferralAction="${dialog_timeout_deferral_action_managed}"
+    { [[ -z "${dialog_timeout_deferral_action_managed}" ]] && [[ -n "${DialogTimeoutDeferralAction}" ]] && [[ -n "${dialog_timeout_deferral_action_local}" ]]; } && DialogTimeoutDeferralAction="${dialog_timeout_deferral_action_local}"
     [[ -n "${days_until_reset_managed}" ]] && daysUntilReset="${days_until_reset_managed}"
     { [[ -z "${days_until_reset_managed}" ]] && [[ -n "${daysUntilReset}" ]] && [[ -n "${days_until_reset_local}" ]]; } && daysUntilReset="${days_until_reset_local}"
     [[ -n "${unattended_exit_managed}" ]] && unattendedExit="${unattended_exit_managed}"
@@ -619,38 +685,41 @@ get_preferences() {
     [[ -n "${support_team_website_managed}" ]] && supportTeamWebsite="${support_team_website_managed}"
     { [[ -z "${support_team_website_managed}" ]] && [[ -n "${supportTeamWebsite}" ]] && [[ -n "${support_team_website_local}" ]]; } && supportTeamWebsite="${support_team_website_local}"
     
-    #Temporary verbose output testing stuff
-    log_verbose  "deadline_count_focus_option: $deadline_count_focus_option"
-    log_verbose  "deadline_count_hard_option: $deadline_count_hard_option"
-    log_verbose  "deferral_next_launch_default_option: $deferral_next_launch_default_option"
-    log_verbose  "interactiveModeOption: $interactiveModeOption"
-    log_verbose  "patch_week_start_day_option: $patch_week_start_day_option"
-    log_verbose  "workflow_disable_app_discovery_option: $workflow_disable_app_discovery_option"
-    log_verbose  "webhook_feature_option: $webhook_feature_option"
-    log_verbose  "webhook_url_slack_option: $webhook_url_slack_option"
-    log_verbose  "webhook_url_teams_option: $webhook_url_teams_option"
-    
-    log_verbose  "ignored_labels_option: $ignored_labels_option"
-    log_verbose  "required_labels_option: $required_labels_option"
-    log_verbose  "optional_labels_option: $optional_labels_option"
-
-    log_verbose  "appTitle: $appTitle"
-    log_verbose  "convertAppsInHomeFolder: $convertAppsInHomeFolder"
-    log_verbose  "ignoreAppsInHomeFolder: $ignoreAppsInHomeFolder"
-    log_verbose  "installomatorOptions: $installomatorOptions"
-    log_verbose  "installomatorVersion: $installomatorVersion"
-    log_verbose  "deferralTimer: $deferralTimer"
-    log_verbose  "deferralTimerAction: $deferralTimerAction"
-    log_verbose  "daysUntilReset: $daysUntilReset"
-    log_verbose  "unattendedExit: $unattendedExit"
-    log_verbose  "unattendedExitSeconds: $unattendedExitSeconds"
-    log_verbose  "dialogOnTop: $dialogOnTop"
-    log_verbose  "useOverlayIcon: $useOverlayIcon"
-    log_verbose  "removeInstallomatorPath: $removeInstallomatorPath"
-    log_verbose  "supportTeamName: $supportTeamName"
-    log_verbose  "supportTeamPhone: $supportTeamPhone"
-    log_verbose  "supportTeamEmail: $supportTeamEmail"
-    log_verbose  "supportTeamWebsite: $supportTeamWebsite"
+    #Verbose Configuration Option Output
+    log_verbose "DeferralTimerMenu: $DeferralTimerMenu"
+    log_verbose "DeferralTimerFocus: $DeferralTimerFocus"
+    log_verbose "DeferralTimerError: $DeferralTimerError"
+    log_verbose "DeferralTimerWorkflowRelaunch: $DeferralTimerWorkflowRelaunch"
+    log_verbose "DeadlineCountFocus: $DeadlineCountFocus"
+    log_verbose "DeadlineCountHard: $DeadlineCountHard"
+    log_verbose "DeferralTimerDefault: $DeferralTimerDefault"
+    log_verbose "InteractiveMode: $InteractiveMode"
+    log_verbose "PatchWeekStartDay: $PatchWeekStartDay"
+    log_verbose "WorkflowDisableAppDiscovery: $WorkflowDisableAppDiscovery"
+    log_verbose "WorkflowDisableRelaunch: $WorkflowDisableRelaunch"
+    log_verbose "WebhookFeature: $WebhookFeature"
+    log_verbose "WebhookURLSlack: $WebhookURLSlack"
+    log_verbose "WebhookURLTeams: $WebhookURLTeams"
+    log_verbose "IgnoredLabels: $IgnoredLabels"
+    log_verbose "RequiredLabels: $RequiredLabels"
+    log_verbose "OptionalLabels: $OptionalLabels"
+    log_verbose "AppTitle: $AppTitle"
+    log_verbose "ConvertAppsInHomeFolder: $ConvertAppsInHomeFolder"
+    log_verbose "IgnoreAppsInHomeFolder: $IgnoreAppsInHomeFolder"
+    log_verbose "InstallomatorOptions: $InstallomatorOptions"
+    log_verbose "InstallomatorVersion: $InstallomatorVersion"
+    log_verbose "DialogTimeoutDeferral: $DialogTimeoutDeferral"
+    log_verbose "DialogTimeoutDeferralAction: $DialogTimeoutDeferralAction"
+    log_verbose "DaysUntilReset: $DaysUntilReset"
+    log_verbose "UnattendedExit: $UnattendedExit"
+    log_verbose "UnattendedExitSeconds: $UnattendedExitSeconds"
+    log_verbose "DialogOnTop: $DialogOnTop"
+    log_verbose "UseOverlayIcon: $UseOverlayIcon"
+    log_verbose "RemoveInstallomatorPath: $RemoveInstallomatorPath"
+    log_verbose "SupportTeamName: $SupportTeamName"
+    log_verbose "SupportTeamPhone: $SupportTeamPhone"
+    log_verbose "SupportTeamEmail: $SupportTeamEmail"
+    log_verbose "SupportTeamWebsite: $SupportTeamWebsite"
     
     
     # Write App Labels to PLIST
@@ -763,27 +832,51 @@ manage_parameter_options() {
 
     option_error="FALSE"
 
-    if [[ "${deferral_next_launch_default_option}" == "X" ]]; then
-        log_status "Deleting local preference for the --deferral-next-launch option, defaulting to ${NEXT_AUTO_LAUNCH_DEFAULT} minutes."
-        defaults delete "${appAutoPatchLocalPLIST}" DeferralNextLaunchMinutes 2> /dev/null
-    elif [[ -n "${deferral_next_launch_default_option}" ]] && [[ "${deferral_next_launch_default_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
-        if [[ "${deferral_next_launch_default_option}" -lt 2 ]]; then
-            log_warning "Specified --deferral-next-launch=minutes value of ${deferral_next_launch_default_option} is too low, rounding to 2 minutes."
-            deferral_next_launch_minutes=2
-        elif [[ "${deferral_next_launch_default_option}" -gt 10080 ]]; then
-            log_warning "Specified --deferral-next-launch=minutes value of ${deferral_next_launch_default_option} is too high, rounding down to 10080 minutes (1 week)."
-            deferral_next_launch_minutes=10080
+    if [[ "${deferral_timer_default_option}" == "X" ]]; then
+        log_status "Deleting local preference for the --deferral-timer-default option, defaulting to ${DEFERRAL_TIMER_DEFAULT_MINUTES} minutes."
+        defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerDefault 2> /dev/null
+    elif [[ -n "${deferral_timer_default_option}" ]] && [[ "${deferral_timer_default_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        if [[ "${deferral_timer_default_option}" -lt 2 ]]; then
+            log_warning "Specified --deferral-timer-default=minutes value of ${deferral_timer_default_option} is too low, rounding to 2 minutes."
+            deferral_timer_minutes=2
+        elif [[ "${deferral_timer_default_option}" -gt 10080 ]]; then
+            log_warning "Specified --deferral-timer-default=minutes value of ${deferral_timer_default_option} is too high, rounding down to 10080 minutes (1 week)."
+            deferral_timer_minutes=10080
         else
-            deferral_next_launch_minutes="${deferral_next_launch_default_option}"
+            deferral_timer_minutes="${deferral_timer_default_option}"
         fi
-        defaults write "${appAutoPatchLocalPLIST}" DeferralNextLaunchMinutes -string "${deferral_next_launch_minutes}"
-        next_auto_launch_minutes="${deferral_next_launch_minutes}"
-        elif [[ -n "${deferral_next_launch_default_option}" ]] && ! [[ "${deferral_next_launch_default_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
-            log_error "The --deferral-next-launch=minutes value must only be a number."; option_error="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" DeferralTimerDefault -string "${deferral_timer_minutes}"
+        # deprecate next_auto_launch_minutes: next_auto_launch_minutes="${deferral_timer_minutes}"
+        elif [[ -n "${deferral_timer_default_option}" ]] && ! [[ "${deferral_timer_default_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+            log_error "The --deferral-timer-default=minutes value must only be a number."; option_error="TRUE"
         fi
-    [[ -z "${deferral_next_launch_minutes}" ]] && deferral_next_launch_minutes="${NEXT_AUTO_LAUNCH_DEFAULT}"
-    next_auto_launch_minutes="${deferral_next_launch_minutes}"
-    log_verbose  "deferral_next_launch_minutes is: ${deferral_next_launch_minutes}"
+    [[ -z "${deferral_timer_minutes}" ]] && deferral_timer_minutes="${DEFERRAL_TIMER_DEFAULT_MINUTES}"
+    # deprecate next_auto_launch_minutes: next_auto_launch_minutes="${deferral_timer_minutes}"
+    log_verbose  "deferral_timer_minutes is: ${deferral_timer_minutes}"
+
+
+    if [[ "${deferral_timer_default_option}" == "X" ]]; then
+        log_super "Status: Deleting local preference for the --deferral-timer-default option, defaulting to ${DEFERRAL_TIMER_DEFAULT_MINUTES} minutes."
+        defaults delete "${SUPER_LOCAL_PLIST}" DeferralTimerDefault 2>/dev/null
+        unset deferral_timer_default_option
+    elif [[ -n "${deferral_timer_default_option}" ]] && [[ "${deferral_timer_default_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        if [[ "${deferral_timer_default_option}" -lt 2 ]]; then
+            log_super "Parameter Warning: Specified --deferral-timer-default=minutes value of ${deferral_timer_default_option} is too low, rounding up to 2 minutes."
+            deferral_timer_minutes=2
+        elif [[ "${deferral_timer_default_option}" -gt 10080 ]]; then
+            log_super "Parameter Warning: Specified --deferral-timer-default=minutes value of ${deferral_timer_default_option} is too high, rounding down to 10080 minutes (1 week)."
+            deferral_timer_minutes=10080
+        else
+            deferral_timer_minutes="${deferral_timer_default_option}"
+        fi
+        defaults write "${SUPER_LOCAL_PLIST}" DeferralTimerDefault -string "${deferral_timer_minutes}"
+    elif [[ -n "${deferral_timer_default_option}" ]] && ! [[ "${deferral_timer_default_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        log_super "Parameter Error: The --deferral-timer-default=minutes value must only be a number."
+        option_error="TRUE"
+    fi
+    [[ -z "${deferral_timer_minutes}" ]] && deferral_timer_minutes="${DEFERRAL_TIMER_DEFAULT_MINUTES}"
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_minutes is: ${deferral_timer_minutes}"
+
 
     
 
@@ -829,6 +922,19 @@ manage_parameter_options() {
         defaults delete "${appAutoPatchLocalPLIST}" WorkflowDisableAppDiscovery 2> /dev/null
     fi
     
+    
+    # Manage ${workflow_disable_relaunch_option} and save to ${SUPER_LOCAL_PLIST}.
+    if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+        workflow_disable_relaunch_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch -bool true
+    else
+        workflow_disable_relaunch_option="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null
+    fi
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${workflow_disable_relaunch_option}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: workflow_disable_relaunch_option is: ${workflow_disable_relaunch_option}"
+    
+    
+    
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_count_focus}" ]]; } && log_verbose "deadline_count_focus is: ${deadline_count_focus}"
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_count_hard}" ]]; } && log_verbose "deadline_count_hard is: ${deadline_count_hard}"
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${patch_week_start_day}" ]]; } && log_verbose "patch_week_start_day is: ${patch_week_start_day}"
@@ -870,9 +976,9 @@ manage_parameter_options() {
         option_error="TRUE"
     fi
     
-    # Validate ${deferral_timer_focus_option} input and if valid set ${deferral_timer_focus_minutes} and save to ${appAutoPatchLocalPLIST}. If there is no ${deferral_timer_focus_minutes} then set it to ${next_auto_launch_minutes}.
+    # Validate ${deferral_timer_focus_option} input and if valid set ${deferral_timer_focus_minutes} and save to ${appAutoPatchLocalPLIST}. If there is no ${deferral_timer_focus_minutes} then set it to ${deferral_timer_minutes}.
     if [[ "${deferral_timer_focus_option}" == "X" ]]; then
-        log_status "Deleting local preference for the --deferral-timer-focus option, defaulting to ${next_auto_launch_minutes} minutes."
+        log_status "Deleting local preference for the --deferral-timer-focus option, defaulting to ${deferral_timer_minutes} minutes."
         defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerFocus 2> /dev/null
     elif [[ -n "${deferral_timer_focus_option}" ]] && [[ "${deferral_timer_focus_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
         if [[ "${deferral_timer_focus_option}" -lt 2 ]]; then
@@ -888,12 +994,12 @@ manage_parameter_options() {
     elif [[ -n "${deferral_timer_focus_option}" ]] && ! [[ "${deferral_timer_focus_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
         log_error "The --deferral-timer-focus=minutes value must only be a number."; option_error="TRUE"
     fi
-    [[ -z "${deferral_timer_focus_minutes}" ]] && deferral_timer_focus_minutes="${next_auto_launch_minutes}"
+    [[ -z "${deferral_timer_focus_minutes}" ]] && deferral_timer_focus_minutes="${deferral_timer_minutes}"
     log_verbose  "deferral_timer_focus_minutes is: ${deferral_timer_focus_minutes}"
     
-    # Validate ${deferral_timer_error_option} input and if valid set ${deferral_timer_error_minutes} and save to ${appAutoPatchLocalPLIST}. If there is no ${deferral_timer_error_minutes} then set it to ${next_auto_launch_minutes}.
+    # Validate ${deferral_timer_error_option} input and if valid set ${deferral_timer_error_minutes} and save to ${appAutoPatchLocalPLIST}. If there is no ${deferral_timer_error_minutes} then set it to ${deferral_timer_minutes}.
     if [[ "${deferral_timer_error_option}" == "X" ]]; then
-        log_status "Deleting local preference for the --deferral-timer-error option, defaulting to ${next_auto_launch_minutes} minutes."
+        log_status "Deleting local preference for the --deferral-timer-error option, defaulting to ${deferral_timer_minutes} minutes."
         defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerError 2> /dev/null
     elif [[ -n "${deferral_timer_error_option}" ]] && [[ "${deferral_timer_error_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
         if [[ "${deferral_timer_error_option}" -lt 2 ]]; then
@@ -909,9 +1015,32 @@ manage_parameter_options() {
     elif [[ -n "${deferral_timer_error_option}" ]] && ! [[ "${deferral_timer_error_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
         log_error "The --deferral-timer-error=minutes value must only be a number."; option_error="TRUE"
     fi
-    [[ -z "${deferral_timer_error_minutes}" ]] && deferral_timer_error_minutes="${next_auto_launch_minutes}"
+    [[ -z "${deferral_timer_error_minutes}" ]] && deferral_timer_error_minutes="${deferral_timer_minutes}"
     log_verbose  "deferral_timer_error_minutes is: ${deferral_timer_error_minutes}"
 
+    # Validate ${deferral_timer_workflow_relaunch_option} input and if valid set ${deferral_timer_workflow_relaunch_minutes} and save to ${appAutoPatchLocalPLIST}. If there is no ${deferral_timer_workflow_relaunch_minutes} then set it to ${DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES}.
+    if [[ "${deferral_timer_workflow_relaunch_option}" == "X" ]]; then
+        log_super "Status: Deleting local preference for the --deferral-timer-workflow-relaunch option, defaulting to ${DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES} minutes."
+        defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerWorkflowRelaunch 2>/dev/null
+        unset deferral_timer_workflow_relaunch_option
+    elif [[ -n "${deferral_timer_workflow_relaunch_option}" ]] && [[ "${deferral_timer_workflow_relaunch_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        if [[ "${deferral_timer_workflow_relaunch_option}" -lt 2 ]]; then
+            log_super "Parameter Warning: Specified --deferral-timer-workflow-relaunch=minutes value of ${deferral_timer_workflow_relaunch_option} minutes is too low, rounding up to 2 minutes."
+            deferral_timer_workflow_relaunch_minutes=2
+        elif [[ "${deferral_timer_workflow_relaunch_option}" -gt 43200 ]]; then
+            log_super "Parameter Warning: Specified --deferral-timer-workflow-relaunch=minutes value of ${deferral_timer_workflow_relaunch_option} minutes is too high, rounding down to 43200 minutes (30 days)."
+            deferral_timer_workflow_relaunch_minutes=43200
+        else
+            deferral_timer_workflow_relaunch_minutes="${deferral_timer_workflow_relaunch_option}"
+        fi
+        defaults write "${appAutoPatchLocalPLIST}" DeferralTimerWorkflowRelaunch -string "${deferral_timer_workflow_relaunch_minutes}"
+    elif [[ -n "${deferral_timer_workflow_relaunch_option}" ]] && ! [[ "${deferral_timer_workflow_relaunch_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        log_super "Parameter Error: The --deferral-timer-workflow-relaunch=minutes value must only be a number."
+        option_error="TRUE"
+    fi
+    [[ -z "${deferral_timer_workflow_relaunch_minutes}" ]] && deferral_timer_workflow_relaunch_minutes="${DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES}"
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_workflow_relaunch_minutes is: ${deferral_timer_workflow_relaunch_minutes}"
+    
     # Some validation and logging for the focus deferral timer option.
     if [[ -n "${deferral_timer_focus_option}" ]] && { [[ -z "${deadline_count_focus}" ]]; }; then
         log_error "The --deferral-timer-focus option requires that you also specify at least one focus deadline option."; option_error="TRUE"
@@ -1238,9 +1367,9 @@ workflow_startup() {
 		network_timeout=$((network_timeout + 5))
 	done
     if [[ $(ifconfig -a inet 2>/dev/null | sed -n -e '/127.0.0.1/d' -e '/0.0.0.0/d' -e '/inet/p' | wc -l) -le 0 ]]; then
-        next_auto_launch_minutes="${deferral_timer_error_minutes}"
-        log_error "Network unavailable, trying again in ${next_auto_launch_minutes} minutes."
-        write_status "Pending: Network unavailable, trying again in ${next_auto_launch_minutes} minutes."
+        deferral_timer_minutes="${deferral_timer_error_minutes}"
+        log_error "Network unavailable, trying again in ${deferral_timer_minutes} minutes."
+        write_status "Pending: Network unavailable, trying again in ${deferral_timer_minutes} minutes."
         set_auto_launch_deferral
     fi
 	
@@ -1785,8 +1914,8 @@ check_completion_status() {
     fi
     
     if [[  $weeklyPatchingComplete == 1 ]]; then
-        next_auto_launch_minutes="1440"
-        log_info "Patching Status Already Complete, trying again in ${next_auto_launch_minutes} minutes."
+        #This should be set by configuration # # # deferral_timer_minutes="1440"
+        log_info "Patching Status Already Complete, trying again in ${deferral_timer_minutes} minutes."
         set_auto_launch_deferral
     elif [[  $weeklyPatchingComplete == 0 ]]; then
         log_info "Continuing App Auto-Patch Workflow"
@@ -1883,9 +2012,9 @@ check_deadlines_count() {
 }
 
 set_auto_launch_deferral() {
-    log_verbose  "deferralNextLaunch is: ${next_auto_launch_minutes}"
+    log_verbose  "deferralNextLaunch is: ${deferral_timer_minutes}"
     local next_launch_seconds
-    next_launch_seconds=$(( next_auto_launch_minutes * 60 ))
+    next_launch_seconds=$(( deferral_timer_minutes * 60 ))
     local deferral_timer_epoch
     deferral_timer_epoch=$(( $(date +%s) + next_launch_seconds ))
     local deferral_timer_year
@@ -2168,7 +2297,7 @@ dialog_install_or_defer() {
 
     [[ -n "${deferral_timer_menu_minutes}" ]] && set_deferral_menu
     
-	action=$( echo $deferralTimerAction | tr '[:upper:]' '[:lower:]' )
+	action=$( echo $DialogTimeoutDeferralAction | tr '[:upper:]' '[:lower:]' )
 	infobuttontext="Defer"
 	infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $display_string_deadline_count"
 	message="You can **Defer** the updates or **Continue** to close the applications and apply updates.  \n\n There are ($numberOfUpdates) application(s) that require updates: "
@@ -2176,6 +2305,7 @@ dialog_install_or_defer() {
 	
 	# Create the deferrals available dialog options and content
     if [[ -n "${deferral_timer_menu_minutes}" ]]; then
+        selectDefault=${deferral_timer_menu_display_array[1]}
         deferralDialogContent=(
             --title "$appTitle"
             --message "$message"
@@ -2184,9 +2314,9 @@ dialog_install_or_defer() {
             --overlayicon "$overlayicon"
             --infobuttontext "$infobuttontext"
             --infobox "$infobox"
-            --timer $deferralTimer
+            --timer $DialogTimeoutDeferral
             --button1text "Continue"
-            --selecttitle "Defer updates for:" --selectvalues $display_string_deferral_menu
+            --selecttitle "Defer updates for:" --selectvalues $display_string_deferral_menu --selectdefault $selectDefault
         )
     else
         deferralDialogContent=(
@@ -2197,7 +2327,7 @@ dialog_install_or_defer() {
             --overlayicon "$overlayicon"
             --infobuttontext "$infobuttontext"
             --infobox "$infobox"
-            --timer $deferralTimer
+            --timer $DialogTimeoutDeferral
             --button1text "Continue"
         )
     fi
@@ -2271,7 +2401,7 @@ dialog_install_hard_deadline() {
 		--overlayicon "$overlayicon"
 		--infotext "$infobuttontext"
 		--infobox "$infobox"
-		--timer $deferralTimer
+		--timer $DialogTimeoutDeferral
 		--button1text "Continue"
 	)
 	
@@ -3005,8 +3135,8 @@ main() {
             workflow_do_Installations
             defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus -bool true #Set completion status to true
             check_webhook
-            next_auto_launch_minutes="1440" #Set auto launch for 24 hours
-            log_notice "Will auto launch in ${next_auto_launch_minutes} minutes."
+            #This should be set by configuration # # # deferral_timer_minutes="1440" #Set auto launch for 24 hours
+            log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
             set_auto_launch_deferral
         else
             check_user_focus #Check if a user is in focus mode or has display assertions active
@@ -3020,13 +3150,13 @@ main() {
                 workflow_do_Installations
                 defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus -bool true #Set completion status to true
                 check_webhook
-                next_auto_launch_minutes="1440" #Set auto launch for 24 hours
-                log_notice "Will auto launch in ${next_auto_launch_minutes} minutes."
+                #This should be set by configuration # # # deferral_timer_minutes="1440" #Set auto launch for 24 hours
+                log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
                 set_auto_launch_deferral
             elif [[ "${user_focus_active}" == "TRUE" ]]; then # No deferral deadlines have passed but a process has told the display to not sleep or the user has enabled Focus or Do Not Disturb.
                 log_info "Focus Mode Triggered"
-                next_auto_launch_minutes="${deferral_timer_focus_minutes}"
-                write_status "Pending: Automatic user focus deferral, trying again in ${next_auto_launch_minutes} minutes."
+                deferral_timer_minutes="${deferral_timer_focus_minutes}"
+                write_status "Pending: Automatic user focus deferral, trying again in ${deferral_timer_minutes} minutes."
                 set_auto_launch_deferral
             else # Display the deferral dialog
                 log_info "Display Deferral Dialog"
@@ -3037,11 +3167,11 @@ main() {
                     workflow_do_Installations
                     defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus -bool true #Set completion status to true
                     check_webhook
-                    next_auto_launch_minutes="1440" #Set auto launch for 24 hours
-                    log_notice "Will auto launch in ${next_auto_launch_minutes} minutes."
+                    #This should be set by configuration # # # deferral_timer_minutes="1440" #Set auto launch for 24 hours
+                    log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
                     set_auto_launch_deferral
                 else # The user chose to defer. 
-                    next_auto_launch_minutes=${deferral_timer_minutes} 
+                    deferral_timer_minutes=${deferral_timer_minutes} 
                     log_notice "User chose to defer, trying again in ${deferral_timer_minutes} minutes."
                     set_auto_launch_deferral
                 fi
@@ -3055,9 +3185,25 @@ main() {
             $dialogBinary --title "$appTitle" --message "All apps are up to date." --windowbuttons min --icon "$icon" --overlayicon "$overlayIcon" --moveable --position topright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
         fi
         
-        next_auto_launch_minutes="1440"
-        log_info "All apps are up to date, will check again in ${next_auto_launch_minutes} minutes."
-        set_auto_launch_deferral
+        
+        
+        # Logic for ${workflow_disable_relaunch_option} and ${deferral_timer_workflow_relaunch_minutes}.
+        if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+            log_aap "Status: Full AAP workflow complete! Automatic relaunch is disabled."
+            log_status "Inactive: Full AAP workflow complete! Automatic relaunch is disabled."
+            /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+        else # Default super workflow automatically relaunches.
+            deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
+            #This should be set by configuration # # # deferral_timer_minutes="1440"
+            log_info "All apps are up to date, will check again in ${deferral_timer_minutes} minutes."
+            set_auto_launch_deferral
+        fi
+
+        
+        
+        
+        
+        
     fi
 }
 
