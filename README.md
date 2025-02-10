@@ -48,7 +48,7 @@ Or trigger from the script directly to perform an install with parameters as you
 
 A Pre-Release of ther 3.0.0 Wiki can be found here: [App Auto-Patch Wiki](https://github.com/App-Auto-Patch/AAP3-Wiki/wiki)
 
-- [Getting Started]([https://github.com/robjschroeder/App-Auto-Patch/wiki/Getting-Started](https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Getting-Started))
+- [Getting Started]([https://github.com/robjschroeder/App-Auto-Patch/wiki/Getting-Started](https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Getting-Started)
 
 - [Deferral Behavior](https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Deferral-Behavior)
 
