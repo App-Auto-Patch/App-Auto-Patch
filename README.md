@@ -22,7 +22,7 @@ This project has since been applied to MDMs outside of Jamf Pro, showcasing its 
 ## Getting Started with 3.0
 
 App Auto-Patch 3.0 automatically installs itself and necessary components anytime it's ran from outside the working folder `/Library/Management/AppAutoPatch/`
-For more information on getting started and testing, please visit the [AAP 3.0.0 Wiki Pre-Release]([https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Getting-Started](https://github.com/App-Auto-Patch/AAP3-Wiki/wiki)) page for more information
+For more information on getting started and testing, please visit the [AAP 3.0.0 Wiki Pre-Release](https://github.com/App-Auto-Patch/AAP3-Wiki/wiki) page for more information
 
 - After installed, you can simply run `sudo appautopatch` from terminal with any parameters to configure as you'd like. Examples:
 
