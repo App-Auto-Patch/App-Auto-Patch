@@ -5,6 +5,10 @@
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/robjschroeder/App-Auto-Patch?display_name=tag) ![GitHub issues](https://img.shields.io/github/issues-raw/robjschroeder/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/robjschroeder/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/robjschroeder/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/robjschroeder/App-Auto-Patch)
 
+## App Auto-Patch 3.0.0-beta
+Check out the latest 3.0.0 Beta and wiki pre-release
+[App Auto-Patch 3.0.0](https://github.com/App-Auto-Patch/App-Auto-Patch/releases/tag/3.0.0-beta9)
+
 ## Introduction
 App Auto-Patch combines local application discovery, an Installomator integration, and user-friendly swiftDialog prompts to automate application patch management across Mac computers.
 
