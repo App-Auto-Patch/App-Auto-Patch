@@ -8,11 +8,12 @@
 #
 # HISTORY
 #
-#   Version 3.0.0-beta8, [02.09.2025]
+#   Version 3.0.0-beta9, [02.10.2025]
 #   - Added WorkflowDisableRelaunch/--workflow-disable-relaunch functionality to prevent AAP from re-launching automatically
 #   - Added DeferralTimerWorkflowRelaunch/--deferral-timer-workflow-relaunch
 #   - Renamed DeferralTimer to DialogTimeoutDeferral, DeferralTimerAction to DialogTimeoutDeferralAction
 #   - Added default menu selection on dialog as first option when using DeferralTimerMenu
+#   - Added logic to ignore apps in '/Library/Application Support/JAMF/Composer'
 #
 #
 ####################################################################################################
@@ -27,8 +28,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.0-beta8"
-scriptDate="2025/02/09"
+scriptVersion="3.0.0-beta9"
+scriptDate="2025/02/10"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -2456,9 +2457,12 @@ function PgetAppVersion() {
     else
         applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0)
         if ([[ "$applist" == *"/Daemon Containers/"* ]]); then
-                log_info "App found in the iPhone Mirroring folder: $applist, ignoring"
-                appList=""
-            elif ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "TRUE" ]]); then
+            log_info "App found in the iPhone Mirroring folder: $applist, ignoring"
+            appList=""
+        elif ([[ "$applist" == *"/Library/Application Support/JAMF/Composer/"* ]]); then
+            infoOut "App found in the Jamf Composer folder: $applist, ignoring"
+            appList=""
+        elif ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "TRUE" ]]); then
             log_verbose "App found in User directory: $applist, coverting to default directory"
             # Adding the label to the converted labels
             /usr/libexec/PlistBuddy -c "add \":ConvertedLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
