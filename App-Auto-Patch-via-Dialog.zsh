@@ -141,6 +141,9 @@
 #   Version 2.11.7, 02.07.2025, Andrew Spokes (@TechTrekkie)
 #   - Additional updates SwiftDialog command file permissions to work with changes made in SwiftDialog 2.5.5 that were missed in 2.11.6 update
 # 
+#   Version 2.11.8, 02.10.2025, Andrew Spokes (@TechTrekkie)
+#   - Added logic to ignore apps found in Jamf Composer storage folder
+# 
 ####################################################################################################
 
 ####################################################################################################
@@ -153,7 +156,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.11.7"
+scriptVersion="2.11.8"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1234,6 +1237,9 @@ function PgetAppVersion() {
 	else
 		applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0)
 		if ([[ "$applist" == *"/Daemon Containers/"* ]]); then
+			infoOut "App found in the iPhone Mirroring folder: $applist, ignoring"
+			appList=""
+		elif ([[ "$applist" == *"/Library/Application Support/JAMF/Composer/"* ]]); then
 			infoOut "App found in the iPhone Mirroring folder: $applist, ignoring"
 			appList=""
 		elif ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "true" ]]); then
