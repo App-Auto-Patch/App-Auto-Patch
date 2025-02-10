@@ -21,9 +21,19 @@ This project has since been applied to MDMs outside of Jamf Pro, showcasing its 
 
 ## Getting Started with 3.0
 
-- Run the script with script parameters to configure as you'd like. Examples:
+App Auto-Patch 3.0 automatically installs itself and necessary components anytime it's ran from outside the working folder `/Library/Management/AppAutoPatch/`
+For more information on getting started and testing, please visit the [AAP 3.0.0 Wiki Pre-Release]([https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Getting-Started](https://github.com/App-Auto-Patch/AAP3-Wiki/wiki)) page for more information
+
+- After installed, you can simply run `sudo appautopatch` from terminal with any parameters to configure as you'd like. Examples:
+
+`sudo appautopatch --interactiveMode=2 --workflow-install-now --deadline-count-focus=2 --deadline-count-hard=4 --ignored-labels="microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog" --verbose-mode`
+
+Or trigger from the script directly to perform an install with parameters as you'd like. Example:
 
 `./App-Auto-Patch-via-Dialog.zsh --interactiveMode=2 --workflow-install-now --deadline-count-focus=2 --deadline-count-hard=4 --ignored-labels="microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog" --verbose-mode`
+
+ - You can find a mapping of 2.x variables to 3.0.0 configuration and command line options from the following TSV file: [Migration Options](https://github.com/App-Auto-Patch/App-Auto-Patch/blob/3.0/Resources/App-Auto-Patch%203.0.0-Migration-Options.tsv)
+ - An example configuration profile can be found here: [xyz.techitout.appAutoPatch.plist](https://github.com/App-Auto-Patch/App-Auto-Patch/blob/3.0/App-Auto-Patch-Managed-Config-xyz.techitout.appAutoPatch.plist)
 
 - To reset AAP to defaults:
   `./App-Auto-Patch-via-Dialog.zsh --reset-defaults`
@@ -34,20 +44,18 @@ This project has since been applied to MDMs outside of Jamf Pro, showcasing its 
 - Uninstall App Auto Patch:
   `./App-Auto-Patch-via-Dialog.zsh --uninstall`
 
-## Learn More (Below documentation is for version 2)
+## Learn More 
 
-Please visit the [App Auto-Patch Wiki](https://github.com/robjschroeder/App-Auto-Patch/wiki) for detailed documentation!
+A Pre-Release of ther 3.0.0 Wiki can be found here: [App Auto-Patch Wiki](https://github.com/App-Auto-Patch/AAP3-Wiki/wiki)
 
-- [Getting Started](https://github.com/robjschroeder/App-Auto-Patch/wiki/Getting-Started)
+- [Getting Started]([https://github.com/robjschroeder/App-Auto-Patch/wiki/Getting-Started](https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Getting-Started))
 
-- [Jamf Pro Deployment](https://github.com/robjschroeder/App-Auto-Patch/wiki/Jamf-Pro-Deployment)
+- [Deferral Behavior](https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Deferral-Behavior)
 
-- [End-User Experience](https://github.com/robjschroeder/App-Auto-Patch/wiki/End-User-Experience)
+- [Configuration Settings](https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings)
 
 
 ***
-
-Detailed `AAP` version progress can be found in the [Change Log](https://github.com/robjschroeder/App-Auto-Patch/blob/main/CHANGELOG.md).
 
 You can also join the conversation at the [Mac Admins Foundation Slack](https://www.macadmins.org) in channel [#app-auto-patch](https://macadmins.slack.com/archives/C05D69E7SBH).
 
@@ -61,6 +69,7 @@ To everyone who has helped contribute to App Auto-Patch, including but not limit
 - Trevor Sysock ([@bigmacadmin](https://github.com/bigmacadmin))
 - Bart Reardon ([@bartreardon](https://github.com/bartreardon))
 - Charles Mangin ([@option8](https://github.com/option8))
+- Gil Burns ([@gilburns](https://github.com/gilburns))
 ### And special thanks to the Installomator Team
 - Armin Briegel ([@scriptingosx](https://github.com/scriptingosx))
 - Isaac Ordonez ([@issacatmann](https://github.com/issacatmann))
