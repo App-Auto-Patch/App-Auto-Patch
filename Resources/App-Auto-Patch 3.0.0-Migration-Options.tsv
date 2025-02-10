@@ -4,7 +4,7 @@ convertAppsInHomeFolder	"<key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</
 daysUntilReset	<key>DaysUntilReset</key> <integer>number</integer>	
 debugMode		"[--verbose-mode] [--verbose-mode-off]
     [--debug-mode] [--debug-mode-off]"
-deferralTimer	<key>DialogTimeoutDeferral</key> <integer>minutes</integer>	
+deferralTimer	<key>DialogTimeoutDeferral</key> <integer>seconds</integer>	
 deferralTimerAction	"<key>DialogTimeoutDeferralAction</key> <string>Defer,Continue</string>"	
 ignoreAppsInHomeFolder	"<key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>"	
 ignoredLabels	<key>IgnoredLabels</key> <string>label label label etc…</string>	"--ignored-labels=""label1 label2"""
