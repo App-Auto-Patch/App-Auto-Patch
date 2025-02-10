@@ -1240,7 +1240,7 @@ function PgetAppVersion() {
 			infoOut "App found in the iPhone Mirroring folder: $applist, ignoring"
 			appList=""
 		elif ([[ "$applist" == *"/Library/Application Support/JAMF/Composer/"* ]]); then
-			infoOut "App found in the iPhone Mirroring folder: $applist, ignoring"
+			infoOut "App found in the Jamf Composer folder: $applist, ignoring"
 			appList=""
 		elif ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "true" ]]); then
 			debugVerbose "App found in User directory: $applist, coverting to default directory"
