@@ -144,6 +144,9 @@
 #   Version 2.11.8, 02.10.2025, Andrew Spokes (@TechTrekkie)
 #   - Added logic to ignore apps found in Jamf Composer storage folder
 # 
+#   Version 2.11.9, 02.10.2025, Andrew Spokes (@TechTrekkie)
+#   - Fixing case on applist variable
+# 
 ####################################################################################################
 
 ####################################################################################################
@@ -156,7 +159,7 @@
 # Script Version and Jamf Pro Script Parameters
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="2.11.8"
+scriptVersion="2.11.9"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1238,10 +1241,10 @@ function PgetAppVersion() {
 		applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0)
 		if ([[ "$applist" == *"/Daemon Containers/"* ]]); then
 			infoOut "App found in the iPhone Mirroring folder: $applist, ignoring"
-			appList=""
+			applist=""
 		elif ([[ "$applist" == *"/Library/Application Support/JAMF/Composer/"* ]]); then
 			infoOut "App found in the Jamf Composer folder: $applist, ignoring"
-			appList=""
+			applist=""
 		elif ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "true" ]]); then
 			debugVerbose "App found in User directory: $applist, coverting to default directory"
 			# Adding the label to the converted labels
