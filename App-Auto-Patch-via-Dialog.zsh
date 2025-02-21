@@ -2792,11 +2792,11 @@ webHookMessage() {
             # For cases when the device id is not found in the logs
                 mdmComputerURL="https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMacOsMenu/~/macOsDevices"
             fi
-	    # If Mac is managed by Jumpcloud, link to the Jumpcloud devices page
-	    elif [[  $mdmName == "Jumpcloud" ]]; then
+        # If Mac is managed by Jumpcloud, link to the Jumpcloud devices page
+	elif [[  $mdmName == "Jumpcloud" ]]; then
             mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
     	else
-	        log_info "No MDM determined - webhook call will fail"
+	    log_info "No MDM determined - webhook call will fail"
         fi
 
         log_info "Sending Slack WebHook"
@@ -2891,11 +2891,12 @@ webHookMessage() {
                 mdmComputerURL="https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMacOsMenu/~/macOsDevices"
             fi
         # If Mac is managed by Jumpcloud, link to the Jumpcloud devices page
-	    elif [[  $mdmName == "Jumpcloud" ]]; then
+	elif [[  $mdmName == "Jumpcloud" ]]; then
             mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
     	else
-	        log_info "No MDM determined - webhook call will fail"
+            log_info "No MDM determined - webhook call will fail"
         fi
+
         log_info "Sending Teams WebHook"
         jsonPayload='{
     "@type": "MessageCard",
