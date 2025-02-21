@@ -1836,6 +1836,10 @@ get_mdm(){
 			log_info "MDM is Intune"
 			mdmName="Microsoft Intune"
 		;;
+		*jumpcloud*)
+			log_info "MDM is Jumpcloud"
+			mdmName="Jumpcloud"
+		;;
 		*)
 			log_info "Unsure of MDM"
 		;;
@@ -2788,70 +2792,76 @@ webHookMessage() {
             # For cases when the device id is not found in the logs
                 mdmComputerURL="https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMacOsMenu/~/macOsDevices"
             fi
+	    # If Mac is managed by Jumpcloud, link to the Jumpcloud devices page
+	    elif [[  $mdmName == "Jumpcloud" ]]; then
+            mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
+    	else
+	        log_info "No MDM determined - webhook call will fail"
         fi
+
         log_info "Sending Slack WebHook"
-        curl -s -X POST -H 'Content-type: application/json' \
-        -d \
-        '{
-    "blocks": [
-        {
-            "type": "header",
-            "text": {
-                "type": "plain_text",
-                "text": "'${appTitle}': '${webhookStatus}'",
-            }
-        },
-        {
-            "type": "divider"
-        },
-        {
-            "type": "section",
-            "fields": [
+        jsonPayload='{
+            "blocks": [
                 {
-                    "type": "mrkdwn",
-                    "text": ">*Serial Number and Computer Name:*\n>'"$serialNumber"' on '"$computerName"'"
-                },
-                        {
-                    "type": "mrkdwn",
-                    "text": ">*Computer Model:*\n>'"$modelName"'"
-                },
-                {
-                    "type": "mrkdwn",
-                    "text": ">*Current User:*\n>'"$currentUserAccountName"'"
-                },
-                {
-                    "type": "mrkdwn",
-                    "text": ">*Updates:*\n>'"$formatted_result"'"
-                },
-                {
-                    "type": "mrkdwn",
-                    "text": ">*Errors:*\n>'"$formatted_error_result"'"
-                },
-                        {
-                    "type": "mrkdwn",
-                    "text": ">*Computer Record:*\n>'"$mdmComputerURL"'"
-                }
-            ]
-        },
-        {
-        "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
+                    "type": "header",
                     "text": {
                         "type": "plain_text",
-                        "text": "View computer in $mdmName",
-                        "emoji": true
-                    },
-                    "style": "primary",
-                    "action_id": "actionId-0",
-                    "url": "'"$mdmComputerURL"'"
+                        "text": "'${appTitle}': '${webhookStatus}'",
+                    }
+                },
+                {
+                    "type": "divider"
+                },
+                {
+                    "type": "section",
+                    "fields": [
+                        {
+                            "type": "mrkdwn",
+                            "text": ">*Serial Number and Computer Name:*\n>'"$serialNumber"' on '"$computerName"'"
+                        },
+                                {
+                            "type": "mrkdwn",
+                            "text": ">*Computer Model:*\n>'"$modelName"'"
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": ">*Current User:*\n>'"$currentUserAccountName"'"
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": ">*Updates:*\n>'"$formatted_result"'"
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": ">*Errors:*\n>'"$formatted_error_result"'"
+                        },
+                                {
+                            "type": "mrkdwn",
+                            "text": ">*Computer Record:*\n>'"$mdmComputerURL"'"
+                        }
+                    ]
+                },
+                {
+                "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {
+                                "type": "plain_text",
+                                "text": "View computer in '"$mdmName"'",
+                                "emoji": true
+                            },
+                            "style": "primary",
+                            "action_id": "actionId-0",
+                            "url": "'"$mdmComputerURL"'"
+                        }
+                    ]
                 }
             ]
-        }
-    ]
-}' \
-        $webhook_url_slack_option
+        }'
+
+        curlResult=$(curl -s -X POST -H 'Content-type: application/json' -d "$jsonPayload" "$webhook_url_slack_option")
+        log_verbose "Webhook result: $curlResult"
     fi
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -2880,6 +2890,11 @@ webHookMessage() {
             # For cases when the device id is not found in the logs
                 mdmComputerURL="https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMacOsMenu/~/macOsDevices"
             fi
+        # If Mac is managed by Jumpcloud, link to the Jumpcloud devices page
+	    elif [[  $mdmName == "Jumpcloud" ]]; then
+            mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
+    	else
+	        log_info "No MDM determined - webhook call will fail"
         fi
         log_info "Sending Teams WebHook"
         jsonPayload='{
@@ -2917,8 +2932,8 @@ webHookMessage() {
 }'
         
         # Send the JSON payload using curl
-        curl -s -X POST -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_teams_option"
-        
+        curlResult=$(curl -s -X POST -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_teams_option")
+        log_verbose "Webhook result: $curlResult"
     fi
     
 }
