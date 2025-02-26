@@ -14,7 +14,7 @@
   <integer>60</integer>
   <key>DeadlineCountFocus</key>
   <integer>3</integer>
-  <key>DeadlineHardCount</key>
+  <key>DeadlineCountHard</key>
   <integer>3</integer>
   <key>DeferralTimerDefault</key>
   <integer>1440</integer>
