@@ -15,6 +15,12 @@
 #   - Added default menu selection on dialog as first option when using DeferralTimerMenu
 #   - Added logic to ignore apps in '/Library/Application Support/JAMF/Composer'
 #
+#   Version 3.0.0-beta10, [03.07.2025]
+#   - Fixed logic for optional labels that may have been preventing them from being added to the queue
+#   - Fixed various bugs with logging
+#   - Fixed some references to the local PLIST when adding/modifying/deleting values
+#   - Added static variable for workflow_install_now_patching_status_action for controlling completion status for workflow_install_now function
+#
 #
 ####################################################################################################
 
@@ -28,8 +34,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.0-beta9"
-scriptDate="2025/02/10"
+scriptVersion="3.0.0-beta10"
+scriptDate="2025/03/07"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -220,7 +226,7 @@ set_defaults() {
 
     daysUntilReset="7" # MDM Enabled
 
-    selfServicePatchingStatusModeReset="3"
+    workflow_install_now_patching_status_action="3" # Replaced selfServicePatchingStatusModeReset
 
     unattendedExit="FALSE" # MDM Enabled
 
@@ -770,6 +776,7 @@ get_preferences() {
     done
 
     # Attempting to populate Required Labels
+    log_info "Attempting to populate required labels"
     for requiredLabel in "${requiredLabelsArray[@]}"; do
         if [[ -f "${fragmentsPath}/labels/${requiredLabel}.sh" ]]; then
             if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $requiredLabel; then
@@ -803,14 +810,26 @@ get_preferences() {
     done
 
     # Attempt to populate the Optional Labels
+    log_info "Attempting to populate optional labels"
     for optionalLabel in "${optionalLabelsArray[@]}"; do
         if [[ -f "${fragmentsPath}/labels/${optionalLabel}.sh" ]]; then
             if /usr/libexec/PlistBuddy -c "Print :OptionalLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $optionalLabel; then
                 log_verbose "$optionalLabel already exists, skipping for now"
             else
-                log_verbose "Writing required label $optionalLabel to configuration plist"
+                log_verbose "Writing optional label $optionalLabel to configuration plist"
                 /usr/libexec/PlistBuddy -c "add \":OptionalLabels:\" string \"${optionalLabel}\"" "${appAutoPatchLocalPLIST}.plist"
             fi
+            # Checking if app is installed and adding Optional Label to Required if it exists
+            if ${installomatorScript} ${optionalLabel} DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" | grep "No previous app found" >/dev/null 2>&1
+            then
+                notice "$optionalLabel is not installed, skipping ..."
+            else
+                log_verbose "Writing optional label ${optionalLabel} to required configuration plist"
+                /usr/libexec/PlistBuddy -c "add \":RequiredLabels:\" string \"${optionalLabel}\"" "${appAutoPatchLocalPLIST}.plist"
+            fi
+            
+            
+            
         else
             log_verbose "No such label ${optionalLabel}"
         fi
@@ -857,26 +876,26 @@ manage_parameter_options() {
 
 
     if [[ "${deferral_timer_default_option}" == "X" ]]; then
-        log_super "Status: Deleting local preference for the --deferral-timer-default option, defaulting to ${DEFERRAL_TIMER_DEFAULT_MINUTES} minutes."
-        defaults delete "${SUPER_LOCAL_PLIST}" DeferralTimerDefault 2>/dev/null
+        log_status "Status: Deleting local preference for the --deferral-timer-default option, defaulting to ${DEFERRAL_TIMER_DEFAULT_MINUTES} minutes."
+        defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerDefault 2>/dev/null
         unset deferral_timer_default_option
     elif [[ -n "${deferral_timer_default_option}" ]] && [[ "${deferral_timer_default_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
         if [[ "${deferral_timer_default_option}" -lt 2 ]]; then
-            log_super "Parameter Warning: Specified --deferral-timer-default=minutes value of ${deferral_timer_default_option} is too low, rounding up to 2 minutes."
+            log_warning "Parameter Warning: Specified --deferral-timer-default=minutes value of ${deferral_timer_default_option} is too low, rounding up to 2 minutes."
             deferral_timer_minutes=2
         elif [[ "${deferral_timer_default_option}" -gt 10080 ]]; then
-            log_super "Parameter Warning: Specified --deferral-timer-default=minutes value of ${deferral_timer_default_option} is too high, rounding down to 10080 minutes (1 week)."
+            log_warning "Parameter Warning: Specified --deferral-timer-default=minutes value of ${deferral_timer_default_option} is too high, rounding down to 10080 minutes (1 week)."
             deferral_timer_minutes=10080
         else
             deferral_timer_minutes="${deferral_timer_default_option}"
         fi
-        defaults write "${SUPER_LOCAL_PLIST}" DeferralTimerDefault -string "${deferral_timer_minutes}"
+        defaults write "${appAutoPatchLocalPLIST}" DeferralTimerDefault -string "${deferral_timer_minutes}"
     elif [[ -n "${deferral_timer_default_option}" ]] && ! [[ "${deferral_timer_default_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
-        log_super "Parameter Error: The --deferral-timer-default=minutes value must only be a number."
+        log_error "Parameter Error: The --deferral-timer-default=minutes value must only be a number."
         option_error="TRUE"
     fi
     [[ -z "${deferral_timer_minutes}" ]] && deferral_timer_minutes="${DEFERRAL_TIMER_DEFAULT_MINUTES}"
-    [[ "${verbose_mode_option}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_minutes is: ${deferral_timer_minutes}"
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_minutes is: ${deferral_timer_minutes}"
 
 
     
@@ -924,7 +943,7 @@ manage_parameter_options() {
     fi
     
     
-    # Manage ${workflow_disable_relaunch_option} and save to ${SUPER_LOCAL_PLIST}.
+    # Manage ${workflow_disable_relaunch_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
         workflow_disable_relaunch_option="TRUE"
         defaults write "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch -bool true
@@ -1021,26 +1040,26 @@ manage_parameter_options() {
 
     # Validate ${deferral_timer_workflow_relaunch_option} input and if valid set ${deferral_timer_workflow_relaunch_minutes} and save to ${appAutoPatchLocalPLIST}. If there is no ${deferral_timer_workflow_relaunch_minutes} then set it to ${DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES}.
     if [[ "${deferral_timer_workflow_relaunch_option}" == "X" ]]; then
-        log_super "Status: Deleting local preference for the --deferral-timer-workflow-relaunch option, defaulting to ${DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES} minutes."
+        log_status "Status: Deleting local preference for the --deferral-timer-workflow-relaunch option, defaulting to ${DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES} minutes."
         defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerWorkflowRelaunch 2>/dev/null
         unset deferral_timer_workflow_relaunch_option
     elif [[ -n "${deferral_timer_workflow_relaunch_option}" ]] && [[ "${deferral_timer_workflow_relaunch_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
         if [[ "${deferral_timer_workflow_relaunch_option}" -lt 2 ]]; then
-            log_super "Parameter Warning: Specified --deferral-timer-workflow-relaunch=minutes value of ${deferral_timer_workflow_relaunch_option} minutes is too low, rounding up to 2 minutes."
+            log_warning "Parameter Warning: Specified --deferral-timer-workflow-relaunch=minutes value of ${deferral_timer_workflow_relaunch_option} minutes is too low, rounding up to 2 minutes."
             deferral_timer_workflow_relaunch_minutes=2
         elif [[ "${deferral_timer_workflow_relaunch_option}" -gt 43200 ]]; then
-            log_super "Parameter Warning: Specified --deferral-timer-workflow-relaunch=minutes value of ${deferral_timer_workflow_relaunch_option} minutes is too high, rounding down to 43200 minutes (30 days)."
+            log_warning "Parameter Warning: Specified --deferral-timer-workflow-relaunch=minutes value of ${deferral_timer_workflow_relaunch_option} minutes is too high, rounding down to 43200 minutes (30 days)."
             deferral_timer_workflow_relaunch_minutes=43200
         else
             deferral_timer_workflow_relaunch_minutes="${deferral_timer_workflow_relaunch_option}"
         fi
         defaults write "${appAutoPatchLocalPLIST}" DeferralTimerWorkflowRelaunch -string "${deferral_timer_workflow_relaunch_minutes}"
     elif [[ -n "${deferral_timer_workflow_relaunch_option}" ]] && ! [[ "${deferral_timer_workflow_relaunch_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
-        log_super "Parameter Error: The --deferral-timer-workflow-relaunch=minutes value must only be a number."
+        log_error "Parameter Error: The --deferral-timer-workflow-relaunch=minutes value must only be a number."
         option_error="TRUE"
     fi
     [[ -z "${deferral_timer_workflow_relaunch_minutes}" ]] && deferral_timer_workflow_relaunch_minutes="${DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES}"
-    [[ "${verbose_mode_option}" == "TRUE" ]] && log_super "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_workflow_relaunch_minutes is: ${deferral_timer_workflow_relaunch_minutes}"
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_workflow_relaunch_minutes is: ${deferral_timer_workflow_relaunch_minutes}"
     
     # Some validation and logging for the focus deferral timer option.
     if [[ -n "${deferral_timer_focus_option}" ]] && { [[ -z "${deadline_count_focus}" ]]; }; then
@@ -1828,7 +1847,7 @@ get_mdm(){
     fi
 
     case "${server_url}" in
-		*jamf*)
+		*jamf*|*jss*)
 			log_info "MDM is Jamf"
 			mdmName="Jamf Pro"
 		;;
@@ -1837,14 +1856,14 @@ get_mdm(){
 			mdmName="Microsoft Intune"
 		;;
 		*)
-			log_info "Unsure of MDM"
+			log_info "Unable to determine MDM from ServerURL"
 		;;
 	esac
 
 
 }
 
-#Evaluate if weekly patching has been completed or not
+#Evaluate if patching cadence has been completed or not
 check_completion_status() {
     
     CurrentDate=$(date +"%Y-%m-%d")
@@ -1866,20 +1885,20 @@ check_completion_status() {
         Patch_Week_Start_Date=$CurrentDate
     fi 
     
-    weeklyPatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus 2> /dev/null)
-    weeklyPatchingStartDate=$(defaults read "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingStartDate 2> /dev/null)
+    PatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus 2> /dev/null)
+    PatchingStartDate=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingStartDate 2> /dev/null)
     
-    if [[ -z $weeklyPatchingComplete || -z $weeklyPatchingStartDate ]]; then
+    if [[ -z $PatchingComplete || -z $PatchingStartDate ]]; then
         log_info "Patching Completion Status or Start Date not set, setting values"
-        defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus -bool false
-        defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingStartDate "$Patch_Week_Start_Date"
+        defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool false
+        defaults write "${appAutoPatchLocalPLIST}" AAPPatchingStartDate "$Patch_Week_Start_Date"
         
-        weeklyPatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus 2> /dev/null)
-        weeklyPatchingStartDate=$(defaults read "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingStartDate 2> /dev/null)
+        PatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus 2> /dev/null)
+        PatchingStartDate=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingStartDate 2> /dev/null)
     fi
 
     # Commenting out old logic due to issue with timing of caluclation
-    # statusDateEpoch=$(date -j -f "%Y-%m-%d" "$weeklyPatchingStartDate" "+%s")
+    # statusDateEpoch=$(date -j -f "%Y-%m-%d" "$PatchingStartDate" "+%s")
     # EpochTimeSinceStatus=$(($CurrentDateEpoch - $statusDateEpoch))
     # DaysSinceStatus=$(($EpochTimeSinceStatus / 86400))
 
@@ -1888,7 +1907,7 @@ check_completion_status() {
     zmodload zsh/datetime
     
     # Define the two dates (in YYYY-MM-DD format)
-    date1="$weeklyPatchingStartDate"
+    date1="$PatchingStartDate"
     date2="$CurrentDate"
     
     # Convert the dates to seconds since epoch
@@ -1899,32 +1918,32 @@ check_completion_status() {
     diff_in_seconds=$((epoch2 - epoch1))
     DaysSinceStatus=$((diff_in_seconds / 86400))
 
-    log_notice "Patching Completion Status is $weeklyPatchingComplete"
-    log_notice "Patching Start Date is $weeklyPatchingStartDate"
+    log_notice "Patching Completion Status is $PatchingComplete"
+    log_notice "Patching Start Date is $PatchingStartDate"
     log_notice "Current Date: $CurrentDate"
     log_notice "Days Since Patching Start Date: $DaysSinceStatus"
     
     if [ ${DaysSinceStatus} -ge $daysUntilReset ]; then
         log_info "Resetting Completion Status to False"
-        defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus -bool false
+        defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool false
         log_info "Setting Patch Week Start Date as $Patch_Week_Start_Date"
-        defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingStartDate "$Patch_Week_Start_Date"
-        weeklyPatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus 2> /dev/null)
+        defaults write "${appAutoPatchLocalPLIST}" AAPPatchingStartDate "$Patch_Week_Start_Date"
+        PatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus 2> /dev/null)
         defaults delete "${appAutoPatchLocalPLIST}" DeadlineCounterFocus 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" DeadlineCounterHard 2> /dev/null
     fi
     
-    if [[  $weeklyPatchingComplete == 1 ]]; then
+    if [[  $PatchingComplete == 1 ]]; then
         #This should be set by configuration # # # deferral_timer_minutes="1440"
         log_info "Patching Status Already Complete, trying again in ${deferral_timer_minutes} minutes."
         set_auto_launch_deferral
-    elif [[  $weeklyPatchingComplete == 0 ]]; then
+    elif [[  $PatchingComplete == 0 ]]; then
         log_info "Continuing App Auto-Patch Workflow"
     else
         log_info "Unknown Status... Setting status to False"
-        defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus -bool false
-        defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingStartDate "$Patch_Week_Start_Date"
-        weeklyPatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus 2> /dev/null)
+        defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool false
+        defaults write "${appAutoPatchLocalPLIST}" AAPPatchingStartDate "$Patch_Week_Start_Date"
+        PatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus 2> /dev/null)
         log_info "Continuing App Auto-Patch Workflow"
     fi
     
@@ -2123,7 +2142,7 @@ archive_logs() {
     archive_logs_needed="FALSE"
     [[ $(ls -l "${appAutoPatchLog}" 2> /dev/null | awk '{print int($5/1000)}') -gt $appAutoPatchLogArchiveSize ]] && archive_logs_needed="TRUE"
     
-    # A super log has become to large, archival is required.
+    # An AAP log has become to large, archival is required.
     if [[ "${archive_logs_needed}" == "TRUE" ]]; then
         local log_archive_name
         log_archive_name=$(date +"%Y-%m-%d.%H-%M-%S")
@@ -2364,7 +2383,7 @@ dialog_install_or_defer() {
 				log_status "User chose to defer update for ${deferral_timer_minutes} minutes."
 				write_status "Pending: User chose to defer update for ${deferral_timer_minutes} minutes."
 			else
-				log_super "Status: User chose to defer update, using the default defer of ${deferral_timer_minutes} minutes."
+				log_status "Status: User chose to defer update, using the default defer of ${deferral_timer_minutes} minutes."
 				write_status "Pending: User chose to defer update, using the default defer of ${deferral_timer_minutes} minutes."
 			fi
 		;;
@@ -3137,7 +3156,12 @@ main() {
             log_info "Bypassing deferral workflow"
             log_notice "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
             workflow_do_Installations
-            defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus -bool true #Set completion status to true
+            
+            if [[ "$workflow_install_now_patching_status_action" == 2 ]] || "$workflow_install_now_patching_status_action" == 3 && "${errorCount}" == 0 ]]; then
+                defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true #Set completion status to true
+                timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
+                defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
+            fi
             check_webhook
             #This should be set by configuration # # # deferral_timer_minutes="1440" #Set auto launch for 24 hours
             log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
@@ -3152,7 +3176,9 @@ main() {
                 dialog_install_hard_deadline
                 log_info "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
                 workflow_do_Installations
-                defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus -bool true #Set completion status to true
+                defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true #Set completion status to true
+                timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
+                defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
                 check_webhook
                 #This should be set by configuration # # # deferral_timer_minutes="1440" #Set auto launch for 24 hours
                 log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
@@ -3169,7 +3195,9 @@ main() {
                 if [[ "${dialog_user_choice_install}" == "TRUE" ]]; then
                     log_notice "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
                     workflow_do_Installations
-                    defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus -bool true #Set completion status to true
+                    defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true #Set completion status to true
+                    timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
+                    defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
                     check_webhook
                     #This should be set by configuration # # # deferral_timer_minutes="1440" #Set auto launch for 24 hours
                     log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
@@ -3183,7 +3211,9 @@ main() {
         fi
     else
         log_info "All apps are up to date. Nothing to do."
-        defaults write "${appAutoPatchLocalPLIST}" AAPWeeklyPatchingCompletionStatus -bool true #Set completion status to true
+        defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true #Set completion status to true
+        timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
+        defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
         
         if [ ${interactiveModeOption} -gt 1 ]; then
             $dialogBinary --title "$appTitle" --message "All apps are up to date." --windowbuttons min --icon "$icon" --overlayicon "$overlayIcon" --moveable --position topright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
@@ -3196,7 +3226,7 @@ main() {
             log_aap "Status: Full AAP workflow complete! Automatic relaunch is disabled."
             log_status "Inactive: Full AAP workflow complete! Automatic relaunch is disabled."
             /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
-        else # Default super workflow automatically relaunches.
+        else # Default AAP workflow automatically relaunches.
             deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
             #This should be set by configuration # # # deferral_timer_minutes="1440"
             log_info "All apps are up to date, will check again in ${deferral_timer_minutes} minutes."
