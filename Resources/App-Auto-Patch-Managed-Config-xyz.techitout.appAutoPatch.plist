@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>InteractiveMode</key>
+  <integer>3</integer>
+  <key>PatchWeekStartDay</key>
+  <integer>1</integer>
+  <key>DaysUntilReset</key>
+  <integer>7</integer>
+  <key>DeferralTimerFocus</key>
+  <integer>60</integer>
+  <key>DeferralTimerError</key>
+  <integer>60</integer>
+  <key>DeadlineCountFocus</key>
+  <integer>3</integer>
+  <key>DeadlineCountHard</key>
+  <integer>3</integer>
+  <key>DeferralTimerDefault</key>
+  <integer>1440</integer>
+  <key>DeferralTimerMenu</key>
+  <string>30,60,90,480,720,1440,2880</string>
+  <key>DialogTimeoutDeferral</key>
+  <integer>7200</integer>
+  <key>DialogTimeoutDeferralAction</key>
+  <string>Defer</string>
+  <key>IgnoredLabels</key>
+  <string>1password* androidstudio azuredatastudio bettertouchtool beyondcomparepro clickshare depnotify displaylinkmanager docker dropbox firefox firefox_da firefox_intl firefoxdeveloperedition firefoxesr firefoxesr_intl firefoxesrpkg firefoxpkg_intl  fork githubdesktop googlechrome* googleearth grammarly hpeasystart ibmnotifier istatmenus iterm2 jamf* jetbrains* krisp macadminspython microsoftautoupdate microsoftazuredatastudio microsoftoutlook-monthly microsoftvisualstudiocode monitorcontrol mysqlworkbenchce omnigraffle* omnifocus* omniplan* openvpnconnect* opera postman pritunl privileges prune python royaltsx scaleft visualstudiocode vmwarefusion webex* yubikey*</string>
+  <key>InstallomatorOptions</key>
+  <string>BLOCKING_PROCESS_ACTION=quit_kill NOTIFY=silent LOGO=appstore IGNORE_APP_STORE_APPS=yes</string>
+</dict>
+</plist>
