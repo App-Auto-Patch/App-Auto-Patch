@@ -15,11 +15,12 @@
 #   - Added default menu selection on dialog as first option when using DeferralTimerMenu
 #   - Added logic to ignore apps in '/Library/Application Support/JAMF/Composer'
 #
-#   Version 3.0.0-beta10, [03.07.2025]
+#   Version 3.0.0-beta10, [03.08.2025]
 #   - Fixed logic for optional labels that may have been preventing them from being added to the queue
 #   - Fixed various bugs with logging
 #   - Fixed some references to the local PLIST when adding/modifying/deleting values
 #   - Added static variable for workflow_install_now_patching_status_action for controlling completion status for workflow_install_now function
+#   - Added command line trigger for --days-until-reset=
 #
 #
 ####################################################################################################
@@ -35,7 +36,7 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.0.0-beta10"
-scriptDate="2025/03/07"
+scriptDate="2025/03/08"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -58,6 +59,7 @@ echo "
     [--interactiveMode=number]
     [--reset-defaults]
     [--patch-week-start-day=number]
+    [--days-until-reset=number]
 
     Workflow Options:
     [--workflow-disable-relaunch]  [--workflow-disable-relaunch-off]
@@ -95,40 +97,40 @@ echo "
 
     ** Managed preferences override local options via domain: xyz.techitout.appAutoPatch
 
-    <key>DeferralTimerMenu</key> <string>minutes,minutes,minutes,etc...</string>
-    <key>DeferralTimerFocus</key> <integer>minutes</integer>
-    <key>DeferralTimerError</key> <integer>minutes</integer>
-    <key>DeferralTimerWorkflowRelaunch</key> <integer>minutes</integer>
-    <key>DeadlineCountFocus</key> <integer>number</integer>
-    <key>DeadlineCountHard</key> <integer>number</integer>
-    <key>DeferralTimerDefault</key> <integer>minutes</integer>
-    <key>InteractiveMode</key> <integer>number</integer>
-    <key>PatchWeekStartDay</key> <integer>number</integer>
-    <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
-    <key>WorkflowDisableRelaunch</key> <true/> | <false/>
-    <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
-    <key>WebhookURLTeams</key> <string>URL</string>
-    <key>WebhookURLSlack</key> <string>URL</string>
-    <key>IgnoredLabels</key> <string>label label label etc</string>
-    <key>RequiredLabels</key> <string>label label label etc</string>
-    <key>OptionalLabels</key> <string>label label label etc</string>
-    <key>AppTitle</key> <string>App Auto-Patch</string>
-    <key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</string>
-    <key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>
-    <key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc</string>
-    <key>InstallomatorVersion</key> <string>Main,Release</string>
-    <key>DialogTimeoutDeferral</key> <integer>seconds</integer>
-    <key>DialogTimeoutDeferralAction</key> <string>Defer,Continue</string>
-    <key>DaysUntilReset</key> <integer>number</integer>
-    <key>UnattendedExit</key> <string>TRUE,FALSE</string>
-    <key>UnattendedExitSeconds</key> <integer>seconds</integer>
-    <key>DialogOnTop</key> <string>TRUE,FALSE</string>
-    <key>UseOverlayIcon</key> <string>TRUE,FALSE</string>
-    <key>RemoveInstallomatorPath</key> <string>TRUE,FALSE</string>
-    <key>SupportTeamName</key> <string>name</string>
-    <key>SupportTeamPhone</key> <string>phoem</string>
-    <key>SupportTeamEmail</key> <string>email</string>
-    <key>SupportTeamWebsite</key> <string>URL</string>
+    <key>AppTitle</key> <string>App Auto-Patch</string>    
+    <key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</string>
+    <key>DaysUntilReset</key> <integer>number</integer>
+    <key>DeadlineCountFocus</key> <integer>number</integer>
+    <key>DeadlineCountHard</key> <integer>number</integer>
+    <key>DeferralTimerDefault</key> <integer>minutes</integer>
+    <key>DeferralTimerError</key> <integer>minutes</integer>
+    <key>DeferralTimerFocus</key> <integer>minutes</integer>
+    <key>DeferralTimerMenu</key> <string>minutes,minutes,minutes,etc...</string>
+    <key>DeferralTimerWorkflowRelaunch</key> <integer>minutes</integer>
+    <key>DialogOnTop</key> <string>TRUE,FALSE</string>
+    <key>DialogTimeoutDeferral</key> <integer>seconds</integer>
+    <key>DialogTimeoutDeferralAction</key> <string>Defer,Continue</string>
+    <key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>
+    <key>IgnoredLabels</key> <string>label label label etc</string>
+    <key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc</string>
+    <key>InstallomatorVersion</key> <string>Main,Release</string>
+    <key>InteractiveMode</key> <integer>number</integer>
+    <key>OptionalLabels</key> <string>label label label etc</string>
+    <key>PatchWeekStartDay</key> <integer>number</integer>
+    <key>RemoveInstallomatorPath</key> <string>TRUE,FALSE</string>
+    <key>RequiredLabels</key> <string>label label label etc</string>
+    <key>SupportTeamEmail</key> <string>email</string>
+    <key>SupportTeamName</key> <string>name</string>
+    <key>SupportTeamPhone</key> <string>phoem</string>
+    <key>SupportTeamWebsite</key> <string>URL</string>
+    <key>UnattendedExit</key> <string>TRUE,FALSE</string>
+    <key>UnattendedExitSeconds</key> <integer>seconds</integer>
+    <key>UseOverlayIcon</key> <string>TRUE,FALSE</string>
+    <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
+    <key>WebhookURLSlack</key> <string>URL</string>
+    <key>WebhookURLTeams</key> <string>URL</string>
+    <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
+    <key>WorkflowDisableRelaunch</key> <true/> | <false/>
 
 "
 # Error log any unrecognized options.
@@ -383,6 +385,9 @@ get_options() {
             ;;
             --patch-week-start-day=*)
                 patch_week_start_day_option="${1##*=}"
+            ;;
+            --days-until-reset=*)
+                days_until_reset_option="${1##*=}"
             ;;
             --workflow-disable-app-discovery)
                 workflow_disable_app_discovery_option="TRUE"
@@ -671,8 +676,8 @@ get_preferences() {
     { [[ -z "${dialog_timeout_deferral_managed}" ]] && [[ -n "${DialogTimeoutDeferral}" ]] && [[ -n "${dialog_timeout_deferral_local}" ]]; } && DialogTimeoutDeferral="${dialog_timeout_deferral_local}"
     [[ -n "${dialog_timeout_deferral_action_managed}" ]] && DialogTimeoutDeferralAction="${dialog_timeout_deferral_action_managed}"
     { [[ -z "${dialog_timeout_deferral_action_managed}" ]] && [[ -n "${DialogTimeoutDeferralAction}" ]] && [[ -n "${dialog_timeout_deferral_action_local}" ]]; } && DialogTimeoutDeferralAction="${dialog_timeout_deferral_action_local}"
-    [[ -n "${days_until_reset_managed}" ]] && daysUntilReset="${days_until_reset_managed}"
-    { [[ -z "${days_until_reset_managed}" ]] && [[ -n "${daysUntilReset}" ]] && [[ -n "${days_until_reset_local}" ]]; } && daysUntilReset="${days_until_reset_local}"
+    [[ -n "${days_until_reset_managed}" ]] && days_until_reset_option="${days_until_reset_managed}"
+    { [[ -z "${days_until_reset_managed}" ]] && [[ -z "${days_until_reset_option}" ]] && [[ -n "${days_until_reset_local}" ]]; } && days_until_reset_option="${days_until_reset_local}"
     [[ -n "${unattended_exit_managed}" ]] && unattendedExit="${unattended_exit_managed}"
     { [[ -z "${unattended_exit_managed}" ]] && [[ -n "${unattendedExit}" ]] && [[ -n "${unattended_exit_local}" ]]; } && unattendedExit="${unattended_exit_local}"
     [[ -n "${unattended_exit_seconds_managed}" ]] && unattendedExitSeconds="${unattended_exit_seconds_managed}"
@@ -933,6 +938,17 @@ manage_parameter_options() {
         log_error "The --patch-week-start-day=number value must only be a number."; option_error="TRUE"
     fi
     
+    # Validate ${days_until_reset_option} input and if valid set ${patch_week_start_day}.
+    if [[ "${days_until_reset_option}" == "X" ]]; then
+        log_status "Deleting local preference for the --days_until_reset option."
+        defaults delete "${appAutoPatchLocalPLIST}" DaysUntilReset 2> /dev/null
+    elif [[ -n "${days_until_reset_option}" ]] && [[ "${days_until_reset_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        days_until_reset="${days_until_reset_option}"
+        defaults write "${appAutoPatchLocalPLIST}" DaysUntilReset -string "${days_until_reset}"
+    elif [[ -n "${days_until_reset_option}" ]] && ! [[ "${days_until_reset_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        log_error "The --patch-week-start-day=number value must only be a number."; option_error="TRUE"
+    fi
+    
     # Manage ${workflow_disable_app_discovery_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${workflow_disable_app_discovery_option}" -eq 1 ]] || [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then
         workflow_disable_app_discovery_option="TRUE"
@@ -958,6 +974,7 @@ manage_parameter_options() {
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_count_focus}" ]]; } && log_verbose "deadline_count_focus is: ${deadline_count_focus}"
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_count_hard}" ]]; } && log_verbose "deadline_count_hard is: ${deadline_count_hard}"
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${patch_week_start_day}" ]]; } && log_verbose "patch_week_start_day is: ${patch_week_start_day}"
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${days_until_reset}" ]]; } && log_verbose "days_until_reset is: ${days_until_reset}"
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${workflow_disable_app_discovery_option}" ]]; } && log_verbose "workflow_disable_app_discovery_option is: ${workflow_disable_app_discovery_option}"
     
     # Validate ${deferral_timer_menu_option} input and if valid set ${deferral_timer_menu_minutes} and save to ${appAutoPatchLocalPLIST}.
@@ -1923,7 +1940,7 @@ check_completion_status() {
     log_notice "Current Date: $CurrentDate"
     log_notice "Days Since Patching Start Date: $DaysSinceStatus"
     
-    if [ ${DaysSinceStatus} -ge $daysUntilReset ]; then
+    if [ ${DaysSinceStatus} -ge $days_until_reset ]; then
         log_info "Resetting Completion Status to False"
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool false
         log_info "Setting Patch Week Start Date as $Patch_Week_Start_Date"
@@ -3104,7 +3121,7 @@ main() {
     # Deduplicate required labels
     requiredLabelsArray=($(tr ' ' '\n' <<< "${requiredLabelsArray[@]}" | sort -u | tr '\n' ' '))
 
-    # Deduplicate required labels
+    # Deduplicate optional labels
     optionalLabelsArray=($(tr ' ' '\n' <<< "${optionalLabelsArray[@]}" | sort -u | tr '\n' ' '))
 
     # Deduplicate converted labels
