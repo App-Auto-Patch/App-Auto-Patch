@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>AppTitle</key>
+			<string>App Auto-Patch</string>
+			<key>ConvertAppsInHomeFolder</key>
+			<string>TRUE</string>
+			<key>DaysUntilReset</key>
+			<integer>7</integer>
+			<key>DeadlineCountFocus</key>
+			<integer>3</integer>
+			<key>DeadlineCountHard</key>
+			<integer>3</integer>
+			<key>DeferralTimerDefault</key>
+			<integer>1440</integer>
+			<key>DeferralTimerError</key>
+			<integer>60</integer>
+			<key>DeferralTimerFocus</key>
+			<integer>60</integer>
+			<key>DeferralTimerMenu</key>
+			<string>15,60,240,1440</string>
+			<key>DeferralTimerWorkflowRelaunch</key>
+			<integer>1440</integer>
+			<key>DialogOnTop</key>
+			<string>TRUE</string>
+			<key>DialogTimeoutDeferral</key>
+			<integer>300</integer>
+			<key>DialogTimeoutDeferralAction</key>
+			<string>Defer</string>
+			<key>IgnoreAppsInHomeFolder</key>
+			<string>FALSE</string>
+			<key>IgnoredLabels</key>
+			<string>1password* androidstudio microsoft*</string>
+			<key>InstallomatorOptions</key>
+			<string>BLOCKING_PROCESS_ACTION=quit_kill NOTIFY=silent LOGO=appstore IGNORE_APP_STORE_APPS=yes</string>
+			<key>InstallomatorVersion</key>
+			<string>Main</string>
+			<key>InteractiveMode</key>
+			<integer>1</integer>
+			<key>OptionalLabels</key>
+			<string>iTerm2  imazingprofileeditor</string>
+			<key>PatchWeekStartDay</key>
+			<integer>2</integer>
+			<key>PayloadDisplayName</key>
+			<string>App Auto-Patch</string>
+			<key>PayloadIdentifier</key>
+			<string>xyz.techitout.appAutoPatch.48825131-4206-41FA-96F0-30A76CD64BF1</string>
+			<key>PayloadType</key>
+			<string>xyz.techitout.appAutoPatch</string>
+			<key>PayloadUUID</key>
+			<string>48825131-4206-41FA-96F0-30A76CD64BF1</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>RemoveInstallomatorPath</key>
+			<string>FALSE</string>
+			<key>RequiredLabels</key>
+			<string>googlechromepkg homebrew</string>
+			<key>SupportTeamEmail</key>
+			<string>support@company.com</string>
+			<key>SupportTeamName</key>
+			<string>Support Team Name</string>
+			<key>SupportTeamPhone</key>
+			<string>888-867-5309</string>
+			<key>SupportTeamWebsite</key>
+			<string>www.company.com</string>
+			<key>UnattendedExit</key>
+			<string>TRUE</string>
+			<key>UnattendedExitSeconds</key>
+			<integer>60</integer>
+			<key>UseOverlayIcon</key>
+			<string>TRUE</string>
+			<key>WebhookFeature</key>
+			<string>FAILURES</string>
+			<key>WebhookURLSlack</key>
+			<string>https://webhook.slack.com</string>
+			<key>WebhookURLTeams</key>
+			<string>https://webhook.microsoft.com</string>
+			<key>WorkflowDisableAppDiscovery</key>
+			<false/>
+			<key>WorkflowDisableRelaunch</key>
+			<false/>
+		</dict>
+	</array>
+	<key>PayloadDescription</key>
+	<string>This is an example of all possible AAP managed preferences. DO NOT DEPLOY. THIS EXAMPLE MAY CAUSE ERRORS IF DEPLOYED AS-IS</string>
+	<key>PayloadDisplayName</key>
+	<string>appAutoPatch | All Settings Example</string>
+	<key>PayloadIdentifier</key>
+	<string>ZG-H39D70JXM1.3F721295-0C16-4F8E-9223-73368D8E1064</string>
+	<key>PayloadOrganization</key>
+	<string>TechItOut</string>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadUUID</key>
+	<string>3F721295-0C16-4F8E-9223-73368D8E1064</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+</dict>
+</plist>

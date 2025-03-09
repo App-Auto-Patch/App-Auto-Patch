@@ -1,0 +1,66 @@
+<key>InteractiveMode</key>
+<string>3</string>
+<key>IgnoredLabels</key>
+<string>microsoft* googlechrome*</string>
+<key>RequiredLabels</key>
+<string>desktoppr dockutil nudgesuite</string>
+<key>OptionalLabels</key>
+<string>1password8 adobereaderdc amazonchime apparency firefoxpkg vlc zoom</string>
+<key>AppTitle</key>
+<string>App Auto-Patch via Intune</string>
+<key>ConvertAppsInHomeFolder</key>
+<string>TRUE</string>
+<key>IgnoreAppsInHomeFolder</key>
+<string>FALSE</string>
+<key>InstallomatorOptions</key>
+<string>BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=microsoft</string>
+<key>InstallomatorVersion</key>
+<string>Beta</string>
+<key>PatchWeekStartDay</key>
+<integer>1</integer>
+<key>DeferralTimerFocus</key>
+<integer>60</integer>
+<key>DeferralTimerError</key>
+<integer>60</integer>
+<key>DialogTimeoutDeferral</key>
+<integer>300</integer>
+<key>DialogTimeoutDeferralAction</key>
+<string>Defer</string>
+<key>DeferralTimerMenu</key>
+<string>30,60,90,480,720,1440,2880</string>
+<key>DeadlineCountFocus</key>
+<integer>3</integer>
+<key>DeadlineHardCount</key>
+<integer>3</integer>
+<key>DeferralNextLaunchMinutes</key>
+<integer>60</integer>
+<key>DaysUntilReset</key>
+<integer>7</integer>
+<key>UnattendedExit</key>
+<string>FALSE</string>
+<key>UnattendedExitSeconds</key>
+<integer>60</integer>
+<key>DialogOnTop</key>
+<string>TRUE</string>
+<key>UseOverlayIcon</key>
+<string>TRUE</string>
+<key>RemoveInstallomatorPath</key>
+<string>FALSE</string>
+<key>VerboseMode</key>
+<string>TRUE</string>
+<key>WorkflowDisableAppDiscovery</key>
+<string>FALSE</string>
+<key>WebhookFeature</key>
+<string>FALSE</string>
+<key>WebhookURLSlack</key>
+<string>longURL</string>
+<key>WebhookURLTeams</key>
+<string>longerURL</string>
+<key>SupportTeamName</key>
+<string>Company Support Team</string>
+<key>SupportTeamPhone</key>
+<string>555-555-5555</string>
+<key>SupportTeamEmail</key>
+<string>support@company.com</string>
+<key>SupportTeamWebsite</key>
+<string>support.company.com</string>
