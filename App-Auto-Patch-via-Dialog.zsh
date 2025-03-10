@@ -8,8 +8,13 @@
 #
 # HISTORY
 #
-#   Version 3.0.0, [03.08.2025]
-#   - Final Version
+#   3.0.1, [03.10.2025]
+#   - Fixed a bug where --workflow-install-now would be ignored if AAPPatchingCompletionStatus=TRUE
+#   - Fixed a bug where --workflow-install-now would not complete cleanly and trigger an immediate re-run of AAP
+#   - Added logic for Jumpcloud MDM and updated Webhook logic for the Jumpcloud MDM URL (Thanks @mattbilson)
+#
+#   3.0.0, [03.08.2025]
+#   - Final Release
 #
 #
 ####################################################################################################
@@ -24,8 +29,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.0"
-scriptDate="2025/03/08"
+scriptVersion="3.0.1"
+scriptDate="2025/03/10"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1861,6 +1866,10 @@ get_mdm(){
 			log_info "MDM is Intune"
 			mdmName="Microsoft Intune"
 		;;
+        *jumpcloud*)
+            log_info "MDM is Jumpcloud"
+            mdmName="Jumpcloud"
+        ;;
 		*)
 			log_info "Unable to determine MDM from ServerURL"
 		;;
@@ -2813,70 +2822,76 @@ webHookMessage() {
             # For cases when the device id is not found in the logs
                 mdmComputerURL="https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMacOsMenu/~/macOsDevices"
             fi
+            # If Mac is managed by Jumpcloud, link to the Jumpcloud devices page
+        elif [[  $mdmName == "Jumpcloud" ]]; then
+            mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
+        else
+            log_info "No MDM determined - webhook call will fail"
         fi
+        
         log_info "Sending Slack WebHook"
-        curl -s -X POST -H 'Content-type: application/json' \
-        -d \
-        '{
-    "blocks": [
-        {
-            "type": "header",
-            "text": {
-                "type": "plain_text",
-                "text": "'${appTitle}': '${webhookStatus}'",
-            }
-        },
-        {
-            "type": "divider"
-        },
-        {
-            "type": "section",
-            "fields": [
+        jsonPayload='{
+            "blocks": [
                 {
-                    "type": "mrkdwn",
-                    "text": ">*Serial Number and Computer Name:*\n>'"$serialNumber"' on '"$computerName"'"
-                },
-                        {
-                    "type": "mrkdwn",
-                    "text": ">*Computer Model:*\n>'"$modelName"'"
-                },
-                {
-                    "type": "mrkdwn",
-                    "text": ">*Current User:*\n>'"$currentUserAccountName"'"
-                },
-                {
-                    "type": "mrkdwn",
-                    "text": ">*Updates:*\n>'"$formatted_result"'"
-                },
-                {
-                    "type": "mrkdwn",
-                    "text": ">*Errors:*\n>'"$formatted_error_result"'"
-                },
-                        {
-                    "type": "mrkdwn",
-                    "text": ">*Computer Record:*\n>'"$mdmComputerURL"'"
-                }
-            ]
-        },
-        {
-        "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
+                    "type": "header",
                     "text": {
                         "type": "plain_text",
-                        "text": "View computer in $mdmName",
-                        "emoji": true
-                    },
-                    "style": "primary",
-                    "action_id": "actionId-0",
-                    "url": "'"$mdmComputerURL"'"
+                        "text": "'${appTitle}': '${webhookStatus}'",
+                    }
+                },
+                {
+                    "type": "divider"
+                },
+                {
+                    "type": "section",
+                    "fields": [
+                        {
+                            "type": "mrkdwn",
+                            "text": ">*Serial Number and Computer Name:*\n>'"$serialNumber"' on '"$computerName"'"
+                        },
+                                {
+                            "type": "mrkdwn",
+                            "text": ">*Computer Model:*\n>'"$modelName"'"
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": ">*Current User:*\n>'"$currentUserAccountName"'"
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": ">*Updates:*\n>'"$formatted_result"'"
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": ">*Errors:*\n>'"$formatted_error_result"'"
+                        },
+                                {
+                            "type": "mrkdwn",
+                            "text": ">*Computer Record:*\n>'"$mdmComputerURL"'"
+                        }
+                    ]
+                },
+                {
+                "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {
+                                "type": "plain_text",
+                                "text": "View computer in '"$mdmName"'",
+                                "emoji": true
+                            },
+                            "style": "primary",
+                            "action_id": "actionId-0",
+                            "url": "'"$mdmComputerURL"'"
+                        }
+                    ]
                 }
             ]
-        }
-    ]
-}' \
-        $webhook_url_slack_option
+        }'
+        
+        curlResult=$(curl -s -X POST -H 'Content-type: application/json' -d "$jsonPayload" "$webhook_url_slack_option")
+        log_verbose "Webhook result: $curlResult"
     fi
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -2895,17 +2910,23 @@ webHookMessage() {
         if defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url &> /dev/null; then
             jamfProURL=$(/usr/bin/defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url)
             mdmComputerURL="${jamfProURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
-        # If Mac is managed by Intune, get the Intune URL to the computer
+            # If Mac is managed by Intune, get the Intune URL to the computer
         elif [[ "$(profiles show | grep -A4 "Management Profile" | sed -n -e 's/^.*profileIdentifier: //p')" == "Microsoft.Profiles.MDM" ]]; then
             mdmURL="https://intune.microsoft.com/#view/Microsoft_Intune_Devices/DeviceSettingsMenuBlade/~/overview/mdmDeviceId"
             mdmComputerID="$(grep -rnwi '/Library/Logs/Microsoft/Intune' -e 'DeviceId:' | head -1 | grep -E -o 'DeviceId.{0,38}' | cut -d ' ' -f2)"
             if [[ ! -z "$mdmComputerID" ]]; then
                 mdmComputerURL="${mdmURL}/${mdmComputerID}"
             else
-            # For cases when the device id is not found in the logs
+                # For cases when the device id is not found in the logs
                 mdmComputerURL="https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMacOsMenu/~/macOsDevices"
             fi
+            # If Mac is managed by Jumpcloud, link to the Jumpcloud devices page
+        elif [[  $mdmName == "Jumpcloud" ]]; then
+            mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
+        else
+            log_info "No MDM determined - webhook call will fail"
         fi
+        
         log_info "Sending Teams WebHook"
         jsonPayload='{
     "@type": "MessageCard",
@@ -2942,8 +2963,8 @@ webHookMessage() {
 }'
         
         # Send the JSON payload using curl
-        curl -s -X POST -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_teams_option"
-        
+        curlResult=$(curl -s -X POST -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_teams_option")
+        log_verbose "Webhook result: $curlResult"
     fi
     
 }
@@ -2984,8 +3005,12 @@ main() {
     get_options "$@"
 
     workflow_startup
-    #Run the function to check if a user has already completed patching for the week, ignore if in Self Service mode (need to add that logic)
+    #Run the function to check if a user has already completed patching for the set cadence, ignore if using --workflow-install-now
+    if [[ "${workflow_install_now_option}" == "TRUE" ]]; then
+        log_notice "**** App Auto-Patch ${scriptVersion} - WORKFLOW INSTALL NOW - Skipping Completion Status Check"
+    else
     check_completion_status
+    fi
 
     declare -A configArray=()
     # Start the appropriate main workflow based on user options.
@@ -3163,7 +3188,7 @@ main() {
             log_notice "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
             workflow_do_Installations
             
-            if [[ "$workflow_install_now_patching_status_action" == 2 ]] || "$workflow_install_now_patching_status_action" == 3 && "${errorCount}" == 0 ]]; then
+            if [[ "$workflow_install_now_patching_status_action" == 2 ]] || [[ "$workflow_install_now_patching_status_action" == 3 && "${errorCount}" == 0 ]]; then
                 defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true #Set completion status to true
                 timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
                 defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
@@ -3237,13 +3262,7 @@ main() {
             #This should be set by configuration # # # deferral_timer_minutes="1440"
             log_info "All apps are up to date, will check again in ${deferral_timer_minutes} minutes."
             set_auto_launch_deferral
-        fi
-
-        
-        
-        
-        
-        
+        fi 
     fi
 }
 
