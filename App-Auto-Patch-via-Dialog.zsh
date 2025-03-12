@@ -8,6 +8,9 @@
 #
 # HISTORY
 #
+#   3.0.2, [03.11.2025]
+#   - Added AAPLastRunDate and AAPLastSilentRunDate
+#
 #   3.0.1, [03.10.2025]
 #   - Fixed a bug where --workflow-install-now would be ignored if AAPPatchingCompletionStatus=TRUE
 #   - Fixed a bug where --workflow-install-now would not complete cleanly and trigger an immediate re-run of AAP
@@ -29,8 +32,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.1"
-scriptDate="2025/03/10"
+scriptVersion="3.0.2"
+scriptDate="2025/03/11"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -2074,6 +2077,11 @@ set_auto_launch_deferral() {
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 exit_clean() {
+    
+    timestamp="$(date +"%Y-%m-%d %H:%M:%S")"
+    { [[ "${interactiveModeOption}" == 0 ]]; } && defaults write $appAutoPatchLocalPLIST AAPLastSilentRunDate -date "$timestamp"
+    defaults write $appAutoPatchLocalPLIST AAPLastRunDate -date "$timestamp"
+    
     log_verbose  "Local preference file at clean exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
     log_aap "**** App Auto-Patch ${scriptVersion} - CLEAN EXIT ****"
     rm -f "${appAutoPatchPIDfile}" 2> /dev/null
