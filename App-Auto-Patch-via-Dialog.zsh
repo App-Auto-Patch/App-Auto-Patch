@@ -8,6 +8,10 @@
 #
 # HISTORY
 #
+#   3.0.3, [03.13.2025]
+#   - Fixed progress bar incrementation to increment in steps vs. bouncing
+#   - Fixed logic for UnattendedExit
+#
 #   3.0.2, [03.11.2025]
 #   - Added AAPLastRunDate and AAPLastSilentRunDate
 #
@@ -32,8 +36,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.2"
-scriptDate="2025/03/11"
+scriptVersion="3.0.3"
+scriptDate="2025/03/13"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -227,9 +231,9 @@ set_defaults() {
 
     workflow_install_now_patching_status_action="3" # Replaced selfServicePatchingStatusModeReset
 
-    unattendedExit="FALSE" # MDM Enabled
+    UnattendedExit="FALSE" # MDM Enabled
 
-    unattendedExitSeconds="60" # MDM Enabled
+    UnattendedExitSeconds="60" # MDM Enabled
 
     appAutoPatchLocalPLIST="${appAutoPatchFolder}/xyz.techitout.appAutoPatch"
 
@@ -523,10 +527,10 @@ get_preferences() {
         dialog_timeout_deferral_action_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogTimeoutDeferralAction 2> /dev/null)
         local days_until_reset_managed
         days_until_reset_managed=$(defaults read "${appAutoPatchManagedPLIST}" DaysUntilReset 2> /dev/null)
-        local unattended_exit_managed
-        unattended_exit_managed=$(defaults read "${appAutoPatchManagedPLIST}" UnattendedExit 2> /dev/null)
-        local unattended_exit_seconds_managed
-        unattended_exit_seconds_managed=$(defaults read "${appAutoPatchManagedPLIST}" UnattendedExitSeconds 2> /dev/null)
+        local Unattended_exit_managed
+        Unattended_exit_managed=$(defaults read "${appAutoPatchManagedPLIST}" UnattendedExit 2> /dev/null)
+        local Unattended_exit_seconds_managed
+        Unattended_exit_seconds_managed=$(defaults read "${appAutoPatchManagedPLIST}" UnattendedExitSeconds 2> /dev/null)
         local dialog_on_top_managed
         dialog_on_top_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogOnTop 2> /dev/null)
         local use_overlay_icon_managed
@@ -600,10 +604,10 @@ get_preferences() {
         dialog_timeout_deferral_action_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogTimeoutDeferralAction 2> /dev/null)
         local days_until_reset_local
         days_until_reset_local=$(defaults read "${appAutoPatchLocalPLIST}" DaysUntilReset 2> /dev/null)
-        local unattended_exit_local
-        unattended_exit_local=$(defaults read "${appAutoPatchLocalPLIST}" UnattendedExit 2> /dev/null)
-        local unattended_exit_seconds_local
-        unattended_exit_seconds_local=$(defaults read "${appAutoPatchLocalPLIST}" UnattendedExitSeconds 2> /dev/null)
+        local Unattended_exit_local
+        Unattended_exit_local=$(defaults read "${appAutoPatchLocalPLIST}" UnattendedExit 2> /dev/null)
+        local Unattended_exit_seconds_local
+        Unattended_exit_seconds_local=$(defaults read "${appAutoPatchLocalPLIST}" UnattendedExitSeconds 2> /dev/null)
         local dialog_on_top_local
         dialog_on_top_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogOnTop 2> /dev/null)
         local use_overlay_icon_local
@@ -675,10 +679,10 @@ get_preferences() {
     { [[ -z "${dialog_timeout_deferral_action_managed}" ]] && [[ -n "${DialogTimeoutDeferralAction}" ]] && [[ -n "${dialog_timeout_deferral_action_local}" ]]; } && DialogTimeoutDeferralAction="${dialog_timeout_deferral_action_local}"
     [[ -n "${days_until_reset_managed}" ]] && days_until_reset_option="${days_until_reset_managed}"
     { [[ -z "${days_until_reset_managed}" ]] && [[ -z "${days_until_reset_option}" ]] && [[ -n "${days_until_reset_local}" ]]; } && days_until_reset_option="${days_until_reset_local}"
-    [[ -n "${unattended_exit_managed}" ]] && unattendedExit="${unattended_exit_managed}"
-    { [[ -z "${unattended_exit_managed}" ]] && [[ -n "${unattendedExit}" ]] && [[ -n "${unattended_exit_local}" ]]; } && unattendedExit="${unattended_exit_local}"
-    [[ -n "${unattended_exit_seconds_managed}" ]] && unattendedExitSeconds="${unattended_exit_seconds_managed}"
-    { [[ -z "${unattended_exit_seconds_managed}" ]] && [[ -n "${unattendedExitSeconds}" ]] && [[ -n "${unattended_exit_seconds_local}" ]]; } && unattendedExitSeconds="${unattended_exit_seconds_local}"
+    [[ -n "${Unattended_exit_managed}" ]] && UnattendedExit="${Unattended_exit_managed}"
+    { [[ -z "${Unattended_exit_managed}" ]] && [[ -n "${UnattendedExit}" ]] && [[ -n "${Unattended_exit_local}" ]]; } && UnattendedExit="${Unattended_exit_local}"
+    [[ -n "${Unattended_exit_seconds_managed}" ]] && UnattendedExitSeconds="${Unattended_exit_seconds_managed}"
+    { [[ -z "${Unattended_exit_seconds_managed}" ]] && [[ -n "${UnattendedExitSeconds}" ]] && [[ -n "${Unattended_exit_seconds_local}" ]]; } && UnattendedExitSeconds="${Unattended_exit_seconds_local}"
     [[ -n "${dialog_on_top_managed}" ]] && dialogOnTop="${dialog_on_top_managed}"
     { [[ -z "${dialog_on_top_managed}" ]] && [[ -n "${dialogOnTop}" ]] && [[ -n "${dialog_on_top_local}" ]]; } && dialogOnTop="${dialog_on_top_local}"
     [[ -n "${use_overlay_icon_managed}" ]] && useOverlayIcon="${use_overlay_icon_managed}"
@@ -824,7 +828,7 @@ get_preferences() {
             # Checking if app is installed and adding Optional Label to Required if it exists
             if ${installomatorScript} ${optionalLabel} DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" | grep "No previous app found" >/dev/null 2>&1
             then
-                notice "$optionalLabel is not installed, skipping ..."
+                log_notice "$optionalLabel is not installed, skipping ..."
             else
                 log_verbose "Writing optional label ${optionalLabel} to required configuration plist"
                 /usr/libexec/PlistBuddy -c "add \":RequiredLabels:\" string \"${optionalLabel}\"" "${appAutoPatchLocalPLIST}.plist"
@@ -966,8 +970,35 @@ manage_parameter_options() {
     fi
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${workflow_disable_relaunch_option}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: workflow_disable_relaunch_option is: ${workflow_disable_relaunch_option}"
     
+    # Manage ${UnattendedExit} and save to ${appAutoPatchLocalPLIST}.
+    if [[ "${UnattendedExit}" -eq 1 ]] || [[ "${UnattendedExit}" == "TRUE" ]]; then
+        UnattendedExit="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" UnattendedExit -bool true
+    else
+        UnattendedExit="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" UnattendedExit 2>/dev/null
+    fi
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${UnattendedExit}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: UnattendedExit is: ${UnattendedExit}"
+    
+    if [[ -n "${UnattendedExitSeconds}" ]] && [[ "${UnattendedExitSeconds}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        if [[ "${UnattendedExitSeconds}" -lt 2 ]]; then
+            log_warning "Parameter Warning: Specified UnattendedExitSeconds value of ${UnattendedExitSeconds} is too low, rounding up to 2 seconds."
+            UnattendedExitSeconds=2
+        elif [[ "${UnattendedExitSeconds}" -gt 86400 ]]; then
+            log_warning "Parameter Warning: Specified UnattendedExitSeconds value of ${UnattendedExitSeconds} is too high, rounding down to 86400 (24 hours)."
+            UnattendedExitSeconds=86400
+        fi
+        defaults write "${appAutoPatchLocalPLIST}" UnattendedExitSeconds -int "${UnattendedExitSeconds}"
+    elif [[ -n "${UnattendedExitSeconds}" ]] && ! [[ "${UnattendedExitSeconds}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        log_error "Parameter Error: The UnattendedExitSeconds value must only be a number."
+        option_error="TRUE"
+    fi
+    [[ -z "${UnattendedExitSeconds}" ]] && UnattendedExitSeconds=60
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: UnattendedExitSeconds is: ${UnattendedExitSeconds}"
     
     
+    
+
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_count_focus}" ]]; } && log_verbose "deadline_count_focus is: ${deadline_count_focus}"
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_count_hard}" ]]; } && log_verbose "deadline_count_hard is: ${deadline_count_hard}"
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${patch_week_start_day}" ]]; } && log_verbose "patch_week_start_day is: ${patch_week_start_day}"
@@ -2266,9 +2297,16 @@ swiftDialogCompleteDialogPatching(){
         # Activate button 1
         swiftDialogCommand "button1: enabled"
     fi
-    
+
+    if [ ${UnattendedExit} = "TRUE" ]; then
+        log_info "Unattended Exit set to TRUE, sleeping for $UnattendedExitSeconds"
+        sleep $UnattendedExitSeconds
+        swiftDialogUpdate "quit:"
+        rm "$dialogCommandFile"
+    else
     # Delete the tmp command file
     rm "$dialogCommandFile"
+    fi
     
 }
 
@@ -2664,7 +2702,7 @@ workflow_do_Installations() {
         swiftDialogUpdate "infobox: + <br><br>"
         swiftDialogUpdate "infobox: + **Updates:** $queuedLabelsArrayLength"
     fi
-    
+    swiftDialogUpdate "progress: 1"
     i=0
     for label in $queuedLabelsArray; do
         log_info "Installing ${label}..."
@@ -2693,6 +2731,7 @@ workflow_do_Installations() {
             let errorCount++
         fi
         let i++
+        swiftDialogUpdate "progress: increment ${progressIncrementValue}"
     done
     
     log_notice "Errors: $errorCount"
