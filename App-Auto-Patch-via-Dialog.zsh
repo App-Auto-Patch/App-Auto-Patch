@@ -8,6 +8,12 @@
 #
 # HISTORY
 #
+#   3.0.4, [03.14.2025]
+#   - Fixed logic so that InteractiveMode=0 will not run the deferral workflow or display a deferral dialog
+#   - Updated workflow_disable_relaunch logic to not relaunch AAP if set to true and AAP is installing or Jamf is the parent process
+#   - Fixed an issue that was causing Optional labels to be duplicated when added to the Required queue if the app is installed
+#   - Fixed various formatting throughout the script
+#
 #   3.0.3, [03.13.2025]
 #   - Fixed progress bar incrementation to increment in steps vs. bouncing
 #   - Fixed logic for UnattendedExit
@@ -36,8 +42,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.3"
-scriptDate="2025/03/13"
+scriptVersion="3.0.4"
+scriptDate="2025/03/14"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -201,7 +207,7 @@ set_defaults() {
 
     appAutoPatchPIDfile="/var/run/aap.pid"
 
-    interactiveMode="2" # MDM Enabled
+    InteractiveMode="2" # MDM Enabled
 
     installomatorPath="${appAutoPatchFolder}/Installomator"
 
@@ -328,7 +334,7 @@ get_options() {
                 show_help
             ;;
             --interactiveMode=*)
-                interactiveModeOption="${1##*=}"
+                InteractiveModeOption="${1##*=}"
             ;;
             --deferral-timer-default=*)
                 deferral_timer_default_option="${1##*=}"
@@ -450,7 +456,7 @@ get_preferences() {
         defaults delete "${appAutoPatchLocalPLIST}"
         defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "${scriptVersion}"
         defaults write "${appAutoPatchLocalPLIST}" MacLastStartup -string "${mac_last_startup}"
-        defaults write "${appAutoPatchLocalPLIST}" InteractiveMode -integer "${interactiveMode}"
+        defaults write "${appAutoPatchLocalPLIST}" InteractiveMode -integer "${InteractiveMode}"
         [[ "${verbose_mode_option}" == "TRUE" ]] && defaults write "${appAutoPatchLocalPLIST}" VerboseMode -bool true
         [[ "${debug_mode_option}" == "TRUE" ]] && defaults write "${appAutoPathLocalPLIST}" DebugMode -bool true
         rm -f "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
@@ -641,8 +647,8 @@ get_preferences() {
     { [[ -z "${deadline_count_hard_managed}" ]] && [[ -z "${deadline_count_hard_option}" ]] && [[ -n "${deadline_count_hard_local}" ]]; } && deadline_count_hard_option="${deadline_count_hard_local}"
     [[ -n "${deferral_timer_default_managed}" ]] && deferral_timer_default_option="${deferral_timer_default_managed}"
     { [[ -z "${deferral_timer_default_managed}" ]] && [[ -z "${deferral_timer_default_option}" ]] && [[ -n "${deferral_timer_default_local}" ]]; } && deferral_timer_default_option="${deferral_timer_default_local}"
-    [[ -n "${interactive_mode_managed}" ]] && interactiveModeOption="${interactive_mode_managed}"
-    { [[ -z "${interactive_mode_managed}" ]] && [[ -z "${interactiveModeOption}" ]] && [[ -n "${interactive_mode_local}" ]]; } && interactiveModeOption="${interactive_mode_local}"
+    [[ -n "${interactive_mode_managed}" ]] && InteractiveModeOption="${interactive_mode_managed}"
+    { [[ -z "${interactive_mode_managed}" ]] && [[ -z "${InteractiveModeOption}" ]] && [[ -n "${interactive_mode_local}" ]]; } && InteractiveModeOption="${interactive_mode_local}"
     [[ -n "${patch_week_start_day_managed}" ]] && patch_week_start_day_option="${patch_week_start_day_managed}"
     { [[ -z "${patch_week_start_day_managed}" ]] && [[ -z "${patch_week_start_day_option}" ]] && [[ -n "${patch_week_start_day_local}" ]]; } && patch_week_start_day_option="${patch_week_start_day_local}"
     [[ -n "${workflow_disable_app_discovery_managed}" ]] && workflow_disable_app_discovery_option="${workflow_disable_app_discovery_managed}"
@@ -829,6 +835,8 @@ get_preferences() {
             if ${installomatorScript} ${optionalLabel} DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" | grep "No previous app found" >/dev/null 2>&1
             then
                 log_notice "$optionalLabel is not installed, skipping ..."
+            elif /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $optionalLabel; then
+                log_verbose "$optionalLabel Installed but already exists in Required list, skipping for now"
             else
                 log_verbose "Writing optional label ${optionalLabel} to required configuration plist"
                 /usr/libexec/PlistBuddy -c "add \":RequiredLabels:\" string \"${optionalLabel}\"" "${appAutoPatchLocalPLIST}.plist"
@@ -1111,11 +1119,11 @@ manage_parameter_options() {
         log_error "The --deferral-timer-focus option requires that you also specify at least one focus deadline option."; option_error="TRUE"
     fi
     
-    # Manage ${interactiveModeOption} and save to ${appAutoPatchLocalPLIST}
-    if [[ -n "${interactiveModeOption}" ]]; then
-        defaults write "${appAutoPatchLocalPLIST}" InteractiveMode -integer "${interactiveModeOption}"
+    # Manage ${InteractiveModeOption} and save to ${appAutoPatchLocalPLIST}
+    if [[ -n "${InteractiveModeOption}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" InteractiveMode -integer "${InteractiveModeOption}"
     fi
-    log_verbose "interactiveModeOption: $interactiveModeOption"
+    log_verbose "InteractiveModeOption: $InteractiveModeOption"
 
     # Manage ${webhook_feature_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${webhook_feature_option}" == "ALL" ]] || [[ "${webhook_feature_option}" == "FAILURES" ]]; then
@@ -1409,18 +1417,36 @@ workflow_startup() {
 	
 	# If aap is running via Jamf, then restart via LaunchDaemon to release the jamf parent process.
 	if [[ "${parent_process_is_jamf}" == "TRUE" ]]; then
+        if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+            log_aap "Status: Found that Jamf is installing or is the parent process and Automatic Relaunch is disabled. Exiting."
+            log_status "Inactive: Jamf is parent process or AAP Installing. Automatic relaunch is disabled."
+            /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+            { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+            disown
+            exit_clean
+        else
 		log_status "Found that Jamf is installing or is the parent process, restarting via App Auto-Patch LaunchDaemon..."
 		{ sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
 		disown
 		exit_clean
+        fi
 	fi
 	
 	# If aap is running from outside the ${appAutoPatchFolder}, then restart via LaunchDaemon to release any parent installer process.
 	if ! { [[ "${aapCurrentFolder}" == "${appAutoPatchFolder}" ]] || [[ "${aapCurrentFolder}" == $(dirname "${appAutoPatchLink}") ]]; }; then
+        if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+            log_aap "Status: Found App Auto-Patch is installing and Automatic Relaunch is disabled. Exiting."
+            log_status "Inactive: App Auto-Patch Installing. Automatic relaunch is disabled."
+            /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+            { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+            disown
+            exit_clean
+        else
 		log_status "Found that App Auto-Patch is installing, restarting via App Auto-Patch LaunchDaemon..."
 		{ sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
         disown
 		exit_clean
+        fi
 	fi
 	
 	# Wait for a valid network connection. If there is still no network after two minutes, an automatic deferral is started.
@@ -2110,7 +2136,7 @@ set_auto_launch_deferral() {
 exit_clean() {
     
     timestamp="$(date +"%Y-%m-%d %H:%M:%S")"
-    { [[ "${interactiveModeOption}" == 0 ]]; } && defaults write $appAutoPatchLocalPLIST AAPLastSilentRunDate -date "$timestamp"
+    { [[ "${InteractiveModeOption}" == 0 ]]; } && defaults write $appAutoPatchLocalPLIST AAPLastSilentRunDate -date "$timestamp"
     defaults write $appAutoPatchLocalPLIST AAPLastRunDate -date "$timestamp"
     
     log_verbose  "Local preference file at clean exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
@@ -2227,7 +2253,7 @@ archive_logs() {
 
 swiftDialogCommand(){
     
-    if [ ${interactiveModeOption} -gt 0 ]; then
+    if [ ${InteractiveModeOption} -gt 0 ]; then
         echo "$@" > "$dialogCommandFile"
         sleep .2
     fi
@@ -2237,7 +2263,7 @@ swiftDialogCommand(){
 swiftDialogPatchingWindow(){
     
     # If we are using SwiftDialog
-    if [ ${interactiveModeOption} -ge 1 ]; then
+    if [ ${InteractiveModeOption} -ge 1 ]; then
         # Check if there's a valid logged-in user:
         currentUser=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
         if [ "$currentUser" = "root" ] || [ "$currentUser" = "loginwindow" ] || [ "$currentUser" = "_mbsetupuser" ] || [ -z "$currentUser" ]; then
@@ -2277,7 +2303,7 @@ swiftDialogDiscoverWindow(){
     # If we are using SwiftDialog
     touch "$dialogCommandFile"
     chmod -vv 644 $dialogCommandFile
-    if [ ${interactiveModeOption} -gt 1 ]; then
+    if [ ${InteractiveModeOption} -gt 1 ]; then
         $dialogBinary \
         ${dialogDiscoverConfigurationOptions[@]} \
         &
@@ -2287,7 +2313,7 @@ swiftDialogDiscoverWindow(){
 
 swiftDialogCompleteDialogPatching(){
     
-    if [ ${interactiveModeOption} -ge 1 ]; then
+    if [ ${InteractiveModeOption} -ge 1 ]; then
         # swiftDialogCommand "listitem: add, title: Updates Complete!,status: success"
         swiftDialogUpdate "icon: SF=checkmark.circle.fill,weight=bold,colour1=#00ff44,colour2=#075c1e"
         swiftDialogUpdate "progress: complete"
@@ -2312,7 +2338,7 @@ swiftDialogCompleteDialogPatching(){
 
 swiftDialogCompleteDialogDiscover(){
     
-    if [ ${interactiveModeOption} -gt 1 ]; then
+    if [ ${InteractiveModeOption} -gt 1 ]; then
         swiftDialogCommand "quit:"
         rm "$dialogCommandFile"
     fi
@@ -2566,7 +2592,7 @@ function PgetAppVersion() {
             log_info "Found $appName version $appversion"
             sleep .2
             
-            if [ ${interactiveModeOption} -gt 1 ]; then
+            if [ ${InteractiveModeOption} -gt 1 ]; then
                 if [[ "$debugMode" == "true" || "$debugMode" == "verbose" ]]; then
                     swiftDialogUpdate "message: Analyzing ${appName//.app/} ($appversion)"
                 else
@@ -2694,7 +2720,7 @@ workflow_do_Installations() {
     
     swiftDialogPatchingWindow # Create our main "list" swiftDialog Window
     
-    if [ ${interactiveModeOption} -ge 1 ]; then
+    if [ ${InteractiveModeOption} -ge 1 ]; then
         sleep 1
         queuedLabelsArrayLength=$((${#countOfElementsArray[@]}))
         progressIncrementValue=$(( 100 / queuedLabelsArrayLength ))
@@ -2709,7 +2735,7 @@ workflow_do_Installations() {
         
         # Use built-in swiftDialog Installomator integration options (if swiftDialog is being used)
         swiftDialogOptions=()
-        if [ ${interactiveModeOption} -ge 1 ]; then
+        if [ ${InteractiveModeOption} -ge 1 ]; then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
             
             # Get the "name=" value from the current label and use it in our swiftDialog list
@@ -3229,9 +3255,9 @@ main() {
     if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         numberOfUpdates=$((${#countOfElementsArray[@]}))
         
-        if [[ "${workflow_install_now_option}" == "TRUE" ]]; then
+        if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ ${InteractiveModeOption} == 0 ]]; then
             rm -f "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
-            log_info "Bypassing deferral workflow"
+            log_info "Install Now Workflow or Silent Mode active - Bypassing deferral workflow"
             log_notice "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
             workflow_do_Installations
             
@@ -3293,7 +3319,7 @@ main() {
         timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
         
-        if [ ${interactiveModeOption} -gt 1 ]; then
+        if [ ${InteractiveModeOption} -gt 1 ]; then
             $dialogBinary --title "$appTitle" --message "All apps are up to date." --windowbuttons min --icon "$icon" --overlayicon "$overlayIcon" --moveable --position topright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
         fi
         
