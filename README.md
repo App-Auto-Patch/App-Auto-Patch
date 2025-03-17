@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.0.0
+# App Auto-Patch 3.1.0
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch)
 
@@ -19,10 +19,18 @@ The script simplifies the process of taking an inventory of installed applicatio
 
 This project has since been applied to MDMs outside of Jamf Pro, showcasing its versatility and adaptability. 
 
-## Getting Started with 3.0
+## New features/Specific Changes in 3.1
+ - [Days Deadlines](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Days-Deadlines) - allows you to specify the maximum number of days the user can defer after the Patching Start Date. You can set multiple days deadlines with one of each type; focus, and hard.
+ - [WorkflowInstallNowPatchingStatusAction](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#workflow-install-now-patching-status-action) - Added MDM keys and triggers for determining what happens with the Patching Completion Status when using the `--workflow-install-now` option
+ - Moved the Defer button next to the Continue button to position it underneath the deferral menu drop-down
+ - Adjusted logic to use deferral_timer_workflow_relaunch_minutes after AAP completes the installation workflow
+ - Fixed logic for workflow_disable_relaunch_option to disable relaunch after successful patching completion if set to TRUE
+ - Added exit_error function to handle startup validation errors
 
-App Auto-Patch 3.0 automatically installs itself and necessary components anytime it's ran from outside the working folder `/Library/Management/AppAutoPatch/`
-For more information on getting started and testing, please visit the [AAP 3.0.0 Wiki](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki) page for more information
+## Getting Started with 3.1
+
+App Auto-Patch 3.1 automatically installs itself and necessary components anytime it's ran from outside the working folder `/Library/Management/AppAutoPatch/`
+For more information on getting started and testing, please visit the [AAP 3.1.0 Wiki](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki) page for more information
 
 - After installed, you can simply run `sudo appautopatch` from terminal with any parameters to configure as you'd like. Examples:
 
@@ -32,7 +40,7 @@ Or trigger from the script directly to perform an install with parameters as you
 
 `./App-Auto-Patch-via-Dialog.zsh --interactiveMode=2 --workflow-install-now --deadline-count-focus=2 --deadline-count-hard=4 --ignored-labels="microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog" --verbose-mode`
 
- - You can find a mapping of 2.x variables to 3.0.0 configuration and command line options from the following TSV file: [Migration Options](https://github.com/App-Auto-Patch/App-Auto-Patch/blob/3.0/Resources/App-Auto-Patch%203.0.0-Migration-Options.tsv)
+ - You can find a mapping of 2.x variables to 3.1.0 configuration and command line options from the following TSV file: [Migration Options](https://github.com/App-Auto-Patch/App-Auto-Patch/blob/3.0/Resources/App-Auto-Patch%203.0.0-Migration-Options.tsv)
  - Profile Manfiests to assist with building a configuration profile can be found in the Resources folder: [Profile Manifests](https://github.com/App-Auto-Patch/App-Auto-Patch/tree/main/Resources/Manifests)
  - An example configuration profile and a profile & plist containing All available options can be found in the resources: [Example Configurations](https://github.com/App-Auto-Patch/App-Auto-Patch/tree/main/Resources)
 
