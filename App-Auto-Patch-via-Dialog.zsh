@@ -12,6 +12,9 @@
 #   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
 #   - Added MDM keys and and triggers for WorkflowInstallNowPatchingStatusAction
 #   - Moved the Defer button next to the Continue button to position it underneath the deferral menu drop-down
+#   - Adjusted logic to use deferral_timer_workflow_relaunch_minutes after AAP completes the installation workflow
+#   - Fixed logic for workflow_disable_relaunch_option to disable relaunch after successful patching completion if set to TRUE
+#   - Added exit_error function to handle startup validation errors
 #
 #   3.0.4, [03.14.2025]
 #   - Fixed logic so that InteractiveMode=0 will not run the deferral workflow or display a deferral dialog
@@ -88,7 +91,7 @@ echo "
 
     Deferral Deadline DAYS Options:
     [--deadline-days-focus=number] [--deadline-days-hard=number] 
-    [--deadline-days-restart-all] [--deadline-days-delete-all]
+    [--deadline-days-delete-all]
 
     App Label Options:
     [--ignored-labels="label1 label2"]
@@ -2416,6 +2419,14 @@ exit_clean() {
     exit 0
 }
 
+exit_error() {
+
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Local preference file at error exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
+    log_super "**** App Auto-Patch ${scriptVersion} - ERROR EXIT ****"
+    rm -f "${appAutoPatchPIDfile}" 2> /dev/null
+    exit 1
+}
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Logging Related Functions
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -2679,13 +2690,13 @@ dialog_install_or_defer() {
 	infobuttontext="Defer"
     
     if [[ -n "${display_string_deadline}" ]] && [[ -n "${display_string_deadline_count}" ]]; then # Show both date and maximum deferral count deadlines.
-        infobox="Deferral available until ${display_string_deadline}.\n\n• ${display_string_deadline_count} out of ${display_string_deadline_count_maximum} deferrals remaining.\n"
+        infobox="Deferral available until ${display_string_deadline}\n\n ${display_string_deadline_count} out of ${display_string_deadline_count_maximum} deferrals remaining\n"
     elif [[ -n "${display_string_deadline}" ]]; then # Show only date deadline.
-        infobox="Deferral available until ${display_string_deadline}.\n"
+        infobox="Deferral available until ${display_string_deadline}\n"
     elif [[ -n "${display_string_deadline_count}" ]]; then # Show only maximum deferral count deadline.
-        infobox="${display_string_deadline_count} out of ${display_string_deadline_count_maximum} deferrals remaining.\n"
+        infobox="${display_string_deadline_count} out of ${display_string_deadline_count_maximum} deferrals remaining\n"
     else # Show no deadlines.
-        infobox="No deadline date and unlimited deferrals.\n"
+        infobox="No deadline date and unlimited deferrals\n"
     fi
 	#infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $display_string_deadline_count"
 	message="You can **Defer** the updates or **Continue** to close the applications and apply updates.  \n\n There are ($numberOfUpdates) application(s) that require updates: "
@@ -3553,9 +3564,19 @@ main() {
                 defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
             fi
             check_webhook
-            #This should be set by configuration # # # deferral_timer_minutes="1440" #Set auto launch for 24 hours
-            log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
-            set_auto_launch_deferral
+            if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+                log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
+                log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
+                /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+                { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+                disown
+                exit_clean
+            else
+                deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
+                log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
+                set_auto_launch_deferral
+            fi
+
         else
             check_deadlines_days_date
             # User Focus only needs to be checked if there are no date or day deadlines.
@@ -3576,9 +3597,20 @@ main() {
                 timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
                 defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
                 check_webhook
-                #This should be set by configuration # # # deferral_timer_minutes="1440" #Set auto launch for 24 hours
+
+                if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+                    log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
+                    log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
+                    /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+                    { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+                    disown
+                    exit_clean
+                else
+                deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
                 log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
                 set_auto_launch_deferral
+                fi
+                
             elif [[ "${user_focus_active}" == "TRUE" ]]; then # No deferral deadlines have passed but a process has told the display to not sleep or the user has enabled Focus or Do Not Disturb.
                 log_info "Focus Mode Triggered"
                 deferral_timer_minutes="${deferral_timer_focus_minutes}"
@@ -3595,9 +3627,19 @@ main() {
                     timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
                     defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
                     check_webhook
-                    #This should be set by configuration # # # deferral_timer_minutes="1440" #Set auto launch for 24 hours
-                    log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
-                    set_auto_launch_deferral
+                    
+                    if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+                        log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
+                        log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
+                        /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+                        { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+                        disown
+                        exit_clean
+                    else
+                        deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
+                        log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
+                        set_auto_launch_deferral
+                    fi
                 else # The user chose to defer. 
                     deferral_timer_minutes=${deferral_timer_minutes} 
                     log_notice "User chose to defer, trying again in ${deferral_timer_minutes} minutes."
