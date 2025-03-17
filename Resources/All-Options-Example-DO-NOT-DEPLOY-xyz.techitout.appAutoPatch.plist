@@ -74,5 +74,7 @@
 	<false/>
 	<key>WorkflowDisableRelaunch</key>
 	<false/>
+	<key>WorkflowInstallNowPatchingStatusAction</key>
+	<string>SUCCESS</string>
 </dict>
 </plist>

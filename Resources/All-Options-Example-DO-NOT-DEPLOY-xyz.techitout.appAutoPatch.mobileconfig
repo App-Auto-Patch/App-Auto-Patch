@@ -87,6 +87,8 @@
 			<false/>
 			<key>WorkflowDisableRelaunch</key>
 			<false/>
+			<key>WorkflowInstallNowPatchingStatusAction</key>
+			<string>SUCCESS</string>
 		</dict>
 	</array>
 	<key>PayloadDescription</key>
