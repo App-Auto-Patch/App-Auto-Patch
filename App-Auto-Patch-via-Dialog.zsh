@@ -8,6 +8,9 @@
 #
 # HISTORY
 #
+#   3.1.0, [03.16.2025]
+#   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
+#
 #   3.0.4, [03.14.2025]
 #   - Fixed logic so that InteractiveMode=0 will not run the deferral workflow or display a deferral dialog
 #   - Updated workflow_disable_relaunch logic to not relaunch AAP if set to true and AAP is installing or Jamf is the parent process
@@ -42,8 +45,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.4"
-scriptDate="2025/03/14"
+scriptVersion="3.1.0"
+scriptDate="2025/03/16"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -78,6 +81,10 @@ echo "
     [--deadline-count-hard=number]
     [--deadline-count-delete-all]
 
+    Deferral Deadline DAYS Options:
+    [--deadline-days-focus=number] [--deadline-days-hard=number] 
+    [--deadline-days-restart-all] [--deadline-days-delete-all]
+
     App Label Options:
     [--ignored-labels="label1 label2"]
     [--required-labels="label1 label2"]
@@ -109,6 +116,8 @@ echo "
     <key>DaysUntilReset</key> <integer>number</integer>
     <key>DeadlineCountFocus</key> <integer>number</integer>
     <key>DeadlineCountHard</key> <integer>number</integer>
+    <key>DeadlineDaysFocus</key> <string>number</string>
+    <key>DeadlineDaysHard</key> <string>number</string>
     <key>DeferralTimerDefault</key> <integer>minutes</integer>
     <key>DeferralTimerError</key> <integer>minutes</integer>
     <key>DeferralTimerFocus</key> <integer>minutes</integer>
@@ -299,6 +308,10 @@ set_defaults() {
     DISPLAY_STRING_FORMAT_DATE="%a %b %d" # Formatting options can be found in the man page for the date command.
     readonly DISPLAY_STRING_FORMAT_DATE
     
+    # Deadline time display format.
+    DISPLAY_STRING_FORMAT_TIME="+%l:%M %p" # Formatting options can be found in the man page for the date command.
+    readonly DISPLAY_STRING_FORMAT_TIME
+    
     #### Language for the defer button in dialogs when the deferral time is sometime today.
     display_string_defer_today_button="Defer"
     
@@ -390,6 +403,18 @@ get_options() {
             --deadline-count-delete-all)
                 deadline_count_delete_all_option="TRUE"
             ;;
+            --deadline-days-focus=*)
+                deadline_days_focus_option="${1##*=}"
+            ;;
+            --deadline-days-hard=*)
+                deadline_days_hard_option="${1##*=}"
+            ;;
+            --deadline-days-restart-all)
+                deadline_days_restart_all_option="TRUE"
+            ;;
+            --deadline-days-delete-all)
+                deadline_days_delete_all_option="TRUE"
+            ;;
             --patch-week-start-day=*)
                 patch_week_start_day_option="${1##*=}"
             ;;
@@ -475,6 +500,11 @@ get_preferences() {
             defaults delete "${appAutoPatchLocalPLIST}" DeadlineCountFocus 2> /dev/null
             defaults delete "${appAutoPatchLocalPLIST}" DeadlineCountHard 2> /dev/null
         fi
+        if [[ "${deadline_days_delete_all_option}" == "TRUE" ]]; then
+            log_status "Status: Deleting all local deadline days preferences."
+            defaults delete "${appAutoPatchLocalPLIST}" DeadlineDaysFocus 2>/dev/null
+            defaults delete "${appAutoPatchLocalPLIST}" DeadlineDaysHard 2>/dev/null
+        fi
         
         log_status "Continuing to gather new preferences"
     fi
@@ -497,6 +527,10 @@ get_preferences() {
         deadline_count_focus_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeadlineCountFocus 2> /dev/null)
         local deadline_count_hard_managed
         deadline_count_hard_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeadlineCountHard 2> /dev/null)
+        local deadline_days_focus_managed
+        deadline_days_focus_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeadlineDaysFocus 2>/dev/null)
+        local deadline_days_hard_managed
+        deadline_days_hard_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeadlineDaysHard 2>/dev/null)
         local interactive_mode_managed
         interactive_mode_managed=$(defaults read "${appAutoPatchManagedPLIST}" InteractiveMode 2> /dev/null)
         local patch_week_start_day_managed
@@ -574,6 +608,10 @@ get_preferences() {
         deadline_count_focus_local=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineCountFocus 2> /dev/null)
         local deadline_count_hard_local
         deadline_count_hard_local=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineCountHard 2> /dev/null)
+        local deadline_days_focus_local
+        deadline_days_focus_local=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineDaysFocus 2>/dev/null)
+        local deadline_days_hard_local
+        deadline_days_hard_local=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineDaysHard 2>/dev/null)
         local interactive_mode_local
         interactive_mode_local=$(defaults read "${appAutoPatchLocalPLIST}" InteractiveMode 2> /dev/null)
         local patch_week_start_day_local
@@ -645,6 +683,14 @@ get_preferences() {
     { [[ -z "${deadline_count_focus_managed}" ]] && [[ -z "${deadline_count_focus_option}" ]] && [[ -n "${deadline_count_focus_local}" ]]; } && deadline_count_focus_option="${deadline_count_focus_local}"
     [[ -n "${deadline_count_hard_managed}" ]] && deadline_count_hard_option="${deadline_count_hard_managed}"
     { [[ -z "${deadline_count_hard_managed}" ]] && [[ -z "${deadline_count_hard_option}" ]] && [[ -n "${deadline_count_hard_local}" ]]; } && deadline_count_hard_option="${deadline_count_hard_local}"
+    
+    
+    [[ -n "${deadline_days_focus_managed}" ]] && deadline_days_focus_option="${deadline_days_focus_managed}"
+    { [[ -z "${deadline_days_focus_managed}" ]] && [[ -z "${deadline_days_focus_option}" ]] && [[ -n "${deadline_days_focus_local}" ]]; } && deadline_days_focus_option="${deadline_days_focus_local}"
+    [[ -n "${deadline_days_hard_managed}" ]] && deadline_days_hard_option="${deadline_days_hard_managed}"
+    { [[ -z "${deadline_days_hard_managed}" ]] && [[ -z "${deadline_days_hard_option}" ]] && [[ -n "${deadline_days_hard_local}" ]]; } && deadline_days_hard_option="${deadline_days_hard_local}"
+    
+    
     [[ -n "${deferral_timer_default_managed}" ]] && deferral_timer_default_option="${deferral_timer_default_managed}"
     { [[ -z "${deferral_timer_default_managed}" ]] && [[ -z "${deferral_timer_default_option}" ]] && [[ -n "${deferral_timer_default_local}" ]]; } && deferral_timer_default_option="${deferral_timer_default_local}"
     [[ -n "${interactive_mode_managed}" ]] && InteractiveModeOption="${interactive_mode_managed}"
@@ -912,8 +958,6 @@ manage_parameter_options() {
     [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_minutes is: ${deferral_timer_minutes}"
 
 
-    
-
     # Validate ${deadline_count_focus_option} input and if valid set ${deadline_count_focus} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${deadline_count_focus_option}" == "X" ]]; then
         log_status "Deleting local preference for the --deadline-count-focus option."
@@ -936,6 +980,42 @@ manage_parameter_options() {
         log_error "The --deadline-count-hard=number value must only be a number."; option_error="TRUE"
     fi
     
+
+    # Validate ${deadline_days_focus_option} input and if valid set ${deadline_days_focus} and ${deadline_days_focus_seconds}.
+    if [[ "${deadline_days_focus_option}" == "X" ]]; then
+        log_status "Status: Deleting local preference for the --deadline-days-focus option."
+        defaults delete "${appAutoPatchLocalPLIST}" DeadlineDaysFocus 2> /dev/null
+    elif [[ -n "${deadline_days_focus_option}" ]] && [[ "${deadline_days_focus_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        deadline_days_focus="${deadline_days_focus_option}"
+        deadline_days_focus_seconds=$((deadline_days_focus*86400))
+    elif [[ -n "${deadline_days_focus_option}" ]] && ! [[ "${deadline_days_focus_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        log_status "Parameter Error: The --deadline-days-focus=number value must only be a number."; option_error="TRUE"
+    fi
+    
+    # Validate ${deadline_days_hard_option} input and if valid set ${deadline_days_hard} and ${deadline_days_hard_seconds}.
+    if [[ "${deadline_days_hard_option}" == "X" ]]; then
+        log_status "Status: Deleting local preference for the --deadline-days-hard option."
+        defaults delete "${appAutoPatchLocalPLIST}" DeadlineDaysHard 2> /dev/null
+    elif [[ -n "${deadline_days_hard_option}" ]] && [[ "${deadline_days_hard_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        deadline_days_hard="${deadline_days_hard_option}"
+        deadline_days_hard_seconds=$((deadline_days_hard*86400))
+    elif [[ -n "${deadline_days_hard_option}" ]] && ! [[ "${deadline_days_hard_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        log_status "Parameter Error: The --deadline-days-hard=number value must only be a number."; option_error="TRUE"
+    fi
+    
+    # Validate ${deadline_days_focus}, and ${deadline_days_hard} in relation to each other, and if valid save to ${appAutoPatchLocalPLIST}.
+    if [[ -n "${deadline_days_hard}" ]] && [[ -n "${deadline_days_focus}" ]] && [[ "${deadline_days_hard}" -le "${deadline_days_focus}" ]]; then
+        log_status "Parameter Error: The --deadline-days-hard=number value of ${deadline_days_hard} day(s) must be more than the --deadline-days-focus=number value of ${deadline_days_focus} day(s)."; option_error="TRUE"
+    fi
+
+    if [[ "${option_error}" != "TRUE" ]]; then
+        [[ -n "${deadline_days_focus}" ]] && defaults write "${appAutoPatchLocalPLIST}" DeadlineDaysFocus -string "${deadline_days_focus}"
+        [[ -n "${deadline_days_hard}" ]] && defaults write "${appAutoPatchLocalPLIST}" DeadlineDaysHard -string "${deadline_days_hard}"
+    fi
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_days_focus}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_focus is: ${deadline_days_focus}"
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_days_hard}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_hard is: ${deadline_days_hard}"
+    
+
     # Validate ${patch_week_start_day_option} input and if valid set ${patch_week_start_day}.
     if [[ "${patch_week_start_day_option}" == "X" ]]; then
         log_status "Deleting local preference for the --patch-week-start-day option."
@@ -1115,7 +1195,7 @@ manage_parameter_options() {
     [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_workflow_relaunch_minutes is: ${deferral_timer_workflow_relaunch_minutes}"
     
     # Some validation and logging for the focus deferral timer option.
-    if [[ -n "${deferral_timer_focus_option}" ]] && { [[ -z "${deadline_count_focus}" ]]; }; then
+    if [[ -n "${deferral_timer_focus_option}" ]] && { [[ -z "${deadline_count_focus}" ]] && [[ -z "${deadline_days_focus}" ]]; }; then
         log_error "The --deferral-timer-focus option requires that you also specify at least one focus deadline option."; option_error="TRUE"
     fi
     
@@ -2024,10 +2104,159 @@ check_completion_status() {
     
 }
 
+check_deadlines_days_date() {
+    deadline_days_status="FALSE" # Deadline status modes: FALSE, SOFT, or HARD
+    local current_epoch
+    current_epoch=$(date +%s)
+    workflow_zero_date_epoch=$(date -j -f "%Y-%m-%d" "${PatchingStartDate}" +"%s")
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: current_epoch is: ${current_epoch}"
+    
+    # Evaluate days deadlines and set ${deadline_days_status}, ${deadline_days_epoch}, and ${display_string_deadline_days}.
+    if [[ -n "${deadline_days_focus}" ]]; then
+        local deadline_days_focus_epoch
+        deadline_days_focus_epoch=$(( workflow_zero_date_epoch + deadline_days_focus_seconds ))
+        local deadline_days_focus_date
+        deadline_days_focus_date=$(date -r "${deadline_days_focus_epoch}" +%Y-%m-%d:%H:%M)
+        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_focus_epoch: ${deadline_days_focus_epoch}"
+        if [[ "${deadline_days_focus_epoch}" -lt "${current_epoch}" ]]; then
+            log_status "Status: Focus days deadline of ${deadline_days_focus_date} (${deadline_days_focus} day(s) after ${PatchingStartDate}) HAS passed."
+            deadline_days_status="FOCUS"
+        else
+            local deadline_days_focus_difference
+            deadline_days_focus_difference=$(( deadline_days_focus_epoch - current_epoch ))
+            [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_focus_difference is: ${deadline_days_focus_difference}"
+            if [[ "${deadline_days_focus_difference}" -le 120 ]]; then
+                log_status "Status: Focus days deadline of ${deadline_days_focus_date} (${deadline_days_focus} day(s) after ${PatchingStartDate}) is only ${deadline_days_focus_difference} seconds away, waiting for deadline to pass..."
+                sleep $(( deadline_days_focus_difference + 1 ))
+                log_status "Status: Focus days deadline of ${deadline_days_focus_date} (${deadline_days_focus} day(s) after ${PatchingStartDate}) HAS passed."
+                deadline_days_status="FOCUS"
+            else
+                log_status "Status: Focus days deadline of ${deadline_days_focus_date} (${deadline_days_focus} day(s) after ${PatchingStartDate}) NOT passed."
+            fi
+        fi
+    fi
+    if [[ -n "${deadline_days_hard}" ]]; then
+        local deadline_days_hard_epoch
+        deadline_days_hard_epoch=$(( workflow_zero_date_epoch + deadline_days_hard_seconds ))
+        local deadline_days_hard_date
+        deadline_days_hard_date=$(date -r "${deadline_days_hard_epoch}" +%Y-%m-%d:%H:%M)
+        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_hard_epoch: ${deadline_days_hard_epoch}"
+        if [[ "${deadline_days_hard_epoch}" -lt "${current_epoch}" ]]; then
+            log_status "Status: Hard days deadline of ${deadline_days_hard_date} (${deadline_days_hard} day(s) after ${PatchingStartDate}) HAS passed."
+            deadline_days_status="HARD"
+        else
+            local deadline_days_hard_difference
+            deadline_days_hard_difference=$(( deadline_days_hard_epoch - current_epoch ))
+            [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_hard_difference is: ${deadline_days_hard_difference}"
+            if [[ "${deadline_days_hard_difference}" -le 120 ]]; then
+                log_status "Status: Hard days deadline of ${deadline_days_hard_date} (${deadline_days_hard} day(s) after ${PatchingStartDate}) is only ${deadline_days_hard_difference} seconds away, waiting for deadline to pass..."
+                sleep $(( deadline_days_hard_difference + 1 ))
+                log_status "Status: Hard days deadline of ${deadline_days_hard_date} (${deadline_days_hard} day(s) after ${PatchingStartDate}) HAS passed."
+                deadline_days_status="HARD"
+            else
+                log_status "Status: Hard days deadline of ${deadline_days_hard_date} (${deadline_days_hard} day(s) after ${PatchingStartDate}) NOT passed."
+            fi
+        fi
+    fi
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_status is: ${deadline_days_status}"
+    [[ -n ${deadline_days_hard} ]] && deadline_days_epoch="${deadline_days_hard_epoch}"
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_epoch is: ${deadline_days_epoch}"
+    if [[ -n "${deadline_days_epoch}" ]]; then
+        local display_string_deadline_days_only_date
+        display_string_deadline_days_only_date=$(date -r "${deadline_days_epoch}" "+${DISPLAY_STRING_FORMAT_DATE}")
+        local display_string_deadline_days_only_time
+        display_string_deadline_days_only_time=$(date -r "${deadline_days_epoch}" "${DISPLAY_STRING_FORMAT_TIME}" | sed 's/^ *//g')
+        if [[ $(date -r "${deadline_days_epoch}" "+%H:%M") == "00:00" ]]; then
+            display_string_deadline_days="${display_string_deadline_days_only_date}"
+        else
+            #display_string_deadline_days="${display_string_deadline_days_only_date} - ${display_string_deadline_days_only_time}"
+            display_string_deadline_days="${display_string_deadline_days_only_date}"
+        fi
+        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: display_string_deadline_days_only_date is: ${display_string_deadline_days_only_date}"
+        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: display_string_deadline_days_only_time is: ${display_string_deadline_days_only_time}"
+        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: display_string_deadline_days is: ${display_string_deadline_days}"
+    fi
+    
+    
+    # Set ${deadline_epoch} and ${display_string_deadline} to the soonest of either days or date deadlines.
+    
+    deadline_epoch="${deadline_days_epoch}"
+    display_string_deadline="${display_string_deadline_days}"
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_epoch is: ${deadline_epoch}"
+    
+    # If there is a ${deadline_epoch}, then make sure no user deferral timer or display timeout exceeds the deadline.
+    if [[ -n "${deadline_epoch}" ]]; then
+        local deferral_timer_deadline_minutes
+        deferral_timer_deadline_minutes=$(( ( deadline_epoch - current_epoch ) / 60 ))
+        local deferral_timer_deadline_active
+        deferral_timer_deadline_active="FALSE"
+        [[ $deferral_timer_deadline_minutes -lt 2 ]] && deferral_timer_deadline_minutes=2
+        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deferral_timer_deadline_minutes is: ${deferral_timer_deadline_minutes}"
+        if [[ -n "${deferral_timer_menu_minutes}" ]]; then
+            local previous_ifs
+            previous_ifs="${IFS}"; IFS=','
+            local deferral_timer_menu_array
+            #read -r -a deferral_timer_menu_array <<< "${deferral_timer_menu_minutes}"
+            deferral_timer_menu_array=("${(@s/,/)deferral_timer_menu_minutes}")
+            local deferral_timer_menu_reduced_array
+            deferral_timer_menu_reduced_array=()
+            local deferral_timer_menu_reduced
+            deferral_timer_menu_reduced="FALSE"
+            for deferral_timer_menu_item in "${deferral_timer_menu_array[@]}"; do
+                if [[ $deferral_timer_deadline_minutes -le $deferral_timer_menu_item ]]; then
+                    if [[ "${deferral_timer_menu_reduced}" == "FALSE" ]]; then
+                        deferral_timer_menu_reduced_array+=("${deferral_timer_deadline_minutes}")
+                        deferral_timer_menu_reduced="TRUE"
+                        deferral_timer_deadline_active="TRUE"
+                    fi
+                else
+                    deferral_timer_menu_reduced_array+=("${deferral_timer_menu_item}")
+                fi
+            done
+            [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deferral_timer_menu_reduced is: ${deferral_timer_menu_reduced}"
+            [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deferral_timer_menu_reduced_array is: ${deferral_timer_menu_reduced_array[*]}"
+            if [[ "${deferral_timer_menu_reduced}" == "TRUE" ]]; then
+                if [[ ${#deferral_timer_menu_reduced_array[@]} -gt 1 ]]; then
+                    deferral_timer_menu_minutes="${deferral_timer_menu_reduced_array[*]}"
+                    log_status "Warning: The deferral timer menu list has been reduced to ${deferral_timer_menu_minutes} minutes given the deferral deadline of: ${display_string_deadline}"
+                else
+                    unset deferral_timer_menu_minutes
+                    log_status "Warning: Not showing the deferral timer menu given the deferral deadline of: ${display_string_deadline}"
+                fi
+            fi
+            IFS="${previous_ifs}"
+        fi
+        if [[ -z "${deferral_timer_menu_minutes}" ]]; then
+            if [[ $deferral_timer_deadline_minutes -lt $deferral_timer_minutes ]]; then
+                log_status "Warning: Reducing user deferral timers to ${deferral_timer_deadline_minutes} minutes given the deferral deadline of: ${display_string_deadline}"
+                deferral_timer_minutes="${deferral_timer_deadline_minutes}"
+                [[ -n "${deferral_timer_focus_minutes}" ]] && deferral_timer_focus_minutes="${deferral_timer_deadline_minutes}"
+                deferral_timer_deadline_active="TRUE"
+            fi
+        fi
+        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deferral_timer_deadline_active is: ${deferral_timer_deadline_active}"
+        if [[ "${deferral_timer_deadline_active}" == "TRUE" ]]; then
+            if [[ -n "${dialog_timeout_default_seconds}" ]] && [[ $dialog_timeout_default_seconds -gt 120 ]]; then
+                dialog_timeout_default_seconds=120
+                log_status "Warning: Reducing the --dialog-timeout-default option to ${dialog_timeout_default_seconds} seconds given the approaching deferral deadline."
+            fi
+            if [[ -n "${dialog_timeout_restart_or_defer_seconds}" ]] && [[ $dialog_timeout_restart_or_defer_seconds -gt 120 ]]; then
+                dialog_timeout_restart_or_defer_seconds=120
+                log_status "Warning: Reducing the --dialog-timeout-restart-or-defer option to ${dialog_timeout_restart_or_defer_seconds} seconds given the approaching deferral deadline."
+            fi
+            if [[ -n "${dialog_timeout_soft_deadline_seconds}" ]] && [[ $dialog_timeout_soft_deadline_seconds -gt 120 ]]; then
+                dialog_timeout_soft_deadline_seconds=120
+                log_status "Warning: Reducing the --dialog-timeout-soft-deadline option to ${dialog_timeout_soft_deadline_seconds} seconds given the approaching deferral deadline."
+            fi
+            
+        fi
+    fi
+}
+
 # Evaluate if a process has told the display to not sleep or the user has enabled Focus or Do Not Disturb, and set ${user_focus_active} accordingly.
 check_user_focus() {
     user_focus_active="FALSE"
-	if [[ -n "${deadline_count_focus}" ]]; then
+	if [[ -n "${deadline_count_focus}" ]]|| [[ -n "${deadline_days_focus}" ]] ; then
         local focus_response
 		focus_response=$(plutil -extract data.0.storeAssertionRecords.0.assertionDetails.assertionDetailsModeIdentifier raw -o - "/Users/${currentUserAccountName}/Library/DoNotDisturb/DB/Assertions.json" | grep -ic 'com.apple.')
 		log_verbose  "focus_response is: ${focus_response}"
@@ -2398,15 +2627,25 @@ set_deferral_menu() {
 }
 
 dialog_install_or_defer() {
-    if [[ -z $display_string_deadline_count ]]; then 
-        display_string_deadline_count="Unlimited"
-    fi
+    #if [[ -z $display_string_deadline_count ]]; then 
+    #    display_string_deadline_count="Unlimited"
+    #fi
 
     [[ -n "${deferral_timer_menu_minutes}" ]] && set_deferral_menu
     
 	action=$( echo $DialogTimeoutDeferralAction | tr '[:upper:]' '[:lower:]' )
 	infobuttontext="Defer"
-	infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $display_string_deadline_count"
+    
+    if [[ -n "${display_string_deadline}" ]] && [[ -n "${display_string_deadline_count}" ]]; then # Show both date and maximum deferral count deadlines.
+        infobox="Deferral available until ${display_string_deadline}.\n\n• ${display_string_deadline_count} out of ${display_string_deadline_count_maximum} deferrals remaining.\n"
+    elif [[ -n "${display_string_deadline}" ]]; then # Show only date deadline.
+        infobox="Deferral available until ${display_string_deadline}.\n"
+    elif [[ -n "${display_string_deadline_count}" ]]; then # Show only maximum deferral count deadline.
+        infobox="${display_string_deadline_count} out of ${display_string_deadline_count_maximum} deferrals remaining.\n"
+    else # Show no deadlines.
+        infobox="No deadline date and unlimited deferrals.\n"
+    fi
+	#infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $display_string_deadline_count"
 	message="You can **Defer** the updates or **Continue** to close the applications and apply updates.  \n\n There are ($numberOfUpdates) application(s) that require updates: "
 	height=480
 	
@@ -2497,7 +2736,12 @@ dialog_install_or_defer() {
 dialog_install_hard_deadline() {
 		infobuttontext="Max Deferrals Reached"
 	infobox="Updates will automatically install after the timer expires. \n\n #### No Deferrals Remaining ####"
-	message="There are $numberOfUpdates application(s) that require updates\n\n You have deferred the maximum number of ${display_string_deadline_count_maximum} times."
+    if [[ "${deadline_days_status}" == "HARD" ]]; then
+        message="There are $numberOfUpdates application(s) that require updates\n\n You have deferred the maximum number of ${deadline_days_hard} days."
+    elif [[ "${deadline_count_status}" == "HARD" ]]; then
+        message="There are $numberOfUpdates application(s) that require updates\n\n You have deferred the maximum number of ${display_string_deadline_count_maximum} times."
+    fi
+	
 	height=480
 	
 	deferralDialogContent=(
@@ -3271,11 +3515,17 @@ main() {
             log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
             set_auto_launch_deferral
         else
-            check_user_focus #Check if a user is in focus mode or has display assertions active
+            check_deadlines_days_date
+            # User Focus only needs to be checked if there are no date or day deadlines.
+            if [[ "${deadline_date_status}" == "FALSE" ]] && [[ "${deadline_days_status}" == "FALSE" ]]; then
+                check_user_focus
+            else # At this point any date or days deadline would rule out any ${user_focus_active} option.
+                user_focus_active="FALSE"
+            fi
             check_deadlines_count #Check if the user has passed the max deferral count
-            # All Deferral and focus options have been evaluated
+            # At this point all deferral and deadline options have been evaluated.
             
-            if [[ "${deadline_count_status}" == "HARD" ]]; then # The Max number of deferrals have been used
+            if [[ "${deadline_days_status}" == "HARD" ]] || [[ "${deadline_count_status}" == "HARD" ]]; then # The Max number of deferrals have been used
                 log_notice "Max number of deferrals have been used, display dialog and countdown to install workflow"
                 dialog_install_hard_deadline
                 log_info "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
