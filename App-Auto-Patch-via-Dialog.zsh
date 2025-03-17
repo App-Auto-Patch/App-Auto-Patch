@@ -11,6 +11,7 @@
 #   3.1.0, [03.17.2025]
 #   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
 #   - Added MDM keys and and triggers for WorkflowInstallNowPatchingStatusAction
+#   - Moved the Defer button next to the Continue button to position it underneath the deferral menu drop-down
 #
 #   3.0.4, [03.14.2025]
 #   - Fixed logic so that InteractiveMode=0 will not run the deferral workflow or display a deferral dialog
@@ -2699,7 +2700,7 @@ dialog_install_or_defer() {
             --helpmessage "$helpMessage"
             --icon "$icon"
             --overlayicon "$overlayicon"
-            --infobuttontext "$infobuttontext"
+            --button2text "$infobuttontext"
             --infobox "$infobox"
             --timer $DialogTimeoutDeferral
             --button1text "Continue"
@@ -2712,7 +2713,7 @@ dialog_install_or_defer() {
             --helpmessage "$helpMessage"
             --icon "$icon"
             --overlayicon "$overlayicon"
-            --infobuttontext "$infobuttontext"
+            --button2text "$infobuttontext"
             --infobox "$infobox"
             --timer $DialogTimeoutDeferral
             --button1text "Continue"
@@ -2741,7 +2742,7 @@ dialog_install_or_defer() {
 	dialogOutput=$?
 	
 	case "${dialogOutput}" in
-		3)
+		2)
 			dialog_user_choice_install="FALSE"
 			if [[ -n "${deferral_timer_menu_minutes}" ]]; then
                 INDEX_CHOICE=$(echo "$SELECTION" | grep "SelectedIndex" | awk -F ": " '{print $NF}')
