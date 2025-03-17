@@ -58,6 +58,30 @@
             ],
             "property_order": 20
         },
+        "DeadlineDaysFocus": {
+            "type": "integer",
+            "title": "Focus Days Deadline",
+            "description": "The maximum number of days that automatic deferrals are allowed if the system is in user-enabled Focus/Do Not Disturb or when a process has requested that the display not go to sleep",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Days-Deadlines"
+                }
+            ],
+            "property_order": 25
+        },
+        "DeadlineDaysHard": {
+            "type": "integer",
+            "title": "Hard Days Deadline",
+            "description": "The maximum number of days deferrals allowed before App Auto-Patch will no longer allow deferrals and will automatically patch when the timer expires",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Days-Deadlines"
+                }
+            ],
+            "property_order": 30
+        },
         "DeferralTimerDefault": {
             "type": "integer",
             "title": "Deferral Timer Default",
@@ -68,7 +92,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#deferraltimerdefault"
                 }
             ],
-            "property_order": 25
+            "property_order": 35
         },
         "DeferralTimerError": {
             "type": "integer",
@@ -80,7 +104,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#deferraltimererror"
                 }
             ],
-            "property_order": 30
+            "property_order": 40
         },
         "DeferralTimerFocus": {
             "type": "integer",
@@ -92,7 +116,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#deferraltimerfocus"
                 }
             ],
-            "property_order": 35
+            "property_order": 45
         },
         "DeferralTimerMenu": {
             "type": "string",
@@ -104,7 +128,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#deferraltimermenu"
                 }
             ],
-            "property_order": 40
+            "property_order": 50
         },
         "DeferralTimerWorkflowRelaunch": {
             "type": "integer",
@@ -116,7 +140,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#deferraltimerworkflowrelaunch"
                 }
             ],
-            "property_order": 45
+            "property_order": 55
         },
         "DialogOnTop": {
             "type": "string",
@@ -132,7 +156,7 @@
                     "FALSE"
                 ]
             },
-            "property_order": 50
+            "property_order": 60
         },
         "DialogTimeoutDeferral": {
             "type": "integer",
@@ -144,7 +168,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 55
+            "property_order": 65
         },
         "DialogTimeoutDeferralAction": {
             "type": "string",
@@ -160,7 +184,7 @@
                     "Continue"
                 ]
             },
-            "property_order": 60
+            "property_order": 70
         },
         "UnattendedExit": {
             "type": "string",
@@ -176,7 +200,7 @@
                     "FALSE"
                 ]
             },
-            "property_order": 65
+            "property_order": 75
         },
         "UnattendedExitSeconds": {
             "type": "integer",
@@ -188,7 +212,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 70
+            "property_order": 80
         },
         "UseOverlayIcon": {
             "type": "string",
@@ -204,7 +228,7 @@
                     "FALSE"
                 ]
             },
-            "property_order": 75
+            "property_order": 85
         },
         "IgnoredLabels": {
             "type": "string",
@@ -216,7 +240,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 80
+            "property_order": 90
         },
         "RequiredLabels": {
             "type": "string",
@@ -228,7 +252,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 85
+            "property_order": 95
         },
         "OptionalLabels": {
             "type": "string",
@@ -240,7 +264,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 90
+            "property_order": 100
         },
         "AppTitle": {
             "type": "string",
@@ -253,7 +277,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 95
+            "property_order": 105
         },
         "ConvertAppsInHomeFolder": {
             "type": "string",
@@ -270,7 +294,7 @@
                     "FALSE"
                 ]
             },
-            "property_order": 100
+            "property_order": 110
         },
         "IgnoreAppsInHomeFolder": {
             "type": "string",
@@ -287,7 +311,7 @@
                     "FALSE"
                 ]
             },
-            "property_order": 105
+            "property_order": 115
         },
         "InstallomatorOptions": {
             "type": "string",
@@ -299,7 +323,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 110
+            "property_order": 120
         },
         "InstallomatorVersion": {
             "type": "string",
@@ -316,7 +340,7 @@
                     "Release"
                 ]
             },
-            "property_order": 115
+            "property_order": 125
         },
         "InteractiveMode": {
             "type": "integer",
@@ -335,7 +359,7 @@
                     "2 - Full Interactive"
                 ]
             },
-            "property_order": 120
+            "property_order": 130
         },
         "RemoveInstallomatorPath": {
             "type": "string",
@@ -352,7 +376,7 @@
                     "FALSE"
                 ]
             },
-            "property_order": 125
+            "property_order": 135
         },
         "SupportTeamName": {
             "type": "string",
@@ -364,7 +388,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 130
+            "property_order": 140
         },
         "SupportTeamEmail": {
             "type": "string",
@@ -376,7 +400,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 135
+            "property_order": 145
         },
         "SupportTeamPhone": {
             "type": "string",
@@ -388,7 +412,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 140
+            "property_order": 150
         },
         "SupportTeamWebsite": {
             "type": "string",
@@ -400,7 +424,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 145
+            "property_order": 155
         },
         "WebhookFeature": {
             "type": "string",
@@ -419,7 +443,7 @@
                     "FAILURES"
                 ]
             },
-            "property_order": 150
+            "property_order": 160
         },
         "WebhookURLSlack": {
             "type": "string",
@@ -431,7 +455,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 155
+            "property_order": 165
         },
         "WebhookURLTeams": {
             "type": "string",
@@ -443,7 +467,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 160
+            "property_order": 170
         },
         "WorkflowDisableAppDiscovery": {
             "type": "boolean",
@@ -456,7 +480,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 165
+            "property_order": 175
         },
         "WorkflowDisableRelaunch": {
             "type": "boolean",
@@ -469,7 +493,7 @@
                     "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 170
+            "property_order": 180
         }
     }
 }
