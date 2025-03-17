@@ -1,4 +1,4 @@
-AAP 2.11.9	3.0.2 Configuration Profile	3.0.2 CLI	3.0.2 Script
+AAP 2.11.9	3.1.0 Configuration Profile	3.1.0 CLI	3.1.0 Script
 appTitle	<key>AppTitle</key> <string>App Auto-Patch</string>Ê		
 convertAppsInHomeFolder	"<key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</string>"		
 daysUntilReset	<key>DaysUntilReset</key> <integer>number</integer>	--days-until-reset=number	
@@ -32,6 +32,8 @@ unattendedExitSeconds	<key>UnattendedExitSeconds</key> <integer>seconds</integer
 useLatestAvailableInstallomatorScriptVersion	"<key>InstallomatorVersion</key> <string>Main,Release</string>"		
 useOverlayIcon	"<key>UseOverlayIcon</key> <string>TRUE,FALSE</string>"		
 webhookEnabled	"<key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>"	--webhook-feature-all | --webhook-feature-failures | --webhook-feature-off	
+	<key>DeadlineDaysHard</key> <integer>number</integer>	--deadline-days-hard=number	
+	<key>DeadlineDaysFocus</key> <integer>number</integer>	--deadline-days-focus=number	
 	<key>DeferralTimerDefault</key> <integer>minutes</integer>	--deferral-timer-default=minutes	
 	<key>DeferralTimerError</key> <integer>minutes</integer>	--deferral-timer-error=minutes	
 	<key>DeferralTimerFocus</key> <integer>minutes</integer>	--deferral-timer-focus=minutes	
@@ -40,6 +42,7 @@ webhookEnabled	"<key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>"	-
 	"<key>DialogOnTop</key> <string>TRUE,FALSE</string>"		
 	<key>WorkflowDisableRelaunch</key> <true/> | <false/>	--workflow-disable-relaunch | --workflow-disable-relaunch-off	
 		--deadline-count-delete-all	
+		--deadline-days-delete-all	
 		--deferral-timer-reset-all	
 		--help	
 		--reset-defaults	
