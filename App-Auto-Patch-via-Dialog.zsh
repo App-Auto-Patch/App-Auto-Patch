@@ -8,8 +8,9 @@
 #
 # HISTORY
 #
-#   3.1.0, [03.16.2025]
+#   3.1.0, [03.17.2025]
 #   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
+#   - Added MDM keys and and triggers for WorkflowInstallNowPatchingStatusAction
 #
 #   3.0.4, [03.14.2025]
 #   - Fixed logic so that InteractiveMode=0 will not run the deferral workflow or display a deferral dialog
@@ -46,7 +47,7 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.1.0"
-scriptDate="2025/03/16"
+scriptDate="2025/03/17"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -75,6 +76,9 @@ echo "
     [--workflow-disable-relaunch]  [--workflow-disable-relaunch-off]
     [--workflow-disable-app-discovery] [--workflow-disable-app-discovery-off]
     [--workflow-install-now]
+    [--workflow-install-now-patching-status-action-never]
+    [--workflow-install-now-patching-status-action-always]
+    [--workflow-install-now-patching-status-action-sucess]
 
     Deferral Deadline COUNT Options:
     [--deadline-count-focus=number]
@@ -147,6 +151,7 @@ echo "
     <key>WebhookURLTeams</key> <string>URL</string>
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
     <key>WorkflowDisableRelaunch</key> <true/> | <false/>
+    <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
 
 "
 # Error log any unrecognized options.
@@ -244,7 +249,7 @@ set_defaults() {
 
     daysUntilReset="7" # MDM Enabled
 
-    workflow_install_now_patching_status_action="3" # Replaced selfServicePatchingStatusModeReset
+    workflow_install_now_patching_status_action_option="SUCCESS" # MDM Enabled - Determines what happens when  NEVER | ALWAYS | SUCCESS 
 
     UnattendedExit="FALSE" # MDM Enabled
 
@@ -430,6 +435,15 @@ get_options() {
             --workflow-install-now)
                 workflow_install_now_option="TRUE"
             ;;
+            --workflow-install-now-patching-status-action-never)
+                workflow_install_now_patching_status_action_option="NEVER"
+            ;;
+            --workflow-install-now-patching-status-action-always)
+                workflow_install_now_patching_status_action_option="ALWAYS"
+            ;;
+            --workflow-install-now-patching-status-action-success)
+                workflow_install_now_patching_status_action_option="SUCCESS"
+            ;;
             --workflow-disable-relaunch)
                 workflow_disable_relaunch_option="TRUE"
             ;;
@@ -573,6 +587,8 @@ get_preferences() {
         Unattended_exit_seconds_managed=$(defaults read "${appAutoPatchManagedPLIST}" UnattendedExitSeconds 2> /dev/null)
         local dialog_on_top_managed
         dialog_on_top_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogOnTop 2> /dev/null)
+        local workflow_install_now_patching_status_action_managed
+        workflow_install_now_patching_status_action_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowInstallNowPatchingStatusAction 2> /dev/null)
         local use_overlay_icon_managed
         use_overlay_icon_managed=$(defaults read "${appAutoPatchManagedPLIST}" UseOverlayIcon 2> /dev/null)
         local remove_installomator_path_managed
@@ -654,6 +670,8 @@ get_preferences() {
         Unattended_exit_seconds_local=$(defaults read "${appAutoPatchLocalPLIST}" UnattendedExitSeconds 2> /dev/null)
         local dialog_on_top_local
         dialog_on_top_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogOnTop 2> /dev/null)
+        local workflow_install_now_patching_status_action_local
+        workflow_install_now_patching_status_action_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowInstallNowPatchingStatusAction 2> /dev/null)
         local use_overlay_icon_local
         use_overlay_icon_local=$(defaults read "${appAutoPatchLocalPLIST}" UseOverlayIcon 2> /dev/null)
         local remove_installomator_path_local
@@ -737,6 +755,11 @@ get_preferences() {
     { [[ -z "${Unattended_exit_seconds_managed}" ]] && [[ -n "${UnattendedExitSeconds}" ]] && [[ -n "${Unattended_exit_seconds_local}" ]]; } && UnattendedExitSeconds="${Unattended_exit_seconds_local}"
     [[ -n "${dialog_on_top_managed}" ]] && dialogOnTop="${dialog_on_top_managed}"
     { [[ -z "${dialog_on_top_managed}" ]] && [[ -n "${dialogOnTop}" ]] && [[ -n "${dialog_on_top_local}" ]]; } && dialogOnTop="${dialog_on_top_local}"
+    
+    [[ -n "${workflow_install_now_patching_status_action_managed}" ]] && workflow_install_now_patching_status_action_option="${workflow_install_now_patching_status_action_managed}"
+    { [[ -z "${workflow_install_now_patching_status_action_managed}" ]] && [[ -z "${workflow_install_now_patching_status_action_option}" ]] && [[ -n "${workflow_install_now_patching_status_action_local}" ]]; } && workflow_install_now_patching_status_action_option="${workflow_install_now_patching_status_action_local}"
+    
+    
     [[ -n "${use_overlay_icon_managed}" ]] && useOverlayIcon="${use_overlay_icon_managed}"
     { [[ -z "${use_overlay_icon_managed}" ]] && [[ -n "${useOverlayIcon}" ]] && [[ -n "${use_overlay_icon_local}" ]]; } && useOverlayIcon="${use_overlay_icon_local}"
     [[ -n "${remove_installomator_path_managed}" ]] && removeInstallomatorPath="${remove_installomator_path_managed}"
@@ -1204,6 +1227,12 @@ manage_parameter_options() {
         defaults write "${appAutoPatchLocalPLIST}" InteractiveMode -integer "${InteractiveModeOption}"
     fi
     log_verbose "InteractiveModeOption: $InteractiveModeOption"
+    
+    # Manage ${workflow_install_now_patching_status_action_option} and save to ${appAutoPatchLocalPLIST}
+    if [[ -n "${workflow_install_now_patching_status_action_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowInstallNowPatchingStatusAction -string "${workflow_install_now_patching_status_action_option}"
+    fi
+    log_verbose "WorkflowInstallNowPatchingStatusAction: $workflow_install_now_patching_status_action_option"
 
     # Manage ${webhook_feature_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${webhook_feature_option}" == "ALL" ]] || [[ "${webhook_feature_option}" == "FAILURES" ]]; then
@@ -1656,6 +1685,18 @@ workflow_startup() {
     #Running this function for something webhook related
     gather_error_log
 
+}
+
+# MARK: *** Process Management ***
+################################################################################
+
+# This function is only used for debugging from the command line to interrupt the workflow and wait for the user to press Enter to continue. Insert the following line wherever you want an interrupt to occur:
+# [[ "${current_user_account_name}" != "FALSE" ]] && interactive_interrupt
+interactive_interrupt() {
+
+    log_status "**** App Auto Patch. ${scriptVersion} - INTERACTIVE INTERRUPT - PRESS ENTER TO CONTINUE ****"
+
+    /bin/bash read -n 1 -p -r >/dev/null 2>&1
 }
 
 # Installation
@@ -3505,7 +3546,7 @@ main() {
             log_notice "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
             workflow_do_Installations
             
-            if [[ "$workflow_install_now_patching_status_action" == 2 ]] || [[ "$workflow_install_now_patching_status_action" == 3 && "${errorCount}" == 0 ]]; then
+            if [[ "$workflow_install_now_patching_status_action_option" == "ALWAYS" ]] || [[ "$workflow_install_now_patching_status_action_option" == "SUCCESS" && "${errorCount}" == 0 ]]; then
                 defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true #Set completion status to true
                 timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
                 defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
