@@ -12,6 +12,10 @@
 	<integer>3</integer>
 	<key>DeadlineCountHard</key>
 	<integer>3</integer>
+	<key>DeadlineDaysFocus</key>
+	<integer>3</integer>
+	<key>DeadlineDaysHard</key>
+	<integer>3</integer>
 	<key>DeferralTimerDefault</key>
 	<integer>1440</integer>
 	<key>DeferralTimerError</key>
