@@ -494,6 +494,25 @@
                 }
             ],
             "property_order": 180
+        },
+        "WorkflowInstallNowPatchingStatusAction": {
+            "type": "string",
+            "title": "Workflow Install Now Patching Status Action",
+            "default": "SUCCESS",
+            "description": "Determines if the Patching Completion Status is set to true when using the --workflow-install-now trigger",
+            "enum": [
+                "NEVER",
+                "ALWAYS",
+                "SUCCESS"
+            ],
+            "options": {
+                "enum_titles": [
+                    "NEVER",
+                    "ALWAYS",
+                    "SUCCESS"
+                ]
+            },
+            "property_order": 185
         }
     }
 }
