@@ -5,23 +5,23 @@
   <key>InteractiveMode</key>
   <integer>3</integer>
   <key>PatchWeekStartDay</key>
-  <integer>1</integer>
+  <string>1</string>
   <key>DaysUntilReset</key>
-  <integer>7</integer>
+  <string>7</string>
   <key>DeferralTimerFocus</key>
-  <integer>60</integer>
+  <string>60</string>
   <key>DeferralTimerError</key>
-  <integer>60</integer>
+  <string>60</string>
   <key>DeadlineCountFocus</key>
-  <integer>3</integer>
+  <string>3</string>
   <key>DeadlineCountHard</key>
-  <integer>3</integer>
+  <string>3</string>
   <key>DeferralTimerDefault</key>
-  <integer>1440</integer>
+  <string>1440</string>
   <key>DeferralTimerMenu</key>
   <string>30,60,90,480,720,1440,2880</string>
   <key>DialogTimeoutDeferral</key>
-  <integer>7200</integer>
+  <string>7200</string>
   <key>DialogTimeoutDeferralAction</key>
   <string>Defer</string>
   <key>IgnoredLabels</key>
