@@ -10,25 +10,25 @@
 			<key>ConvertAppsInHomeFolder</key>
 			<string>TRUE</string>
 			<key>DaysUntilReset</key>
-			<integer>7</integer>
+			<string>7</string>
 			<key>DeadlineCountFocus</key>
-			<integer>3</integer>
+			<string>3</string>
 			<key>DeadlineCountHard</key>
-			<integer>3</integer>
+			<string>3</string>
 			<key>DeadlineDaysFocus</key>
-			<integer>3</integer>
+			<string>3</string>
 			<key>DeadlineDaysHard</key>
-			<integer>3</integer>
+			<string>3</string>
 			<key>DeferralTimerDefault</key>
-			<integer>1440</integer>
+			<string>1440</string>
 			<key>DeferralTimerError</key>
-			<integer>60</integer>
+			<string>60</string>
 			<key>DeferralTimerFocus</key>
-			<integer>60</integer>
+			<string>60</string>
 			<key>DeferralTimerMenu</key>
 			<string>15,60,240,1440</string>
 			<key>DeferralTimerWorkflowRelaunch</key>
-			<integer>1440</integer>
+			<string>1440</string>
 			<key>DialogOnTop</key>
 			<string>TRUE</string>
 			<key>DialogTimeoutDeferral</key>
@@ -48,7 +48,7 @@
 			<key>OptionalLabels</key>
 			<string>iTerm2  imazingprofileeditor</string>
 			<key>PatchWeekStartDay</key>
-			<integer>2</integer>
+			<string>2</string>
 			<key>PayloadDisplayName</key>
 			<string>App Auto-Patch</string>
 			<key>PayloadIdentifier</key>
@@ -87,8 +87,6 @@
 			<false/>
 			<key>WorkflowDisableRelaunch</key>
 			<false/>
-			<key>WorkflowInstallNowPatchingStatusAction</key>
-			<string>SUCCESS</string>
 		</dict>
 	</array>
 	<key>PayloadDescription</key>
