@@ -3,13 +3,13 @@
     "description": "This will configure the settings for the App Auto-Patch tool",
     "properties": {
         "DaysUntilReset": {
-            "type": "integer",
+            "type": "string",
             "title": "Days Until Reset",
             "description": "The number of days after the patching cadence start date (Zero Date) that the patching complete status will reset from TRUE to FALSE",
             "property_order": 5
         },
         "PatchWeekStartDay": {
-            "type": "integer",
+            "type": "string",
             "title": "Patch Week Start Day",
             "description": "The day of the week to force the patching cadence start date (Zero Date) to go back to in order to have the patch cadence start the same day of the week for all users",
             "enum": [
@@ -35,7 +35,7 @@
             "property_order": 10
         },
         "DeadlineCountFocus": {
-            "type": "integer",
+            "type": "string",
             "title": "Focus Count Deadline",
             "description": "The maximum number of automatic deferrals allowed if the system is in user-enabled Focus/Do Not Disturb or when a process has requested that the display not go to sleep",
             "links": [
@@ -47,7 +47,7 @@
             "property_order": 15
         },
         "DeadlineCountHard": {
-            "type": "integer",
+            "type": "string",
             "title": "Hard Count Deadline",
             "description": "The maximum number of user selected deferrals allowed before App Auto-Patch will no longer allow deferrals and will automatically patch when the timer expires",
             "links": [
@@ -59,7 +59,7 @@
             "property_order": 20
         },
         "DeadlineDaysFocus": {
-            "type": "integer",
+            "type": "string",
             "title": "Focus Days Deadline",
             "description": "The maximum number of days that automatic deferrals are allowed if the system is in user-enabled Focus/Do Not Disturb or when a process has requested that the display not go to sleep",
             "links": [
@@ -71,7 +71,7 @@
             "property_order": 25
         },
         "DeadlineDaysHard": {
-            "type": "integer",
+            "type": "string",
             "title": "Hard Days Deadline",
             "description": "The maximum number of days deferrals allowed before App Auto-Patch will no longer allow deferrals and will automatically patch when the timer expires",
             "links": [
@@ -83,7 +83,7 @@
             "property_order": 30
         },
         "DeferralTimerDefault": {
-            "type": "integer",
+            "type": "string",
             "title": "Deferral Timer Default",
             "description": "The number of minutes to defer until the next update workflow attempt if a user choses not install updates",
             "links": [
@@ -95,7 +95,7 @@
             "property_order": 35
         },
         "DeferralTimerError": {
-            "type": "integer",
+            "type": "string",
             "title": "Deferral Timer Error",
             "description": "The number of minutes to defer if AAP detects an error in the workflow",
             "links": [
@@ -107,7 +107,7 @@
             "property_order": 40
         },
         "DeferralTimerFocus": {
-            "type": "integer",
+            "type": "string",
             "title": "Deferral Timer Focus",
             "description": "The number of minutes to defer the update restart dialog automatically if a process has prevented display sleep (for example, during an active meeting) or the user has Focus or Do Not Disturb enabled",
             "links": [
@@ -131,7 +131,7 @@
             "property_order": 50
         },
         "DeferralTimerWorkflowRelaunch": {
-            "type": "integer",
+            "type": "string",
             "title": "Deferral Timer Workflow Relaunch",
             "description": "Amount of time in minutes until AAP is relaunched after a workflow. This timer results in AAP acting as a permanent agent that checks for app updates on a regular basis",
             "links": [
@@ -159,7 +159,7 @@
             "property_order": 60
         },
         "DialogTimeoutDeferral": {
-            "type": "integer",
+            "type": "string",
             "title": "Deferral Dialog Timeout",
             "description": "Time given to the user to respond to deferral prompt if enabled",
             "links": [
