@@ -32,7 +32,6 @@ if [[ -f "${AAP_FOLDER}/appautopatch" ]]; then
 		[[ $(echo "${AAP_version_local}" | cut -c 1) -lt 4 ]] && AAP_version_local=$(grep -m1 -e 'scriptVersion=' -e '  Version ' "${AAP_FOLDER}/appautopatch" | cut -d '"' -f 2 | cut -d " " -f 4)
 		[[ -n "${AAP_version_local}" ]] && echo "<result>${AAP_version_local}</result>"
 		[[ -z "${AAP_version_local}" ]] && echo "<result>No AAP version number found</result>"
-		AAP_version_local="FALSE"
 	else
 		echo "<result>No AAP preference file</result>"
 		AAP_version_local="FALSE"
