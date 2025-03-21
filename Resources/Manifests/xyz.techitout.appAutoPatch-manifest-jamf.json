@@ -13,13 +13,13 @@
             "title": "Patch Week Start Day",
             "description": "The day of the week to force the patching cadence start date (Zero Date) to go back to in order to have the patch cadence start the same day of the week for all users",
             "enum": [
-                1,
-                2,
-                3,
-                4,
-                5,
-                6,
-                7
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7"
             ],
             "options": {
                 "enum_titles": [
