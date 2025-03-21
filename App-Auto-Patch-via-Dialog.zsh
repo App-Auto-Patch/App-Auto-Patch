@@ -8,13 +8,16 @@
 #
 # HISTORY
 #
-#   3.1.0, [03.17.2025]
+#   3.1.0, [03.18.2025]
 #   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
 #   - Added MDM keys and and triggers for WorkflowInstallNowPatchingStatusAction
 #   - Moved the Defer button next to the Continue button to position it underneath the deferral menu drop-down
 #   - Adjusted logic to use deferral_timer_workflow_relaunch_minutes after AAP completes the installation workflow
 #   - Fixed logic for workflow_disable_relaunch_option to disable relaunch after successful patching completion if set to TRUE
 #   - Added exit_error function to handle startup validation errors
+#   - Fixed an issue where --workflow-install-now was not displaying the discovery workflow when InteractiveMode < 2
+#   - Added the ability to pull from a custom Installomator fork. It must include all Installomator contents, including fragments
+#   - Added logic to check for a successful App Auto Patch installation. 
 #
 #   3.0.4, [03.14.2025]
 #   - Fixed logic so that InteractiveMode=0 will not run the deferral workflow or display a deferral dialog
@@ -50,8 +53,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.1.0"
-scriptDate="2025/03/17"
+scriptVersion="3.1.0-beta2"
+scriptDate="2025/03/18"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -137,7 +140,9 @@ echo "
     <key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>
     <key>IgnoredLabels</key> <string>label label label etc</string>
     <key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc</string>
-    <key>InstallomatorVersion</key> <string>Main,Release</string>
+    <key>InstallomatorVersion</key> <string>Main,Release,Custom</string>
+    <key>InstallomatorVersionCustomRepoPath</key> <string>Installomator/Installomator</string>
+    <key>InstallomatorVersionCustomBranchName</key> <string>main</string>
     <key>InteractiveMode</key> <integer>number</integer>
     <key>OptionalLabels</key> <string>label label label etc</string>
     <key>PatchWeekStartDay</key> <integer>number</integer>
@@ -579,6 +584,10 @@ get_preferences() {
         installomator_options_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_version_managed
         installomator_version_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorVersion 2> /dev/null)
+        local installomator_version_custom_repo_path_managed
+        installomator_version_custom_repo_path_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorVersionCustomRepoPath 2> /dev/null)
+        local installomator_version_custom_branch_name_managed
+        installomator_version_custom_branch_name_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorVersionCustomBranchName 2> /dev/null)
         local dialog_timeout_deferral_managed
         dialog_timeout_deferral_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogTimeoutDeferral 2> /dev/null)
         local dialog_timeout_deferral_action_managed
@@ -662,6 +671,10 @@ get_preferences() {
         installomator_options_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_version_local
         installomator_version_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorVersion 2> /dev/null)
+        local installomator_version_custom_repo_path_local
+        installomator_version_custom_repo_path_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorVersionCustomRepoPath 2> /dev/null)
+        local installomator_version_custom_branch_name_local
+        installomator_version_custom_branch_name_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorVersionCustomBranchName 2> /dev/null)
         local dialog_timeout_deferral_local
         dialog_timeout_deferral_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogTimeoutDeferral 2> /dev/null)
         local dialog_timeout_deferral_action_local
@@ -747,6 +760,13 @@ get_preferences() {
     { [[ -z "${installomator_options_managed}" ]] && [[ -n "${installomatorOptions}" ]] && [[ -n "${installomator_options_local}" ]]; } && installomatorOptions="${installomator_options_local}"
     [[ -n "${installomator_version_managed}" ]] && installomatorVersion="${installomator_version_managed}"
     { [[ -z "${installomator_version_managed}" ]] && [[ -n "${installomatorVersion}" ]] && [[ -n "${installomator_version_local}" ]]; } && installomatorVersion="${installomator_version_local}"
+    
+    [[ -n "${installomator_version_custom_repo_path_managed}" ]] && installomatorVersionCustomRepoPath="${installomator_version_custom_repo_path_managed}"
+    { [[ -z "${installomator_version_custom_repo_path_managed}" ]] && [[ -z "${installomatorVersionCustomRepoPath}" ]] && [[ -n "${installomator_version_custom_repo_path_local}" ]]; } && installomatorVersionCustomRepoPath="${installomator_version_custom_repo_path_local}"
+    
+    [[ -n "${installomator_version_custom_branch_name_managed}" ]] && installomatorVersionCustomBranchName="${installomator_version_custom_branch_name_managed}"
+    { [[ -z "${installomator_version_custom_branch_name_managed}" ]] && [[ -z "${installomatorVersionCustomBranchName}" ]] && [[ -n "${installomator_version_custom_branch_name_local}" ]]; } && installomatorVersionCustomBranchName="${installomator_version_custom_branch_name_local}"
+    
     [[ -n "${dialog_timeout_deferral_managed}" ]] && DialogTimeoutDeferral="${dialog_timeout_deferral_managed}"
     { [[ -z "${dialog_timeout_deferral_managed}" ]] && [[ -n "${DialogTimeoutDeferral}" ]] && [[ -n "${dialog_timeout_deferral_local}" ]]; } && DialogTimeoutDeferral="${dialog_timeout_deferral_local}"
     [[ -n "${dialog_timeout_deferral_action_managed}" ]] && DialogTimeoutDeferralAction="${dialog_timeout_deferral_action_managed}"
@@ -1007,6 +1027,15 @@ manage_parameter_options() {
         log_error "The --deadline-count-hard=number value must only be a number."; option_error="TRUE"
     fi
     
+    #Validate Custom Installomator Options
+    
+    if [[ "${installomatorVersion}" == "Custom" ]] || [[ "${installomatorVersion}" == "Custom" ]]; then
+        if [[ -z "${installomatorVersionCustomRepoPath}" ]] || [[ -z "${installomatorVersionCustomBranchName}" ]]; then
+            log_status "Parameter Error: The Custom InstallomatorVersion option requires both the InstallomatorVersionCustomRepoPath and InstallomatorVersionCustomBranchName keys"; option_error="TRUE"
+        fi
+        fi
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${installomatorVersionCustomRepoPath}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: installomatorVersionCustomRepoPath is: ${installomatorVersionCustomRepoPath}"
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${installomatorVersionCustomBranchName}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: installomatorVersionCustomBranchName is: ${installomatorVersionCustomBranchName}"
 
     # Validate ${deadline_days_focus_option} input and if valid set ${deadline_days_focus} and ${deadline_days_focus_seconds}.
     if [[ "${deadline_days_focus_option}" == "X" ]]; then
@@ -1110,8 +1139,6 @@ manage_parameter_options() {
     fi
     [[ -z "${UnattendedExitSeconds}" ]] && UnattendedExitSeconds=60
     [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: UnattendedExitSeconds is: ${UnattendedExitSeconds}"
-    
-    
     
 
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_count_focus}" ]]; } && log_verbose "deadline_count_focus is: ${deadline_count_focus}"
@@ -1795,6 +1822,10 @@ chmod 644 "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
 chown root:wheel "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
 defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "${scriptVersion}"
 
+    if ! { [[ -f "${appAutoPatchFolder}/appautopatch" ]] || [[ -f "${appAutoPatchLink}" ]]; }; then
+        log_install "ERROR: App Auto Patch failed to install correctly... Try pre-loading the script to a local temporary folder and executing the script from there to install properly"
+        option_error="TRUE"
+    fi
 }
 
 function uninstall_app_auto_patch() {
@@ -1887,14 +1918,18 @@ get_installomator() {
     if ! [[ -f $installomatorScript ]]; then
         log_warning "Installomator was not found at $installomatorPath"
         log_info "Attempting to download Installomator.sh at $installomatorPath"
-        if [[ "$installomatorVersion" == "Release" ]]; then
+        
+        if [[ "$installomatorVersion" == "Release" ]] || [[ "$installomatorVersion" == "release" ]]; then
             log_info "Attempting to download Installomator release version"
             latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
+        elif [[ "$installomatorVersion" == "Custom" ]] || [[ "$installomatorVersion" == "custom" ]]; then
+            log_info "Attempting to download Installomator from Custom Repo"
+            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "$installomatorVersionCustomBranchName" | tail -1 | cut -d'"' -f4)"
         else
             log_info "Attempting to download Installomator main version"
             latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "main" | tail -1 | cut -d'"' -f4)"
         fi
-
+        
         tarPath="$installomatorPath/installomator.latest.tar.gz"
 
         log_verbose  "Downloading ${latestURL} to ${tarPath}"
@@ -1909,17 +1944,31 @@ get_installomator() {
         rm -rf $installomatorPath/*.tar.gz
     else
         log_notice "Installomator was found at $installomatorPath, checking version ..."
-        if [[ "$installomatorVersion" == "Release" ]]; then
+        if [[ "$installomatorVersion" == "Release" ]] || [[ "$installomatorVersion" == "release" ]]; then
+            echo "pulling from Installomator Latest Release"
+            latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
             appNewVersion=$(curl -sLI "https://github.com/Installomator/Installomator/releases/latest" | grep -i "^location" | tr "/" "\n" | tail -1 | sed 's/[^0-9\.]//g')
             appVersion="$(cat $fragmentsPath/version.sh)"
+        elif [[ "$installomatorVersion" == "Custom" ]] || [[ "$installomatorVersion" == "custom" ]]; then
+            echo "Pulling from custom installomator"
+            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "$installomatorVersionCustomBranchName" | tail -1 | cut -d'"' -f4)"
+            appNewVersion="$(curl -sL "https://raw.githubusercontent.com/$installomatorVersionCustomRepoPath/refs/heads/$installomatorVersionCustomBranchName/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
+            appVersion="$(cat "/Library/Management/AppAutoPatch/Installomator/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
+            # convert to epoch
+            appNewVersion=$(date -j -f "%Y-%m-%d" "${appNewVersion}" +%s)
+            appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
         else
+            echo "Pulling from Installomator Main Branch"
+            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "main" | tail -1 | cut -d'"' -f4)"
             appNewVersion="$(curl -sL "https://raw.githubusercontent.com/Installomator/Installomator/refs/heads/main/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
             appVersion="$(cat "/Library/Management/AppAutoPatch/Installomator/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
             # convert to epoch
             appNewVersion=$(date -j -f "%Y-%m-%d" "${appNewVersion}" +%s)
             appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
         fi
-        if [[ ${appVersion} -lt ${appNewVersion} ]]; then
+
+        #if [[ ${appVersion} -lt ${appNewVersion} ]]; then
+        if [[ ${appVersion} != ${appNewVersion} ]]; then
             log_error "Installomator is installed but is out of date. Versions before 10.0 function unpredictably with App Auto Patch."
             log_info "Removing previously installed Installomator version ($appVersion) and reinstalling with the latest version ($appNewVersion)"
             remove_installomator_outdated
@@ -2585,7 +2634,7 @@ swiftDialogDiscoverWindow(){
     # If we are using SwiftDialog
     touch "$dialogCommandFile"
     chmod -vv 644 $dialogCommandFile
-    if [ ${InteractiveModeOption} -gt 1 ]; then
+    if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ ${InteractiveModeOption} -gt 1 ]]; then
         $dialogBinary \
         ${dialogDiscoverConfigurationOptions[@]} \
         &
