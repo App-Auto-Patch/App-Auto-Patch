@@ -20,6 +20,7 @@
 #   - Added logic to check for a successful App Auto Patch installation.
 #   - Fixed logic for InteractiveMode to use default if no option is set via MDM or command line
 #   - Fixed logic for DaysUntilReset to use default if no option is set via mdm or command line
+#   - Fixed logic where script was improperly shifting CLI options when running from Jamf and not using built in parameter options
 #
 #   3.0.4, [03.14.2025]
 #   - Fixed logic so that InteractiveMode=0 will not run the deferral workflow or display a deferral dialog
@@ -55,7 +56,7 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.1.0-beta3"
+scriptVersion="3.1.0-beta4"
 scriptDate="2025/03/26"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
@@ -350,8 +351,10 @@ get_options() {
 
     write_status "Running: Getting parameter options"
     if [[ "$1" == "/" ]] || [[ $(ps -p "${PPID}" | grep -c -e 'bin/jamf' -e 'jamf/bin' -e '\sjamf\s') -gt 0 ]]; then
-        shift 3
         parent_process_is_jamf="TRUE"
+        if [[ "$1" == "/" ]]; then
+        shift 3
+        fi
     fi
 
     while [[ -n "$1" ]]; do
