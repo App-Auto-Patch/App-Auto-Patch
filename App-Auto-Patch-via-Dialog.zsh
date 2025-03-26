@@ -8,7 +8,7 @@
 #
 # HISTORY
 #
-#   3.1.0, [03.18.2025]
+#   3.1.0, [03.26.2025]
 #   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
 #   - Added MDM keys and and triggers for WorkflowInstallNowPatchingStatusAction
 #   - Moved the Defer button next to the Continue button to position it underneath the deferral menu drop-down
@@ -17,7 +17,9 @@
 #   - Added exit_error function to handle startup validation errors
 #   - Fixed an issue where --workflow-install-now was not displaying the discovery workflow when InteractiveMode < 2
 #   - Added the ability to pull from a custom Installomator fork. It must include all Installomator contents, including fragments
-#   - Added logic to check for a successful App Auto Patch installation. 
+#   - Added logic to check for a successful App Auto Patch installation.
+#   - Fixed logic for InteractiveMode to use default if no option is set via MDM or command line
+#   - Fixed logic for DaysUntilReset to use default if no option is set via mdm or command line
 #
 #   3.0.4, [03.14.2025]
 #   - Fixed logic so that InteractiveMode=0 will not run the deferral workflow or display a deferral dialog
@@ -53,8 +55,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.1.0-beta2"
-scriptDate="2025/03/18"
+scriptVersion="3.1.0-beta3"
+scriptDate="2025/03/26"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -256,7 +258,7 @@ set_defaults() {
     
     patch_week_start_day_default="2" # MDM Enabled
 
-    daysUntilReset="7" # MDM Enabled
+    daysUntilReset="1" # MDM Enabled
 
     workflow_install_now_patching_status_action_option="SUCCESS" # MDM Enabled - Determines what happens when  NEVER | ALWAYS | SUCCESS 
 
@@ -728,8 +730,11 @@ get_preferences() {
     
     [[ -n "${deferral_timer_default_managed}" ]] && deferral_timer_default_option="${deferral_timer_default_managed}"
     { [[ -z "${deferral_timer_default_managed}" ]] && [[ -z "${deferral_timer_default_option}" ]] && [[ -n "${deferral_timer_default_local}" ]]; } && deferral_timer_default_option="${deferral_timer_default_local}"
+    
     [[ -n "${interactive_mode_managed}" ]] && InteractiveModeOption="${interactive_mode_managed}"
     { [[ -z "${interactive_mode_managed}" ]] && [[ -z "${InteractiveModeOption}" ]] && [[ -n "${interactive_mode_local}" ]]; } && InteractiveModeOption="${interactive_mode_local}"
+    
+    
     [[ -n "${patch_week_start_day_managed}" ]] && patch_week_start_day_option="${patch_week_start_day_managed}"
     { [[ -z "${patch_week_start_day_managed}" ]] && [[ -z "${patch_week_start_day_option}" ]] && [[ -n "${patch_week_start_day_local}" ]]; } && patch_week_start_day_option="${patch_week_start_day_local}"
     [[ -n "${workflow_disable_app_discovery_managed}" ]] && workflow_disable_app_discovery_option="${workflow_disable_app_discovery_managed}"
@@ -1094,6 +1099,11 @@ manage_parameter_options() {
         log_error "The --patch-week-start-day=number value must only be a number."; option_error="TRUE"
     fi
     
+    if [[ -z "${days_until_reset_option}" ]]; then
+        days_until_reset_option="${daysUntilReset}"
+        days_until_reset="${days_until_reset_option}"
+    fi
+    
     # Manage ${workflow_disable_app_discovery_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${workflow_disable_app_discovery_option}" -eq 1 ]] || [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then
         workflow_disable_app_discovery_option="TRUE"
@@ -1256,6 +1266,9 @@ manage_parameter_options() {
     # Manage ${InteractiveModeOption} and save to ${appAutoPatchLocalPLIST}
     if [[ -n "${InteractiveModeOption}" ]]; then
         defaults write "${appAutoPatchLocalPLIST}" InteractiveMode -integer "${InteractiveModeOption}"
+    else
+        defaults write "${appAutoPatchLocalPLIST}" InteractiveMode -integer "${InteractiveMode}"
+        InteractiveModeOption="${InteractiveMode}"
     fi
     log_verbose "InteractiveModeOption: $InteractiveModeOption"
     
