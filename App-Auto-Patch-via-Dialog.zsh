@@ -8,7 +8,7 @@
 #
 # HISTORY
 #
-#   3.1.0, [03.26.2025]
+#   3.1.0, [03.27.2025]
 #   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
 #   - Added MDM keys and and triggers for WorkflowInstallNowPatchingStatusAction
 #   - Moved the Defer button next to the Continue button to position it underneath the deferral menu drop-down
@@ -21,6 +21,7 @@
 #   - Fixed logic for InteractiveMode to use default if no option is set via MDM or command line
 #   - Fixed logic for DaysUntilReset to use default if no option is set via mdm or command line
 #   - Fixed logic where script was improperly shifting CLI options when running from Jamf and not using built in parameter options
+#   - Updated Microsoft Teams Webhook per [Create incoming webhooks with Workflows for Microsoft Teams](https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498)
 #
 #   3.0.4, [03.14.2025]
 #   - Fixed logic so that InteractiveMode=0 will not run the deferral workflow or display a deferral dialog
@@ -56,8 +57,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.1.0-beta4"
-scriptDate="2025/03/26"
+scriptVersion="3.1.0-beta5"
+scriptDate="2025/03/27"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -3364,39 +3365,88 @@ webHookMessage() {
         
         log_info "Sending Teams WebHook"
         jsonPayload='{
-    "@type": "MessageCard",
-    "@context": "http://schema.org/extensions",
-    "themeColor": "0076D7",
-    "summary": "'${appTitle}': '${webhookStatus}'",
-    "sections": [{
-        "activityTitle": "'${webhookStatus}'",
-        "activityImage": "https://ics.services.jamfcloud.com/icon/hash_28ed3420a17f56d084d012e1af310d3aa9bc239b245f47bc8f9cb1603642737d",
-        "facts": [{
-            "name": "Computer Name (Serial Number):",
-            "value": "'"$computerName"' ('"$serialNumber"')"
-        }, {
-            "name": "User:",
-            "value": "'"$currentUserAccountName"'"
-        }, {
-            "name": "Updates:",
-            "value": "'"$formatted_result"'"
-        }, {
-            "name": "Errors:",
-            "value": "'"$formatted_error_result"'"
-        }],
-        "markdown": true
-    }],
-    "potentialAction": [{
-        "@type": "OpenUri",
-        "name": "View in $mdmName",
-        "targets": [{
-            "os": "default",
-            "uri":
-            "'"$mdmComputerURL"'"
-        }]
-    }]
-}'
-        
+            "type": "message",
+            "attachments": [
+                {
+                    "contentType": "application/vnd.microsoft.card.adaptive",
+                    "contentUrl": null,
+                    "content": {
+                        "type": "AdaptiveCard",
+                        "body": [
+                            {
+                                "type": "TextBlock",
+                                "size": "Large",
+                                "weight": "Bolder",
+                                "text": "'${appTitle}': '${webhookStatus}'"
+                            },
+                            {
+                                "type": "ColumnSet",
+                                "columns": [
+                                    {
+                                        "type": "Column",
+                                        "items": [
+                                            {
+                                                "type": "Image",
+                                                "url": "https://raw.githubusercontent.com/App-Auto-Patch/App-Auto-Patch/main/Images/AAPLogo.png",
+                                                "altText": "'${appTitle}'",
+                                                "size": "Small"
+                                            }
+                                        ],
+                                        "width": "auto"
+                                    },
+                                    {
+                                        "type": "Column",
+                                        "items": [
+                                            {
+                                                "type": "TextBlock",
+                                                "weight": "Bolder",
+                                                "text": "'${computerName}'",
+                                                "wrap": true
+                                            },
+                                            {
+                                                "type": "TextBlock",
+                                                "spacing": "None",
+                                                "text": "'${serialNumber}'",
+                                                "isSubtle": true,
+                                                "wrap": true
+                                            }
+                                        ],
+                                        "width": "stretch"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "FactSet",
+                                "facts": [
+                                    {
+                                        "title": "User",
+                                        "value": "'${currentUserAccountName}'"
+                                    },
+                                    {
+                                        "title": "Updates",
+                                        "value": "'${formatted_result}'"
+                                    },
+                                    {
+                                        "title": "Errors",
+                                        "value": "'${formatted_error_result}'"
+                                    }
+                                ]
+                            }
+                        ],
+                        "actions": [
+                            {
+                                "type": "Action.OpenUrl",
+                                "title": "View in '${mdmName}'",
+                                "url": "'${mdmComputerURL}'"
+                            }
+                        ],
+                        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                        "version": "1.2"
+                    }
+                }
+            ]
+        }'
+
         # Send the JSON payload using curl
         curlResult=$(curl -s -X POST -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_teams_option")
         log_verbose "Webhook result: $curlResult"
