@@ -8,20 +8,20 @@
 #
 # HISTORY
 #
-#   3.1.0, [03.27.2025]
+#   3.1.0, [04.01.2025]
 #   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
 #   - Added MDM keys and and triggers for WorkflowInstallNowPatchingStatusAction
 #   - Moved the Defer button next to the Continue button to position it underneath the deferral menu drop-down
 #   - Adjusted logic to use deferral_timer_workflow_relaunch_minutes after AAP completes the installation workflow
 #   - Fixed logic for workflow_disable_relaunch_option to disable relaunch after successful patching completion if set to TRUE
 #   - Added exit_error function to handle startup validation errors
-#   - Fixed an issue where --workflow-install-now was not displaying the discovery workflow when InteractiveMode < 2
 #   - Added the ability to pull from a custom Installomator fork. It must include all Installomator contents, including fragments
 #   - Added logic to check for a successful App Auto Patch installation.
 #   - Fixed logic for InteractiveMode to use default if no option is set via MDM or command line
 #   - Fixed logic for DaysUntilReset to use default if no option is set via mdm or command line
 #   - Fixed logic where script was improperly shifting CLI options when running from Jamf and not using built in parameter options
 #   - Updated Microsoft Teams Webhook per [Create incoming webhooks with Workflows for Microsoft Teams](https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498)
+#   - Fixed issues with dialog logic for Install Now Workflow
 #
 #   3.0.4, [03.14.2025]
 #   - Fixed logic so that InteractiveMode=0 will not run the deferral workflow or display a deferral dialog
@@ -57,8 +57,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.1.0-beta5"
-scriptDate="2025/03/27"
+scriptVersion="3.1.0-beta6"
+scriptDate="2025/04/01"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1563,6 +1563,7 @@ workflow_startup() {
     if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ -f "${WORKFLOW_INSTALL_NOW_FILE}" ]]; then
         log_status "Install now alternate workflow enabled."
         workflow_install_now_option="TRUE" # This is re-set in case the script restarts.
+        InteractiveModeOption=2 # This is to make sure all dialogs are displayed for the install now workflow
         touch "${WORKFLOW_INSTALL_NOW_FILE}" # This is created in case the script restarts.
     fi
 
@@ -3445,8 +3446,8 @@ webHookMessage() {
                     }
                 }
             ]
-        }'
-
+}'
+        
         # Send the JSON payload using curl
         curlResult=$(curl -s -X POST -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_teams_option")
         log_verbose "Webhook result: $curlResult"
