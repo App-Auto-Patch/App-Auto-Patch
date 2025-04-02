@@ -8,7 +8,7 @@
 #
 # HISTORY
 #
-#   3.1.0, [04.01.2025]
+#   3.1.0, [04.02.2025]
 #   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
 #   - Added MDM keys and and triggers for WorkflowInstallNowPatchingStatusAction
 #   - Moved the Defer button next to the Continue button to position it underneath the deferral menu drop-down
@@ -19,7 +19,7 @@
 #   - Added logic to check for a successful App Auto Patch installation.
 #   - Fixed logic for InteractiveMode to use default if no option is set via MDM or command line
 #   - Fixed logic for DaysUntilReset to use default if no option is set via mdm or command line
-#   - Fixed logic where script was improperly shifting CLI options when running from Jamf and not using built in parameter options
+#   - Fixed logic where script was improperly shifting CLI options when running from Jamf and not using built in parameter options (Issues #45)
 #   - Updated Microsoft Teams Webhook per [Create incoming webhooks with Workflows for Microsoft Teams](https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498)
 #   - Fixed issues with dialog logic for Install Now Workflow
 #
@@ -57,8 +57,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.1.0-beta6"
-scriptDate="2025/04/01"
+scriptVersion="3.1.0-beta7"
+scriptDate="2025/04/02"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -218,6 +218,8 @@ show_version_short() {
 
 set_defaults() {
 
+    timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
+    
     appTitle="App Auto-Patch" # MDM Enabled
 
     appAutoPatchFolder="/Library/Management/AppAutoPatch"
@@ -319,8 +321,6 @@ set_defaults() {
     serialNumber=$( ioreg -rd1 -c IOPlatformExpertDevice | awk -F'"' '/IOPlatformSerialNumber/{print $4}' )
 
     modelName=$( /usr/libexec/PlistBuddy -c 'Print :0:_items:0:machine_name' /dev/stdin <<< "$(system_profiler -xml SPHardwareDataType)" )
-
-    timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
     
     # Deadline date display format.
     DISPLAY_STRING_FORMAT_DATE="%a %b %d" # Formatting options can be found in the man page for the date command.
@@ -3696,7 +3696,7 @@ main() {
         else
             check_deadlines_days_date
             # User Focus only needs to be checked if there are no date or day deadlines.
-            if [[ "${deadline_date_status}" == "FALSE" ]] && [[ "${deadline_days_status}" == "FALSE" ]]; then
+            if [[ "${deadline_days_status}" == "FALSE" ]]; then
                 check_user_focus
             else # At this point any date or days deadline would rule out any ${user_focus_active} option.
                 user_focus_active="FALSE"
@@ -3770,7 +3770,7 @@ main() {
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
         
         if [ ${InteractiveModeOption} -gt 1 ]; then
-            $dialogBinary --title "$appTitle" --message "All apps are up to date." --windowbuttons min --icon "$icon" --overlayicon "$overlayIcon" --moveable --position topright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
+            $dialogBinary --title "$appTitle" --message "All apps are up to date." --windowbuttons min --icon "${logoImage}" --overlayicon "$overlayicon" --moveable --position topright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
         fi
         
         
