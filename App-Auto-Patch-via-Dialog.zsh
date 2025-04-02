@@ -3770,7 +3770,7 @@ main() {
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
         
         if [ ${InteractiveModeOption} -gt 1 ]; then
-            $dialogBinary --title "$appTitle" --message "All apps are up to date." --windowbuttons min --icon "${logoImage}" --overlayicon "$overlayicon" --moveable --position topright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
+            $dialogBinary --title "$appTitle" --message "All apps are up to date." --windowbuttons min --icon "${icon}" --overlayicon "$overlayicon" --moveable --position topright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
         fi
         
         
