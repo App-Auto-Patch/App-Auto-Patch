@@ -84,9 +84,9 @@
 			<key>WebhookURLTeams</key>
 			<string>https://webhook.microsoft.com</string>
 			<key>WorkflowDisableAppDiscovery</key>
-			<false/>
+			<string>FALSE</string>
 			<key>WorkflowDisableRelaunch</key>
-			<false/>
+			<string>FALSE</string>
 		</dict>
 	</array>
 	<key>PayloadDescription</key>
