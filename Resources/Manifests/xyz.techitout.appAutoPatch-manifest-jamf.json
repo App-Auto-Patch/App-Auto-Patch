@@ -92,12 +92,24 @@
             "type": "string",
             "title": "Focus Days Deadline",
             "description": "The maximum number of days that automatic deferrals are allowed if the system is in user-enabled Focus/Do Not Disturb or when a process has requested that the display not go to sleep",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Days-Deadlines"
+                }
+            ],
             "property_order": 25
         },
         "DeadlineDaysHard": {
             "type": "string",
             "title": "Hard Days Deadline",
             "description": "The maximum number of days deferrals allowed before App Auto-Patch will no longer allow deferrals and will automatically patch when the timer expires",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Days-Deadlines"
+                }
+            ],
             "property_order": 30
         },
         "DeferralTimerDefault": {
@@ -200,8 +212,8 @@
             ],
             "options": {
                 "enum_titles": [
-                    "True",
-                    "False"
+                    "TRUE",
+                    "FALSE"
                 ]
             },
             "links": [
@@ -262,8 +274,8 @@
             ],
             "options": {
                 "enum_titles": [
-                    "True",
-                    "False"
+                    "TRUE",
+                    "FALSE"
                 ]
             },
             "links": [
@@ -302,8 +314,8 @@
             ],
             "options": {
                 "enum_titles": [
-                    "True",
-                    "False"
+                    "TRUE",
+                    "FALSE"
                 ]
             },
             "links": [
@@ -397,8 +409,8 @@
             ],
             "options": {
                 "enum_titles": [
-                    "True",
-                    "False"
+                    "TRUE",
+                    "FALSE"
                 ]
             },
             "links": [
@@ -420,8 +432,8 @@
             ],
             "options": {
                 "enum_titles": [
-                    "True",
-                    "False"
+                    "TRUE",
+                    "FALSE"
                 ]
             },
             "links": [
@@ -512,8 +524,8 @@
             ],
             "options": {
                 "enum_titles": [
-                    "True",
-                    "False"
+                    "TRUE",
+                    "FALSE"
                 ]
             },
             "links": [
@@ -608,9 +620,9 @@
             ],
             "options": {
                 "enum_titles": [
-                    "False",
-                    "All",
-                    "Failures"
+                    "FALSE",
+                    "ALL",
+                    "FAILURES"
                 ]
             },
             "links": [

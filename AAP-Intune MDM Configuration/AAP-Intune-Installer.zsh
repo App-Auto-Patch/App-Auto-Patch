@@ -14,10 +14,10 @@ AAP_FOLDER="/Library/Management/AppAutoPatch"
 AAP_LOCAL_PLIST="${AAP_FOLDER}/xyz.techitout.appAutoPatch" # No trailing ".plist"
 
 # Version to install:
-INSTALL_VERSION="3.0.1"
+INSTALL_VERSION="3.0.4"
 
 # Hash of downloaded script for security reasons:
-HASH_CHECK=2c27b487b2581f7cfb3d282f6fe5353de1b6bc884cba3722acc19d756a870e5d
+HASH_CHECK=bad8e82bc47d84839c6ceb79f1517f2f2a372dfba7f0de9cae7a51ba4f5ae1c9
 
 # Temporary download folder
 AAP_TEMP="/var/tmp/temp_aap"
@@ -32,7 +32,6 @@ if [[ -f "${AAP_FOLDER}/appautopatch" ]]; then
 		[[ $(echo "${AAP_version_local}" | cut -c 1) -lt 4 ]] && AAP_version_local=$(grep -m1 -e 'scriptVersion=' -e '  Version ' "${AAP_FOLDER}/appautopatch" | cut -d '"' -f 2 | cut -d " " -f 4)
 		[[ -n "${AAP_version_local}" ]] && echo "<result>${AAP_version_local}</result>"
 		[[ -z "${AAP_version_local}" ]] && echo "<result>No AAP version number found</result>"
-		AAP_version_local="FALSE"
 	else
 		echo "<result>No AAP preference file</result>"
 		AAP_version_local="FALSE"
