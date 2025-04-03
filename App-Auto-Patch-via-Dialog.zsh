@@ -10,7 +10,7 @@
 #
 #   3.1.0, [04.02.2025]
 #   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
-#   - Added MDM keys and and triggers for WorkflowInstallNowPatchingStatusAction
+#   - Added MDM keys and triggers for WorkflowInstallNowPatchingStatusAction
 #   - Moved the Defer button next to the Continue button to position it underneath the deferral menu drop-down
 #   - Adjusted logic to use deferral_timer_workflow_relaunch_minutes after AAP completes the installation workflow
 #   - Fixed logic for workflow_disable_relaunch_option to disable relaunch after successful patching completion if set to TRUE
@@ -19,7 +19,7 @@
 #   - Added logic to check for a successful App Auto Patch installation.
 #   - Fixed logic for InteractiveMode to use default if no option is set via MDM or command line
 #   - Fixed logic for DaysUntilReset to use default if no option is set via mdm or command line
-#   - Fixed logic where script was improperly shifting CLI options when running from Jamf and not using built in parameter options (Issues #45)
+#   - Fixed logic where script was improperly shifting CLI options when running from Jamf and not using built-in parameter options (Issues #45)
 #   - Updated Microsoft Teams Webhook per [Create incoming webhooks with Workflows for Microsoft Teams](https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498)
 #   - Fixed issues with dialog logic for Install Now Workflow
 #
@@ -57,7 +57,7 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.1.0-beta7"
+scriptVersion="3.1.0"
 scriptDate="2025/04/02"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
