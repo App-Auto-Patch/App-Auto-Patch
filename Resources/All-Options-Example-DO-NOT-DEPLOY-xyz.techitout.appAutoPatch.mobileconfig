@@ -15,6 +15,10 @@
 			<string>3</string>
 			<key>DeadlineCountHard</key>
 			<string>3</string>
+			<key>DeadlineDaysFocus</key>
+			<string>3</string>
+			<key>DeadlineDaysHard</key>
+			<string>3</string>
 			<key>DeferralTimerDefault</key>
 			<string>1440</string>
 			<key>DeferralTimerError</key>

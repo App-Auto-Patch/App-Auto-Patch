@@ -6,6 +6,18 @@
             "type": "string",
             "title": "Days Until Reset",
             "description": "The number of days after the patching cadence start date (Zero Date) that the patching complete status will reset from TRUE to FALSE",
+            "default": 7,
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "7"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#daysuntilreset"
+                }
+            ],
             "property_order": 5
         },
         "PatchWeekStartDay": {
@@ -32,12 +44,24 @@
                     "Sunday - 7"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#patchweekstartday"
+                }
+            ],
             "property_order": 10
         },
         "DeadlineCountFocus": {
             "type": "string",
             "title": "Focus Count Deadline",
             "description": "The maximum number of automatic deferrals allowed if the system is in user-enabled Focus/Do Not Disturb or when a process has requested that the display not go to sleep",
+            "default": 3,
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "3"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
@@ -50,6 +74,12 @@
             "type": "string",
             "title": "Hard Count Deadline",
             "description": "The maximum number of user selected deferrals allowed before App Auto-Patch will no longer allow deferrals and will automatically patch when the timer expires",
+            "default": 3,
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "3"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
@@ -86,6 +116,12 @@
             "type": "string",
             "title": "Deferral Timer Default",
             "description": "The number of minutes to defer until the next update workflow attempt if a user choses not install updates",
+            "default": 1440,
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "1440"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
@@ -98,6 +134,12 @@
             "type": "string",
             "title": "Deferral Timer Error",
             "description": "The number of minutes to defer if AAP detects an error in the workflow",
+            "default": 60,
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "60"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
@@ -110,6 +152,12 @@
             "type": "string",
             "title": "Deferral Timer Focus",
             "description": "The number of minutes to defer the update restart dialog automatically if a process has prevented display sleep (for example, during an active meeting) or the user has Focus or Do Not Disturb enabled",
+            "default": 60,
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "60"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
@@ -122,6 +170,12 @@
             "type": "string",
             "title": "Deferral Timer Menu",
             "description": "Display a deferral time pop-up menu in the non-deadline install dialog that allows the user to override the Deferral Timer Default timer",
+            "default": "30,60,90,480,720,1440,2880",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "30,60,90,480,720,1440,2880"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
@@ -134,6 +188,12 @@
             "type": "string",
             "title": "Deferral Timer Workflow Relaunch",
             "description": "Amount of time in minutes until AAP is relaunched after a workflow. This timer results in AAP acting as a permanent agent that checks for app updates on a regular basis",
+            "default": 1440,
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "1440"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
@@ -156,16 +216,28 @@
                     "FALSE"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#dialogontop"
+                }
+            ],
             "property_order": 60
         },
         "DialogTimeoutDeferral": {
             "type": "string",
             "title": "Deferral Dialog Timeout",
             "description": "Time given to the user to respond to deferral prompt if enabled",
+            "default": 300,
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "300"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#dialogtimeoutdeferral"
                 }
             ],
             "property_order": 65
@@ -184,6 +256,12 @@
                     "Continue"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#dialogtimeoutdeferralaction"
+                }
+            ],
             "property_order": 70
         },
         "UnattendedExit": {
@@ -200,16 +278,28 @@
                     "FALSE"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#unattendedexit"
+                }
+            ],
             "property_order": 75
         },
         "UnattendedExitSeconds": {
             "type": "integer",
             "title": "Unattended Exit Seconds",
             "description": "The number of seconds the AAP dialog will automatically close if UnattendedExit is set to TRUE",
+            "default": 60,
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "60"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#unattendedexitseconds"
                 }
             ],
             "property_order": 80
@@ -228,16 +318,28 @@
                     "FALSE"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#useoverlayicon"
+                }
+            ],
             "property_order": 85
         },
         "IgnoredLabels": {
             "type": "string",
             "title": "Ignored Labels",
             "description": "A space-separated list of Installomator labels to ignore for the AAP workflow. Supports wilddcards",
+            "default": "microsoft* googlechrome*",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "microsoft* googlechrome*"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#ignoredlabels"
                 }
             ],
             "property_order": 90
@@ -246,10 +348,16 @@
             "type": "string",
             "title": "Required Labels",
             "description": "a space-separated list of Installomator labels that are required, regardless if the app is installed or or the latest version. Supports wildcards.",
+            "default": "desktoppr dockutil nudgesuite",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "desktoppr dockutil nudgesuite"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#requiredlabels"
                 }
             ],
             "property_order": 95
@@ -257,11 +365,17 @@
         "OptionalLabels": {
             "type": "string",
             "title": "Optional Labels",
-            "description": "A space-separated list of optional Installomator labels. Labels in this category are only included if the app exists on the end-users device and will force install even if its the latest version. Does Not Support Wildcards",
+            "description": "A space-separated list of optional Installomator labels. Labels in this category are only included if the app exists on the end-users device and will force install even if its the latest version. **Does not** support wildcards!",
+            "default": "1password8 adobereaderdc amazonchime apparency firefoxpkg vlc zoom",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "1password8 adobereaderdc amazonchime apparency firefoxpkg vlc zoom"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#optionallabels"
                 }
             ],
             "property_order": 100
@@ -269,12 +383,17 @@
         "AppTitle": {
             "type": "string",
             "title": "App Title",
-            "default": "App Auto-Patch",
             "description": "Allows you to customize the name of App Auto-Patch to something else",
+            "default": "App Auto-Patch",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "App Auto-Patch"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#apptitle"
                 }
             ],
             "property_order": 105
@@ -294,6 +413,12 @@
                     "FALSE"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#convertappsinhomefolder"
+                }
+            ],
             "property_order": 110
         },
         "IgnoreAppsInHomeFolder": {
@@ -311,16 +436,28 @@
                     "FALSE"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#ignoreappsinhomefolder"
+                }
+            ],
             "property_order": 115
         },
         "InstallomatorOptions": {
             "type": "string",
             "title": "Installomator Options",
-            "description": "A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore)",
+            "description": "A space-separated list of options to override default Installomator options (i.e., BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=jamf)",
+            "default": "BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=jamf",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=jamf"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#installomatoroptions"
                 }
             ],
             "property_order": 120
@@ -340,6 +477,12 @@
                     "Release"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#installomatorversion"
+                }
+            ],
             "property_order": 125
         },
         "InteractiveMode": {
@@ -357,8 +500,17 @@
                     "0 - Completely Silent",
                     "1 - Silent Discovery, Interactive Patching",
                     "2 - Full Interactive"
-                ]
-            },
+                ],
+                "inputAttributes": {
+                    "placeholder": "2"
+                        }
+                    },
+                "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#interactivemode"
+                }
+            ],
             "property_order": 130
         },
         "RemoveInstallomatorPath": {
@@ -376,16 +528,28 @@
                     "FALSE"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#removeinstallomatorpath"
+                }
+            ],
             "property_order": 135
         },
         "SupportTeamName": {
             "type": "string",
             "title": "Support Team Name",
             "description": "For the Support Team details that display in the Help Message",
+            "default": "Company IT Support",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "Company IT Support"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#supportteamname"
                 }
             ],
             "property_order": 140
@@ -394,10 +558,16 @@
             "type": "string",
             "title": "Support Team Email",
             "description": "For the Support Team details that display in the Help Message",
+            "default": "support@company.com",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "support@company.com"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#supportteamemail"
                 }
             ],
             "property_order": 145
@@ -406,10 +576,16 @@
             "type": "string",
             "title": "Support Team Phone",
             "description": "For the Support Team details that display in the Help Message",
+            "default": "(555) 867-5309",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "(555) 867-5309"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#supportteamphone"
                 }
             ],
             "property_order": 150
@@ -418,10 +594,16 @@
             "type": "string",
             "title": "Support Team Website",
             "description": "For the Support Team details that display in the Help Message",
+            "default": "support.company.com",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "support.company.com"
+                        }
+                    },
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#supportteamwebsite"
                 }
             ],
             "property_order": 155
@@ -443,6 +625,12 @@
                     "FAILURES"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#webhookfeature"
+                }
+            ],
             "property_order": 160
         },
         "WebhookURLSlack": {
@@ -452,7 +640,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#webhookurlslack"
                 }
             ],
             "property_order": 165
@@ -464,7 +652,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498"
                 }
             ],
             "property_order": 170
@@ -477,7 +665,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#workflowdisableappdiscovery"
                 }
             ],
             "property_order": 175
@@ -512,6 +700,12 @@
                     "SUCCESS"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#workflowdisablerelaunch"
+                }
+            ],
             "property_order": 185
         }
     }

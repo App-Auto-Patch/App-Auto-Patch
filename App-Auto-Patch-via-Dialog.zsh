@@ -8,6 +8,21 @@
 #
 # HISTORY
 #
+#   3.1.0, [04.02.2025]
+#   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
+#   - Added MDM keys and triggers for WorkflowInstallNowPatchingStatusAction
+#   - Moved the Defer button next to the Continue button to position it underneath the deferral menu drop-down
+#   - Adjusted logic to use deferral_timer_workflow_relaunch_minutes after AAP completes the installation workflow
+#   - Fixed logic for workflow_disable_relaunch_option to disable relaunch after successful patching completion if set to TRUE
+#   - Added exit_error function to handle startup validation errors
+#   - Added the ability to pull from a custom Installomator fork. It must include all Installomator contents, including fragments
+#   - Added logic to check for a successful App Auto Patch installation.
+#   - Fixed logic for InteractiveMode to use default if no option is set via MDM or command line
+#   - Fixed logic for DaysUntilReset to use default if no option is set via mdm or command line
+#   - Fixed logic where script was improperly shifting CLI options when running from Jamf and not using built-in parameter options (Issues #45)
+#   - Updated Microsoft Teams Webhook per [Create incoming webhooks with Workflows for Microsoft Teams](https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498)
+#   - Fixed issues with dialog logic for Install Now Workflow
+#
 #   3.0.4, [03.14.2025]
 #   - Fixed logic so that InteractiveMode=0 will not run the deferral workflow or display a deferral dialog
 #   - Updated workflow_disable_relaunch logic to not relaunch AAP if set to true and AAP is installing or Jamf is the parent process
@@ -42,8 +57,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.0.4"
-scriptDate="2025/03/14"
+scriptVersion="3.1.0"
+scriptDate="2025/04/02"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -72,11 +87,18 @@ echo "
     [--workflow-disable-relaunch]  [--workflow-disable-relaunch-off]
     [--workflow-disable-app-discovery] [--workflow-disable-app-discovery-off]
     [--workflow-install-now]
+    [--workflow-install-now-patching-status-action-never]
+    [--workflow-install-now-patching-status-action-always]
+    [--workflow-install-now-patching-status-action-sucess]
 
     Deferral Deadline COUNT Options:
     [--deadline-count-focus=number]
     [--deadline-count-hard=number]
     [--deadline-count-delete-all]
+
+    Deferral Deadline DAYS Options:
+    [--deadline-days-focus=number] [--deadline-days-hard=number] 
+    [--deadline-days-delete-all]
 
     App Label Options:
     [--ignored-labels="label1 label2"]
@@ -109,6 +131,8 @@ echo "
     <key>DaysUntilReset</key> <integer>number</integer>
     <key>DeadlineCountFocus</key> <integer>number</integer>
     <key>DeadlineCountHard</key> <integer>number</integer>
+    <key>DeadlineDaysFocus</key> <string>number</string>
+    <key>DeadlineDaysHard</key> <string>number</string>
     <key>DeferralTimerDefault</key> <integer>minutes</integer>
     <key>DeferralTimerError</key> <integer>minutes</integer>
     <key>DeferralTimerFocus</key> <integer>minutes</integer>
@@ -120,7 +144,9 @@ echo "
     <key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>
     <key>IgnoredLabels</key> <string>label label label etc</string>
     <key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc</string>
-    <key>InstallomatorVersion</key> <string>Main,Release</string>
+    <key>InstallomatorVersion</key> <string>Main,Release,Custom</string>
+    <key>InstallomatorVersionCustomRepoPath</key> <string>Installomator/Installomator</string>
+    <key>InstallomatorVersionCustomBranchName</key> <string>main</string>
     <key>InteractiveMode</key> <integer>number</integer>
     <key>OptionalLabels</key> <string>label label label etc</string>
     <key>PatchWeekStartDay</key> <integer>number</integer>
@@ -138,6 +164,7 @@ echo "
     <key>WebhookURLTeams</key> <string>URL</string>
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
     <key>WorkflowDisableRelaunch</key> <true/> | <false/>
+    <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
 
 "
 # Error log any unrecognized options.
@@ -191,6 +218,8 @@ show_version_short() {
 
 set_defaults() {
 
+    timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
+    
     appTitle="App Auto-Patch" # MDM Enabled
 
     appAutoPatchFolder="/Library/Management/AppAutoPatch"
@@ -233,9 +262,9 @@ set_defaults() {
     
     patch_week_start_day_default="2" # MDM Enabled
 
-    daysUntilReset="7" # MDM Enabled
+    daysUntilReset="1" # MDM Enabled
 
-    workflow_install_now_patching_status_action="3" # Replaced selfServicePatchingStatusModeReset
+    workflow_install_now_patching_status_action_option="SUCCESS" # MDM Enabled - Determines what happens when  NEVER | ALWAYS | SUCCESS 
 
     UnattendedExit="FALSE" # MDM Enabled
 
@@ -292,12 +321,14 @@ set_defaults() {
     serialNumber=$( ioreg -rd1 -c IOPlatformExpertDevice | awk -F'"' '/IOPlatformSerialNumber/{print $4}' )
 
     modelName=$( /usr/libexec/PlistBuddy -c 'Print :0:_items:0:machine_name' /dev/stdin <<< "$(system_profiler -xml SPHardwareDataType)" )
-
-    timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
     
     # Deadline date display format.
     DISPLAY_STRING_FORMAT_DATE="%a %b %d" # Formatting options can be found in the man page for the date command.
     readonly DISPLAY_STRING_FORMAT_DATE
+    
+    # Deadline time display format.
+    DISPLAY_STRING_FORMAT_TIME="+%l:%M %p" # Formatting options can be found in the man page for the date command.
+    readonly DISPLAY_STRING_FORMAT_TIME
     
     #### Language for the defer button in dialogs when the deferral time is sometime today.
     display_string_defer_today_button="Defer"
@@ -321,8 +352,10 @@ get_options() {
 
     write_status "Running: Getting parameter options"
     if [[ "$1" == "/" ]] || [[ $(ps -p "${PPID}" | grep -c -e 'bin/jamf' -e 'jamf/bin' -e '\sjamf\s') -gt 0 ]]; then
-        shift 3
         parent_process_is_jamf="TRUE"
+        if [[ "$1" == "/" ]]; then
+        shift 3
+        fi
     fi
 
     while [[ -n "$1" ]]; do
@@ -390,6 +423,18 @@ get_options() {
             --deadline-count-delete-all)
                 deadline_count_delete_all_option="TRUE"
             ;;
+            --deadline-days-focus=*)
+                deadline_days_focus_option="${1##*=}"
+            ;;
+            --deadline-days-hard=*)
+                deadline_days_hard_option="${1##*=}"
+            ;;
+            --deadline-days-restart-all)
+                deadline_days_restart_all_option="TRUE"
+            ;;
+            --deadline-days-delete-all)
+                deadline_days_delete_all_option="TRUE"
+            ;;
             --patch-week-start-day=*)
                 patch_week_start_day_option="${1##*=}"
             ;;
@@ -404,6 +449,15 @@ get_options() {
             ;;
             --workflow-install-now)
                 workflow_install_now_option="TRUE"
+            ;;
+            --workflow-install-now-patching-status-action-never)
+                workflow_install_now_patching_status_action_option="NEVER"
+            ;;
+            --workflow-install-now-patching-status-action-always)
+                workflow_install_now_patching_status_action_option="ALWAYS"
+            ;;
+            --workflow-install-now-patching-status-action-success)
+                workflow_install_now_patching_status_action_option="SUCCESS"
             ;;
             --workflow-disable-relaunch)
                 workflow_disable_relaunch_option="TRUE"
@@ -475,6 +529,11 @@ get_preferences() {
             defaults delete "${appAutoPatchLocalPLIST}" DeadlineCountFocus 2> /dev/null
             defaults delete "${appAutoPatchLocalPLIST}" DeadlineCountHard 2> /dev/null
         fi
+        if [[ "${deadline_days_delete_all_option}" == "TRUE" ]]; then
+            log_status "Status: Deleting all local deadline days preferences."
+            defaults delete "${appAutoPatchLocalPLIST}" DeadlineDaysFocus 2>/dev/null
+            defaults delete "${appAutoPatchLocalPLIST}" DeadlineDaysHard 2>/dev/null
+        fi
         
         log_status "Continuing to gather new preferences"
     fi
@@ -497,6 +556,10 @@ get_preferences() {
         deadline_count_focus_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeadlineCountFocus 2> /dev/null)
         local deadline_count_hard_managed
         deadline_count_hard_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeadlineCountHard 2> /dev/null)
+        local deadline_days_focus_managed
+        deadline_days_focus_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeadlineDaysFocus 2>/dev/null)
+        local deadline_days_hard_managed
+        deadline_days_hard_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeadlineDaysHard 2>/dev/null)
         local interactive_mode_managed
         interactive_mode_managed=$(defaults read "${appAutoPatchManagedPLIST}" InteractiveMode 2> /dev/null)
         local patch_week_start_day_managed
@@ -527,6 +590,10 @@ get_preferences() {
         installomator_options_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_version_managed
         installomator_version_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorVersion 2> /dev/null)
+        local installomator_version_custom_repo_path_managed
+        installomator_version_custom_repo_path_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorVersionCustomRepoPath 2> /dev/null)
+        local installomator_version_custom_branch_name_managed
+        installomator_version_custom_branch_name_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorVersionCustomBranchName 2> /dev/null)
         local dialog_timeout_deferral_managed
         dialog_timeout_deferral_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogTimeoutDeferral 2> /dev/null)
         local dialog_timeout_deferral_action_managed
@@ -539,6 +606,8 @@ get_preferences() {
         Unattended_exit_seconds_managed=$(defaults read "${appAutoPatchManagedPLIST}" UnattendedExitSeconds 2> /dev/null)
         local dialog_on_top_managed
         dialog_on_top_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogOnTop 2> /dev/null)
+        local workflow_install_now_patching_status_action_managed
+        workflow_install_now_patching_status_action_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowInstallNowPatchingStatusAction 2> /dev/null)
         local use_overlay_icon_managed
         use_overlay_icon_managed=$(defaults read "${appAutoPatchManagedPLIST}" UseOverlayIcon 2> /dev/null)
         local remove_installomator_path_managed
@@ -574,6 +643,10 @@ get_preferences() {
         deadline_count_focus_local=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineCountFocus 2> /dev/null)
         local deadline_count_hard_local
         deadline_count_hard_local=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineCountHard 2> /dev/null)
+        local deadline_days_focus_local
+        deadline_days_focus_local=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineDaysFocus 2>/dev/null)
+        local deadline_days_hard_local
+        deadline_days_hard_local=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineDaysHard 2>/dev/null)
         local interactive_mode_local
         interactive_mode_local=$(defaults read "${appAutoPatchLocalPLIST}" InteractiveMode 2> /dev/null)
         local patch_week_start_day_local
@@ -604,6 +677,10 @@ get_preferences() {
         installomator_options_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_version_local
         installomator_version_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorVersion 2> /dev/null)
+        local installomator_version_custom_repo_path_local
+        installomator_version_custom_repo_path_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorVersionCustomRepoPath 2> /dev/null)
+        local installomator_version_custom_branch_name_local
+        installomator_version_custom_branch_name_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorVersionCustomBranchName 2> /dev/null)
         local dialog_timeout_deferral_local
         dialog_timeout_deferral_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogTimeoutDeferral 2> /dev/null)
         local dialog_timeout_deferral_action_local
@@ -616,6 +693,8 @@ get_preferences() {
         Unattended_exit_seconds_local=$(defaults read "${appAutoPatchLocalPLIST}" UnattendedExitSeconds 2> /dev/null)
         local dialog_on_top_local
         dialog_on_top_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogOnTop 2> /dev/null)
+        local workflow_install_now_patching_status_action_local
+        workflow_install_now_patching_status_action_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowInstallNowPatchingStatusAction 2> /dev/null)
         local use_overlay_icon_local
         use_overlay_icon_local=$(defaults read "${appAutoPatchLocalPLIST}" UseOverlayIcon 2> /dev/null)
         local remove_installomator_path_local
@@ -645,10 +724,21 @@ get_preferences() {
     { [[ -z "${deadline_count_focus_managed}" ]] && [[ -z "${deadline_count_focus_option}" ]] && [[ -n "${deadline_count_focus_local}" ]]; } && deadline_count_focus_option="${deadline_count_focus_local}"
     [[ -n "${deadline_count_hard_managed}" ]] && deadline_count_hard_option="${deadline_count_hard_managed}"
     { [[ -z "${deadline_count_hard_managed}" ]] && [[ -z "${deadline_count_hard_option}" ]] && [[ -n "${deadline_count_hard_local}" ]]; } && deadline_count_hard_option="${deadline_count_hard_local}"
+    
+    
+    [[ -n "${deadline_days_focus_managed}" ]] && deadline_days_focus_option="${deadline_days_focus_managed}"
+    { [[ -z "${deadline_days_focus_managed}" ]] && [[ -z "${deadline_days_focus_option}" ]] && [[ -n "${deadline_days_focus_local}" ]]; } && deadline_days_focus_option="${deadline_days_focus_local}"
+    [[ -n "${deadline_days_hard_managed}" ]] && deadline_days_hard_option="${deadline_days_hard_managed}"
+    { [[ -z "${deadline_days_hard_managed}" ]] && [[ -z "${deadline_days_hard_option}" ]] && [[ -n "${deadline_days_hard_local}" ]]; } && deadline_days_hard_option="${deadline_days_hard_local}"
+    
+    
     [[ -n "${deferral_timer_default_managed}" ]] && deferral_timer_default_option="${deferral_timer_default_managed}"
     { [[ -z "${deferral_timer_default_managed}" ]] && [[ -z "${deferral_timer_default_option}" ]] && [[ -n "${deferral_timer_default_local}" ]]; } && deferral_timer_default_option="${deferral_timer_default_local}"
+    
     [[ -n "${interactive_mode_managed}" ]] && InteractiveModeOption="${interactive_mode_managed}"
     { [[ -z "${interactive_mode_managed}" ]] && [[ -z "${InteractiveModeOption}" ]] && [[ -n "${interactive_mode_local}" ]]; } && InteractiveModeOption="${interactive_mode_local}"
+    
+    
     [[ -n "${patch_week_start_day_managed}" ]] && patch_week_start_day_option="${patch_week_start_day_managed}"
     { [[ -z "${patch_week_start_day_managed}" ]] && [[ -z "${patch_week_start_day_option}" ]] && [[ -n "${patch_week_start_day_local}" ]]; } && patch_week_start_day_option="${patch_week_start_day_local}"
     [[ -n "${workflow_disable_app_discovery_managed}" ]] && workflow_disable_app_discovery_option="${workflow_disable_app_discovery_managed}"
@@ -679,6 +769,13 @@ get_preferences() {
     { [[ -z "${installomator_options_managed}" ]] && [[ -n "${installomatorOptions}" ]] && [[ -n "${installomator_options_local}" ]]; } && installomatorOptions="${installomator_options_local}"
     [[ -n "${installomator_version_managed}" ]] && installomatorVersion="${installomator_version_managed}"
     { [[ -z "${installomator_version_managed}" ]] && [[ -n "${installomatorVersion}" ]] && [[ -n "${installomator_version_local}" ]]; } && installomatorVersion="${installomator_version_local}"
+    
+    [[ -n "${installomator_version_custom_repo_path_managed}" ]] && installomatorVersionCustomRepoPath="${installomator_version_custom_repo_path_managed}"
+    { [[ -z "${installomator_version_custom_repo_path_managed}" ]] && [[ -z "${installomatorVersionCustomRepoPath}" ]] && [[ -n "${installomator_version_custom_repo_path_local}" ]]; } && installomatorVersionCustomRepoPath="${installomator_version_custom_repo_path_local}"
+    
+    [[ -n "${installomator_version_custom_branch_name_managed}" ]] && installomatorVersionCustomBranchName="${installomator_version_custom_branch_name_managed}"
+    { [[ -z "${installomator_version_custom_branch_name_managed}" ]] && [[ -z "${installomatorVersionCustomBranchName}" ]] && [[ -n "${installomator_version_custom_branch_name_local}" ]]; } && installomatorVersionCustomBranchName="${installomator_version_custom_branch_name_local}"
+    
     [[ -n "${dialog_timeout_deferral_managed}" ]] && DialogTimeoutDeferral="${dialog_timeout_deferral_managed}"
     { [[ -z "${dialog_timeout_deferral_managed}" ]] && [[ -n "${DialogTimeoutDeferral}" ]] && [[ -n "${dialog_timeout_deferral_local}" ]]; } && DialogTimeoutDeferral="${dialog_timeout_deferral_local}"
     [[ -n "${dialog_timeout_deferral_action_managed}" ]] && DialogTimeoutDeferralAction="${dialog_timeout_deferral_action_managed}"
@@ -691,6 +788,11 @@ get_preferences() {
     { [[ -z "${Unattended_exit_seconds_managed}" ]] && [[ -n "${UnattendedExitSeconds}" ]] && [[ -n "${Unattended_exit_seconds_local}" ]]; } && UnattendedExitSeconds="${Unattended_exit_seconds_local}"
     [[ -n "${dialog_on_top_managed}" ]] && dialogOnTop="${dialog_on_top_managed}"
     { [[ -z "${dialog_on_top_managed}" ]] && [[ -n "${dialogOnTop}" ]] && [[ -n "${dialog_on_top_local}" ]]; } && dialogOnTop="${dialog_on_top_local}"
+    
+    [[ -n "${workflow_install_now_patching_status_action_managed}" ]] && workflow_install_now_patching_status_action_option="${workflow_install_now_patching_status_action_managed}"
+    { [[ -z "${workflow_install_now_patching_status_action_managed}" ]] && [[ -z "${workflow_install_now_patching_status_action_option}" ]] && [[ -n "${workflow_install_now_patching_status_action_local}" ]]; } && workflow_install_now_patching_status_action_option="${workflow_install_now_patching_status_action_local}"
+    
+    
     [[ -n "${use_overlay_icon_managed}" ]] && useOverlayIcon="${use_overlay_icon_managed}"
     { [[ -z "${use_overlay_icon_managed}" ]] && [[ -n "${useOverlayIcon}" ]] && [[ -n "${use_overlay_icon_local}" ]]; } && useOverlayIcon="${use_overlay_icon_local}"
     [[ -n "${remove_installomator_path_managed}" ]] && removeInstallomatorPath="${remove_installomator_path_managed}"
@@ -912,8 +1014,6 @@ manage_parameter_options() {
     [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_minutes is: ${deferral_timer_minutes}"
 
 
-    
-
     # Validate ${deadline_count_focus_option} input and if valid set ${deadline_count_focus} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${deadline_count_focus_option}" == "X" ]]; then
         log_status "Deleting local preference for the --deadline-count-focus option."
@@ -936,6 +1036,51 @@ manage_parameter_options() {
         log_error "The --deadline-count-hard=number value must only be a number."; option_error="TRUE"
     fi
     
+    #Validate Custom Installomator Options
+    
+    if [[ "${installomatorVersion}" == "Custom" ]] || [[ "${installomatorVersion}" == "Custom" ]]; then
+        if [[ -z "${installomatorVersionCustomRepoPath}" ]] || [[ -z "${installomatorVersionCustomBranchName}" ]]; then
+            log_status "Parameter Error: The Custom InstallomatorVersion option requires both the InstallomatorVersionCustomRepoPath and InstallomatorVersionCustomBranchName keys"; option_error="TRUE"
+        fi
+        fi
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${installomatorVersionCustomRepoPath}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: installomatorVersionCustomRepoPath is: ${installomatorVersionCustomRepoPath}"
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${installomatorVersionCustomBranchName}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: installomatorVersionCustomBranchName is: ${installomatorVersionCustomBranchName}"
+
+    # Validate ${deadline_days_focus_option} input and if valid set ${deadline_days_focus} and ${deadline_days_focus_seconds}.
+    if [[ "${deadline_days_focus_option}" == "X" ]]; then
+        log_status "Status: Deleting local preference for the --deadline-days-focus option."
+        defaults delete "${appAutoPatchLocalPLIST}" DeadlineDaysFocus 2> /dev/null
+    elif [[ -n "${deadline_days_focus_option}" ]] && [[ "${deadline_days_focus_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        deadline_days_focus="${deadline_days_focus_option}"
+        deadline_days_focus_seconds=$((deadline_days_focus*86400))
+    elif [[ -n "${deadline_days_focus_option}" ]] && ! [[ "${deadline_days_focus_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        log_status "Parameter Error: The --deadline-days-focus=number value must only be a number."; option_error="TRUE"
+    fi
+    
+    # Validate ${deadline_days_hard_option} input and if valid set ${deadline_days_hard} and ${deadline_days_hard_seconds}.
+    if [[ "${deadline_days_hard_option}" == "X" ]]; then
+        log_status "Status: Deleting local preference for the --deadline-days-hard option."
+        defaults delete "${appAutoPatchLocalPLIST}" DeadlineDaysHard 2> /dev/null
+    elif [[ -n "${deadline_days_hard_option}" ]] && [[ "${deadline_days_hard_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        deadline_days_hard="${deadline_days_hard_option}"
+        deadline_days_hard_seconds=$((deadline_days_hard*86400))
+    elif [[ -n "${deadline_days_hard_option}" ]] && ! [[ "${deadline_days_hard_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        log_status "Parameter Error: The --deadline-days-hard=number value must only be a number."; option_error="TRUE"
+    fi
+    
+    # Validate ${deadline_days_focus}, and ${deadline_days_hard} in relation to each other, and if valid save to ${appAutoPatchLocalPLIST}.
+    if [[ -n "${deadline_days_hard}" ]] && [[ -n "${deadline_days_focus}" ]] && [[ "${deadline_days_hard}" -le "${deadline_days_focus}" ]]; then
+        log_status "Parameter Error: The --deadline-days-hard=number value of ${deadline_days_hard} day(s) must be more than the --deadline-days-focus=number value of ${deadline_days_focus} day(s)."; option_error="TRUE"
+    fi
+
+    if [[ "${option_error}" != "TRUE" ]]; then
+        [[ -n "${deadline_days_focus}" ]] && defaults write "${appAutoPatchLocalPLIST}" DeadlineDaysFocus -string "${deadline_days_focus}"
+        [[ -n "${deadline_days_hard}" ]] && defaults write "${appAutoPatchLocalPLIST}" DeadlineDaysHard -string "${deadline_days_hard}"
+    fi
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_days_focus}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_focus is: ${deadline_days_focus}"
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_days_hard}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_hard is: ${deadline_days_hard}"
+    
+
     # Validate ${patch_week_start_day_option} input and if valid set ${patch_week_start_day}.
     if [[ "${patch_week_start_day_option}" == "X" ]]; then
         log_status "Deleting local preference for the --patch-week-start-day option."
@@ -956,6 +1101,11 @@ manage_parameter_options() {
         defaults write "${appAutoPatchLocalPLIST}" DaysUntilReset -string "${days_until_reset}"
     elif [[ -n "${days_until_reset_option}" ]] && ! [[ "${days_until_reset_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
         log_error "The --patch-week-start-day=number value must only be a number."; option_error="TRUE"
+    fi
+    
+    if [[ -z "${days_until_reset_option}" ]]; then
+        days_until_reset_option="${daysUntilReset}"
+        days_until_reset="${days_until_reset_option}"
     fi
     
     # Manage ${workflow_disable_app_discovery_option} and save to ${appAutoPatchLocalPLIST}.
@@ -1003,8 +1153,6 @@ manage_parameter_options() {
     fi
     [[ -z "${UnattendedExitSeconds}" ]] && UnattendedExitSeconds=60
     [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: UnattendedExitSeconds is: ${UnattendedExitSeconds}"
-    
-    
     
 
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_count_focus}" ]]; } && log_verbose "deadline_count_focus is: ${deadline_count_focus}"
@@ -1115,15 +1263,24 @@ manage_parameter_options() {
     [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_workflow_relaunch_minutes is: ${deferral_timer_workflow_relaunch_minutes}"
     
     # Some validation and logging for the focus deferral timer option.
-    if [[ -n "${deferral_timer_focus_option}" ]] && { [[ -z "${deadline_count_focus}" ]]; }; then
+    if [[ -n "${deferral_timer_focus_option}" ]] && { [[ -z "${deadline_count_focus}" ]] && [[ -z "${deadline_days_focus}" ]]; }; then
         log_error "The --deferral-timer-focus option requires that you also specify at least one focus deadline option."; option_error="TRUE"
     fi
     
     # Manage ${InteractiveModeOption} and save to ${appAutoPatchLocalPLIST}
     if [[ -n "${InteractiveModeOption}" ]]; then
         defaults write "${appAutoPatchLocalPLIST}" InteractiveMode -integer "${InteractiveModeOption}"
+    else
+        defaults write "${appAutoPatchLocalPLIST}" InteractiveMode -integer "${InteractiveMode}"
+        InteractiveModeOption="${InteractiveMode}"
     fi
     log_verbose "InteractiveModeOption: $InteractiveModeOption"
+    
+    # Manage ${workflow_install_now_patching_status_action_option} and save to ${appAutoPatchLocalPLIST}
+    if [[ -n "${workflow_install_now_patching_status_action_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowInstallNowPatchingStatusAction -string "${workflow_install_now_patching_status_action_option}"
+    fi
+    log_verbose "WorkflowInstallNowPatchingStatusAction: $workflow_install_now_patching_status_action_option"
 
     # Manage ${webhook_feature_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${webhook_feature_option}" == "ALL" ]] || [[ "${webhook_feature_option}" == "FAILURES" ]]; then
@@ -1406,6 +1563,7 @@ workflow_startup() {
     if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ -f "${WORKFLOW_INSTALL_NOW_FILE}" ]]; then
         log_status "Install now alternate workflow enabled."
         workflow_install_now_option="TRUE" # This is re-set in case the script restarts.
+        InteractiveModeOption=2 # This is to make sure all dialogs are displayed for the install now workflow
         touch "${WORKFLOW_INSTALL_NOW_FILE}" # This is created in case the script restarts.
     fi
 
@@ -1578,6 +1736,18 @@ workflow_startup() {
 
 }
 
+# MARK: *** Process Management ***
+################################################################################
+
+# This function is only used for debugging from the command line to interrupt the workflow and wait for the user to press Enter to continue. Insert the following line wherever you want an interrupt to occur:
+# [[ "${current_user_account_name}" != "FALSE" ]] && interactive_interrupt
+interactive_interrupt() {
+
+    log_status "**** App Auto Patch. ${scriptVersion} - INTERACTIVE INTERRUPT - PRESS ENTER TO CONTINUE ****"
+
+    /bin/bash read -n 1 -p -r >/dev/null 2>&1
+}
+
 # Installation
 install_app_auto_patch() {
     [[ ! -d "${appAutoPatchFolder}" ]] && mkdir -p "${appAutoPatchFolder}"
@@ -1670,6 +1840,10 @@ chmod 644 "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
 chown root:wheel "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
 defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "${scriptVersion}"
 
+    if ! { [[ -f "${appAutoPatchFolder}/appautopatch" ]] || [[ -f "${appAutoPatchLink}" ]]; }; then
+        log_install "ERROR: App Auto Patch failed to install correctly... Try pre-loading the script to a local temporary folder and executing the script from there to install properly"
+        option_error="TRUE"
+    fi
 }
 
 function uninstall_app_auto_patch() {
@@ -1762,14 +1936,18 @@ get_installomator() {
     if ! [[ -f $installomatorScript ]]; then
         log_warning "Installomator was not found at $installomatorPath"
         log_info "Attempting to download Installomator.sh at $installomatorPath"
-        if [[ "$installomatorVersion" == "Release" ]]; then
+        
+        if [[ "$installomatorVersion" == "Release" ]] || [[ "$installomatorVersion" == "release" ]]; then
             log_info "Attempting to download Installomator release version"
             latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
+        elif [[ "$installomatorVersion" == "Custom" ]] || [[ "$installomatorVersion" == "custom" ]]; then
+            log_info "Attempting to download Installomator from Custom Repo"
+            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "$installomatorVersionCustomBranchName" | tail -1 | cut -d'"' -f4)"
         else
             log_info "Attempting to download Installomator main version"
             latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "main" | tail -1 | cut -d'"' -f4)"
         fi
-
+        
         tarPath="$installomatorPath/installomator.latest.tar.gz"
 
         log_verbose  "Downloading ${latestURL} to ${tarPath}"
@@ -1784,17 +1962,31 @@ get_installomator() {
         rm -rf $installomatorPath/*.tar.gz
     else
         log_notice "Installomator was found at $installomatorPath, checking version ..."
-        if [[ "$installomatorVersion" == "Release" ]]; then
+        if [[ "$installomatorVersion" == "Release" ]] || [[ "$installomatorVersion" == "release" ]]; then
+            echo "pulling from Installomator Latest Release"
+            latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
             appNewVersion=$(curl -sLI "https://github.com/Installomator/Installomator/releases/latest" | grep -i "^location" | tr "/" "\n" | tail -1 | sed 's/[^0-9\.]//g')
             appVersion="$(cat $fragmentsPath/version.sh)"
+        elif [[ "$installomatorVersion" == "Custom" ]] || [[ "$installomatorVersion" == "custom" ]]; then
+            echo "Pulling from custom installomator"
+            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "$installomatorVersionCustomBranchName" | tail -1 | cut -d'"' -f4)"
+            appNewVersion="$(curl -sL "https://raw.githubusercontent.com/$installomatorVersionCustomRepoPath/refs/heads/$installomatorVersionCustomBranchName/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
+            appVersion="$(cat "/Library/Management/AppAutoPatch/Installomator/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
+            # convert to epoch
+            appNewVersion=$(date -j -f "%Y-%m-%d" "${appNewVersion}" +%s)
+            appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
         else
+            echo "Pulling from Installomator Main Branch"
+            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "main" | tail -1 | cut -d'"' -f4)"
             appNewVersion="$(curl -sL "https://raw.githubusercontent.com/Installomator/Installomator/refs/heads/main/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
             appVersion="$(cat "/Library/Management/AppAutoPatch/Installomator/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
             # convert to epoch
             appNewVersion=$(date -j -f "%Y-%m-%d" "${appNewVersion}" +%s)
             appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
         fi
-        if [[ ${appVersion} -lt ${appNewVersion} ]]; then
+
+        #if [[ ${appVersion} -lt ${appNewVersion} ]]; then
+        if [[ ${appVersion} != ${appNewVersion} ]]; then
             log_error "Installomator is installed but is out of date. Versions before 10.0 function unpredictably with App Auto Patch."
             log_info "Removing previously installed Installomator version ($appVersion) and reinstalling with the latest version ($appNewVersion)"
             remove_installomator_outdated
@@ -2024,10 +2216,159 @@ check_completion_status() {
     
 }
 
+check_deadlines_days_date() {
+    deadline_days_status="FALSE" # Deadline status modes: FALSE, SOFT, or HARD
+    local current_epoch
+    current_epoch=$(date +%s)
+    workflow_zero_date_epoch=$(date -j -f "%Y-%m-%d" "${PatchingStartDate}" +"%s")
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: current_epoch is: ${current_epoch}"
+    
+    # Evaluate days deadlines and set ${deadline_days_status}, ${deadline_days_epoch}, and ${display_string_deadline_days}.
+    if [[ -n "${deadline_days_focus}" ]]; then
+        local deadline_days_focus_epoch
+        deadline_days_focus_epoch=$(( workflow_zero_date_epoch + deadline_days_focus_seconds ))
+        local deadline_days_focus_date
+        deadline_days_focus_date=$(date -r "${deadline_days_focus_epoch}" +%Y-%m-%d:%H:%M)
+        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_focus_epoch: ${deadline_days_focus_epoch}"
+        if [[ "${deadline_days_focus_epoch}" -lt "${current_epoch}" ]]; then
+            log_status "Status: Focus days deadline of ${deadline_days_focus_date} (${deadline_days_focus} day(s) after ${PatchingStartDate}) HAS passed."
+            deadline_days_status="FOCUS"
+        else
+            local deadline_days_focus_difference
+            deadline_days_focus_difference=$(( deadline_days_focus_epoch - current_epoch ))
+            [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_focus_difference is: ${deadline_days_focus_difference}"
+            if [[ "${deadline_days_focus_difference}" -le 120 ]]; then
+                log_status "Status: Focus days deadline of ${deadline_days_focus_date} (${deadline_days_focus} day(s) after ${PatchingStartDate}) is only ${deadline_days_focus_difference} seconds away, waiting for deadline to pass..."
+                sleep $(( deadline_days_focus_difference + 1 ))
+                log_status "Status: Focus days deadline of ${deadline_days_focus_date} (${deadline_days_focus} day(s) after ${PatchingStartDate}) HAS passed."
+                deadline_days_status="FOCUS"
+            else
+                log_status "Status: Focus days deadline of ${deadline_days_focus_date} (${deadline_days_focus} day(s) after ${PatchingStartDate}) NOT passed."
+            fi
+        fi
+    fi
+    if [[ -n "${deadline_days_hard}" ]]; then
+        local deadline_days_hard_epoch
+        deadline_days_hard_epoch=$(( workflow_zero_date_epoch + deadline_days_hard_seconds ))
+        local deadline_days_hard_date
+        deadline_days_hard_date=$(date -r "${deadline_days_hard_epoch}" +%Y-%m-%d:%H:%M)
+        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_hard_epoch: ${deadline_days_hard_epoch}"
+        if [[ "${deadline_days_hard_epoch}" -lt "${current_epoch}" ]]; then
+            log_status "Status: Hard days deadline of ${deadline_days_hard_date} (${deadline_days_hard} day(s) after ${PatchingStartDate}) HAS passed."
+            deadline_days_status="HARD"
+        else
+            local deadline_days_hard_difference
+            deadline_days_hard_difference=$(( deadline_days_hard_epoch - current_epoch ))
+            [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_hard_difference is: ${deadline_days_hard_difference}"
+            if [[ "${deadline_days_hard_difference}" -le 120 ]]; then
+                log_status "Status: Hard days deadline of ${deadline_days_hard_date} (${deadline_days_hard} day(s) after ${PatchingStartDate}) is only ${deadline_days_hard_difference} seconds away, waiting for deadline to pass..."
+                sleep $(( deadline_days_hard_difference + 1 ))
+                log_status "Status: Hard days deadline of ${deadline_days_hard_date} (${deadline_days_hard} day(s) after ${PatchingStartDate}) HAS passed."
+                deadline_days_status="HARD"
+            else
+                log_status "Status: Hard days deadline of ${deadline_days_hard_date} (${deadline_days_hard} day(s) after ${PatchingStartDate}) NOT passed."
+            fi
+        fi
+    fi
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_status is: ${deadline_days_status}"
+    [[ -n ${deadline_days_hard} ]] && deadline_days_epoch="${deadline_days_hard_epoch}"
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_epoch is: ${deadline_days_epoch}"
+    if [[ -n "${deadline_days_epoch}" ]]; then
+        local display_string_deadline_days_only_date
+        display_string_deadline_days_only_date=$(date -r "${deadline_days_epoch}" "+${DISPLAY_STRING_FORMAT_DATE}")
+        local display_string_deadline_days_only_time
+        display_string_deadline_days_only_time=$(date -r "${deadline_days_epoch}" "${DISPLAY_STRING_FORMAT_TIME}" | sed 's/^ *//g')
+        if [[ $(date -r "${deadline_days_epoch}" "+%H:%M") == "00:00" ]]; then
+            display_string_deadline_days="${display_string_deadline_days_only_date}"
+        else
+            #display_string_deadline_days="${display_string_deadline_days_only_date} - ${display_string_deadline_days_only_time}"
+            display_string_deadline_days="${display_string_deadline_days_only_date}"
+        fi
+        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: display_string_deadline_days_only_date is: ${display_string_deadline_days_only_date}"
+        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: display_string_deadline_days_only_time is: ${display_string_deadline_days_only_time}"
+        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: display_string_deadline_days is: ${display_string_deadline_days}"
+    fi
+    
+    
+    # Set ${deadline_epoch} and ${display_string_deadline} to the soonest of either days or date deadlines.
+    
+    deadline_epoch="${deadline_days_epoch}"
+    display_string_deadline="${display_string_deadline_days}"
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_epoch is: ${deadline_epoch}"
+    
+    # If there is a ${deadline_epoch}, then make sure no user deferral timer or display timeout exceeds the deadline.
+    if [[ -n "${deadline_epoch}" ]]; then
+        local deferral_timer_deadline_minutes
+        deferral_timer_deadline_minutes=$(( ( deadline_epoch - current_epoch ) / 60 ))
+        local deferral_timer_deadline_active
+        deferral_timer_deadline_active="FALSE"
+        [[ $deferral_timer_deadline_minutes -lt 2 ]] && deferral_timer_deadline_minutes=2
+        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deferral_timer_deadline_minutes is: ${deferral_timer_deadline_minutes}"
+        if [[ -n "${deferral_timer_menu_minutes}" ]]; then
+            local previous_ifs
+            previous_ifs="${IFS}"; IFS=','
+            local deferral_timer_menu_array
+            #read -r -a deferral_timer_menu_array <<< "${deferral_timer_menu_minutes}"
+            deferral_timer_menu_array=("${(@s/,/)deferral_timer_menu_minutes}")
+            local deferral_timer_menu_reduced_array
+            deferral_timer_menu_reduced_array=()
+            local deferral_timer_menu_reduced
+            deferral_timer_menu_reduced="FALSE"
+            for deferral_timer_menu_item in "${deferral_timer_menu_array[@]}"; do
+                if [[ $deferral_timer_deadline_minutes -le $deferral_timer_menu_item ]]; then
+                    if [[ "${deferral_timer_menu_reduced}" == "FALSE" ]]; then
+                        deferral_timer_menu_reduced_array+=("${deferral_timer_deadline_minutes}")
+                        deferral_timer_menu_reduced="TRUE"
+                        deferral_timer_deadline_active="TRUE"
+                    fi
+                else
+                    deferral_timer_menu_reduced_array+=("${deferral_timer_menu_item}")
+                fi
+            done
+            [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deferral_timer_menu_reduced is: ${deferral_timer_menu_reduced}"
+            [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deferral_timer_menu_reduced_array is: ${deferral_timer_menu_reduced_array[*]}"
+            if [[ "${deferral_timer_menu_reduced}" == "TRUE" ]]; then
+                if [[ ${#deferral_timer_menu_reduced_array[@]} -gt 1 ]]; then
+                    deferral_timer_menu_minutes="${deferral_timer_menu_reduced_array[*]}"
+                    log_status "Warning: The deferral timer menu list has been reduced to ${deferral_timer_menu_minutes} minutes given the deferral deadline of: ${display_string_deadline}"
+                else
+                    unset deferral_timer_menu_minutes
+                    log_status "Warning: Not showing the deferral timer menu given the deferral deadline of: ${display_string_deadline}"
+                fi
+            fi
+            IFS="${previous_ifs}"
+        fi
+        if [[ -z "${deferral_timer_menu_minutes}" ]]; then
+            if [[ $deferral_timer_deadline_minutes -lt $deferral_timer_minutes ]]; then
+                log_status "Warning: Reducing user deferral timers to ${deferral_timer_deadline_minutes} minutes given the deferral deadline of: ${display_string_deadline}"
+                deferral_timer_minutes="${deferral_timer_deadline_minutes}"
+                [[ -n "${deferral_timer_focus_minutes}" ]] && deferral_timer_focus_minutes="${deferral_timer_deadline_minutes}"
+                deferral_timer_deadline_active="TRUE"
+            fi
+        fi
+        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deferral_timer_deadline_active is: ${deferral_timer_deadline_active}"
+        if [[ "${deferral_timer_deadline_active}" == "TRUE" ]]; then
+            if [[ -n "${dialog_timeout_default_seconds}" ]] && [[ $dialog_timeout_default_seconds -gt 120 ]]; then
+                dialog_timeout_default_seconds=120
+                log_status "Warning: Reducing the --dialog-timeout-default option to ${dialog_timeout_default_seconds} seconds given the approaching deferral deadline."
+            fi
+            if [[ -n "${dialog_timeout_restart_or_defer_seconds}" ]] && [[ $dialog_timeout_restart_or_defer_seconds -gt 120 ]]; then
+                dialog_timeout_restart_or_defer_seconds=120
+                log_status "Warning: Reducing the --dialog-timeout-restart-or-defer option to ${dialog_timeout_restart_or_defer_seconds} seconds given the approaching deferral deadline."
+            fi
+            if [[ -n "${dialog_timeout_soft_deadline_seconds}" ]] && [[ $dialog_timeout_soft_deadline_seconds -gt 120 ]]; then
+                dialog_timeout_soft_deadline_seconds=120
+                log_status "Warning: Reducing the --dialog-timeout-soft-deadline option to ${dialog_timeout_soft_deadline_seconds} seconds given the approaching deferral deadline."
+            fi
+            
+        fi
+    fi
+}
+
 # Evaluate if a process has told the display to not sleep or the user has enabled Focus or Do Not Disturb, and set ${user_focus_active} accordingly.
 check_user_focus() {
     user_focus_active="FALSE"
-	if [[ -n "${deadline_count_focus}" ]]; then
+	if [[ -n "${deadline_count_focus}" ]]|| [[ -n "${deadline_days_focus}" ]] ; then
         local focus_response
 		focus_response=$(plutil -extract data.0.storeAssertionRecords.0.assertionDetails.assertionDetailsModeIdentifier raw -o - "/Users/${currentUserAccountName}/Library/DoNotDisturb/DB/Assertions.json" | grep -ic 'com.apple.')
 		log_verbose  "focus_response is: ${focus_response}"
@@ -2143,6 +2484,14 @@ exit_clean() {
     log_aap "**** App Auto-Patch ${scriptVersion} - CLEAN EXIT ****"
     rm -f "${appAutoPatchPIDfile}" 2> /dev/null
     exit 0
+}
+
+exit_error() {
+
+    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Local preference file at error exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
+    log_super "**** App Auto-Patch ${scriptVersion} - ERROR EXIT ****"
+    rm -f "${appAutoPatchPIDfile}" 2> /dev/null
+    exit 1
 }
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -2303,7 +2652,7 @@ swiftDialogDiscoverWindow(){
     # If we are using SwiftDialog
     touch "$dialogCommandFile"
     chmod -vv 644 $dialogCommandFile
-    if [ ${InteractiveModeOption} -gt 1 ]; then
+    if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ ${InteractiveModeOption} -gt 1 ]]; then
         $dialogBinary \
         ${dialogDiscoverConfigurationOptions[@]} \
         &
@@ -2398,15 +2747,25 @@ set_deferral_menu() {
 }
 
 dialog_install_or_defer() {
-    if [[ -z $display_string_deadline_count ]]; then 
-        display_string_deadline_count="Unlimited"
-    fi
+    #if [[ -z $display_string_deadline_count ]]; then 
+    #    display_string_deadline_count="Unlimited"
+    #fi
 
     [[ -n "${deferral_timer_menu_minutes}" ]] && set_deferral_menu
     
 	action=$( echo $DialogTimeoutDeferralAction | tr '[:upper:]' '[:lower:]' )
 	infobuttontext="Defer"
-	infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $display_string_deadline_count"
+    
+    if [[ -n "${display_string_deadline}" ]] && [[ -n "${display_string_deadline_count}" ]]; then # Show both date and maximum deferral count deadlines.
+        infobox="Deferral available until ${display_string_deadline}\n\n ${display_string_deadline_count} out of ${display_string_deadline_count_maximum} deferrals remaining\n"
+    elif [[ -n "${display_string_deadline}" ]]; then # Show only date deadline.
+        infobox="Deferral available until ${display_string_deadline}\n"
+    elif [[ -n "${display_string_deadline_count}" ]]; then # Show only maximum deferral count deadline.
+        infobox="${display_string_deadline_count} out of ${display_string_deadline_count_maximum} deferrals remaining\n"
+    else # Show no deadlines.
+        infobox="No deadline date and unlimited deferrals\n"
+    fi
+	#infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $display_string_deadline_count"
 	message="You can **Defer** the updates or **Continue** to close the applications and apply updates.  \n\n There are ($numberOfUpdates) application(s) that require updates: "
 	height=480
 	
@@ -2419,7 +2778,7 @@ dialog_install_or_defer() {
             --helpmessage "$helpMessage"
             --icon "$icon"
             --overlayicon "$overlayicon"
-            --infobuttontext "$infobuttontext"
+            --button2text "$infobuttontext"
             --infobox "$infobox"
             --timer $DialogTimeoutDeferral
             --button1text "Continue"
@@ -2432,7 +2791,7 @@ dialog_install_or_defer() {
             --helpmessage "$helpMessage"
             --icon "$icon"
             --overlayicon "$overlayicon"
-            --infobuttontext "$infobuttontext"
+            --button2text "$infobuttontext"
             --infobox "$infobox"
             --timer $DialogTimeoutDeferral
             --button1text "Continue"
@@ -2461,7 +2820,7 @@ dialog_install_or_defer() {
 	dialogOutput=$?
 	
 	case "${dialogOutput}" in
-		3)
+		2)
 			dialog_user_choice_install="FALSE"
 			if [[ -n "${deferral_timer_menu_minutes}" ]]; then
                 INDEX_CHOICE=$(echo "$SELECTION" | grep "SelectedIndex" | awk -F ": " '{print $NF}')
@@ -2497,7 +2856,12 @@ dialog_install_or_defer() {
 dialog_install_hard_deadline() {
 		infobuttontext="Max Deferrals Reached"
 	infobox="Updates will automatically install after the timer expires. \n\n #### No Deferrals Remaining ####"
-	message="There are $numberOfUpdates application(s) that require updates\n\n You have deferred the maximum number of ${display_string_deadline_count_maximum} times."
+    if [[ "${deadline_days_status}" == "HARD" ]]; then
+        message="There are $numberOfUpdates application(s) that require updates\n\n You have deferred the maximum number of ${deadline_days_hard} days."
+    elif [[ "${deadline_count_status}" == "HARD" ]]; then
+        message="There are $numberOfUpdates application(s) that require updates\n\n You have deferred the maximum number of ${display_string_deadline_count_maximum} times."
+    fi
+	
 	height=480
 	
 	deferralDialogContent=(
@@ -3002,37 +3366,86 @@ webHookMessage() {
         
         log_info "Sending Teams WebHook"
         jsonPayload='{
-    "@type": "MessageCard",
-    "@context": "http://schema.org/extensions",
-    "themeColor": "0076D7",
-    "summary": "'${appTitle}': '${webhookStatus}'",
-    "sections": [{
-        "activityTitle": "'${webhookStatus}'",
-        "activityImage": "https://ics.services.jamfcloud.com/icon/hash_28ed3420a17f56d084d012e1af310d3aa9bc239b245f47bc8f9cb1603642737d",
-        "facts": [{
-            "name": "Computer Name (Serial Number):",
-            "value": "'"$computerName"' ('"$serialNumber"')"
-        }, {
-            "name": "User:",
-            "value": "'"$currentUserAccountName"'"
-        }, {
-            "name": "Updates:",
-            "value": "'"$formatted_result"'"
-        }, {
-            "name": "Errors:",
-            "value": "'"$formatted_error_result"'"
-        }],
-        "markdown": true
-    }],
-    "potentialAction": [{
-        "@type": "OpenUri",
-        "name": "View in $mdmName",
-        "targets": [{
-            "os": "default",
-            "uri":
-            "'"$mdmComputerURL"'"
-        }]
-    }]
+            "type": "message",
+            "attachments": [
+                {
+                    "contentType": "application/vnd.microsoft.card.adaptive",
+                    "contentUrl": null,
+                    "content": {
+                        "type": "AdaptiveCard",
+                        "body": [
+                            {
+                                "type": "TextBlock",
+                                "size": "Large",
+                                "weight": "Bolder",
+                                "text": "'${appTitle}': '${webhookStatus}'"
+                            },
+                            {
+                                "type": "ColumnSet",
+                                "columns": [
+                                    {
+                                        "type": "Column",
+                                        "items": [
+                                            {
+                                                "type": "Image",
+                                                "url": "https://raw.githubusercontent.com/App-Auto-Patch/App-Auto-Patch/main/Images/AAPLogo.png",
+                                                "altText": "'${appTitle}'",
+                                                "size": "Small"
+                                            }
+                                        ],
+                                        "width": "auto"
+                                    },
+                                    {
+                                        "type": "Column",
+                                        "items": [
+                                            {
+                                                "type": "TextBlock",
+                                                "weight": "Bolder",
+                                                "text": "'${computerName}'",
+                                                "wrap": true
+                                            },
+                                            {
+                                                "type": "TextBlock",
+                                                "spacing": "None",
+                                                "text": "'${serialNumber}'",
+                                                "isSubtle": true,
+                                                "wrap": true
+                                            }
+                                        ],
+                                        "width": "stretch"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "FactSet",
+                                "facts": [
+                                    {
+                                        "title": "User",
+                                        "value": "'${currentUserAccountName}'"
+                                    },
+                                    {
+                                        "title": "Updates",
+                                        "value": "'${formatted_result}'"
+                                    },
+                                    {
+                                        "title": "Errors",
+                                        "value": "'${formatted_error_result}'"
+                                    }
+                                ]
+                            }
+                        ],
+                        "actions": [
+                            {
+                                "type": "Action.OpenUrl",
+                                "title": "View in '${mdmName}'",
+                                "url": "'${mdmComputerURL}'"
+                            }
+                        ],
+                        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                        "version": "1.2"
+                    }
+                }
+            ]
 }'
         
         # Send the JSON payload using curl
@@ -3261,21 +3674,37 @@ main() {
             log_notice "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
             workflow_do_Installations
             
-            if [[ "$workflow_install_now_patching_status_action" == 2 ]] || [[ "$workflow_install_now_patching_status_action" == 3 && "${errorCount}" == 0 ]]; then
+            if [[ "$workflow_install_now_patching_status_action_option" == "ALWAYS" ]] || [[ "$workflow_install_now_patching_status_action_option" == "SUCCESS" && "${errorCount}" == 0 ]]; then
                 defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true #Set completion status to true
                 timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
                 defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
             fi
             check_webhook
-            #This should be set by configuration # # # deferral_timer_minutes="1440" #Set auto launch for 24 hours
-            log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
-            set_auto_launch_deferral
+            if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+                log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
+                log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
+                /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+                { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+                disown
+                exit_clean
+            else
+                deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
+                log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
+                set_auto_launch_deferral
+            fi
+
         else
-            check_user_focus #Check if a user is in focus mode or has display assertions active
+            check_deadlines_days_date
+            # User Focus only needs to be checked if there are no date or day deadlines.
+            if [[ "${deadline_days_status}" == "FALSE" ]]; then
+                check_user_focus
+            else # At this point any date or days deadline would rule out any ${user_focus_active} option.
+                user_focus_active="FALSE"
+            fi
             check_deadlines_count #Check if the user has passed the max deferral count
-            # All Deferral and focus options have been evaluated
+            # At this point all deferral and deadline options have been evaluated.
             
-            if [[ "${deadline_count_status}" == "HARD" ]]; then # The Max number of deferrals have been used
+            if [[ "${deadline_days_status}" == "HARD" ]] || [[ "${deadline_count_status}" == "HARD" ]]; then # The Max number of deferrals have been used
                 log_notice "Max number of deferrals have been used, display dialog and countdown to install workflow"
                 dialog_install_hard_deadline
                 log_info "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
@@ -3284,9 +3713,20 @@ main() {
                 timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
                 defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
                 check_webhook
-                #This should be set by configuration # # # deferral_timer_minutes="1440" #Set auto launch for 24 hours
+
+                if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+                    log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
+                    log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
+                    /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+                    { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+                    disown
+                    exit_clean
+                else
+                deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
                 log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
                 set_auto_launch_deferral
+                fi
+                
             elif [[ "${user_focus_active}" == "TRUE" ]]; then # No deferral deadlines have passed but a process has told the display to not sleep or the user has enabled Focus or Do Not Disturb.
                 log_info "Focus Mode Triggered"
                 deferral_timer_minutes="${deferral_timer_focus_minutes}"
@@ -3303,9 +3743,19 @@ main() {
                     timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
                     defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
                     check_webhook
-                    #This should be set by configuration # # # deferral_timer_minutes="1440" #Set auto launch for 24 hours
-                    log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
-                    set_auto_launch_deferral
+                    
+                    if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+                        log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
+                        log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
+                        /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+                        { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+                        disown
+                        exit_clean
+                    else
+                        deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
+                        log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
+                        set_auto_launch_deferral
+                    fi
                 else # The user chose to defer. 
                     deferral_timer_minutes=${deferral_timer_minutes} 
                     log_notice "User chose to defer, trying again in ${deferral_timer_minutes} minutes."
@@ -3320,7 +3770,7 @@ main() {
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
         
         if [ ${InteractiveModeOption} -gt 1 ]; then
-            $dialogBinary --title "$appTitle" --message "All apps are up to date." --windowbuttons min --icon "$icon" --overlayicon "$overlayIcon" --moveable --position topright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
+            $dialogBinary --title "$appTitle" --message "All apps are up to date." --windowbuttons min --icon "${icon}" --overlayicon "$overlayicon" --moveable --position topright --timer 60 --quitkey k --button1text "Close" --style "mini" --hidetimerbar
         fi
         
         
