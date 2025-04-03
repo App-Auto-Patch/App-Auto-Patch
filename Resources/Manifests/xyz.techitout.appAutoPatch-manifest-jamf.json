@@ -658,10 +658,20 @@
             "property_order": 170
         },
         "WorkflowDisableAppDiscovery": {
-            "type": "boolean",
+            "type": "string",
             "title": "Disable App Discovery Workflow",
-            "default": false,
+            "default": "FALSE",
             "description": "Disables the discovery of applications that require patching. If a list of labels from a previous discovery exists, AAP will use that list for the workflow",
+            "enum": [
+                "TRUE",
+                "FALSE"
+            ],
+            "options": {
+                "enum_titles": [
+                    "TRUE",
+                    "FALSE"
+                ]
+            },
             "links": [
                 {
                     "rel": "More information",
@@ -671,10 +681,20 @@
             "property_order": 175
         },
         "WorkflowDisableRelaunch": {
-            "type": "boolean",
+            "type": "string",
             "title": "Disable Relaunch Workflow",
-            "default": false,
+            "default": "FALSE",
             "description": "Disable the automatic relaunch of AAP after the current workflow successfully completes",
+             "enum": [
+                "TRUE",
+                "FALSE"
+            ],
+            "options": {
+                "enum_titles": [
+                    "TRUE",
+                    "FALSE"
+                ]
+            },
             "links": [
                 {
                     "rel": "More information",
