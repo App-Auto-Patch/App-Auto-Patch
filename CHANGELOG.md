@@ -2,6 +2,44 @@
 
 # Version 3
 
+## Version 3.1.0
+### 02-Apr-2025
+- Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
+- Added MDM keys and triggers for WorkflowInstallNowPatchingStatusAction
+- Moved the Defer button next to the Continue button to position it underneath the deferral menu drop-down
+- Adjusted logic to use deferral_timer_workflow_relaunch_minutes after AAP completes the installation workflow
+- Fixed logic for workflow_disable_relaunch_option to disable relaunch after successful patching completion if set to TRUE
+- Added exit_error function to handle startup validation errors
+- Added the ability to pull from a custom Installomator fork. It must include all Installomator contents, including fragments
+- Added logic to check for a successful App Auto Patch installation.
+- Fixed logic for InteractiveMode to use default if no option is set via MDM or command line
+- Fixed logic for DaysUntilReset to use default if no option is set via mdm or command line
+- Fixed logic where script was improperly shifting CLI options when running from Jamf and not using built-in parameter options (Issues #45)
+- Updated Microsoft Teams Webhook per [Create incoming webhooks with Workflows for Microsoft Teams](https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498)
+- Fixed issues with dialog logic for Install Now Workflow
+
+## Version 3.0.4
+### 14-Mar-2025
+- Fixed logic so that InteractiveMode=0 will not run the deferral workflow or display a deferral dialog
+- Updated workflow_disable_relaunch logic to not relaunch AAP if set to true and AAP is installing or Jamf is the parent process
+- Fixed an issue that was causing Optional labels to be duplicated when added to the Required queue if the app is installed
+- Fixed various formatting throughout the script
+
+## Version 3.0.3
+### 13-Mar-2025
+- Fixed progress bar incrementation to increment in steps vs. bouncing
+
+## Version 3.0.2
+### 11-Mar-2025
+- Added AAPLastRunDate and AAPLastSilentRunDate
+- Fixed logic for UnattendedExit
+
+## Version 3.0.1
+### 10-Mar-2025
+- Fixed a bug where --workflow-install-now would be ignored if AAPPatchingCompletionStatus=TRUE
+- Fixed a bug where --workflow-install-now would not complete cleanly and trigger an immediate re-run of AAP
+- Added logic for Jumpcloud MDM and updated Webhook logic for the Jumpcloud MDM URL (Thanks @mattbilson)
+
 ## Version 3.0.0
 ### 08-Mar-2025
 - Final Version
