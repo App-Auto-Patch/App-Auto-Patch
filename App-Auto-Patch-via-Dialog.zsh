@@ -8,6 +8,9 @@
 #
 # HISTORY
 #
+#   3.1.1, [04.09.2025]
+#   - Updated logic to decrease time for re-launch when parent_process_is_jamf=TRUE. LaunchDaemon will now relaunch in 5 seconds
+#
 #   3.1.0, [04.02.2025]
 #   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
 #   - Added MDM keys and triggers for WorkflowInstallNowPatchingStatusAction
@@ -57,8 +60,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.1.0"
-scriptDate="2025/04/02"
+scriptVersion="3.1.1"
+scriptDate="2025/04/09"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1579,12 +1582,12 @@ workflow_startup() {
             log_aap "Status: Found that Jamf is installing or is the parent process and Automatic Relaunch is disabled. Exiting."
             log_status "Inactive: Jamf is parent process or AAP Installing. Automatic relaunch is disabled."
             /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
-            { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+            { sleep 5; launchctl bootout system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
             disown
             exit_clean
         else
 		log_status "Found that Jamf is installing or is the parent process, restarting via App Auto-Patch LaunchDaemon..."
-		{ sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+		{ sleep 5; launchctl bootout system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
 		disown
 		exit_clean
         fi
@@ -1596,12 +1599,12 @@ workflow_startup() {
             log_aap "Status: Found App Auto-Patch is installing and Automatic Relaunch is disabled. Exiting."
             log_status "Inactive: App Auto-Patch Installing. Automatic relaunch is disabled."
             /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
-            { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+            { sleep 5; launchctl bootout system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
             disown
             exit_clean
         else
 		log_status "Found that App Auto-Patch is installing, restarting via App Auto-Patch LaunchDaemon..."
-		{ sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+		{ sleep 5; launchctl bootout system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
         disown
 		exit_clean
         fi
