@@ -8,8 +8,14 @@
 #
 # HISTORY
 #
+#   3.1.2, [04.10.2025]
+#   - Fixed a bug that prevented the proper app name from populating for a small number of labels (Issue #140)
+#   - Fixed a bug when using wildcards for ignored and required labels that could cause the label to skip being added (Issue #141)
+#   - Fixed a bug that could prevent a label from being added if that label name matched part of a label in the ignoredLabelsArray (Issue #142)
+#   - Fixed a bug to pull the correct label name for cases where the label fragments file contains multiple label references (ex: Camtasia|Camtasia2025) (Issue #143)
+#
 #   3.1.1, [04.09.2025]
-#   - Updated logic to decrease time for re-launch when parent_process_is_jamf=TRUE. LaunchDaemon will now relaunch in 5 seconds
+#   - Updated logic to decrease time for re-launch when parent_process_is_jamf=TRUE
 #
 #   3.1.0, [04.02.2025]
 #   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
@@ -60,8 +66,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.1.1"
-scriptDate="2025/04/09"
+scriptVersion="3.1.2"
+scriptDate="2025/04/10"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -874,7 +880,9 @@ get_preferences() {
                 for i in "${wildIgnored[@]}"; do
                     ignored=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
                     if [[ ! "$ignored" == "Application" ]]; then
-                        if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -w -q $ignored; then
+                        # Issue 141 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/141
+                        #if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -w -q $ignored; then
+                        if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -x -q "$ignored"; then
                             log_verbose "$ignored already exists, skipping for now"
                         else
                             log_verbose "Writing ignored label $ignored to configuration plist"
@@ -909,7 +917,9 @@ get_preferences() {
                 for i in "${wildrequired[@]}"; do
                     required=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
                     if [[ ! "$required" == "Application" ]]; then
-                        if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -w -q $required; then
+                        # Issue 141 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/141
+                        #if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -w -q $required; then
+                        if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -x -q $required; then
                             log_verbose "$required already exists, skipping for now"
                         else
                             log_verbose "Writing required label $required to configuration plist"
@@ -3553,7 +3563,9 @@ main() {
             labelFile=$(basename -- "$labelFragment")
             labelFile="${labelFile%.*}"
             
-            if [[ $ignoredLabelsArray =~ ${labelFile} ]]; then
+            # Issue 142 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/142
+            #if [[ $ignoredLabelsArray =~ ${labelFile} ]]; then
+            if [[ " ${ignoredLabelsArray[*]} " == *" ${labelFile} "* ]]; then
                 log_verbose "Ignoring label $labelFile."
                 continue
             fi
@@ -3568,6 +3580,14 @@ main() {
                 if [ -n $scrubbedLine ]; then
                     if [[ $in_label -eq 0 && "$scrubbedLine" =~ $label_re ]]; then
                         label_name=${match[1]}
+                        # Issue 143 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/143
+                        if [[ "${label_name:l}" = "${labelFile:l}" ]]; then
+                            log_verbose "label_name: $label_name"
+                        else
+                            label_name=$labelFile
+                            log_verbose "Setting label_name to labelFile: $label_name"
+                        fi
+
                         in_label=1
                         continue
                     fi
@@ -3640,7 +3660,10 @@ main() {
     queuedLabelsForNames=("${(@s/ /)labelsArray}")
     for label in $queuedLabelsForNames; do
         log_verbose "Obtaining proper name for $label"
-        appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+        # Issue 140 Fix: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/140
+        #appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+        appName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        log_verbose "appName: $appName"
         appNamesArray+=(--listitem)
     if [[ ! -e "/Applications/${appName}.app" ]]; then
         appNamesArray+=(${appName},icon="${logoImage}")
