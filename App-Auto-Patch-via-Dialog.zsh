@@ -13,6 +13,8 @@
 #   - Fixed a bug when using wildcards for ignored and required labels that could cause the label to skip being added (Issue #141)
 #   - Fixed a bug that could prevent a label from being added if that label name matched part of a label in the ignoredLabelsArray (Issue #142)
 #   - Fixed a bug to pull the correct label name for cases where the label fragments file contains multiple label references (ex: Camtasia|Camtasia2025) (Issue #143)
+#   - Fixed a bug that prevented the proper app name and icon from populating for a small number of labels on the Patching Dialog (Issue #144)
+#   - Fixed a bug that prevented Installomator from sending the proper status updates to the swiftDialogCommandFile (Issue #144)
 #
 #   3.1.1, [04.09.2025]
 #   - Updated logic to decrease time for re-launch when parent_process_is_jamf=TRUE
@@ -66,7 +68,7 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.1.2"
+scriptVersion="3.1.2-beta2"
 scriptDate="2025/04/10"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
@@ -816,40 +818,45 @@ get_preferences() {
     { [[ -z "${support_team_website_managed}" ]] && [[ -n "${supportTeamWebsite}" ]] && [[ -n "${support_team_website_local}" ]]; } && supportTeamWebsite="${support_team_website_local}"
     
     #Verbose Configuration Option Output
-    log_verbose "DeferralTimerMenu: $DeferralTimerMenu"
-    log_verbose "DeferralTimerFocus: $DeferralTimerFocus"
-    log_verbose "DeferralTimerError: $DeferralTimerError"
-    log_verbose "DeferralTimerWorkflowRelaunch: $DeferralTimerWorkflowRelaunch"
-    log_verbose "DeadlineCountFocus: $DeadlineCountFocus"
-    log_verbose "DeadlineCountHard: $DeadlineCountHard"
-    log_verbose "DeferralTimerDefault: $DeferralTimerDefault"
-    log_verbose "InteractiveMode: $InteractiveMode"
-    log_verbose "PatchWeekStartDay: $PatchWeekStartDay"
-    log_verbose "WorkflowDisableAppDiscovery: $WorkflowDisableAppDiscovery"
-    log_verbose "WorkflowDisableRelaunch: $WorkflowDisableRelaunch"
-    log_verbose "WebhookFeature: $WebhookFeature"
-    log_verbose "WebhookURLSlack: $WebhookURLSlack"
-    log_verbose "WebhookURLTeams: $WebhookURLTeams"
-    log_verbose "IgnoredLabels: $IgnoredLabels"
-    log_verbose "RequiredLabels: $RequiredLabels"
-    log_verbose "OptionalLabels: $OptionalLabels"
-    log_verbose "AppTitle: $AppTitle"
-    log_verbose "ConvertAppsInHomeFolder: $ConvertAppsInHomeFolder"
-    log_verbose "IgnoreAppsInHomeFolder: $IgnoreAppsInHomeFolder"
-    log_verbose "InstallomatorOptions: $InstallomatorOptions"
-    log_verbose "InstallomatorVersion: $InstallomatorVersion"
+    log_verbose "DeferralTimerMenu: $deferral_timer_menu_option"
+    log_verbose "DeferralTimerFocus: $deferral_timer_focus_option"
+    log_verbose "DeferralTimerError: $deferral_timer_error_option"
+    log_verbose "DeferralTimerWorkflowRelaunch: $deferral_timer_workflow_relaunch_option"
+    log_verbose "DeadlineCountFocus: $deadline_count_focus_option"
+    log_verbose "DeadlineCountHard: $deadline_count_hard_option"
+    log_verbose "DeadlineDaysFocus: $deadline_days_focus_option"
+    log_verbose "DeadlineDaysHard: $deadline_days_hard_option"
+    log_verbose "DeferralTimerDefault: $deferral_timer_default_option"
+    log_verbose "InteractiveMode: $InteractiveModeOption"
+    log_verbose "PatchWeekStartDay: $patch_week_start_day_option"
+    log_verbose "WorkflowDisableAppDiscovery: $workflow_disable_app_discovery_option"
+    log_verbose "WorkflowDisableRelaunch: $workflow_disable_relaunch_option"
+    log_verbose "WebhookFeature: $webhook_feature_option"
+    log_verbose "WebhookURLSlack: $webhook_url_slack_option"
+    log_verbose "WebhookURLTeams: $webhook_url_teams_option"
+    log_verbose "IgnoredLabels: $ignored_labels_option"
+    log_verbose "RequiredLabels: $required_labels_option"
+    log_verbose "OptionalLabels: $optional_labels_option"
+    log_verbose "AppTitle: $appTitle"
+    log_verbose "ConvertAppsInHomeFolder: $convertAppsInHomeFolder"
+    log_verbose "IgnoreAppsInHomeFolder: $ignoreAppsInHomeFolder"
+    log_verbose "InstallomatorOptions: $installomatorOptions"
+    log_verbose "InstallomatorVersion: $installomatorVersion"
+    log_verbose "InstallomatorVersionCustomRepoPath: $installomatorVersionCustomRepoPath"
+    log_verbose "InstallomatorVersionCustomBranchName: $installomatorVersionCustomBranchName"
     log_verbose "DialogTimeoutDeferral: $DialogTimeoutDeferral"
     log_verbose "DialogTimeoutDeferralAction: $DialogTimeoutDeferralAction"
-    log_verbose "DaysUntilReset: $DaysUntilReset"
+    log_verbose "DaysUntilReset: $days_until_reset_option"
     log_verbose "UnattendedExit: $UnattendedExit"
     log_verbose "UnattendedExitSeconds: $UnattendedExitSeconds"
-    log_verbose "DialogOnTop: $DialogOnTop"
-    log_verbose "UseOverlayIcon: $UseOverlayIcon"
-    log_verbose "RemoveInstallomatorPath: $RemoveInstallomatorPath"
-    log_verbose "SupportTeamName: $SupportTeamName"
-    log_verbose "SupportTeamPhone: $SupportTeamPhone"
-    log_verbose "SupportTeamEmail: $SupportTeamEmail"
-    log_verbose "SupportTeamWebsite: $SupportTeamWebsite"
+    log_verbose "DialogOnTop: $dialogOnTop"
+    log_verbose "WorkflowInstallNowPatchingStatusAction: $workflow_install_now_patching_status_action_option"
+    log_verbose "UseOverlayIcon: $useOverlayIcon"
+    log_verbose "RemoveInstallomatorPath: $removeInstallomatorPath"
+    log_verbose "SupportTeamName: $supportTeamName"
+    log_verbose "SupportTeamPhone: $supportTeamPhone"
+    log_verbose "SupportTeamEmail: $supportTeamEmail"
+    log_verbose "SupportTeamWebsite: $supportTeamWebsite"
     
     
     # Write App Labels to PLIST
@@ -2635,7 +2642,9 @@ swiftDialogPatchingWindow(){
         # Build our list of Display Names for the SwiftDialog list
         for label in $queuedLabelsArray; do
             # Get the "name=" value from the current label and use it in our SwiftDialog list
-            currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+            # Issue 144 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/144
+            #currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+            currentDisplayName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
             if [ -n "$currentDisplayName" ]; then
                 displayNames+=("--listitem")
                 if [[ ! -e "/Applications/${currentDisplayName}.app" ]]; then
@@ -3116,12 +3125,18 @@ workflow_do_Installations() {
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
             
             # Get the "name=" value from the current label and use it in our swiftDialog list
-            currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+            # Issue 144 Fix: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/144
+            #currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+            currentDisplayName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
             # There are some weird \' shenanigans here because Installomator passes this through eval
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplayName}"\')
             sleep .5
-            
+            # Issue 144 Fix https://github.com/App-Auto-Patch/App-Auto-Patch/issues/144
+            if [[ ! -e "/Applications/${currentDisplayName}.app" ]]; then
+            swiftDialogUpdate "icon: ${logoImage}"
+            else
             swiftDialogUpdate "icon: /Applications/${currentDisplayName}.app"
+            fi
             swiftDialogUpdate "progresstext: Processing ${currentDisplayName} …"
             swiftDialogUpdate "listitem: index: $i, icon: /Applications/${currentDisplayName}.app, status: wait, statustext: Checking …"
             
