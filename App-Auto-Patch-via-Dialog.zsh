@@ -8,7 +8,7 @@
 #
 # HISTORY
 #
-#   3.1.2, [04.10.2025]
+#   3.1.2, [04.11.2025]
 #   - Fixed a bug that prevented the proper app name from populating for a small number of labels (Issue #140)
 #   - Fixed a bug when using wildcards for ignored and required labels that could cause the label to skip being added (Issue #141)
 #   - Fixed a bug that could prevent a label from being added if that label name matched part of a label in the ignoredLabelsArray (Issue #142)
@@ -16,6 +16,7 @@
 #   - Fixed a bug that prevented the proper app name and icon from populating for a small number of labels on the Patching Dialog (Issue #144)
 #   - Fixed a bug that prevented Installomator from sending the proper status updates to the swiftDialogCommandFile (Issue #144)
 #   - Updated syntax for some verbose logging
+#   - Added dialog to the ignored label list to prevent dialog from updating during runtime
 #
 #   3.1.1, [04.09.2025]
 #   - Updated logic to decrease time for re-launch when parent_process_is_jamf=TRUE
@@ -69,8 +70,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.1.2-beta2"
-scriptDate="2025/04/10"
+scriptVersion="3.1.2b3"
+scriptDate="2025/04/11"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -980,6 +981,14 @@ get_preferences() {
         /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"swiftdialog\"" "${appAutoPatchLocalPLIST}.plist"
         ignoredLabelsArray+=("swiftdialog")
     fi
+    if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q dialog; then
+        log_verbose "dialog is already ignored"
+    else
+        log_verbose "Ignoring dialog"
+        /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"dialog\"" "${appAutoPatchLocalPLIST}.plist"
+        ignoredLabelsArray+=("dialog")
+    fi
+
     
     
     write_status "Completed: Collecting preferences"
