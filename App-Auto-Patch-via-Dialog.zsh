@@ -15,6 +15,7 @@
 #   - Fixed a bug to pull the correct label name for cases where the label fragments file contains multiple label references (ex: Camtasia|Camtasia2025) (Issue #143)
 #   - Fixed a bug that prevented the proper app name and icon from populating for a small number of labels on the Patching Dialog (Issue #144)
 #   - Fixed a bug that prevented Installomator from sending the proper status updates to the swiftDialogCommandFile (Issue #144)
+#   - Updated syntax for some verbose logging
 #
 #   3.1.1, [04.09.2025]
 #   - Updated logic to decrease time for re-launch when parent_process_is_jamf=TRUE
