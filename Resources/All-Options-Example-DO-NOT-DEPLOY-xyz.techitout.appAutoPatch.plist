@@ -40,6 +40,10 @@
 	<string>BLOCKING_PROCESS_ACTION=quit_kill NOTIFY=silent LOGO=appstore IGNORE_APP_STORE_APPS=yes</string>
 	<key>InstallomatorVersion</key>
 	<string>Main</string>
+	<key>InstallomatorVersionCustomRepoPath</key>
+	<string>Installomator/Installomator</string>
+	<key>InstallomatorVersionCustomBranchName</key>
+	<string>Main</string>
 	<key>InteractiveMode</key>
 	<integer>1</integer>
 	<key>OptionalLabels</key>
@@ -74,5 +78,7 @@
 	<string>FALSE</string>
 	<key>WorkflowDisableRelaunch</key>
 	<string>FALSE</string>
+	<key>WorkflowInstallNowPatchingStatusAction</key>
+	<string>SUCCESS</string>
 </dict>
 </plist>
