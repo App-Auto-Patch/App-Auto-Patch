@@ -2,6 +2,21 @@
 
 # Version 3
 
+## Version 3.1.2
+### 11-Apr-2025
+- Fixed a bug that prevented the proper app name from populating for a small number of labels (Issue #140)
+- Fixed a bug when using wildcards for ignored and required labels that could cause the label to skip being added (Issue #141)
+- Fixed a bug that could prevent a label from being added if that label name matched part of a label in the ignoredLabelsArray (Issue #142)
+- Fixed a bug to pull the correct label name for cases where the label fragments file contains multiple label references (ex: Camtasia|Camtasia2025) (Issue #143)
+- Fixed a bug that prevented the proper app name and icon from populating for a small number of labels on the Patching Dialog (Issue #144)
+- Fixed a bug that prevented Installomator from sending the proper status updates to the swiftDialogCommandFile (Issue #144)
+- Updated syntax for some verbose logging
+- Added dialog to the ignored label list to prevent dialog from updating during runtime
+
+## Version 3.1.1
+### 09-Apr-2025
+- Updated logic to decrease time for re-launch when parent_process_is_jamf=TRUE. LaunchDaemon will now relaunch in 5 seconds
+
 ## Version 3.1.0
 ### 02-Apr-2025
 - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard

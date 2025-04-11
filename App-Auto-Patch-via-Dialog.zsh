@@ -8,44 +8,7 @@
 #
 # HISTORY
 #
-#   3.1.1, [04.09.2025]
-#   - Updated logic to decrease time for re-launch when parent_process_is_jamf=TRUE. LaunchDaemon will now relaunch in 5 seconds
-#
-#   3.1.0, [04.02.2025]
-#   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
-#   - Added MDM keys and triggers for WorkflowInstallNowPatchingStatusAction
-#   - Moved the Defer button next to the Continue button to position it underneath the deferral menu drop-down
-#   - Adjusted logic to use deferral_timer_workflow_relaunch_minutes after AAP completes the installation workflow
-#   - Fixed logic for workflow_disable_relaunch_option to disable relaunch after successful patching completion if set to TRUE
-#   - Added exit_error function to handle startup validation errors
-#   - Added the ability to pull from a custom Installomator fork. It must include all Installomator contents, including fragments
-#   - Added logic to check for a successful App Auto Patch installation.
-#   - Fixed logic for InteractiveMode to use default if no option is set via MDM or command line
-#   - Fixed logic for DaysUntilReset to use default if no option is set via mdm or command line
-#   - Fixed logic where script was improperly shifting CLI options when running from Jamf and not using built-in parameter options (Issues #45)
-#   - Updated Microsoft Teams Webhook per [Create incoming webhooks with Workflows for Microsoft Teams](https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498)
-#   - Fixed issues with dialog logic for Install Now Workflow
-#
-#   3.0.4, [03.14.2025]
-#   - Fixed logic so that InteractiveMode=0 will not run the deferral workflow or display a deferral dialog
-#   - Updated workflow_disable_relaunch logic to not relaunch AAP if set to true and AAP is installing or Jamf is the parent process
-#   - Fixed an issue that was causing Optional labels to be duplicated when added to the Required queue if the app is installed
-#   - Fixed various formatting throughout the script
-#
-#   3.0.3, [03.13.2025]
-#   - Fixed progress bar incrementation to increment in steps vs. bouncing
-#   - Fixed logic for UnattendedExit
-#
-#   3.0.2, [03.11.2025]
-#   - Added AAPLastRunDate and AAPLastSilentRunDate
-#
-#   3.0.1, [03.10.2025]
-#   - Fixed a bug where --workflow-install-now would be ignored if AAPPatchingCompletionStatus=TRUE
-#   - Fixed a bug where --workflow-install-now would not complete cleanly and trigger an immediate re-run of AAP
-#   - Added logic for Jumpcloud MDM and updated Webhook logic for the Jumpcloud MDM URL (Thanks @mattbilson)
-#
-#   3.0.0, [03.08.2025]
-#   - Final Release
+#   Full Change Log: https://github.com/App-Auto-Patch/App-Auto-Patch/blob/main/CHANGELOG.md
 #
 #
 ####################################################################################################
@@ -60,8 +23,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.1.1"
-scriptDate="2025/04/09"
+scriptVersion="3.1.2"
+scriptDate="2025/04/11"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -810,40 +773,45 @@ get_preferences() {
     { [[ -z "${support_team_website_managed}" ]] && [[ -n "${supportTeamWebsite}" ]] && [[ -n "${support_team_website_local}" ]]; } && supportTeamWebsite="${support_team_website_local}"
     
     #Verbose Configuration Option Output
-    log_verbose "DeferralTimerMenu: $DeferralTimerMenu"
-    log_verbose "DeferralTimerFocus: $DeferralTimerFocus"
-    log_verbose "DeferralTimerError: $DeferralTimerError"
-    log_verbose "DeferralTimerWorkflowRelaunch: $DeferralTimerWorkflowRelaunch"
-    log_verbose "DeadlineCountFocus: $DeadlineCountFocus"
-    log_verbose "DeadlineCountHard: $DeadlineCountHard"
-    log_verbose "DeferralTimerDefault: $DeferralTimerDefault"
-    log_verbose "InteractiveMode: $InteractiveMode"
-    log_verbose "PatchWeekStartDay: $PatchWeekStartDay"
-    log_verbose "WorkflowDisableAppDiscovery: $WorkflowDisableAppDiscovery"
-    log_verbose "WorkflowDisableRelaunch: $WorkflowDisableRelaunch"
-    log_verbose "WebhookFeature: $WebhookFeature"
-    log_verbose "WebhookURLSlack: $WebhookURLSlack"
-    log_verbose "WebhookURLTeams: $WebhookURLTeams"
-    log_verbose "IgnoredLabels: $IgnoredLabels"
-    log_verbose "RequiredLabels: $RequiredLabels"
-    log_verbose "OptionalLabels: $OptionalLabels"
-    log_verbose "AppTitle: $AppTitle"
-    log_verbose "ConvertAppsInHomeFolder: $ConvertAppsInHomeFolder"
-    log_verbose "IgnoreAppsInHomeFolder: $IgnoreAppsInHomeFolder"
-    log_verbose "InstallomatorOptions: $InstallomatorOptions"
-    log_verbose "InstallomatorVersion: $InstallomatorVersion"
+    log_verbose "DeferralTimerMenu: $deferral_timer_menu_option"
+    log_verbose "DeferralTimerFocus: $deferral_timer_focus_option"
+    log_verbose "DeferralTimerError: $deferral_timer_error_option"
+    log_verbose "DeferralTimerWorkflowRelaunch: $deferral_timer_workflow_relaunch_option"
+    log_verbose "DeadlineCountFocus: $deadline_count_focus_option"
+    log_verbose "DeadlineCountHard: $deadline_count_hard_option"
+    log_verbose "DeadlineDaysFocus: $deadline_days_focus_option"
+    log_verbose "DeadlineDaysHard: $deadline_days_hard_option"
+    log_verbose "DeferralTimerDefault: $deferral_timer_default_option"
+    log_verbose "InteractiveMode: $InteractiveModeOption"
+    log_verbose "PatchWeekStartDay: $patch_week_start_day_option"
+    log_verbose "WorkflowDisableAppDiscovery: $workflow_disable_app_discovery_option"
+    log_verbose "WorkflowDisableRelaunch: $workflow_disable_relaunch_option"
+    log_verbose "WebhookFeature: $webhook_feature_option"
+    log_verbose "WebhookURLSlack: $webhook_url_slack_option"
+    log_verbose "WebhookURLTeams: $webhook_url_teams_option"
+    log_verbose "IgnoredLabels: $ignored_labels_option"
+    log_verbose "RequiredLabels: $required_labels_option"
+    log_verbose "OptionalLabels: $optional_labels_option"
+    log_verbose "AppTitle: $appTitle"
+    log_verbose "ConvertAppsInHomeFolder: $convertAppsInHomeFolder"
+    log_verbose "IgnoreAppsInHomeFolder: $ignoreAppsInHomeFolder"
+    log_verbose "InstallomatorOptions: $installomatorOptions"
+    log_verbose "InstallomatorVersion: $installomatorVersion"
+    log_verbose "InstallomatorVersionCustomRepoPath: $installomatorVersionCustomRepoPath"
+    log_verbose "InstallomatorVersionCustomBranchName: $installomatorVersionCustomBranchName"
     log_verbose "DialogTimeoutDeferral: $DialogTimeoutDeferral"
     log_verbose "DialogTimeoutDeferralAction: $DialogTimeoutDeferralAction"
-    log_verbose "DaysUntilReset: $DaysUntilReset"
+    log_verbose "DaysUntilReset: $days_until_reset_option"
     log_verbose "UnattendedExit: $UnattendedExit"
     log_verbose "UnattendedExitSeconds: $UnattendedExitSeconds"
-    log_verbose "DialogOnTop: $DialogOnTop"
-    log_verbose "UseOverlayIcon: $UseOverlayIcon"
-    log_verbose "RemoveInstallomatorPath: $RemoveInstallomatorPath"
-    log_verbose "SupportTeamName: $SupportTeamName"
-    log_verbose "SupportTeamPhone: $SupportTeamPhone"
-    log_verbose "SupportTeamEmail: $SupportTeamEmail"
-    log_verbose "SupportTeamWebsite: $SupportTeamWebsite"
+    log_verbose "DialogOnTop: $dialogOnTop"
+    log_verbose "WorkflowInstallNowPatchingStatusAction: $workflow_install_now_patching_status_action_option"
+    log_verbose "UseOverlayIcon: $useOverlayIcon"
+    log_verbose "RemoveInstallomatorPath: $removeInstallomatorPath"
+    log_verbose "SupportTeamName: $supportTeamName"
+    log_verbose "SupportTeamPhone: $supportTeamPhone"
+    log_verbose "SupportTeamEmail: $supportTeamEmail"
+    log_verbose "SupportTeamWebsite: $supportTeamWebsite"
     
     
     # Write App Labels to PLIST
@@ -874,7 +842,9 @@ get_preferences() {
                 for i in "${wildIgnored[@]}"; do
                     ignored=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
                     if [[ ! "$ignored" == "Application" ]]; then
-                        if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -w -q $ignored; then
+                        # Issue 141 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/141
+                        #if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -w -q $ignored; then
+                        if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -x -q "$ignored"; then
                             log_verbose "$ignored already exists, skipping for now"
                         else
                             log_verbose "Writing ignored label $ignored to configuration plist"
@@ -909,7 +879,9 @@ get_preferences() {
                 for i in "${wildrequired[@]}"; do
                     required=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
                     if [[ ! "$required" == "Application" ]]; then
-                        if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -w -q $required; then
+                        # Issue 141 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/141
+                        #if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -w -q $required; then
+                        if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -x -q $required; then
                             log_verbose "$required already exists, skipping for now"
                         else
                             log_verbose "Writing required label $required to configuration plist"
@@ -962,6 +934,14 @@ get_preferences() {
         /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"swiftdialog\"" "${appAutoPatchLocalPLIST}.plist"
         ignoredLabelsArray+=("swiftdialog")
     fi
+    if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q dialog; then
+        log_verbose "dialog is already ignored"
+    else
+        log_verbose "Ignoring dialog"
+        /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"dialog\"" "${appAutoPatchLocalPLIST}.plist"
+        ignoredLabelsArray+=("dialog")
+    fi
+
     
     
     write_status "Completed: Collecting preferences"
@@ -2625,7 +2605,9 @@ swiftDialogPatchingWindow(){
         # Build our list of Display Names for the SwiftDialog list
         for label in $queuedLabelsArray; do
             # Get the "name=" value from the current label and use it in our SwiftDialog list
-            currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+            # Issue 144 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/144
+            #currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+            currentDisplayName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
             if [ -n "$currentDisplayName" ]; then
                 displayNames+=("--listitem")
                 if [[ ! -e "/Applications/${currentDisplayName}.app" ]]; then
@@ -3106,12 +3088,18 @@ workflow_do_Installations() {
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
             
             # Get the "name=" value from the current label and use it in our swiftDialog list
-            currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+            # Issue 144 Fix: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/144
+            #currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+            currentDisplayName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
             # There are some weird \' shenanigans here because Installomator passes this through eval
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplayName}"\')
             sleep .5
-            
+            # Issue 144 Fix https://github.com/App-Auto-Patch/App-Auto-Patch/issues/144
+            if [[ ! -e "/Applications/${currentDisplayName}.app" ]]; then
+            swiftDialogUpdate "icon: ${logoImage}"
+            else
             swiftDialogUpdate "icon: /Applications/${currentDisplayName}.app"
+            fi
             swiftDialogUpdate "progresstext: Processing ${currentDisplayName} …"
             swiftDialogUpdate "listitem: index: $i, icon: /Applications/${currentDisplayName}.app, status: wait, statustext: Checking …"
             
@@ -3553,7 +3541,9 @@ main() {
             labelFile=$(basename -- "$labelFragment")
             labelFile="${labelFile%.*}"
             
-            if [[ $ignoredLabelsArray =~ ${labelFile} ]]; then
+            # Issue 142 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/142
+            #if [[ $ignoredLabelsArray =~ ${labelFile} ]]; then
+            if [[ " ${ignoredLabelsArray[*]} " == *" ${labelFile} "* ]]; then
                 log_verbose "Ignoring label $labelFile."
                 continue
             fi
@@ -3568,6 +3558,14 @@ main() {
                 if [ -n $scrubbedLine ]; then
                     if [[ $in_label -eq 0 && "$scrubbedLine" =~ $label_re ]]; then
                         label_name=${match[1]}
+                        # Issue 143 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/143
+                        if [[ "${label_name:l}" = "${labelFile:l}" ]]; then
+                            log_verbose "label_name: $label_name"
+                        else
+                            label_name=$labelFile
+                            log_verbose "Setting label_name to labelFile: $label_name"
+                        fi
+
                         in_label=1
                         continue
                     fi
@@ -3640,7 +3638,10 @@ main() {
     queuedLabelsForNames=("${(@s/ /)labelsArray}")
     for label in $queuedLabelsForNames; do
         log_verbose "Obtaining proper name for $label"
-        appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+        # Issue 140 Fix: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/140
+        #appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+        appName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        log_verbose "appName: $appName"
         appNamesArray+=(--listitem)
     if [[ ! -e "/Applications/${appName}.app" ]]; then
         appNamesArray+=(${appName},icon="${logoImage}")
