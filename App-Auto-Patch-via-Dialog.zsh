@@ -10,55 +10,6 @@
 #
 #   Full Change Log: https://github.com/App-Auto-Patch/App-Auto-Patch/blob/main/CHANGELOG.md
 #
-#   3.1.2, [04.11.2025]
-#   - Fixed a bug that prevented the proper app name from populating for a small number of labels (Issue #140)
-#   - Fixed a bug when using wildcards for ignored and required labels that could cause the label to skip being added (Issue #141)
-#   - Fixed a bug that could prevent a label from being added if that label name matched part of a label in the ignoredLabelsArray (Issue #142)
-#   - Fixed a bug to pull the correct label name for cases where the label fragments file contains multiple label references (ex: Camtasia|Camtasia2025) (Issue #143)
-#   - Fixed a bug that prevented the proper app name and icon from populating for a small number of labels on the Patching Dialog (Issue #144)
-#   - Fixed a bug that prevented Installomator from sending the proper status updates to the swiftDialogCommandFile (Issue #144)
-#   - Updated syntax for some verbose logging
-#   - Added dialog to the ignored label list to prevent dialog from updating during runtime
-#
-#   3.1.1, [04.09.2025]
-#   - Updated logic to decrease time for re-launch when parent_process_is_jamf=TRUE
-#
-#   3.1.0, [04.02.2025]
-#   - Added functionality for Days Deadlines, configurable by DeadlineDaysFocus and DeadlineDaysHard
-#   - Added MDM keys and triggers for WorkflowInstallNowPatchingStatusAction
-#   - Moved the Defer button next to the Continue button to position it underneath the deferral menu drop-down
-#   - Adjusted logic to use deferral_timer_workflow_relaunch_minutes after AAP completes the installation workflow
-#   - Fixed logic for workflow_disable_relaunch_option to disable relaunch after successful patching completion if set to TRUE
-#   - Added exit_error function to handle startup validation errors
-#   - Added the ability to pull from a custom Installomator fork. It must include all Installomator contents, including fragments
-#   - Added logic to check for a successful App Auto Patch installation.
-#   - Fixed logic for InteractiveMode to use default if no option is set via MDM or command line
-#   - Fixed logic for DaysUntilReset to use default if no option is set via mdm or command line
-#   - Fixed logic where script was improperly shifting CLI options when running from Jamf and not using built-in parameter options (Issues #45)
-#   - Updated Microsoft Teams Webhook per [Create incoming webhooks with Workflows for Microsoft Teams](https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498)
-#   - Fixed issues with dialog logic for Install Now Workflow
-#
-#   3.0.4, [03.14.2025]
-#   - Fixed logic so that InteractiveMode=0 will not run the deferral workflow or display a deferral dialog
-#   - Updated workflow_disable_relaunch logic to not relaunch AAP if set to true and AAP is installing or Jamf is the parent process
-#   - Fixed an issue that was causing Optional labels to be duplicated when added to the Required queue if the app is installed
-#   - Fixed various formatting throughout the script
-#
-#   3.0.3, [03.13.2025]
-#   - Fixed progress bar incrementation to increment in steps vs. bouncing
-#   - Fixed logic for UnattendedExit
-#
-#   3.0.2, [03.11.2025]
-#   - Added AAPLastRunDate and AAPLastSilentRunDate
-#
-#   3.0.1, [03.10.2025]
-#   - Fixed a bug where --workflow-install-now would be ignored if AAPPatchingCompletionStatus=TRUE
-#   - Fixed a bug where --workflow-install-now would not complete cleanly and trigger an immediate re-run of AAP
-#   - Added logic for Jumpcloud MDM and updated Webhook logic for the Jumpcloud MDM URL (Thanks @mattbilson)
-#
-#   3.0.0, [03.08.2025]
-#   - Final Release
-#
 #
 ####################################################################################################
 
