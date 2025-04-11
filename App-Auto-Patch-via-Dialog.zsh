@@ -8,6 +8,8 @@
 #
 # HISTORY
 #
+#   Full Change Log: https://github.com/App-Auto-Patch/App-Auto-Patch/blob/main/CHANGELOG.md
+#
 #   3.1.2, [04.11.2025]
 #   - Fixed a bug that prevented the proper app name from populating for a small number of labels (Issue #140)
 #   - Fixed a bug when using wildcards for ignored and required labels that could cause the label to skip being added (Issue #141)
@@ -70,7 +72,7 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.1.2b3"
+scriptVersion="3.1.2"
 scriptDate="2025/04/11"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
