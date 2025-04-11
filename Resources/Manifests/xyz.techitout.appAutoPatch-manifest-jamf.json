@@ -15,7 +15,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#daysuntilreset"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#daysuntilreset"
                 }
             ],
             "property_order": 5
@@ -47,7 +47,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#patchweekstartday"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#patchweekstartday"
                 }
             ],
             "property_order": 10
@@ -65,7 +65,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#deadlinecountfocus"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#deadlinecountfocus"
                 }
             ],
             "property_order": 15
@@ -83,7 +83,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#deadlinecounthard"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#deadlinecounthard"
                 }
             ],
             "property_order": 20
@@ -95,7 +95,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Days-Deadlines"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Days-Deadlines"
                 }
             ],
             "property_order": 25
@@ -107,7 +107,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Days-Deadlines"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Days-Deadlines"
                 }
             ],
             "property_order": 30
@@ -125,7 +125,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#deferraltimerdefault"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#deferraltimerdefault"
                 }
             ],
             "property_order": 35
@@ -143,7 +143,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#deferraltimererror"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#deferraltimererror"
                 }
             ],
             "property_order": 40
@@ -161,7 +161,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#deferraltimerfocus"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#deferraltimerfocus"
                 }
             ],
             "property_order": 45
@@ -179,7 +179,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#deferraltimermenu"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#deferraltimermenu"
                 }
             ],
             "property_order": 50
@@ -197,7 +197,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#deferraltimerworkflowrelaunch"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#deferraltimerworkflowrelaunch"
                 }
             ],
             "property_order": 55
@@ -219,7 +219,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#dialogontop"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#dialogontop"
                 }
             ],
             "property_order": 60
@@ -237,7 +237,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#dialogtimeoutdeferral"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#dialogtimeoutdeferral"
                 }
             ],
             "property_order": 65
@@ -259,7 +259,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#dialogtimeoutdeferralaction"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#dialogtimeoutdeferralaction"
                 }
             ],
             "property_order": 70
@@ -281,7 +281,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#unattendedexit"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#unattendedexit"
                 }
             ],
             "property_order": 75
@@ -299,7 +299,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#unattendedexitseconds"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#unattendedexitseconds"
                 }
             ],
             "property_order": 80
@@ -321,7 +321,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#useoverlayicon"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#useoverlayicon"
                 }
             ],
             "property_order": 85
@@ -339,7 +339,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#ignoredlabels"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#ignoredlabels"
                 }
             ],
             "property_order": 90
@@ -357,7 +357,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#requiredlabels"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#requiredlabels"
                 }
             ],
             "property_order": 95
@@ -375,7 +375,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#optionallabels"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#optionallabels"
                 }
             ],
             "property_order": 100
@@ -393,7 +393,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#apptitle"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#apptitle"
                 }
             ],
             "property_order": 105
@@ -416,7 +416,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#convertappsinhomefolder"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#convertappsinhomefolder"
                 }
             ],
             "property_order": 110
@@ -439,7 +439,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#ignoreappsinhomefolder"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#ignoreappsinhomefolder"
                 }
             ],
             "property_order": 115
@@ -457,7 +457,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#installomatoroptions"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#installomatoroptions"
                 }
             ],
             "property_order": 120
@@ -469,21 +469,59 @@
             "description": "Determines if the AAP script should use the Main (beta) or Release version of Installomator. The version from the Main branch typically includes more recent updates from PR's to fix issues or add new labels.",
             "enum": [
                 "Main",
-                "Release"
+                "Release",
+                "Custom"
             ],
             "options": {
                 "enum_titles": [
                     "Main",
-                    "Release"
+                    "Release",
+                    "Custom"
                 ]
             },
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#installomatorversion"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Installomator-Integration#installomator-versions"
                 }
             ],
             "property_order": 125
+        },
+        "InstallomatorVersionCustomRepoPath": {
+            "type": "string",
+            "title": "Installomator Version Custom Repo Path",
+            "default": "Main",
+            "description": "If InstallomatorVersion is set to Custom, enter the Github Site and Repository name in the following format: site_name/repo_name . For example, if the custom fork is located at https://github.com/TechTrekkie/Installomator, you would set this key to techtrekkie/installomator",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "Installomator/Installomator"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Installomator-Integration#custom-installomator-repo"
+                }
+            ],
+            "property_order": 130
+        },
+        "InstallomatorVersionCustomBranchName": {
+            "type": "string",
+            "title": "Installomator Version Custom Branch Name",
+            "default": "Main",
+            "description": "The name of the branch you want to use in your custom repo, typically main.",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "main"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Installomator-Integration#custom-installomator-repo"
+                }
+            ],
+            "property_order": 135
         },
         "InteractiveMode": {
             "type": "integer",
@@ -508,10 +546,10 @@
                 "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#interactivemode"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#interactivemode"
                 }
             ],
-            "property_order": 130
+            "property_order": 140
         },
         "RemoveInstallomatorPath": {
             "type": "string",
@@ -531,10 +569,10 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#removeinstallomatorpath"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#removeinstallomatorpath"
                 }
             ],
-            "property_order": 135
+            "property_order": 145
         },
         "SupportTeamName": {
             "type": "string",
@@ -549,10 +587,10 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#supportteamname"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#supportteamname"
                 }
             ],
-            "property_order": 140
+            "property_order": 150
         },
         "SupportTeamEmail": {
             "type": "string",
@@ -567,10 +605,10 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#supportteamemail"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#supportteamemail"
                 }
             ],
-            "property_order": 145
+            "property_order": 155
         },
         "SupportTeamPhone": {
             "type": "string",
@@ -585,10 +623,10 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#supportteamphone"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#supportteamphone"
                 }
             ],
-            "property_order": 150
+            "property_order": 160
         },
         "SupportTeamWebsite": {
             "type": "string",
@@ -603,10 +641,10 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#supportteamwebsite"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#supportteamwebsite"
                 }
             ],
-            "property_order": 155
+            "property_order": 165
         },
         "WebhookFeature": {
             "type": "string",
@@ -628,10 +666,10 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#webhookfeature"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#webhookfeature"
                 }
             ],
-            "property_order": 160
+            "property_order": 170
         },
         "WebhookURLSlack": {
             "type": "string",
@@ -640,10 +678,10 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#webhookurlslack"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#webhookurlslack"
                 }
             ],
-            "property_order": 165
+            "property_order": 175
         },
         "WebhookURLTeams": {
             "type": "string",
@@ -655,7 +693,7 @@
                     "href": "https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498"
                 }
             ],
-            "property_order": 170
+            "property_order": 180
         },
         "WorkflowDisableAppDiscovery": {
             "type": "string",
@@ -675,10 +713,10 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#workflowdisableappdiscovery"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#workflowdisableappdiscovery"
                 }
             ],
-            "property_order": 175
+            "property_order": 185
         },
         "WorkflowDisableRelaunch": {
             "type": "string",
@@ -698,10 +736,10 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings"
                 }
             ],
-            "property_order": 180
+            "property_order": 190
         },
         "WorkflowInstallNowPatchingStatusAction": {
             "type": "string",
@@ -723,10 +761,10 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/AAP3-Wiki/wiki/Configure-Settings#workflowdisablerelaunch"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#workflowdisablerelaunch"
                 }
             ],
-            "property_order": 185
+            "property_order": 195
         }
     }
 }
