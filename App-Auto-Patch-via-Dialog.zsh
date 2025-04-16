@@ -889,8 +889,7 @@ get_preferences() {
     # Get current local user
     currentUserAccountName=$(scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ {$1=$2="";print $0;}' | xargs)
     # Get language setting for current local user
-    #langUser=$(su - ${currentUserAccountName} -c "/usr/bin/defaults read -g AppleLocale | cut -d'_' -f1")
-    langUser="sp"
+    langUser=$(su - ${currentUserAccountName} -c "/usr/bin/defaults read -g AppleLocale | cut -d'_' -f1")
     if [[ "${reset_defaults_option}" == "TRUE" ]]; then
         log_status "Resetting defaults for App Auto Patch"
 
