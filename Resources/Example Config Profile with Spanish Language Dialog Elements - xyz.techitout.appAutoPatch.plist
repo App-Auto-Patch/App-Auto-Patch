@@ -30,7 +30,7 @@
   <string>BLOCKING_PROCESS_ACTION=quit_kill NOTIFY=silent LOGO=appstore IGNORE_APP_STORE_APPS=yes</string>
   <key>userInterface</key>
   <dict>
-    <key>updateElements</key>
+    <key>dialogElements</key>
     <array>
       <dict>
         <key>language</key>
