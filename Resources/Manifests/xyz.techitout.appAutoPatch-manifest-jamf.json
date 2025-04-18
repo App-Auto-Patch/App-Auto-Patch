@@ -798,7 +798,7 @@
                     "type": "array",
                     "items": {
                         "type": "object",
-                        "title": "updateElement - Dictionary",
+                        "title": "dialogElements - Dictionary",
                         "properties": {
                             "language": {
                                 "type": "string",
