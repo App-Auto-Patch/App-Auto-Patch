@@ -1862,7 +1862,7 @@
 								
 							</array>
 							<key>pfm_title</key>
-							<string>updateElement - Dictionary</string>
+							<string>dialogElements - Dictionary</string>
 							<key>pfm_type</key>
 							<string>dictionary</string>
 						</dict>
