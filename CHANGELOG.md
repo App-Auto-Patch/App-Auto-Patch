@@ -2,6 +2,13 @@
 
 # Version 3
 
+## Version 3.2.0
+### 29-Apr-2025
+- Added multi-language support: Entries can be added to the managed configuration profile for multiple languages, based on the setting for the user in macOS
+- Added --workflow-install-now-silent option which runs through the workflow without deferrals but does not display dialogs
+- Added option to disable Installomator Updates using <key>InstallomatorUpdateDisable</key> <string>TRUE,FALSE</string>
+- Added dialogTargetVersion and set to version 2.5.5 as minimum required due to issues with the deferral menu on older versions
+
 ## Version 3.1.2
 ### 11-Apr-2025
 - Fixed a bug that prevented the proper app name from populating for a small number of labels (Issue #140)
