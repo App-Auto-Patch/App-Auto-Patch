@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>InteractiveMode</key>
+  <integer>1</integer>
+  <key>DeferralTimerFocus</key>
+  <integer>60</integer>
+  <key>DeferralTimerError</key>
+  <integer>60</integer>
+  <key>DeadlineDaysFocus</key>
+  <string>4</string>
+  <key>DeadlineDaysHard</key>
+  <string>5</string>
+  <key>DeferralTimerDefault</key>
+  <integer>1440</integer>
+  <key>DeferralTimerMenu</key>
+  <string>30,60,90,480,720,1440,2880</string>
+  <key>DialogTimeoutDeferral</key>
+  <integer>7200</integer>
+  <key>DialogTimeoutDeferralAction</key>
+  <string>Defer</string>
+  <key>PatchWeekStartDay</key>
+  <integer>2</integer>
+  <key>DaysUntilReset</key>
+  <integer>7</integer>
+  <key>IgnoredLabels</key>
+  <string>1password* androidstudio microsoft*</string>
+  <key>InstallomatorOptions</key>
+  <string>BLOCKING_PROCESS_ACTION=quit_kill NOTIFY=silent LOGO=appstore IGNORE_APP_STORE_APPS=yes</string>
+  <key>userInterface</key>
+  <dict>
+    <key>dialogElements</key>
+    <array>
+      <dict>
+        <key>language</key>
+        <string>sp</string>
+        <key>display_string_and</key>
+        <string>y</string>
+        <key>display_string_complete_progress</key>
+        <string>¡Actualizaciones completas!</string>
+        <key>display_string_days</key>
+        <string>días</string>
+        <key>display_string_defer_future_button</key>
+        <string>Aplazar hasta</string>
+        <key>display_string_defer_today_button</key>
+        <string>Aplazar</string>
+        <key>display_string_defer_tomorrow_button</key>
+        <string>Aplazar hasta mañana</string>
+        <key>display_string_deferral_button1</key>
+        <string>Continuar</string>
+        <key>display_string_deferral_button2</key>
+        <string>Aplazar</string>
+        <key>display_string_deferral_infobox1</key>
+        <string>Aplazamiento disponible hasta</string>
+        <key>display_string_deferral_infobox2</key>
+        <string>fuera de</string>
+        <key>display_string_deferral_infobox3</key>
+        <string>aplazamientos restantes</string>
+        <key>display_string_deferral_message_01</key>
+        <string>Puede aplazar las actualizaciones o continuar cerrando las aplicaciones y aplicar actualizaciones</string>
+        <key>display_string_deferral_message_02</key>
+        <string>aplicaciones que requieren actualizaciones</string>
+        <key>display_string_deferral_unlimited</key>
+        <string>Sin fecha límite y con aplazamientos ilimitados</string>
+        <key>display_string_deferraldeadline_button1</key>
+        <string>Continuar</string>
+        <key>display_string_deferraldeadline_button2</key>
+        <string>Se alcanzaron los aplazamientos máximos</string>
+        <key>display_string_deferraldeadline_infobox</key>
+        <string>Las actualizaciones se instalarán automáticamente una vez que se agote el tiempo. \n\n No quedan aplazamientos.</string>
+        <key>display_string_deferraldeadline_message_deadline</key>
+        <string>aplicaciones que requieren actualizaciones\n\n Has aplazado el número máximo de</string>
+        <key>display_string_discovery_action_message</key>
+        <string>Analizando</string>
+        <key>display_string_discovery_message</key>
+        <string>Análisis de aplicaciones instaladas</string>
+        <key>display_string_discovery_progress</key>
+        <string>Exploración</string>
+        <key>display_string_help_message_computer_info</key>
+        <string>Información de la computadora</string>
+        <key>display_string_help_message_dialog</key>
+        <string>Diálogo</string>
+        <key>display_string_help_message_email</key>
+        <string>Correo electrónico</string>
+        <key>display_string_help_message_help_website</key>
+        <string>Sitio web de ayuda</string>
+        <key>display_string_help_message_intro</key>
+        <string>Si necesita ayuda, póngase en contacto con</string>
+        <key>display_string_help_message_operating_system</key>
+        <string>Sistema operativo</string>
+        <key>display_string_help_message_script_version</key>
+        <string>Versión del guión</string>
+        <key>display_string_help_message_serial</key>
+        <string>Número de serie</string>
+        <key>display_string_help_message_started</key>
+        <string>Comenzó</string>
+        <key>display_string_help_message_telephone</key>
+        <string>Teléfono</string>
+        <key>display_string_hour</key>
+        <string>Hora</string>
+        <key>display_string_hours</key>
+        <string>Horas</string>
+        <key>display_string_minutes</key>
+        <string>Minutos</string>
+        <key>display_string_patching_button1</key>
+        <string>Hecho</string>
+        <key>display_string_patching_checking</key>
+        <string>De cheques</string>
+        <key>display_string_patching_infobox_computer_name</key>
+        <string>**Nombre de la computadora:**</string>
+        <key>display_string_patching_infobox_macos_version</key>
+        <string>**Versión MacOS:**</string>
+        <key>display_string_patching_infobox_updates</key>
+        <string>Actualizaciones:</string>
+        <key>display_string_patching_message</key>
+        <string>Actualizando las siguientes aplicaciones</string>
+        <key>display_string_patching_progress</key>
+        <string>Tratamiento</string>
+        <key>display_string_there_are</key>
+        <string>Hay</string>
+        <key>display_string_times</key>
+        <string>veces</string>
+        <key>display_string_uptodate_button1</key>
+        <string>Cerca</string>
+        <key>display_string_uptodate_message</key>
+        <string>Todas las aplicaciones están actualizadas.</string>
+      </dict>
+    </array>
+  </dict>
+</dict>
+</plist>
