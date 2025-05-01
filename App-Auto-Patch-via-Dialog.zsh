@@ -23,8 +23,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.2.0"
-scriptDate="2025/04/29"
+scriptVersion="3.2.1"
+scriptDate="2025/05/01"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -1797,6 +1797,7 @@ workflow_startup() {
 		[[ -d "${appAutoPatchLogFolder}" ]] && log_status "Found previous aap instance running with PID ${aapPreviousPID}, killing processes..."
 		[[ ! -d "${appAutoPatchLogFolder}" ]] && log_echo "Status: Found previous aap instance running with PID ${aapPreviousPID}, killing processes..."
 		kill -9 "${aapPreviousPID}" > /dev/null 2>&1
+        killProcess "Dialog"
 	fi
 	
 	# Create new ${appAutoPatchPIDfile} for this instance of aap
@@ -2841,6 +2842,25 @@ set_auto_launch_deferral() {
     defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -string "${next_auto_launch}"
     log_exit "AAP is scheduled to automatically relaunch at: ${next_auto_launch}"
     exit_clean
+}
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Kill a specified process
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+function killProcess() {
+    process="$1"
+    if process_pid=$( pgrep -a "${process}" 2>/dev/null ) ; then
+        log_info "Attempting to terminate the '$process' process …"
+        log_info "(Termination message indicates success.)"
+        kill "$process_pid" 2> /dev/null
+        if pgrep -a "$process" >/dev/null ; then
+            log_error "'$process' could not be terminated."
+        fi
+    else
+        log_info "The '$process' process isn’t running."
+    fi
 }
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #

@@ -2,6 +2,10 @@
 
 # Version 3
 
+## Version 3.2.1
+### 01-May-2025
+- Added logic to kill Dialog process if a previous PID is found
+
 ## Version 3.2.0
 ### 29-Apr-2025
 - Added multi-language support: Entries can be added to the managed configuration profile for multiple languages, based on the setting for the user in macOS
