@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/zsh --no-rcs
 
 # This script returns the Next Scheduled Run of App Auto Patch 3.2.0 to Jamf inventory. 
 # If PatchingCompletionStatus is True, date is calculated based on PatchingStartDate + daysUntilReset.
