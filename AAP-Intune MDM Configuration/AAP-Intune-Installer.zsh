@@ -14,10 +14,10 @@ AAP_FOLDER="/Library/Management/AppAutoPatch"
 AAP_LOCAL_PLIST="${AAP_FOLDER}/xyz.techitout.appAutoPatch" # No trailing ".plist"
 
 # Version to install:
-INSTALL_VERSION="3.0.4"
+INSTALL_VERSION="3.2.1"
 
 # Hash of downloaded script for security reasons:
-HASH_CHECK=bad8e82bc47d84839c6ceb79f1517f2f2a372dfba7f0de9cae7a51ba4f5ae1c9
+HASH_CHECK=12545E6D57241C357552D14D7454BD58BC8DFFC20FABF3E2164535A168C9CDEA
 
 # Temporary download folder
 AAP_TEMP="/var/tmp/temp_aap"
