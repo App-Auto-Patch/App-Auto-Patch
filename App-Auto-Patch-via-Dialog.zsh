@@ -2152,10 +2152,10 @@ next_auto_launch=\$(defaults read "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> 
 if [[ "\${next_auto_launch}" == "FALSE" ]]; then # Exit if auto launch is disabled.
 	exit 0
 elif [[ -z "\${next_auto_launch}" ]]; then # Exit if deferred until a system restart.
-	mac_last_startup_saved_epoch=\$(date -j -f "%Y-%m-%d:%H:%M:%S" "\$(defaults read "${appAutoPatchLocalPLIST}" MacLastStartup 2> /dev/null)" +"%s" 2> /dev/null)
+	mac_last_startup_saved_epoch=\$(date -j -f "${timestamp_format}" "\$(defaults read "${appAutoPatchLocalPLIST}" MacLastStartup 2> /dev/null)" +"%s" 2> /dev/null)
 	mac_last_startup_epoch=\$(date -j -f "%b %d %H:%M:%S" "\$(last reboot | head -1 | cut -c 41- | xargs):00" +"%s" 2> /dev/null)
 	[[ -n "\${mac_last_startup_saved_epoch}" ]] && [[ -n "\${mac_last_startup_epoch}" ]] && [[ "\${mac_last_startup_saved_epoch}" -ge "\${mac_last_startup_epoch}" ]] && exit 0
-elif [[ \$(date +%s) -lt \$(date -j -f "%Y-%m-%d:%H:%M:%S" "\${next_auto_launch}" +"%s" 2> /dev/null) ]]; then # Exit if deferred until a later date.
+elif [[ \$(date +%s) -lt \$(date -j -f "${timestamp_format}" "\${next_auto_launch}" +"%s" 2> /dev/null) ]]; then # Exit if deferred until a later date.
 	exit 0
 fi
 
@@ -2825,23 +2825,11 @@ check_deadlines_count() {
 
 set_auto_launch_deferral() {
     log_verbose  "deferralNextLaunch is: ${deferral_timer_minutes}"
-    local next_launch_seconds
-    next_launch_seconds=$(( deferral_timer_minutes * 60 ))
-    local deferral_timer_epoch
-    deferral_timer_epoch=$(( $(date +%s) + next_launch_seconds ))
-    local deferral_timer_year
-    deferral_timer_year=$(date -j -f "%s" "${deferral_timer_epoch}" "+%Y" | xargs)
-    local deferral_timer_month
-    deferral_timer_month=$(date -j -f "%s" "${deferral_timer_epoch}" "+%m" | xargs)
-    local deferral_timer_day
-    deferral_timer_day=$(date -j -f "%s" "${deferral_timer_epoch}" "+%d" | xargs)
-    local deferral_timer_hour
-    deferral_timer_hour=$(date -j -f "%s" "${deferral_timer_epoch}" "+%H" | xargs)
-    local deferral_timer_minute
-    deferral_timer_minute=$(date -j -f "%s" "${deferral_timer_epoch}" "+%M" | xargs)
+    local deferral_timestamp
+    deferral_timestamp=$(( $(date +%s) + deferral_timer_minutes * 60 ))
     local next_auto_launch
-    next_auto_launch="${deferral_timer_year}-${deferral_timer_month}-${deferral_timer_day}:${deferral_timer_hour}:${deferral_timer_minute}:00"
-    defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -string "${next_auto_launch}"
+    next_auto_launch=$(date -r $deferral_timestamp +"$timestamp_format")
+    defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_auto_launch}"
     log_exit "AAP is scheduled to automatically relaunch at: ${next_auto_launch}"
     exit_clean
 }
