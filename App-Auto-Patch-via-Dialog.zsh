@@ -188,6 +188,8 @@ set_defaults() {
 
     timestamp="$( date '+%Y-%m-%d-%H%M%S' )"
     
+    timestamp_format="%Y-%m-%d %H:%M:%S %z"
+    
     appTitle="App Auto-Patch" # MDM Enabled
 
     appAutoPatchFolder="/Library/Management/AppAutoPatch"
@@ -2869,7 +2871,7 @@ function killProcess() {
 
 exit_clean() {
     
-    timestamp="$(date +"%Y-%m-%d %H:%M:%S")"
+    timestamp="$(date +$timestamp_format)"
     { [[ "${InteractiveModeOption}" == 0 ]]; } && defaults write $appAutoPatchLocalPLIST AAPLastSilentRunDate -date "$timestamp"
     defaults write $appAutoPatchLocalPLIST AAPLastRunDate -date "$timestamp"
     
@@ -2951,7 +2953,7 @@ function log_exit() {
 }
 
 write_status() {
-    defaults write "${appAutoPatchLocalPLIST}" AAPStatus -string "$(date +"%a %b %d %T"): $*"
+    defaults write "${appAutoPatchLocalPLIST}" AAPStatus -string "$(date +$timestamp_format): $*"
 }
 
 log_echo() {
@@ -4139,7 +4141,7 @@ main() {
             
             if [[ "$workflow_install_now_patching_status_action_option" == "ALWAYS" ]] || [[ "$workflow_install_now_patching_status_action_option" == "SUCCESS" && "${errorCount}" == 0 ]]; then
                 defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true #Set completion status to true
-                timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
+                timestamp="$(date +$timestamp_format)"
                 defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
             fi
             check_webhook
@@ -4173,7 +4175,7 @@ main() {
                 log_info "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
                 workflow_do_Installations
                 defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true #Set completion status to true
-                timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
+                timestamp="$(date +$timestamp_format)"
                 defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
                 check_webhook
 
@@ -4203,7 +4205,7 @@ main() {
                     log_notice "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
                     workflow_do_Installations
                     defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true #Set completion status to true
-                    timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
+                    timestamp="$(date +$timestamp_format)"
                     defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
                     check_webhook
                     
@@ -4229,7 +4231,7 @@ main() {
     else
         log_info "All apps are up to date. Nothing to do."
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true #Set completion status to true
-        timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
+        timestamp="$(date +$timestamp_format)"
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
         
         if [ ${InteractiveModeOption} -gt 1 ]; then
