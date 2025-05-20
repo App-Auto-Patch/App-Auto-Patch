@@ -2,6 +2,10 @@
 
 # Version 3
 
+## Version 3.2.2
+### 20-May-2025
+- Fixed logic for resetting PatchStartDate to use new date for deferrals instead of date prior to the reset
+
 ## Version 3.2.1
 ### 01-May-2025
 - Added logic to kill Dialog process if a previous PID is found
