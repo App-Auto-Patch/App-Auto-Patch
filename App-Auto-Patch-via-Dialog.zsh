@@ -36,7 +36,7 @@ echo "
     Version ${scriptVersion}
     ${scriptDate}
     https://github.com/App-Auto-Patch
-
+	
     Wiki:
     https://github.com/App-Auto-Patch/App-Auto-Patch/wiki
 
