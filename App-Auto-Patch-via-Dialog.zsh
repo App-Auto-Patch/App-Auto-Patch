@@ -23,8 +23,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.2.1"
-scriptDate="2025/05/01"
+scriptVersion="3.2.2"
+scriptDate="2025/05/20"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -2569,6 +2569,7 @@ check_completion_status() {
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool false
         log_info "Setting Patch Week Start Date as $Patch_Week_Start_Date"
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingStartDate "$Patch_Week_Start_Date"
+        PatchingStartDate=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingStartDate 2> /dev/null)
         PatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus 2> /dev/null)
         defaults delete "${appAutoPatchLocalPLIST}" DeadlineCounterFocus 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" DeadlineCounterHard 2> /dev/null
