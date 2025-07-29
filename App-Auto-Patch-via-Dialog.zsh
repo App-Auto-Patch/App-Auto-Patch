@@ -80,7 +80,8 @@ echo "
 
     Webhook Options:
     [--webhook-feature-all] [--webhook-feature-failures] [--webhook-feature-off]
-    [--webhook-url-slack=URL] [--webhook-url-teams=URL]
+    [--webhook-url-slack=URL] [--webhook-url-teams=URL] [--webhook-url-zoom=URL]
+    [--webhook-url-zoom-verification-token]
 
     Troubleshooting Options:
     [--verbose-mode] [--verbose-mode-off]
@@ -92,7 +93,7 @@ echo "
 
     ** Managed preferences override local options via domain: xyz.techitout.appAutoPatch
 
-    <key>AppTitle</key> <string>App Auto-Patch</string>    
+    <key>AppTitle</key> <string>App Auto-Patch</string>
     <key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</string>
     <key>DaysUntilReset</key> <integer>number</integer>
     <key>DeadlineCountFocus</key> <integer>number</integer>
@@ -129,6 +130,8 @@ echo "
     <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
     <key>WebhookURLSlack</key> <string>URL</string>
     <key>WebhookURLTeams</key> <string>URL</string>
+    <key>WebhookURLZoom</key> <string>URL</string>
+    <key>WebhookURLZoomVerificationToken</key> <string>secret</string>
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
     <key>WorkflowDisableRelaunch</key> <true/> | <false/>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
@@ -808,6 +811,12 @@ get_options() {
             --webhook-url-teams=*)
                 webhook_url_teams_option="${1##*=}"
             ;;
+            --webhook-url-zoom=*)
+                webhook_url_zoom_option="${1##*=}"
+            ;;
+            --webhook-url-zoom-verification-token=*)
+                webhook_url_zoom_verification_token_option="${1##*=}"
+            ;;
             --uninstall)
                 uninstall_app_auto_patch
             ;;
@@ -907,6 +916,10 @@ get_preferences() {
         webhook_url_slack_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLSlack 2> /dev/null)
         local webhook_url_teams_managed
         webhook_url_teams_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLTeams 2> /dev/null)
+        local webhook_url_zoom_managed
+        webhook_url_zoom_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLZoom 2> /dev/null)
+        local webhook_url_zoom_verification_token_managed
+        webhook_url_zoom_verification_token_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLZoomSecret 2> /dev/null)
         local ignored_labels_managed
         ignored_labels_managed=$(defaults read "${appAutoPatchManagedPLIST}" IgnoredLabels 2> /dev/null)
         local required_labels_managed
@@ -996,6 +1009,10 @@ get_preferences() {
         webhook_url_slack_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLSlack 2> /dev/null)
         local webhook_url_teams_local
         webhook_url_teams_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLTeams 2> /dev/null)
+        local webhook_url_zoom_local
+        webhook_url_zoom_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLZoom 2> /dev/null)
+        local webhook_url_zoom_verification_token_local
+        webhook_url_zoom_verification_token_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLZoomVerificationToken 2> /dev/null)
         local ignored_labels_local
         ignored_labels_local=$(defaults read "${appAutoPatchLocalPLIST}" IgnoredLabels 2> /dev/null)
         local required_labels_local
@@ -1088,6 +1105,10 @@ get_preferences() {
     { [[ -z "${webhook_url_slack_managed}" ]] && [[ -z "${webhook_url_slack_option}" ]] && [[ -n "${webhook_url_slack_local}" ]]; } && webhook_url_slack_option="${webhook_url_slack_local}"
     [[ -n "${webhook_url_teams_managed}" ]] && webhook_url_teams_option="${webhook_url_teams_managed}"
     { [[ -z "${webhook_url_teams_managed}" ]] && [[ -z "${webhook_url_teams_option}" ]] && [[ -n "${webhook_url_teams_local}" ]]; } && webhook_url_teams_option="${webhook_url_teams_local}"
+    [[ -n "${webhook_url_zoom_managed}" ]] && webhook_url_zoom_option="${webhook_url_zoom_managed}"
+    { [[ -z "${webhook_url_zoom_managed}" ]] && [[ -z "${webhook_url_zoom_option}" ]] && [[ -n "${webhook_url_zoom_local}" ]]; } && webhook_url_zoom_option="${webhook_url_zoom_local}"
+    [[ -n "${webhook_url_zoom_verification_token_managed}" ]] && webhook_url_zoom_secret_managed ="${webhook_url_secret_managed}"
+    { [[ -z "${webhook_url_zoom_verification_token_managed}" ]] && [[ -z "${webhook_url_zoom_secret_option}" ]] && [[ -n "${webhook_url_zoom_secret_local}" ]]; } && webhook_url_zoom_secret_option="${webhook_url_zoom_secret_local}"
     [[ -n "${ignored_labels_managed}" ]] && ignored_labels_option="${ignored_labels_managed}"
     { [[ -z "${ignored_labels_managed}" ]] && [[ -z "${ignored_labels_option}" ]] && [[ -n "${ignored_labels_local}" ]]; } && ignored_labels_option="${ignored_labels_local}"
     [[ -n "${required_labels_managed}" ]] && required_labels_option="${required_labels_managed}"
@@ -1164,6 +1185,8 @@ get_preferences() {
     log_verbose "WebhookFeature: $webhook_feature_option"
     log_verbose "WebhookURLSlack: $webhook_url_slack_option"
     log_verbose "WebhookURLTeams: $webhook_url_teams_option"
+    log_verbose "WebhookURLZoom: $webhook_url_zoom_option"
+    log_verbose "WebhookURLZoomVerificationToken: $webhook_url_zoom_verification_token_option"
     log_verbose "IgnoredLabels: $ignored_labels_option"
     log_verbose "RequiredLabels: $required_labels_option"
     log_verbose "OptionalLabels: $optional_labels_option"
@@ -1661,10 +1684,26 @@ manage_parameter_options() {
     else
         defaults delete "${appAutoPatchLocalPLIST}" WebhookURLTeams 2> /dev/null
     fi
-    
+
+    # Manage ${webhook_url_zoom_option} and save to ${appAutoPatchLocalPLIST}.
+    if [[ -n "${webhook_url_zoom_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" WebhookURLZoom -string "${webhook_url_zoom_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" WebhookURLZoom 2> /dev/null
+    fi
+
+    # Manage ${webhook_url_zoom_secret_option} and save to ${appAutoPatchLocalPLIST}.
+    if [[ -n "${webhook_url_zoom_secret_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" WebhookURLZoomVerificationToken -string "${webhook_url_zoom_secret_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" WebhookURLZoomVerificationToken 2> /dev/null
+    fi
+
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${webhook_feature_option}" ]]; } && log_verbose "webhook_feature_option is: ${webhook_feature_option}"
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${webhook_url_slack_option}" ]]; } && log_verbose "webhook_url_slack_option is: ${webhook_url_slack_option}"
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${webhook_url_teams_option}" ]]; } && log_verbose "webhook_url_teams_option is: ${webhook_url_teams_option}"
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${webhook_url_zoom_option}" ]]; } && log_verbose "webhook_url_zoom_option is: ${webhook_url_zoom_option}"
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${webhook_url_zoom_verification_token_option}" ]]; } && log_verbose "Zoom webhook verification token has been provided."
 }
 
 gather_error_log(){
@@ -2495,6 +2534,10 @@ get_mdm(){
         *jumpcloud*)
             log_info "MDM is Jumpcloud"
             mdmName="Jumpcloud"
+        ;;
+        *addigy*)
+            log_info "MDM is Addigy"
+            mdmName="Addigy"
         ;;
 		*)
 			log_info "Unable to determine MDM from ServerURL"
@@ -3902,6 +3945,103 @@ webHookMessage() {
         log_verbose "Webhook result: $curlResult"
     fi
     
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Zoom notification # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #  
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Zoom webhook is a bit different than the other webhooks, as it requires a "Incoming Webhook" app to be created in the Zoom App Marketplace.
+# The webhook URL is then used to send messages to a specific channel in Zoom.
+# Zoom webhooks has a "incoming webhook" chatbot feature. 
+# You can set up the chatbot by going to the Zoom App Marketplace, and searching for that app and adding it to your account.
+# You can also create a self made app, but using the embedded Zoom app is easier. Once created, you will be able to navigate to the "Incoming Webhook" app chat in the Zoom Workplace app.
+# Following the linked documentation will give you the steps and options to recieve the webhook URL that you can add to the .mobileconfig file.
+# The KB can be found here: https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0067640
+
+
+    if [[ $webhook_url_zoom_option == "" ]]; then
+        log_info "No Zoom Webhook configured"
+    else
+        if [[ $supportTeamHyperlink == "" ]]; then
+            supportZoomHyperlink="https://support.zoom.com/"
+        else
+            supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
+        fi
+        # If Mac is managed by Jamf, get the Jamf URL to the computer
+        if defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url &> /dev/null; then
+            jamfProURL=$(/usr/bin/defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url)
+            mdmComputerURL="${jamfProURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
+            # If Mac is managed by Intune, get the Intune URL to the computer
+        elif [[ "$(profiles show | grep -A4 "Management Profile" | sed -n -e 's/^.*profileIdentifier: //p')" == "Microsoft.Profiles.MDM" ]]; then
+            mdmURL="https://intune.microsoft.com/#view/Microsoft_Intune_Devices/DeviceSettingsMenuBlade/~/overview/mdmDeviceId"
+            mdmComputerID="$(grep -rnwi '/Library/Logs/Microsoft/Intune' -e 'DeviceId:' | head -1 | grep -E -o 'DeviceId.{0,38}' | cut -d ' ' -f2)"
+            if [[ ! -z "$mdmComputerID" ]]; then
+                mdmComputerURL="${mdmURL}/${mdmComputerID}"
+            else
+                # For cases when the device id is not found in the logs
+                mdmComputerURL="https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMacOsMenu/~/macOsDevices"
+            fi
+            # If Mac is managed by Jumpcloud, link to the Jumpcloud devices page
+        elif [[  $mdmName == "Jumpcloud" ]]; then
+            mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
+                # If mac is managed by Addigy, link to the Addigy devices page
+        elif [[  $mdmName == "Addigy" ]]; then
+            mdmComputerID=$(/Library/Addigy/go-agent agent agentid)
+            if [[ ! -z "$mdmComputerID" ]]; then
+                mdmComputerURL="https://app.addigy.com/devices/${mdmComputerID}"
+            else
+                # For cases when the device id is not found in the logs
+                mdmComputerURL="https://app.addigy.com/devices"
+            fi
+        else
+            log_info "No MDM determined - webhook call will fail"
+        fi
+
+log_info "Sending Zoom WebHook"
+
+        jsonPayload='{
+            "attachments": [
+                {
+                    "fallback": "'${appTitle}': '${webhookStatus}'",
+                    "color": "#36a64f",
+                    "pretext": "'${appTitle}': '${webhookStatus}'",
+                    "author_name": "'${computerName}'",
+                    "author_icon": "https://raw.githubusercontent.com/App-Auto-Patch/App-Auto-Patch/main/Images/AAPLogo.png",
+                    "fields": [
+                        {
+                            "title": "Serial Number",
+                            "value": "'${serialNumber}'",
+                            "short": true
+                        },
+                        {
+                            "title": "User",
+                            "value": "'${currentUserAccountName}'",
+                            "short": true
+                        },
+                        {
+                            "title": "Updates",
+                            "value": "'${formatted_result}'",
+                            "short": true
+                        },
+                        {
+                            "title": "Errors",
+                            "value": "'${formatted_error_result}'",
+                            "short": true
+                        }
+                    ],
+                    "actions": [
+                        {
+                            "type": "button",
+                            "text": "'View in ${mdmName}'",
+                            "url": "'${mdmComputerURL}'"
+                        }
+                    ]
+                }
+            ]
+        }'
+        # Send the JSON payload using curl
+        curlResult=$(curl "$webhook_url_zoom_option" -s -X POST -H 'Authorization: "webhook_url_zoom_verification_token_option"' 'Content-type: application/json' -d "$jsonPayload")
+        log_verbose "Webhook result: $curlResult"
+    fi
 }
 
 check_webhook(){
