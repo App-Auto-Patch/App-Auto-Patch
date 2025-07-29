@@ -1692,7 +1692,7 @@ manage_parameter_options() {
         defaults delete "${appAutoPatchLocalPLIST}" WebhookURLZoom 2> /dev/null
     fi
 
-    # Manage ${webhook_url_zoom_secret_option} and save to ${appAutoPatchLocalPLIST}.
+    # Manage ${webhook_url_zoom_verification_token_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ -n "${webhook_url_zoom_verification_token_option}" ]]; then
         defaults write "${appAutoPatchLocalPLIST}" WebhookURLZoomVerificationToken -string "${webhook_url_zoom_verification_token_option}"
     else
