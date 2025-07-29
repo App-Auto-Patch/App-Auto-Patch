@@ -592,6 +592,52 @@ set_display_strings_language() {
     [[ -n "${display_string_help_message_script_version_managed}" ]] && display_string_help_message_script_version="${display_string_help_message_script_version_managed}"
     # [[ -z "${display_string_help_message_script_version_managed}" ]] && display_string_help_message_script_version="${display_string_help_message_script_version}"
     
+    log_verbose "display_string_defer_today_button: $display_string_defer_today_button"
+    log_verbose "display_string_defer_tomorrow_button: $display_string_defer_tomorrow_button"
+    log_verbose "display_string_defer_future_button: $display_string_defer_future_button"
+    log_verbose "display_string_minutes: $display_string_minutes"
+    log_verbose "display_string_hour: $display_string_hour"
+    log_verbose "display_string_hours: $display_string_hours"
+    log_verbose "display_string_and: $display_string_and"
+    log_verbose "display_string_days: $display_string_days"
+    log_verbose "display_string_times: $display_string_times"
+    log_verbose "display_string_there_are: $display_string_there_are"
+    log_verbose "display_string_discovery_message: $display_string_discovery_message"
+    log_verbose "display_string_discovery_action_message: $display_string_discovery_action_message"
+    log_verbose "display_string_discovery_progress: $display_string_discovery_progress"
+    log_verbose "display_string_deferral_button1: $display_string_deferral_button1"
+    log_verbose "display_string_deferral_button2: $display_string_deferral_button2"
+    log_verbose "display_string_deferral_infobox1: $display_string_deferral_infobox1"
+    log_verbose "display_string_deferral_infobox2: $display_string_deferral_infobox2"
+    log_verbose "display_string_deferral_infobox3: $display_string_deferral_infobox3"
+    log_verbose "display_string_deferral_message_01: $display_string_deferral_message_01"
+    log_verbose "display_string_deferral_message_02: $display_string_deferral_message_02"
+    log_verbose "display_string_deferral_unlimited: $display_string_deferral_unlimited"
+    log_verbose "display_string_deferraldeadline_button1: $display_string_deferraldeadline_button1"
+    log_verbose "display_string_deferraldeadline_button2: $display_string_deferraldeadline_button2"
+    log_verbose "display_string_deferraldeadline_infobox: $display_string_deferraldeadline_infobox"
+    log_verbose "display_string_deferraldeadline_message_deadline: $display_string_deferraldeadline_message_deadline"
+    log_verbose "display_string_patching_button1: $display_string_patching_button1"
+    log_verbose "display_string_patching_checking: $display_string_patching_checking"
+    log_verbose "display_string_patching_progress: $display_string_patching_progress"
+    log_verbose "display_string_patching_infobox_computer_name: $display_string_patching_infobox_computer_name"
+    log_verbose "display_string_patching_infobox_macos_version: $display_string_patching_infobox_macos_version"
+    log_verbose "display_string_patching_infobox_updates: $display_string_patching_infobox_updates"
+    log_verbose "display_string_patching_message: $display_string_patching_message"
+    log_verbose "display_string_complete_progress: $display_string_complete_progress"
+    log_verbose "display_string_uptodate_button1: $display_string_uptodate_button1"
+    log_verbose "display_string_uptodate_message: $display_string_uptodate_message"
+    log_verbose "display_string_help_message_intro: $display_string_help_message_intro"
+    log_verbose "display_string_help_message_telephone: $display_string_help_message_telephone"
+    log_verbose "display_string_help_message_email: $display_string_help_message_email"
+    log_verbose "display_string_help_message_help_website: $display_string_help_message_help_website"
+    log_verbose "display_string_help_message_computer_info: $display_string_help_message_computer_info"
+    log_verbose "display_string_help_message_operating_system: $display_string_help_message_operating_system"
+    log_verbose "display_string_help_message_serial: $display_string_help_message_serial"
+    log_verbose "display_string_help_message_dialog: $display_string_help_message_dialog"
+    log_verbose "display_string_help_message_started: $display_string_help_message_started"
+    log_verbose "display_string_help_message_script_version: $display_string_help_message_script_version"
+
 }
 
 get_localized_path() {
@@ -1061,8 +1107,8 @@ get_preferences() {
     { [[ -z "${webhook_url_teams_managed}" ]] && [[ -z "${webhook_url_teams_option}" ]] && [[ -n "${webhook_url_teams_local}" ]]; } && webhook_url_teams_option="${webhook_url_teams_local}"
     [[ -n "${webhook_url_zoom_managed}" ]] && webhook_url_zoom_option="${webhook_url_zoom_managed}"
     { [[ -z "${webhook_url_zoom_managed}" ]] && [[ -z "${webhook_url_zoom_option}" ]] && [[ -n "${webhook_url_zoom_local}" ]]; } && webhook_url_zoom_option="${webhook_url_zoom_local}"
-    [[ -n "${webhook_url_zoom_verification_token_managed}" ]] && webhook_url_zoom_verification_token_managed="${webhook_url_zoom_verification_token_managed}"
-    { [[ -z "${webhook_url_zoom_verification_token_managed}" ]] && [[ -z "${webhook_url_zoom_verification_token_option}" ]] && [[ -n "${webhook_url_zoom_verification_token_local}" ]]; } && webhook_url_zoom_verification_token_option="${webhook_url_zoom_verification_token_local}"
+    [[ -n "${webhook_url_zoom_verification_token_managed}" ]] && webhook_url_zoom_verification_token_managed="${webhook_url_verification_token_managed}"
+    { [[ -z "${webhook_url_zoom_verification_token_managed}" ]] && [[ -z "${webhook_url_zoom_verification_token_option}" ]] && [[ -n "${webhook_url_zoom_Verification_token_local}" ]]; } && webhook_url_zoom_verification_token_option="${webhook_url_zoom_verification_token_local}"
     [[ -n "${ignored_labels_managed}" ]] && ignored_labels_option="${ignored_labels_managed}"
     { [[ -z "${ignored_labels_managed}" ]] && [[ -z "${ignored_labels_option}" ]] && [[ -n "${ignored_labels_local}" ]]; } && ignored_labels_option="${ignored_labels_local}"
     [[ -n "${required_labels_managed}" ]] && required_labels_option="${required_labels_managed}"
@@ -1646,7 +1692,7 @@ manage_parameter_options() {
         defaults delete "${appAutoPatchLocalPLIST}" WebhookURLZoom 2> /dev/null
     fi
 
-    # Manage ${webhook_url_zoom_verification_token_option} and save to ${appAutoPatchLocalPLIST}.
+    # Manage ${webhook_url_zoom_secret_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ -n "${webhook_url_zoom_verification_token_option}" ]]; then
         defaults write "${appAutoPatchLocalPLIST}" WebhookURLZoomVerificationToken -string "${webhook_url_zoom_verification_token_option}"
     else
