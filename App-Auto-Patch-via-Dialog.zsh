@@ -2029,7 +2029,7 @@ workflow_startup() {
     else
         overlayicon=""
     fi
-      
+    
     if [[ "${debug_mode_option}" == "TRUE" ]]; then
         infoTextScriptVersion="DEBUG MODE | Dialog: v${dialogVersion} • ${appTitle}: v${scriptVersion}"
     else
@@ -3950,49 +3950,75 @@ webHookMessage() {
             log_info "No MDM determined - webhook call will fail"
         fi
 
+#This can be easily modified by using Zoom's "App Card Builder Kit"
+#located at https://zoom.us/account/chatAppcardBuilderKit
 log_info "Sending Zoom WebHook"
         jsonPayload='{
             "content": {
+                "settings": {
+                    "default_sidebar_color": "#244B96"
+                },
                 "head": {
                     "text": "${appTitle}: ${webhookStatus}",
+                    "style": {
+                        "bold": true
+                    },
                     "sub_head": {
-                        "text": "Patch Summary for ${computerName}"
-                    }
-                },
-                "body": [
-                    {
-                        "type": "fields",
-                        "items": [
+                            "text": "Patch Summary for ${computerName}"
+                        }
+                    },
+                    "body": [
                         {
-                        "key": "Serial Number",
-                        "value": "${serialNumber}"
+                            "type": "section",
+                            "layout": "horizontal",
+                            "sections": [
+                                {
+                                "type": "message",
+                                "text": "Below are the results for ${currentUserAccountName}"
+                            },
+                            {
+                                "type": "fields",
+                                "items": [
+                                    {
+                                        "key": "Serial Number",
+                                        "value": "${serialNumber}",
+                                        "short": true
+                                    },
+                                    {
+                                        "key": "Updates",
+                                        value": "$formatted_results}",
+                                        "short": false
+                                    },
+                                    {
+                                        "key": "Errors",
+                                        "value": "${formatted_error_results}",
+                                        "short": false
+                                    },
+                                ]
+                            }
+                        ]
                     },
                     {
-                        "key": "User",
-                        "value": "${currentUserAccountName}"
-                    },
-                    {
-                        "key": "Updates",
-                        "value": "${formatted_result}"
-                    },
-                    {
-                        "key": "Errors",
-                        "value": "${formatted_error_result}"
-                    }
-                ]
-            },
-            {
-                "type": "actions",
-                "items": [
-                {
-                    "type": "button",
-                    "text": "View in ${mdmName}",
-                    "url": "${mdmComputerURL}"
+                        "type": "section",
+                        "layout": "vertical",
+                        "sections": [
+                            {
+                                "type": "message",
+                                "text": "View device in ${mdmName}"
+                            },
+                            {
+                                "type": "actions",
+                                "items": [
+                                    {
+                                    "text": "${mdmName}",
+                                    "value": "button"
+                                }
+                            ]
+                        }
+                    ]
                 }
             ]
         }
-    ]
-}
 }'
         # Send the JSON payload using curl
         curlResult=$(curl -s -X POST -H "Authorization: $webhook_url_zoom_verification_token_option" -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_zoom_option")
