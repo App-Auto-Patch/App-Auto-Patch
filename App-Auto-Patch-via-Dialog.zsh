@@ -4000,11 +4000,11 @@ webHookMessage() {
 #located at https://zoom.us/account/chatAppcardBuilderKit
 log_info "Sending Zoom WebHook"
         jsonPayload='{
-                        "head": {
-                            "text": "'${appTitle}': '${webhookStatus}'",
-                            "style": {
-                                "bold": true
-                            },
+                "head": {
+                    "text": "'${appTitle}': '${webhookStatus}'",
+                    "style": {
+                    "bold": true
+                        },
                         "sub_head": {
                             "text": "Patch Summary for '${computerName}'"
                         }
@@ -4063,7 +4063,7 @@ log_info "Sending Zoom WebHook"
         ]
 }'
         # Send the JSON payload using curl
-        curlResult=$(curl "$webhook_url_zoom_option" -s -X POST -H "Authorization: $webhook_url_zoom_verification_token_option" -H "Content-Type: application/json" -d "$jsonPayload")
+        curlResult=$(curl -s -X POST -H "Authorization: yHdT3exlS224FA1sKF1LCw " -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_zoom_option")
         log_verbose "Webhook result: $curlResult"
     fi
 }
