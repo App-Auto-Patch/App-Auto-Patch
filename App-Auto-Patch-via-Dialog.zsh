@@ -4032,12 +4032,12 @@ log_info "Sending Zoom WebHook"
                                                 },
                                                 {
                                                     "key": "Updates",
-                                                    value": "'${formatted_results}'",
+                                                    "value": "'${formatted_resul}'",
                                                     "short": false
                                                 },
                                                 {
                                                     "key": "Errors",
-                                                    "value": "'${formatted_error_results}'",
+                                                    "value": "'${formatted_error_result}'",
                                                     "short": false
                                                 },
                                             ]
@@ -4067,7 +4067,7 @@ log_info "Sending Zoom WebHook"
         }
 }'
         # Send the JSON payload using curl
-        curlResult=$(curl -s -X POST -H "Authorization: $webhook_url_zoom_verification_token_option" -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_zoom_option")
+        curlResult=$(curl "$webhook_url_zoom_option" -s -X POST -H "Authorization: $webhook_url_zoom_verification_token_option" -H "Content-Type: application/json" -d "$jsonPayload")
         log_verbose "Webhook result: $curlResult"
     fi
 }
