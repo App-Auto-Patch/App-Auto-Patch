@@ -4000,74 +4000,70 @@ webHookMessage() {
 #located at https://zoom.us/account/chatAppcardBuilderKit
 log_info "Sending Zoom WebHook"
         jsonPayload='{
-                        "content": {
-                            "settings": {
-                                "default_sidebar_color": "#244B96"
+                        "head": {
+                            "text": "'${appTitle}': '${webhookStatus}'",
+                            "style": {
+                                "bold": true
                             },
-                            "head": {
-                                "text": "'${appTitle}': '${webhookStatus}'",
-                                "style": {
-                                    "bold": true
-                                },
-                                "sub_head": {
-                                    "text": "Patch Summary for '${computerName}'"
-                                }
+                        "sub_head": {
+                            "text": "Patch Summary for '${computerName}'"
+                        }
+                    },
+                    "body": [
+                        {
+                            "type": "section",
+                            "layout": "horizontal",
+                            "sections": [
+                                {
+                                "type": "message",
+                                "text": "Below are the results for '${currentUserAccountName}'"
                             },
-                            "body": [
-                                {
-                                    "type": "section",
-                                    "layout": "horizontal",
-                                    "sections": [
-                                        {
-                                            "type": "message",
-                                            "text": "Below are the results for '${currentUserAccountName}'"
-                                        },
-                                        {
-                                            "type": "fields",
-                                            "items": [
-                                                {
-                                                    "key": "Serial Number",
-                                                    "value": "'${serialNumber}'",
-                                                    "short": true
-                                                },
-                                                {
-                                                    "key": "Updates",
-                                                    "value": "'${formatted_resul}'",
-                                                    "short": false
-                                                },
-                                                {
-                                                    "key": "Errors",
-                                                    "value": "'${formatted_error_result}'",
-                                                    "short": false
-                                                },
-                                            ]
-                                        }
-                                    ]
-                                },
-                                {
-                                "type": "section",
-                                "layout": "vertical",
-                                "sections": [
-                                {
+                            {
+                                "type": "fields",
+                                "items": [
+                                    {
+                                        "key": "Serial Number",
+                                        "value": "'${serialNumber}'",
+                                        "short": true
+                                    },
+                                    {
+                                        "key": "Updates",
+                                        "value": "'${formatted_resul}'",
+                                        "short": false
+                                    },
+                                    {
+                                        "key": "Errors",
+                                        "value": "'${formatted_error_result}'",
+                                        "short": false
+                                    },
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "type": "section",
+                        "layout": "vertical",
+                        "sections": [
+                            {
                                 "type": "message",
                                 "text": "View device in '${mdmName}'"
                             },
                             {
                                 "type": "actions",
                                 "items": [
-                                    {
-                                    "text": "'${mdmName}'",
-                                    "value": "button"
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ]
-        }
+                            {
+                                "text": "'${mdmName}' Device",
+                                "value": "button",
+                                "link": "'${mdmComputerURL}'"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
 }'
         # Send the JSON payload using curl
-        curlResult=$(curl "$webhook_url_zoom_option" -s -X POST -H "Authorization: $webhook_url_zoom_verification_token_option=" -H "Content-Type: application/json" -d "$jsonPayload")
+        curlResult=$(curl "$webhook_url_zoom_option" -s -X POST -H "Authorization: $webhook_url_zoom_verification_token_option" -H "Content-Type: application/json" -d "$jsonPayload")
         log_verbose "Webhook result: $curlResult"
     fi
 }
