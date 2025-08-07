@@ -337,8 +337,9 @@ set_display_strings_language() {
     display_string_deferral_infobox1="Deferral available until"
     display_string_deferral_infobox2="out of"
     display_string_deferral_infobox3="deferrals remaining\n"
-    display_string_deferral_message_01="You can **Defer** the updates or **Continue** to close the applications and apply updates.  \n\n"
+    display_string_deferral_message_01="You can **Defer** the updates or **Continue**. If you select a deferment option from the dropdown below, clicking Continue will defer the updates for the selected time period.  \n\n"
     display_string_deferral_message_02="application(s) that require updates:"
+    display_string_deferral_selecttitle="Deferment"
     display_string_deferral_unlimited="No deadline date and unlimited deferrals\n"
     
     #### Language for the Deferral Dialog with NO deferrals remaining
@@ -3290,8 +3291,20 @@ dialog_install_or_defer() {
 			fi
 		;;
 		*)
-			log_status "User chose to install now."
-			dialog_user_choice_install="TRUE"
+			# Check if user selected a deferment option from dropdown before clicking Continue
+			if [[ -n "${deferral_timer_menu_minutes}" ]] && [[ "$SELECTION" == *"SelectedIndex"* ]]; then
+				# User selected a deferment option from dropdown and clicked Continue - treat as defer
+				dialog_user_choice_install="FALSE"
+				INDEX_CHOICE=$(echo "$SELECTION" | grep "SelectedIndex" | awk -F ": " '{print $NF}')
+				INDEX_CHOICE=$((INDEX_CHOICE+1))
+				deferral_timer_minutes="${deferral_timer_menu_minutes_array[${INDEX_CHOICE}]}"
+				log_status "User selected deferment option and clicked Continue - deferring update for ${deferral_timer_minutes} minutes."
+				write_status "Pending: User selected deferment option and clicked Continue - deferring update for ${deferral_timer_minutes} minutes."
+			else
+				# No deferment option selected, proceed with installation
+				log_status "User chose to install now."
+				dialog_user_choice_install="TRUE"
+			fi
 		;;
 	esac
 }
