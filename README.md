@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.2.2
+# App Auto-Patch 3.3.0
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch)
 
@@ -19,16 +19,19 @@ The script simplifies the process of taking an inventory of installed applicatio
 
 This project has since been applied to MDMs outside of Jamf Pro, showcasing its versatility and adaptability. 
 
+## New features/Specific Changes in 3.3
+- Added patching receipts to report succes or failures on individual label patching. Additionally, this can be used with the new AAP-LatestPatches Jamf Pro EA to easily display this information in Jamf Pro. 
+
 ## New features/Specific Changes in 3.2
  - Added [multi-language support](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support): Entries can be added to the managed configuration profile for multiple languages, based on the setting for the user in macOS
  - Added [--workflow-install-now-silent](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#workflow-install-now-silent-version-32) option which runs through the workflow without deferrals but does not display dialogs
  - Added option to [disable Installomator Updates](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Installomator-Integration#installomator-update-disable) using <key>InstallomatorUpdateDisable</key> <string>TRUE,FALSE</string>
  - Added dialogTargetVersion and set to version 2.5.5 as minimum required due to issues with the deferral menu on older versions
 
-## Getting Started with 3.2
+## Getting Started with 3.3
 
-App Auto-Patch 3.2 automatically installs itself and necessary components anytime it's ran from outside the working folder `/Library/Management/AppAutoPatch/`
-For more information on getting started and testing, please visit the [AAP 3.2.2 Wiki](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki) page for more information
+App Auto-Patch 3.3 automatically installs itself and necessary components anytime it's ran from outside the working folder `/Library/Management/AppAutoPatch/`
+For more information on getting started and testing, please visit the [AAP 3.3.0 Wiki](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki) page for more information
 
 - After installed, you can simply run `sudo appautopatch` from terminal with any parameters to configure as you'd like. Examples:
 
@@ -38,7 +41,7 @@ Or trigger from the script directly to perform an install with parameters as you
 
 `./App-Auto-Patch-via-Dialog.zsh --interactiveMode=2 --workflow-install-now --deadline-count-focus=2 --deadline-count-hard=4 --ignored-labels="microsoft* googlechrome* jamfconnect zoom* 1password* firefox* swiftdialog" --verbose-mode`
 
- - You can find a mapping of 2.x variables to 3.2.2 configuration and command line options from the following TSV file: [Migration Options](https://github.com/App-Auto-Patch/App-Auto-Patch/blob/3.0/Resources/App-Auto-Patch%203.0.0-Migration-Options.tsv)
+ - You can find a mapping of 2.x variables to 3.3.0 configuration and command line options from the following TSV file: [Migration Options](https://github.com/App-Auto-Patch/App-Auto-Patch/blob/3.0/Resources/App-Auto-Patch%203.0.0-Migration-Options.tsv)
  - Profile Manfiests to assist with building a configuration profile can be found in the Resources folder: [Profile Manifests](https://github.com/App-Auto-Patch/App-Auto-Patch/tree/main/Resources/Manifests)
  - An example configuration profile and a profile & plist containing All available options can be found in the resources: [Example Configurations](https://github.com/App-Auto-Patch/App-Auto-Patch/tree/main/Resources)
 
