@@ -24,7 +24,7 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.3.0"
-scriptDate="2025/05/20"
+scriptDate="2025/08/21"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
