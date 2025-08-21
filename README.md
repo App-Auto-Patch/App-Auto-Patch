@@ -20,7 +20,8 @@ The script simplifies the process of taking an inventory of installed applicatio
 This project has since been applied to MDMs outside of Jamf Pro, showcasing its versatility and adaptability. 
 
 ## New features/Specific Changes in 3.3
-- Added patching receipts to report succes or failures on individual label patching. Additionally, this can be used with the new AAP-LatestPatches Jamf Pro EA to easily display this information in Jamf Pro. 
+- Added receipt support for patching events. Each app patched by App Auto Patch now writes a JSON receipt into the AAP management folder `/Library/Management/AppAutoPatch/receipts`. Successful and failed patch attempts are recorded. 
+- New `AAP-LatestPatches` Jamf Pro EA makes reporting on app patching easy. The script will report the successful and failed patch attempts along with a timestamp, version, Installomator exit code, and status.
 
 ## New features/Specific Changes in 3.2
  - Added [multi-language support](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support): Entries can be added to the managed configuration profile for multiple languages, based on the setting for the user in macOS
