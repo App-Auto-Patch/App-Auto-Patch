@@ -23,8 +23,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.2.2"
-scriptDate="2025/05/20"
+scriptVersion="3.3.0"
+scriptDate="2025/08/21"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -92,7 +92,7 @@ echo "
 
     ** Managed preferences override local options via domain: xyz.techitout.appAutoPatch
 
-    <key>AppTitle</key> <string>App Auto-Patch</string>    
+    <key>AppTitle</key> <string>App Auto-Patch</string>
     <key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</string>
     <key>DaysUntilReset</key> <integer>number</integer>
     <key>DeadlineCountFocus</key> <integer>number</integer>
@@ -195,6 +195,8 @@ set_defaults() {
     appAutoPatchLogFolder="${appAutoPatchFolder}/logs"
 
     appAutoPatchLogArchiveFolder="${appAutoPatchFolder}/logs-archive"
+
+    appAutoPatchReceiptsFolder="${appAutoPatchFolder}/receipts"
 
     appAutoPatchLog="${appAutoPatchLogFolder}/aap.log"
 
@@ -2123,6 +2125,7 @@ install_app_auto_patch() {
     [[ ! -d "${appAutoPatchFolder}" ]] && mkdir -p "${appAutoPatchFolder}"
     [[ ! -d "${appAutoPatchLogFolder}" ]] && mkdir -p "${appAutoPatchLogFolder}"
     [[ ! -d "${appAutoPatchLogArchiveFolder}" ]] && mkdir -p "${appAutoPatchLogArchiveFolder}"
+    [[ ! -d "${appAutoPatchReceiptsFolder}" ]] && mkdir -p "${appAutoPatchReceiptsFolder}"
 
     log_notice "###### App Auto-Patch ${scriptVersion} - Installing ... ######"
     write_status "Running: Installation workflow"
@@ -3351,6 +3354,53 @@ dialog_install_hard_deadline() {
 	esac
 }
 
+function write_aap_receipt() {
+
+    # Write a receipt for the app installation
+    local label="$1"
+    local version="${2:-}"
+    local exitCode="${3:-0}"
+
+    [[ -z "$exitCode" || ! "$exitCode" =~ ^[0-9]+$ ]] && exitCode=0
+
+    # Determine the status of the app installation
+    local aap_status="success"
+    [[ "$exitCode" -ne 0 ]] && aap_status="failed"
+
+    local timestamp
+    timestamp="$(date +"%Y-%m-%d %l:%M:%S +0000")"
+
+    # Create the receipts directory if it doesn't exist
+    mkdir -p "${appAutoPatchReceiptsFolder}/${label}"
+
+    local appDir="${appAutoPatchReceiptsFolder}/${label}"
+    local history="${appDir}/history.jsonl"
+    local latest="${appDir}/latest.json"
+
+    # Append to history
+    printf '{"timestamp":"%s","label":"%s","version":"%s","exitCode":%d,"status":"%s"}\n' \
+      "$timestamp" "$label" "$version" "$exitCode" "$aap_status" >> "$history"
+
+    # Write latest receipt
+    cat > "$latest" <<EOF
+{
+  "timestamp": "$timestamp",
+  "label": "$label",
+  "version": "$version",
+  "exitCode": $exitCode,
+  "status": "$aap_status"
+}
+EOF
+
+    # Trim history to last 500 lines
+    local max_lines=500
+    local count
+    count=$(wc -l < "$history" 2>/dev/null || echo 0)
+    if [[ "$count" -gt "$max_lines" ]]; then
+        tail -n "$max_lines" "$history" > "${history}.tmp" && mv "${history}.tmp" "$history"
+    fi
+}
+
 function PgetAppVersion() {
     
     if [[ $packageID != "" ]]; then
@@ -3492,6 +3542,7 @@ function verifyApp() {
                         else
                             log_notice "--- New version: ${appNewVersion}"
                             /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
+                            AAPVersionByLabel[$label_name]="$appNewVersion"
                             queueLabel
                         fi
                     fi
@@ -3565,10 +3616,32 @@ workflow_do_Installations() {
         
         # Run Installomator
         ${installomatorScript} ${label} ${installomatorOptions} ${swiftDialogOptions[@]}
-        if [ $? != 0 ]; then
-            log_error "Error installing ${label}. Exit code $?"
+        installomatorExitCode=$?
+        if [ $installomatorExitCode != 0 ]; then
+            log_error "Error installing ${label}. Exit code $installomatorExitCode"
             let errorCount++
         fi
+        # Write the receipt
+        newVersion="${AAPVersionByLabel[$label]:-}"
+
+        # Fallback: find the app path we associated to this label during discovery,
+        # then read the bundle version post-install (ground truth).
+        if [[ -z "$newVersion" ]]; then
+        appPath=""
+        for p in ${(k)configArray}; do
+            if [[ "${configArray[$p]}" == "$label" ]]; then
+            appPath="$p"
+            break
+            fi
+        done
+
+        if [[ -n "$appPath" && -d "$appPath/Contents" ]]; then
+            newVersion=$(/usr/bin/defaults read "$appPath/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null \
+            || /usr/bin/defaults read "$appPath/Contents/Info.plist" CFBundleVersion 2>/dev/null \
+            || echo "")
+        fi
+        fi
+        write_aap_receipt "$label" "$newVersion" "$installomatorExitCode"
         let i++
         swiftDialogUpdate "progress: increment ${progressIncrementValue}"
     done
@@ -3949,6 +4022,7 @@ main() {
     fi
 
     declare -A configArray=()
+    typeset -gA AAPVersionByLabel=()
     # Start the appropriate main workflow based on user options.
     if [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then # Skip App Discovery Workflow
         log_notice "**** App Auto-Patch ${scriptVersion} - SKIP APP DISCOVERY WORKFLOW ****"

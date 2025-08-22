@@ -2,6 +2,10 @@
 
 # Version 3
 
+## Version 3.3.0
+### 21-Aug-2025
+- Added functions to write patching receipts into the App Auto Patch management folder. Receipts are used to report success/failure on app patching
+
 ## Version 3.2.2
 ### 20-May-2025
 - Fixed logic for resetting PatchStartDate to use new date for deferrals instead of date prior to the reset
