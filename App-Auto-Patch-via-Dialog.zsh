@@ -4044,8 +4044,9 @@ self_update() {
 
   # Try GitHub Releases API first; fall back to parsing raw script if rate limited/offline
   local latest_version
-  latest_version=$(curl -fsSL --max-time 8 "https://api.github.com/repos/${appAutoPatchGithubRepo}/releases/latest" \
-                    | awk -F'"' '/"tag_name":/ {print $4; exit}') || latest_version=""
+  latest_version=$(curl -fsSL --max-time 10 \
+      "https://raw.githubusercontent.com/${AAP_GITHUB_REPO}/main/App-Auto-Patch-via-Dialog.zsh" \
+      | awk -F\" '/^(scriptVersion|script_version)=/{print $2; exit}') || latest_version=""
   if [[ -z "$latest_version" ]]; then
     latest_version=$(curl -fsSL --max-time 8 "https://raw.githubusercontent.com/${appAutoPatchGithubRepo}/main/App-Auto-Patch-via-Dialog.zsh" \
                       | awk -F\" '/^(scriptVersion|script_version)=/{print $2; exit}') || latest_version=""
