@@ -204,6 +204,10 @@ set_defaults() {
 
     appAutoPatchLogArchiveSize=1000
 
+    appAutoPatchGithubRepo="App-Auto-Patch/App-Auto-Patch"
+    
+    appAutoPatchLocalScriptPath="/Library/Management/AppAutoPatch/App-Auto-Patch-via-Dialog.zsh"
+
     appAutoPatchLink="/usr/local/bin/appautopatch"
 
     appAutoPatchPIDfile="/var/run/aap.pid"
@@ -2132,50 +2136,80 @@ install_app_auto_patch() {
     log_notice "###### App Auto-Patch ${scriptVersion} - Installing ... ######"
     write_status "Running: Installation workflow"
 
-    log_install "Copying aap to: ${appAutoPatchFolder}/appautopatch"
-    cp "${BASH_SOURCE[0]:-${(%):-%x}}" "${appAutoPatchFolder}/appautopatch" > /dev/null 2>&1
+    # Install canonical script
+    local aapScript="${appAutoPatchFolder}/App-Auto-Patch-via-Dialog.zsh"
+    log_install "Installing canonical script to: ${aapScript}"
+    cp "${BASH_SOURCE[0]:-${(%):-%x}}" "${aapScript}" > /dev/null 2>&1
+    chown root:wheel "${aapScript}"
+    chmod 755 "${aapScript}"
+
+    # Make entrypoint a symlink to the canonical aap script in the local bin directory
+    local entrypoint="${appAutoPatchFolder}/appautopatch"
+    if [[ -e "${entrypoint}" && ! -L "${entrypoint}" ]]; then
+        log_install "Migrating existing ${entrypoint} to symlink"
+        mv -f "${entrypoint}" "${entrypoint}.bak" 2>/dev/null || true
+    fi
+    ln -sfn "App-Auto-Patch-via-Dialog.zsh" "${entrypoint}"
+    chown -h root:wheel "${entrypoint}" 2>/dev/null || true
+    chmod 755 "${entrypoint}" 2>/dev/null || true
+
+    # Create local search path if it doesn't exist
     if [[ ! -d "/usr/local/bin" ]]; then
         log_install "Creating local search path folder: /usr/local/bin"
         mkdir -p "/usr/local/bin"
-        chmod -R a+rx "/usr/local/bin"
+        chmod 755 "/usr/local/bin"
     fi
-
     log_install "Creating aap search path link: ${appAutoPatchLink}"
-    ln -s "${appAutoPatchFolder}/appautopatch" "${appAutoPatchLink}" > /dev/null 2>&1
+    ln -sfn "${entrypoint}" "${appAutoPatchLink}" > /dev/null 2>&1
+    chown -h root:wheel "${appAutoPatchLink}" 2>/dev/null || true
+    chmod 755 "${appAutoPatchLink}" 2>/dev/null || true
 
+    # Create aap-starter
     log_install "Creating AAP LauchDaemon helper: ${appAutoPatchFolder}/aap-starter"
-
-    /bin/cat <<EOAS > "${appAutoPatchFolder}/aap-starter"
+  /bin/cat <<'EOAS' > "${appAutoPatchFolder}/aap-starter"
 #!/bin/bash
 # Exit if App Auto Patch is already running.
-[[ "\$(pgrep -F "${appAutoPatchPIDfile}" 2> /dev/null)" ]] && exit 0
+[[ "$(pgrep -F "__APP_AUTOPATCH_PIDFILE__" 2> /dev/null)" ]] && exit 0
 
 # Exit if the App Auto Patch auto launch workflow is disabled, or deferred until a system restart, or deferred until a later date.
-next_auto_launch=\$(defaults read "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null)
-if [[ "\${next_auto_launch}" == "FALSE" ]]; then # Exit if auto launch is disabled.
-	exit 0
-elif [[ -z "\${next_auto_launch}" ]]; then # Exit if deferred until a system restart.
-	mac_last_startup_saved_epoch=\$(date -j -f "${timestamp_format}" "\$(defaults read "${appAutoPatchLocalPLIST}" MacLastStartup 2> /dev/null)" +"%s" 2> /dev/null)
-	mac_last_startup_epoch=\$(date -j -f "%b %d %H:%M:%S" "\$(last reboot | head -1 | cut -c 41- | xargs):00" +"%s" 2> /dev/null)
-	[[ -n "\${mac_last_startup_saved_epoch}" ]] && [[ -n "\${mac_last_startup_epoch}" ]] && [[ "\${mac_last_startup_saved_epoch}" -ge "\${mac_last_startup_epoch}" ]] && exit 0
-elif [[ \$(date +%s) -lt \$(date -j -f "${timestamp_format}" "\${next_auto_launch}" +"%s" 2> /dev/null) ]]; then # Exit if deferred until a later date.
-	exit 0
+next_auto_launch=$(defaults read "__AAP_LOCAL_PLIST__" NextAutoLaunch 2> /dev/null)
+if [[ "${next_auto_launch}" == "FALSE" ]]; then
+  exit 0
+elif [[ -z "${next_auto_launch}" ]]; then
+  mac_last_startup_saved_epoch=$(date -j -f "__TIMESTAMP_FORMAT__" "$(defaults read "__AAP_LOCAL_PLIST__" MacLastStartup 2> /dev/null)" +"%s" 2> /dev/null)
+  mac_last_startup_epoch=$(date -j -f "%b %d %H:%M:%S" "$(last reboot | head -1 | cut -c 41- | xargs):00" +"%s" 2> /dev/null)
+  [[ -n "${mac_last_startup_saved_epoch}" ]] && [[ -n "${mac_last_startup_epoch}" ]] && [[ "${mac_last_startup_saved_epoch}" -ge "${mac_last_startup_epoch}" ]] && exit 0
+elif [[ $(date +%s) -lt $(date -j -f "__TIMESTAMP_FORMAT__" "${next_auto_launch}" +"%s" 2> /dev/null) ]]; then
+  exit 0
 fi
 
-# If aap-starter has not exited yet, then it's time to start App Auto Patch.
-echo "\$(date +"%a %b %d %T") \$(hostname -s) \$(basename "\$0")[\$\$]: **** App Auto-Patch ${scriptVersion} - LAUNCHDAEMON ****" | tee -a "${appAutoPatchLog}"
-"${appAutoPatchFolder}/appautopatch" &
+echo "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: **** App Auto-Patch __SCRIPT_VERSION__ - LAUNCHDAEMON ****" | tee -a "__AAP_LOG__"
+"__AAP_FOLDER__/appautopatch" &
 disown
 exit 0
 EOAS
 
-if [[ -f "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" ]]; then
-    log_install "Removing previous AAP Launch Daemon: /Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
-    launchctl bootout system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" 2> /dev/null
-    rm -f "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" 2> /dev/null
-fi
+    # Replace placeholders in the starter
+    /usr/bin/sed -i "" \
+    -e "s|__APP_AUTOPATCH_PIDFILE__|${appAutoPatchPIDfile}|g" \
+    -e "s|__AAP_LOCAL_PLIST__|${appAutoPatchLocalPLIST}|g" \
+    -e "s|__TIMESTAMP_FORMAT__|${timestamp_format}|g" \
+    -e "s|__SCRIPT_VERSION__|${scriptVersion}|g" \
+    -e "s|__AAP_LOG__|${appAutoPatchLog}|g" \
+    -e "s|__AAP_FOLDER__|${appAutoPatchFolder}|g" \
+    "${appAutoPatchFolder}/aap-starter"
+    /bin/chmod 755 "${appAutoPatchFolder}/aap-starter"
+    /usr/sbin/chown root:wheel "${appAutoPatchFolder}/aap-starter"
 
-log_install "Creating AAP LaunchDaemon: /Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
+    # Create the LaunchDaemon plist if it doesn't exist
+
+    if [[ -f "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" ]]; then
+        log_install "Removing previous AAP Launch Daemon: /Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
+        launchctl bootout system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" 2> /dev/null
+        rm -f "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" 2> /dev/null
+    fi
+
+    log_install "Creating AAP LaunchDaemon: /Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
 /bin/cat <<EOLD > "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -2199,22 +2233,26 @@ log_install "Creating AAP LaunchDaemon: /Library/LaunchDaemons/${appAutoPatchLau
 </plist>
 EOLD
 
-log_install "Setting permissions for installed items"
-chown root:wheel "/Library/Management"
-chmod 777 "/Library/Management"
-chown -R root:wheel "${appAutoPatchFolder}"
-chmod -R 777 "${appAutoPatchFolder}"
-chmod -R a+r "${appAutoPatchFolder}"
-chmod -R go-w "${appAutoPatchFolder}"
-chmod a+x "${appAutoPatchFolder}/appautopatch"
-chmod a+x "${appAutoPatchFolder}/aap-starter"
-chown root:wheel "${appAutoPatchLink}"
-chmod a+rx "${appAutoPatchLink}"
-chmod go-w "${appAutoPatchLink}"
-chmod 644 "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
-chown root:wheel "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
-defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "${scriptVersion}"
+    log_install "Setting permissions for installed items"
+    chown root:wheel "/Library/Management"
+    chmod 777 "/Library/Management"
+    chown -R root:wheel "${appAutoPatchFolder}"
+    chmod -R 777 "${appAutoPatchFolder}"
+    chmod -R a+r "${appAutoPatchFolder}"
+    chmod -R go-w "${appAutoPatchFolder}"
+    chmod a+x "${appAutoPatchFolder}/appautopatch"
+    chmod a+x "${appAutoPatchFolder}/aap-starter"
+    chown root:wheel "${appAutoPatchLink}"
+    chmod a+rx "${appAutoPatchLink}"
+    chmod go-w "${appAutoPatchLink}"
+    chmod 644 "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
+    chown root:wheel "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
 
+    # Record installed version
+    defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "${scriptVersion}"
+
+
+    # Validate installation
     if ! { [[ -f "${appAutoPatchFolder}/appautopatch" ]] || [[ -f "${appAutoPatchLink}" ]]; }; then
         log_install "ERROR: App Auto Patch failed to install correctly... Try pre-loading the script to a local temporary folder and executing the script from there to install properly"
         option_error="TRUE"
@@ -3998,10 +4036,94 @@ check_webhook(){
     esac
 }
 
+self_update() {
+  log_info "Checking for newer App Auto Patch release..."
+
+  # Resolve local version (supports script_version or scriptVersion)
+  local local_version="${script_version:-${scriptVersion:-0.0.0}}"
+
+  # Try GitHub Releases API first; fall back to parsing raw script if rate limited/offline
+  local latest_version
+  latest_version=$(curl -fsSL --max-time 8 "https://api.github.com/repos/${appAutoPatchGithubRepo}/releases/latest" \
+                    | awk -F'"' '/"tag_name":/ {print $4; exit}') || latest_version=""
+  if [[ -z "$latest_version" ]]; then
+    latest_version=$(curl -fsSL --max-time 8 "https://raw.githubusercontent.com/${appAutoPatchGithubRepo}/main/App-Auto-Patch-via-Dialog.zsh" \
+                      | awk -F\" '/^(scriptVersion|script_version)=/{print $2; exit}') || latest_version=""
+  fi
+  if [[ -z "$latest_version" ]]; then
+    log_error "Unable to determine latest version."
+    return 0
+  fi
+
+  if [[ "$latest_version" == "$local_version" ]]; then
+    log_info "Already running the latest version ($local_version)."
+    return 0
+  fi
+
+  log_info "Newer version available: $latest_version (current: $local_version). Updating..."
+
+  # Download to temp and verify non-empty
+  local tmpfile
+  tmpfile="$(/usr/bin/mktemp -t aap_update)"
+  if ! curl -fsSL --retry 2 --retry-delay 1 \
+        -o "$tmpfile" \
+        "https://raw.githubusercontent.com/${appAutoPatchGithubRepo}/main/App-Auto-Patch-via-Dialog.zsh"; then
+    rm -f "$tmpfile"
+    log_error "Download failed."
+    return 0
+  fi
+  if [[ ! -s "$tmpfile" ]]; then
+    rm -f "$tmpfile"
+    log_error "Download failed — tmpfile empty."
+    return 0
+  fi
+
+  # Install atomically to canonical location
+  /bin/mkdir -p "$(dirname "$appAutoPatchLocalScriptPath")"
+  /bin/chmod 755 "$(dirname "$appAutoPatchLocalScriptPath")"
+  /bin/chmod 755 "$tmpfile"
+  /bin/mv -f "$tmpfile" "$appAutoPatchLocalScriptPath"
+  /usr/sbin/chown root:wheel "$appAutoPatchLocalScriptPath"
+
+  # Ensure entrypoint is a symlink to canonical (one-time migration)
+  local entrypoint="${appAutoPatchFolder}/appautopatch"
+  if [[ -e "$entrypoint" && ! -L "$entrypoint" ]]; then
+    log_info "Migrating ${entrypoint} to a symlink"
+    /bin/mv -f "$entrypoint" "${entrypoint}.bak" 2>/dev/null || true
+  fi
+  /bin/ln -sfn "App-Auto-Patch-via-Dialog.zsh" "$entrypoint"
+  /usr/sbin/chown -h root:wheel "$entrypoint" 2>/dev/null || true
+  /bin/chmod 755 "$entrypoint" 2>/dev/null || true
+
+  # Record the newly installed version into the local PLIST
+  defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "$latest_version" || true
+  log_info "Wrote AAPVersion=$latest_version to ${appAutoPatchLocalPLIST}"
+
+  log_info "Updated App Auto Patch to $latest_version. Relaunching via entrypoint…"
+  exec "$entrypoint" "$@"
+  exit 0
+}
+
+check_version_consistency() {
+    local plistVer
+    plistVer=$(/usr/bin/defaults read "${appAutoPatchLocalPLIST}" AAPVersion 2>/dev/null || echo "none")
+    log_info "AAP script version: ${scriptVersion}"
+    log_info "AAP plist version:  ${plistVer}"
+    if [[ "$plistVer" != "$scriptVersion" ]]; then
+        log_warn "Version mismatch detected (plist=$plistVer, script=$scriptVersion)"
+    fi
+}
+
 main() {
     set_defaults
     set_display_strings_language
     get_options "$@"
+
+    # Check for AAP Updates
+    self_update "$@"
+
+    # Check version consistency
+    check_version_consistency
 
     workflow_startup
     #Run the function to check if a user has already completed patching for the set cadence, ignore if using --workflow-install-now
