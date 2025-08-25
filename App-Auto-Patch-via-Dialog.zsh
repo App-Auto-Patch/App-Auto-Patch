@@ -23,7 +23,7 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.3.0"
+scriptVersion="3.4.0"
 scriptDate="2025/08/21"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
@@ -4037,73 +4037,89 @@ check_webhook(){
 }
 
 self_update() {
-  log_info "Checking for newer App Auto Patch release..."
+  log_info "Checking for newer App Auto Patch script..."
 
-  # Resolve local version (supports script_version or scriptVersion)
-  local local_version="${script_version:-${scriptVersion:-0.0.0}}"
+  # Resolve local version and normalize
+  local local_version_raw="${script_version:-${scriptVersion:-0.0.0}}"
+  local local_version
+  local_version="$(echo "$local_version_raw" | /usr/bin/awk 'match($0,/[0-9]+(\.[0-9]+){1,3}/){print substr($0,RSTART,RLENGTH)}')"
+  [[ -z "$local_version" ]] && local_version="0.0.0"
 
-  # Try GitHub Releases API first; fall back to parsing raw script if rate limited/offline
-  local latest_version
-  latest_version=$(curl -fsSL --max-time 10 \
-      "https://raw.githubusercontent.com/${AAP_GITHUB_REPO}/main/App-Auto-Patch-via-Dialog.zsh" \
-      | awk -F\" '/^(scriptVersion|script_version)=/{print $2; exit}') || latest_version=""
-  if [[ -z "$latest_version" ]]; then
-    latest_version=$(curl -fsSL --max-time 8 "https://raw.githubusercontent.com/${appAutoPatchGithubRepo}/main/App-Auto-Patch-via-Dialog.zsh" \
-                      | awk -F\" '/^(scriptVersion|script_version)=/{print $2; exit}') || latest_version=""
-  fi
-  if [[ -z "$latest_version" ]]; then
-    log_error "Unable to determine latest version."
-    return 0
-  fi
-
-  if [[ "$latest_version" == "$local_version" ]]; then
-    log_info "Already running the latest version ($local_version)."
-    return 0
-  fi
-
-  log_info "Newer version available: $latest_version (current: $local_version). Updating..."
-
-  # Download to temp and verify non-empty
+  # Fetch AAP script
   local tmpfile
   tmpfile="$(/usr/bin/mktemp -t aap_update)"
-  if ! curl -fsSL --retry 2 --retry-delay 1 \
-        -o "$tmpfile" \
-        "https://raw.githubusercontent.com/${appAutoPatchGithubRepo}/main/App-Auto-Patch-via-Dialog.zsh"; then
+  local raw_url="https://raw.githubusercontent.com/${appAutoPatchGithubRepo}/main/App-Auto-Patch-via-Dialog.zsh"
+  log_debug "Self-update fetch URL: ${raw_url}"
+  if ! curl -fsSL --retry 2 --retry-delay 1 -o "$tmpfile" "$raw_url"; then
     rm -f "$tmpfile"
-    log_error "Download failed."
+    log_error "Unable to download remote script for version check."
     return 0
   fi
-  if [[ ! -s "$tmpfile" ]]; then
+  [[ ! -s "$tmpfile" ]] && { rm -f "$tmpfile"; log_error "Downloaded script is empty."; return 0; }
+
+  # Parse remote script_version and normalize
+  local remote_version_raw remote_version
+  remote_version_raw="$(/usr/bin/awk -F\" '/^(scriptVersion|script_version)=/{print $2; exit}' "$tmpfile")"
+  remote_version="$(echo "$remote_version_raw" | /usr/bin/awk 'match($0,/[0-9]+(\.[0-9]+){1,3}/){print substr($0,RSTART,RLENGTH)}')"
+  if [[ -z "$remote_version" ]]; then
     rm -f "$tmpfile"
-    log_error "Download failed — tmpfile empty."
+    log_error "Unable to parse remote script_version."
     return 0
   fi
 
-  # Install atomically to canonical location
+  # Local version == remote version
+  if [[ "$remote_version" == "$local_version" ]]; then
+    log_info "Already running the latest version ($local_version)."
+    rm -f "$tmpfile"
+    return 0
+  fi
+
+  # Compare versions, is remote_version > local_version
+  local -a A B; A=("${(s/./)remote_version}"); B=("${(s/./)local_version}")
+  local i max=${#A}; (( ${#B} > max )) && max=${#B}
+  local remote_is_newer=0
+  for (( i=1; i<=max; i++ )); do
+    local ai=${A[i]:-0} bi=${B[i]:-0}
+    (( ai = ai + 0, bi = bi + 0 ))
+    if (( ai > bi )); then remote_is_newer=1; break
+    elif (( ai < bi )); then remote_is_newer=0; break
+    fi
+  done
+  if (( remote_is_newer == 0 )); then
+    log_info "Remote version ($remote_version) is not newer than local ($local_version)."
+    rm -f "$tmpfile"
+    return 0
+  fi
+
+  log_info "Newer script version available: $remote_version (current: $local_version). Updating…"
+
+  # Install atomically to canonical path
   /bin/mkdir -p "$(dirname "$appAutoPatchLocalScriptPath")"
   /bin/chmod 755 "$(dirname "$appAutoPatchLocalScriptPath")"
   /bin/chmod 755 "$tmpfile"
   /bin/mv -f "$tmpfile" "$appAutoPatchLocalScriptPath"
   /usr/sbin/chown root:wheel "$appAutoPatchLocalScriptPath"
 
-  # Ensure entrypoint is a symlink to canonical (one-time migration)
+  # Ensure entrypoint symlink points to canonical (one-time migration)
   local entrypoint="${appAutoPatchFolder}/appautopatch"
   if [[ -e "$entrypoint" && ! -L "$entrypoint" ]]; then
-    log_info "Migrating ${entrypoint} to a symlink"
+    log_info "Migrating ${entrypoint} to symlink"
     /bin/mv -f "$entrypoint" "${entrypoint}.bak" 2>/dev/null || true
   fi
   /bin/ln -sfn "App-Auto-Patch-via-Dialog.zsh" "$entrypoint"
   /usr/sbin/chown -h root:wheel "$entrypoint" 2>/dev/null || true
   /bin/chmod 755 "$entrypoint" 2>/dev/null || true
 
-  # Record the newly installed version into the local PLIST
-  defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "$latest_version" || true
-  log_info "Wrote AAPVersion=$latest_version to ${appAutoPatchLocalPLIST}"
+  # Stamp plist with the NEW version (normalized)
+  defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "$remote_version" || true
+  log_info "Wrote AAPVersion=$remote_version to ${appAutoPatchLocalPLIST}"
 
-  log_info "Updated App Auto Patch to $latest_version. Relaunching via entrypoint…"
+  # Relaunch via entrypoint
+  log_info "Updated App Auto Patch to $remote_version. Relaunching via entrypoint..."
   exec "$entrypoint" "$@"
-  exit 0
 }
+
+
 
 check_version_consistency() {
     local plistVer
@@ -4111,7 +4127,7 @@ check_version_consistency() {
     log_info "AAP script version: ${scriptVersion}"
     log_info "AAP plist version:  ${plistVer}"
     if [[ "$plistVer" != "$scriptVersion" ]]; then
-        log_warn "Version mismatch detected (plist=$plistVer, script=$scriptVersion)"
+        log_warning "Version mismatch detected (plist=$plistVer, script=$scriptVersion)"
     fi
 }
 
