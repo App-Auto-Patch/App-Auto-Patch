@@ -3049,7 +3049,19 @@ swiftDialogPatchingWindow(){
             # Get the "name=" value from the current label and use it in our SwiftDialog list
             # Issue 144 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/144
             #currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+            # 3.4.0 - currentDisplayName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            
+            # Check for App Name using the appName variable from the label fragment
+            currentDisplayName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            
+            # Check if currentDisplayName is populated, otherwise re-pull using the name variable
+            if [ -z "$currentDisplayName" ]; then
             currentDisplayName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            else
+                # drop the .app portion
+                currentDisplayName="${currentDisplayName%.app}"
+            fi
+            
             if [ -n "$currentDisplayName" ]; then
                 displayNames+=("--listitem")
                 if [[ ! -e "/Applications/${currentDisplayName}.app" ]]; then
@@ -3562,9 +3574,35 @@ function verifyApp() {
                         log_notice "--- Latest version installed."
                     elif [[ "$previousVersionLong" == "$appNewVersion" ]]; then
                         log_notice "--- Latest version installed."
+                    elif [[ "$appCustomVersion" == "$appNewVersion" ]]; then
+                        log_notice "--- Latest version installed."
                     else
+#                       # Lastly, verify with Installomator before queueing the label
+#                       if ${installomatorScript} ${label_name} DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" | grep "same as installed" >/dev/null 2>&1
+#                       then
+#                           log_notice "--- Latest version installed."
+#                       else
+#                           log_notice "--- New version: ${appNewVersion}"
+#                           /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
+#                           AAPVersionByLabel[$label_name]="$appNewVersion"
+#                           queueLabel
+#                       fi
+                        
                         # Lastly, verify with Installomator before queueing the label
-                        if ${installomatorScript} ${label_name} DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" | grep "same as installed" >/dev/null 2>&1
+                        tmp=$(mktemp -t installomator.XXXXXX)
+                        
+                        "${installomatorScript}" "${label_name}" DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" \
+                        >"$tmp" 2>&1
+                        rc=$?                         # exit status of Installomator
+                        out=$(<"$tmp")                # full output as a single string
+                        rm -f "$tmp"
+                        
+                        custom_version=""
+                        custom_version=$(sed -nE 's/.*Custom App Version detection is used, found[[:space:]]+([^[:space:]]+).*/\1/p' <<< "$out" | head -n1)
+                        
+                        if [[ "$custom_version" == "$appNewVersion" ]]; then
+                            log_notice "--- Latest version installed."
+                        elif [[ "$out" == *"same as installed"* ]] 
                         then
                             log_notice "--- Latest version installed."
                         else
@@ -4200,6 +4238,27 @@ main() {
 
         for labelFragment in "$fragmentsPath"/labels/*.sh; do 
             
+            appCustomVersion=""
+            log_verbose "checking for appCustomVersion"
+            if grep -q '^\s*appCustomVersion\s*()' "$labelFragment"
+            then
+                appCustomVersion=$(grep -E -m1 '^\s*appCustomVersion' "$labelFragment" | sed -E 's/^.*\(\)[[:space:]]*\{[[:space:]]*(.*)[[:space:]]*\}/\1/')
+                
+                if [[ -z "$appCustomVersion" ]] || [[ "$appCustomVersion" == *"{"$ ]]
+                then
+                    appCustomVersion=$(awk '
+                    /^[[:space:]]*appCustomVersion[[:space:]]*\(\)[[:space:]]*\{/ { inside=1; next }
+                    inside {
+                        if ($0 ~ /^[[:space:]]*\}/) { inside=0; exit }
+                        print
+                    }' "$labelFragment")
+                fi
+                        if [[ ! "$appCustomVersion" =~ ^[[:space:]]*strings ]]; then
+                                    appCustomVersion=$(eval "$appCustomVersion" 2>/dev/null)
+                        fi
+                fi
+            
+            
             labelFile=$(basename -- "$labelFragment")
             labelFile="${labelFile%.*}"
             
@@ -4243,6 +4302,7 @@ main() {
                         expectedTeamID=""
                         current_label=""
                         appNewVersion=""
+                        targetDir="/"
                         
                         continue
                     fi
@@ -4252,7 +4312,7 @@ main() {
                         
                         case $scrubbedLine in
                             
-                            'name='*|'packageID'*|'expectedTeamID'*)
+                            'name='*|'appName='*|'packageID'*|'expectedTeamID'*)
                                 eval "$scrubbedLine"
                             ;;
                             
@@ -4302,7 +4362,19 @@ main() {
         log_verbose "Obtaining proper name for $label"
         # Issue 140 Fix: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/140
         #appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+        # 3.4.0 - appName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        
+        # Check for App Name using the appName variable from the label fragment
+        appName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        
+        # Check if appName is populated, otherwise re-pull using the name variable
+        if [ -z "$appName" ]; then
         appName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        else
+            # drop the .app portion
+            appName="${appName%.app}"
+        fi
+        
         log_verbose "appName: $appName"
         appNamesArray+=(--listitem)
     if [[ ! -e "/Applications/${appName}.app" ]]; then
