@@ -24,7 +24,7 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.4.0"
-scriptDate="2025/08/21"
+scriptDate="2025/08/26"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -281,6 +281,10 @@ set_defaults() {
     REGEX_ANY_WHOLE_NUMBER="^[0-9]+$"
     
     REGEX_CSV_WHOLE_NUMBERS="^[0-9*,]+$"
+
+    selfUpdateEnabled="FALSE"
+
+    self_update_frequency_option="daily"
 
     supportTeamName="Add IT Support" # MDM Enabled
 
@@ -774,6 +778,18 @@ get_options() {
             --days-until-reset=*)
                 days_until_reset_option="${1##*=}"
             ;;
+            --force-self-update-check)
+                force_self_update_check_option="TRUE"
+            ;;
+            --self-update-enabled)
+                self_update_enabled_option="TRUE"
+            ;;
+            --self-update-disabled)
+                self_update_enabled_option="FALSE"
+            ;;
+            --self-update-frequency=*)
+                self_update_frequency_option="${1##*=}"   # daily|weekly|monthly
+            ;;
             --workflow-disable-app-discovery)
                 workflow_disable_app_discovery_option="TRUE"
             ;;
@@ -832,6 +848,19 @@ get_options() {
         shift
     done
 
+    # Normalize self-update frequency if provided
+    if [[ -n "${self_update_frequency_option:-}" ]]; then
+        case "${self_update_frequency_option:l}" in
+            daily|weekly|monthly) ;;   # ok
+            *)
+                log_error "Invalid value for --self-update-frequency: '${self_update_frequency_option}'. Use daily|weekly|monthly."
+                show_usage
+            ;;
+        esac
+        self_update_frequency_option="${self_update_frequency_option:l}"
+    fi
+
+
     [[ -n "${unrecognized_options_array[*]}" ]] && show_usage
 
 }
@@ -851,6 +880,8 @@ get_preferences() {
         defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "${scriptVersion}"
         defaults write "${appAutoPatchLocalPLIST}" MacLastStartup -string "${mac_last_startup}"
         defaults write "${appAutoPatchLocalPLIST}" InteractiveMode -integer "${InteractiveMode}"
+        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool "${selfUpdateEnabled}"
+        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateFrequency -string "${self_update_frequency_option}"
         [[ "${verbose_mode_option}" == "TRUE" ]] && defaults write "${appAutoPatchLocalPLIST}" VerboseMode -bool true
         [[ "${debug_mode_option}" == "TRUE" ]] && defaults write "${appAutoPathLocalPLIST}" DebugMode -bool true
         rm -f "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
@@ -1641,6 +1672,14 @@ manage_parameter_options() {
         InteractiveModeOption="${InteractiveMode}"
     fi
     log_verbose "InteractiveModeOption: $InteractiveModeOption"
+
+    if [[ -n "${self_update_enabled_option}" ]]; then
+        defaults write "${appAutoPatchLocalPlist}" SelfUpdateEnabled -bool "${self_update_enabled_option}"
+    else
+        defaults write "${appAutoPatchLocalPlsit}" SelfUpdateEnabled -bool "${selfUpdateEnabled}"
+        self_update_enabled_otption="${selfUpdateEnabled}"
+    fi
+    log_verbose "SelfUpdateEnabledOption: $self_update_enabled_option"
     
     # Manage ${workflow_install_now_patching_status_action_option} and save to ${appAutoPatchLocalPLIST}
     if [[ -n "${workflow_install_now_patching_status_action_option}" ]]; then
@@ -4075,93 +4114,152 @@ check_webhook(){
 }
 
 self_update() {
-  log_info "Checking for newer App Auto Patch script..."
 
-  # Resolve local version and normalize
-  local local_version_raw="${script_version:-${scriptVersion:-0.0.0}}"
-  local local_version
-  local_version="$(echo "$local_version_raw" | /usr/bin/awk 'match($0,/[0-9]+(\.[0-9]+){1,3}/){print substr($0,RSTART,RLENGTH)}')"
-  [[ -z "$local_version" ]] && local_version="0.0.0"
+    local enabled freq now nextDue
+    enabled=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateEnabled 2>/dev/null || echo "1")
+    [[ "$enabled" == "0" || "$enabled" == "FALSE" ]] && { log_info "Self-update disabled by prefs."; return 0; }
 
-  # Fetch AAP script
-  local tmpfile
-  tmpfile="$(/usr/bin/mktemp -t aap_update)"
-  local raw_url="https://raw.githubusercontent.com/${appAutoPatchGithubRepo}/main/App-Auto-Patch-via-Dialog.zsh"
-  log_debug "Self-update fetch URL: ${raw_url}"
-  if ! curl -fsSL --retry 2 --retry-delay 1 -o "$tmpfile" "$raw_url"; then
-    rm -f "$tmpfile"
-    log_error "Unable to download remote script for version check."
-    return 0
-  fi
-  [[ ! -s "$tmpfile" ]] && { rm -f "$tmpfile"; log_error "Downloaded script is empty."; return 0; }
+    freq=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateFrequency 2>/dev/null || echo "daily")
+    case "${freq:l}" in
+        daily)   freq="daily" ;;
+        weekly)  freq="weekly" ;;
+        monthly) freq="monthly" ;;
+        *)       freq="daily" ;;
+    esac
 
-  # Parse remote script_version and normalize
-  local remote_version_raw remote_version
-  remote_version_raw="$(/usr/bin/awk -F\" '/^(scriptVersion|script_version)=/{print $2; exit}' "$tmpfile")"
-  remote_version="$(echo "$remote_version_raw" | /usr/bin/awk 'match($0,/[0-9]+(\.[0-9]+){1,3}/){print substr($0,RSTART,RLENGTH)}')"
-  if [[ -z "$remote_version" ]]; then
-    rm -f "$tmpfile"
-    log_error "Unable to parse remote script_version."
-    return 0
-  fi
+    now=$(date +%s)
+    nextDue=$(defaults read "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch 2>/dev/null || echo "0")
 
-  # Local version == remote version
-  if [[ "$remote_version" == "$local_version" ]]; then
-    log_info "Already running the latest version ($local_version)."
-    rm -f "$tmpfile"
-    return 0
-  fi
-
-  # Compare versions, is remote_version > local_version
-  local -a A B; A=("${(s/./)remote_version}"); B=("${(s/./)local_version}")
-  local i max=${#A}; (( ${#B} > max )) && max=${#B}
-  local remote_is_newer=0
-  for (( i=1; i<=max; i++ )); do
-    local ai=${A[i]:-0} bi=${B[i]:-0}
-    (( ai = ai + 0, bi = bi + 0 ))
-    if (( ai > bi )); then remote_is_newer=1; break
-    elif (( ai < bi )); then remote_is_newer=0; break
+    if [[ "${forceSelfUpdateCheck:-false}" != "true" ]]; then
+        if [[ "$nextDue" =~ ^[0-9]+$ ]] && (( now < nextDue )); then
+            local nextReadable
+            nextReadable=$(/bin/date -r "$nextDue" "+${timestamp_format}")
+            log_info "Self-update check skipped, next check at ${nextReadable}"
+            log_debug "Self-update frequency: ${freq}"
+            return 0
+        fi
+    else
+    log_info "Forcing self-update check (override schedule)."
     fi
-  done
-  if (( remote_is_newer == 0 )); then
-    log_info "Remote version ($remote_version) is not newer than local ($local_version)."
-    rm -f "$tmpfile"
-    return 0
-  fi
 
-  log_info "Newer script version available: $remote_version (current: $local_version). Updating…"
+    log_info "Checking for newer App Auto Patch script..."
 
-  # Install atomically to canonical path
-  /bin/mkdir -p "$(dirname "$appAutoPatchLocalScriptPath")"
-  /bin/chmod 755 "$(dirname "$appAutoPatchLocalScriptPath")"
-  /bin/chmod 755 "$tmpfile"
-  /bin/mv -f "$tmpfile" "$appAutoPatchLocalScriptPath"
-  /usr/sbin/chown root:wheel "$appAutoPatchLocalScriptPath"
+    # ---- local version (normalize X.Y[.Z[.W]]) ----
+    local local_version_raw="${script_version:-${scriptVersion:-0.0.0}}"
+    local local_version
+    local_version="$(echo "$local_version_raw" | /usr/bin/awk 'match($0,/[0-9]+(\.[0-9]+){1,3}/){print substr($0,RSTART,RLENGTH)}')"
+    [[ -z "$local_version" ]] && local_version="0.0.0"
 
-  # Ensure entrypoint symlink points to canonical (one-time migration)
-  local entrypoint="${appAutoPatchFolder}/appautopatch"
-  if [[ -e "$entrypoint" && ! -L "$entrypoint" ]]; then
-    log_info "Migrating ${entrypoint} to symlink"
-    /bin/mv -f "$entrypoint" "${entrypoint}.bak" 2>/dev/null || true
-  fi
-  /bin/ln -sfn "App-Auto-Patch-via-Dialog.zsh" "$entrypoint"
-  /usr/sbin/chown -h root:wheel "$entrypoint" 2>/dev/null || true
-  /bin/chmod 755 "$entrypoint" 2>/dev/null || true
+    # ---- fetch remote script once ----
+    local tmpfile raw_url
+    tmpfile="$(mktemp -t aap_update)"
+    raw_url="https://raw.githubusercontent.com/${appAutoPatchGithubRepo}/main/App-Auto-Patch-via-Dialog.zsh"
+    log_debug "Self-update fetch URL: ${raw_url}"
+    if ! curl -fsSL --retry 2 --retry-delay 1 -o "$tmpfile" "$raw_url"; then
+        rm -f "$tmpfile"
+        log_error "Unable to download remote script for version check."
+        # schedule next attempt
+        local interval=$(( freq=="daily" ? 24*3600 : (freq=="weekly" ? 7*24*3600 : 30*24*3600) ))
+        defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateCheckEpoch -int "$now"
+        defaults write "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch -int $(( now + interval ))
+        defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateNote -string "download-failed"
+        return 0
+    fi
 
-  # Stamp plist with the NEW version (normalized)
-  defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "$remote_version" || true
-  log_info "Wrote AAPVersion=$remote_version to ${appAutoPatchLocalPLIST}"
+    [[ ! -s "$tmpfile" ]] && {
+        rm -f "$tmpfile"
+        log_error "Downloaded script is empty."
+        local interval=$(( freq=="daily" ? 24*3600 : (freq=="weekly" ? 7*24*3600 : 30*24*3600) ))
+        defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateCheckEpoch -int "$now"
+        defaults write "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch -int $(( now + interval ))
+        defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateNote -string "empty-download"
+        return 0
+    }
 
-  # Relaunch via entrypoint
-  log_info "Updated App Auto Patch to $remote_version. Relaunching via entrypoint..."
-  exec "$entrypoint" "$@"
+    # ---- parse remote script_version and normalize ----
+    local remote_version_raw remote_version
+    remote_version_raw="$(awk -F\" '/^(scriptVersion|script_version)=/{print $2; exit}' "$tmpfile")"
+    remote_version="$(echo "$remote_version_raw" | awk 'match($0,/[0-9]+(\.[0-9]+){1,3}/){print substr($0,RSTART,RLENGTH)}')"
+    if [[ -z "$remote_version" ]]; then
+        rm -f "$tmpfile"
+        log_error "Unable to parse remote script_version."
+        local interval=$(( freq=="daily" ? 24*3600 : (freq=="weekly" ? 7*24*3600 : 30*24*3600) ))
+        defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateCheckEpoch -int "$now"
+        defaults write "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch -int $(( now + interval ))
+        defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateNote -string "parse-failed"
+        return 0
+    fi
+
+    # ---- equal? ----
+    if [[ "$remote_version" == "$local_version" ]]; then
+        log_info "Already running the latest version ($local_version)."
+        rm -f "$tmpfile"
+        local interval=$(( freq=="daily" ? 24*3600 : (freq=="weekly" ? 7*24*3600 : 30*24*3600) ))
+        defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateCheckEpoch -int "$now"
+        defaults write "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch -int $(( now + interval ))
+        defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateNote -string "already-latest"
+        return 0
+    fi
+
+    # ---- semver compare: remote > local ? ----
+    local -a A B; A=("${(s/./)remote_version}"); B=("${(s/./)local_version}")
+    local i max=${#A}; (( ${#B} > max )) && max=${#B}
+    local remote_is_newer=0
+    for (( i=1; i<=max; i++ )); do
+        local ai=${A[i]:-0} bi=${B[i]:-0}
+        (( ai = ai + 0, bi = bi + 0 ))
+        if (( ai > bi )); then remote_is_newer=1; break
+        elif (( ai < bi )); then remote_is_newer=0; break
+        fi
+    done
+    if (( remote_is_newer == 0 )); then
+        log_info "Remote version ($remote_version) is not newer than local ($local_version)."
+        rm -f "$tmpfile"
+        local interval=$(( freq=="daily" ? 24*3600 : (freq=="weekly" ? 7*24*3600 : 30*24*3600) ))
+        defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateCheckEpoch -int "$now"
+        defaults write "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch -int $(( now + interval ))
+        defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateNote -string "not-newer"
+        return 0
+    fi
+
+    log_info "Newer script version available: $remote_version (current: $local_version). Updating..."
+
+    # ---- install atomically to canonical ----
+    mkdir -p "$(dirname "$appAutoPatchLocalScriptPath")"
+    chmod 755 "$(dirname "$appAutoPatchLocalScriptPath")"
+    chmod 755 "$tmpfile"
+    mv -f "$tmpfile" "$appAutoPatchLocalScriptPath"
+    chown root:wheel "$appAutoPatchLocalScriptPath"
+
+    # ---- ensure entrypoint symlink -> canonical (one-time migration) ----
+    local entrypoint="${appAutoPatchFolder}/appautopatch"
+    if [[ -e "$entrypoint" && ! -L "$entrypoint" ]]; then
+        log_info "Migrating ${entrypoint} to symlink"
+        mv -f "$entrypoint" "${entrypoint}.bak" 2>/dev/null || true
+    fi
+    ln -sfn "App-Auto-Patch-via-Dialog.zsh" "$entrypoint"
+    chown -h root:wheel "$entrypoint" 2>/dev/null || true
+    chmod 755 "$entrypoint" 2>/dev/null || true
+
+    # ---- stamp plist + schedule next ----
+    defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "$remote_version" || true
+    log_info "Wrote AAPVersion=$remote_version to ${appAutoPatchLocalPLIST}"
+    local interval=$(( freq=="daily" ? 24*3600 : (freq=="weekly" ? 7*24*3600 : 30*24*3600) ))
+    defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateCheckEpoch -int "$now"
+    defaults write "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch -int $(( now + interval ))
+    defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateNote -string "updated-to-${remote_version}"
+
+    # ---- relaunch via entrypoint with reset-defaults, preserving args ----
+    log_info "Updated App Auto Patch to $remote_version. Relaunching via entrypoint"
+    exec "$entrypoint" "$@"
 }
+
 
 
 
 check_version_consistency() {
     local plistVer
-    plistVer=$(/usr/bin/defaults read "${appAutoPatchLocalPLIST}" AAPVersion 2>/dev/null || echo "none")
+    plistVer=$(defaults read "${appAutoPatchLocalPLIST}" AAPVersion 2>/dev/null || echo "none")
     log_info "AAP script version: ${scriptVersion}"
     log_info "AAP plist version:  ${plistVer}"
     if [[ "$plistVer" != "$scriptVersion" ]]; then
@@ -4173,6 +4271,29 @@ main() {
     set_defaults
     set_display_strings_language
     get_options "$@"
+
+    # Persist self-update choices if passed via CLI
+    if [[ -n "${self_update_enabled_option:-}" ]]; then
+        if [[ "${self_update_enabled_option}" == "TRUE" ]]; then
+            /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool true
+        else
+            /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool false
+        fi
+    log_info "Self-update enabled set to: ${self_update_enabled_option}"
+    fi
+
+    if [[ -n "${self_update_frequency_option:-}" ]]; then
+        # normalize to lower-case daily|weekly|monthly
+        local _freq_norm="${${self_update_frequency_option:l}}"
+        case "$_freq_norm" in daily|weekly|monthly) ;; *) _freq_norm="daily" ;; esac
+        /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateFrequency -string "$_freq_norm"
+        log_info "Self-update frequency set to: ${_freq_norm}"
+    fi
+
+    # One-shot override
+    if [[ "${force_self_update_check_option:-}" == "TRUE" ]]; then
+        forceSelfUpdateCheck="true"
+    fi
 
     # Check for AAP Updates
     self_update "$@"
