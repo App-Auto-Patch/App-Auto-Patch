@@ -2273,23 +2273,22 @@ EOAS
 EOLD
 
     log_install "Setting permissions for installed items"
-    chown root:wheel "/Library/Management"
-    chmod 777 "/Library/Management"
     chown -R root:wheel "${appAutoPatchFolder}"
     chmod -R 777 "${appAutoPatchFolder}"
     chmod -R a+r "${appAutoPatchFolder}"
     chmod -R go-w "${appAutoPatchFolder}"
     chmod a+x "${appAutoPatchFolder}/appautopatch"
     chmod a+x "${appAutoPatchFolder}/aap-starter"
+
     chown root:wheel "${appAutoPatchLink}"
     chmod a+rx "${appAutoPatchLink}"
     chmod go-w "${appAutoPatchLink}"
+
     chmod 644 "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
     chown root:wheel "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
 
     # Record installed version
     defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "${scriptVersion}"
-
 
     # Validate installation
     if ! { [[ -f "${appAutoPatchFolder}/appautopatch" ]] || [[ -f "${appAutoPatchLink}" ]]; }; then
@@ -2426,7 +2425,7 @@ get_installomator() {
             echo "Pulling from custom installomator"
             latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "$installomatorVersionCustomBranchName" | tail -1 | cut -d'"' -f4)"
             appNewVersion="$(curl -sL "https://raw.githubusercontent.com/$installomatorVersionCustomRepoPath/refs/heads/$installomatorVersionCustomBranchName/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
-            appVersion="$(cat "/Library/Management/AppAutoPatch/Installomator/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
+            appVersion="$(cat "${installomatorScript}" | grep VERSIONDATE= | cut -d'"' -f2)"
             # convert to epoch
             appNewVersion=$(date -j -f "%Y-%m-%d" "${appNewVersion}" +%s)
             appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
@@ -2434,7 +2433,7 @@ get_installomator() {
             echo "Pulling from Installomator Main Branch"
             latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "main" | tail -1 | cut -d'"' -f4)"
             appNewVersion="$(curl -sL "https://raw.githubusercontent.com/Installomator/Installomator/refs/heads/main/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
-            appVersion="$(cat "/Library/Management/AppAutoPatch/Installomator/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
+            appVersion="$(cat "${installomatorScript}" | grep VERSIONDATE= | cut -d'"' -f2)"
             # convert to epoch
             appNewVersion=$(date -j -f "%Y-%m-%d" "${appNewVersion}" +%s)
             appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
