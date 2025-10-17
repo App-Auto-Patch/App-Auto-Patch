@@ -11,6 +11,7 @@
 - Fixed logic to clear targetDir variable when scrubbing Installomator label fragments
 - Fixed case on variables (Issue #178)
 - Added logic to ignore PWA apps from Chrome & Edge (Issue #178)
+- Added --reset-labels trigger functionality (Issue #171)
 
 ## Version 3.3.0
 ### 21-Aug-2025
