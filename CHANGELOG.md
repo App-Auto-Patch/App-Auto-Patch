@@ -3,12 +3,14 @@
 # Version 3
 
 ## Version 3.4.0
-### 25-Aug-2025
+### 17-Oct-2025
 - Added App Auto-Patch Script Self Update functionality
 - Standardize timestamp format and use actual timezones instead of hard-coded UTC. Cleand up and adjusted NextAutoLaunch format to use date datatype (#152)
 - Added check for appName in Installomator label to populate the correct app name to improve app detection
 - Added logic to check for appCustomVersion in Installomator label to pull correct version of installed apps
 - Fixed logic to clear targetDir variable when scrubbing Installomator label fragments
+- Fixed case on variables (Issue #178)
+- Added logic to ignore PWA apps from Chrome & Edge (Issue #178)
 
 ## Version 3.3.0
 ### 21-Aug-2025
