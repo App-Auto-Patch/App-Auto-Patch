@@ -3796,7 +3796,7 @@ check_and_echo_errors() {
     lastPosition=$(cat "$marker_file")
     log_info "Last position: $lastPosition"
     
-    result=$(grep -a 'ERROR\s\+:\s\+\S\+\s\+:\s\+ERROR:' "$duplicate_installomatorLogFile" | awk -F 'ERROR :' '{print $2}')
+	result="$(grep -aE 'ERROR[[:space:]]*:[[:space:]]*[^:]+[[:space:]]*:[[:space:]]*' "$duplicate_installomatorLogFile" | awk -F ' : ' '$2=="ERROR"{print $3 " : " $4; exit}')"
     #log_info "Install Error Result: $result"
     
     #Function to print with bullet points
