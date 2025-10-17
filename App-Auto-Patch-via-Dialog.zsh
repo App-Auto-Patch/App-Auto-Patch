@@ -2046,9 +2046,13 @@ workflow_startup() {
 
     # Create `overlayicon` from Self Service's custom icon (thanks, @meschwartz!)
     if [[ "$useOverlayIcon" == "TRUE" ]]; then
-        if defaults read /Library/Preferences/com.jamfsoftware.jamf self_service_app_path &> /dev/null; then
+        if [[ -n "$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_app_path)" ]]; then
             # Use Self Service icon for overlay if found
-            xxd -p -s 260 "$(defaults read /Library/Preferences/com.jamfsoftware.jamf self_service_app_path)"/Icon$'\r'/..namedfork/rsrc | xxd -r -p > /var/tmp/overlayicon.icns
+            xxd -p -s 260 "$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_app_path)"/Icon$'\r'/..namedfork/rsrc | xxd -r -p > /var/tmp/overlayicon.icns
+            overlayicon="/var/tmp/overlayicon.icns"
+        elif [[ -n "$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_plus_path)" ]]; then
+            # Use Self Service Plus icon for overlay if found
+            xxd -p -s 260 "$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_plus_path)"/Icon$'\r'/..namedfork/rsrc | xxd -r -p > /var/tmp/overlayicon.icns
             overlayicon="/var/tmp/overlayicon.icns"
         # Computer is not Jamf enrolled (or can't use Self Service logo), get a different overlay icon
         elif [[ -e "/Library/Application Support/JAMF/Jamf.app" ]]; then
