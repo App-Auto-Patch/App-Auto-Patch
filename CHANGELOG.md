@@ -15,6 +15,7 @@
 - Added --reset-labels trigger functionality (Issue #171)
 - Fixed error extraction from Installomator logs. Used in webhooks. Previous implementation returned null. (PR #174)
 - Fixed Jamf Self Service Icon Overlay & added support for Jamf Self Service+ (PR #173)
+- Added option to set the Dialog Icon to a custom filepath or URL via MDM or CLI (#179)
 
 ## Version 3.3.0
 ### 21-Aug-2025
