@@ -7,6 +7,7 @@
 - Added App Auto-Patch Script Self Update functionality (Feature Request #128)
 - Standardize timestamp format and use actual timezones instead of hard-coded UTC. Cleand up and adjusted NextAutoLaunch format to use date datatype (#152)
 - Added check for appName in Installomator label to populate the correct app name to improve app detection (Issue #155)
+- Updated logic to populate app icons correctly for apps not located in /Applications folder
 - Added logic to check for appCustomVersion in Installomator label to pull correct version of installed apps
 - Fixed logic to clear targetDir variable when scrubbing Installomator label fragments
 - Fixed case on variables (Issue #178)
