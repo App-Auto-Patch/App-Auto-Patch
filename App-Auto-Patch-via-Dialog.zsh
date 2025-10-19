@@ -2406,7 +2406,7 @@ restart_aap() {
 		launchctl bootout "system/${appAutoPatchLaunchDaemonLabel}" >/dev/null 2>&1
 		launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" >/dev/null 2>&1
 	} &
-	disown -a
+	disown
 	[[ "${verbose_mode}" == "TRUE" ]] && log_aap "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Local preference file at restart exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2>/dev/null)"
 	log_aap "**** App Auto-Patch ${scriptVersion} - EXIT AND RESTART WORKFLOW ****"
 	rm -f "${appAutoPatchPIDfile}" 2>/dev/null
