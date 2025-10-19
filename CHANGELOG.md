@@ -17,10 +17,10 @@
 - Fixed Jamf Self Service Icon Overlay & added support for Jamf Self Service+ (PR #173)
 - Added option to set the Dialog Icon to a custom filepath or URL via MDM or CLI (#179)
 - Added the ability to set a Monthly Patching Cadence (e.g., Patch Tuesday). Note: Functionality is in-script only
--  monthly_patching_cadence_enabled (TRUE|FALSE)
--  monthly_patching_cadence_ordinal_value: Week of the month you want AAP to be scheduled (first|second|third|fourth|fifth|final)
--  monthly_patching_cadence_weekday_index: Day of the week you want AAP to be scheduled (sunday|monday|tuesday|wednesday|thursday|friday|saturday)
--  monthly_patching_cadence_start_time: Local time you want AAP to be scheduled
+	- monthly_patching_cadence_enabled (TRUE|FALSE)
+	- monthly_patching_cadence_ordinal_value: Week of the month you want AAP to be scheduled (first|second|third|fourth|fifth|final)
+	- monthly_patching_cadence_weekday_index: Day of the week you want AAP to be scheduled (sunday|monday|tuesday|wednesday|thursday|friday|saturday)
+	- monthly_patching_cadence_start_time: Local time you want AAP to be scheduled
 
 ## Version 3.3.0
 ### 21-Aug-2025
