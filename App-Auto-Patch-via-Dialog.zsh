@@ -419,7 +419,7 @@ set_display_strings_language() {
     display_string_help_message_script_version="Script Version"
     
     # Count the number of dictionaries in dialogElements
-    numElements=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements" "$appAutoPatchManagedPLIST.plist" | grep -c "Dict")
+    numElements=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements" "$appAutoPatchManagedPLIST.plist" 2> /dev/null | grep -c "Dict")
     log_verbose "Language Element Count: $numElements"
     log_verbose "User Languaget: ${langUser}"
     # Loop through each index and check the _language key
@@ -2085,36 +2085,16 @@ workflow_startup() {
 	
 	# If aap is running via Jamf, then restart via LaunchDaemon to release the jamf parent process.
 	if [[ "${parent_process_is_jamf}" == "TRUE" ]]; then
-        if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-            log_aap "Status: Found that Jamf is installing or is the parent process and Automatic Relaunch is disabled. Exiting."
-            log_status "Inactive: Jamf is parent process or AAP Installing. Automatic relaunch is disabled."
-            /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
-            { sleep 5; launchctl bootout system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
-            disown
-            exit_clean
-        else
 		log_status "Found that Jamf is installing or is the parent process, restarting via App Auto-Patch LaunchDaemon..."
-		{ sleep 5; launchctl bootout system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
-		disown
-		exit_clean
-        fi
+		restart_aap_sleep_seconds=5
+        restart_aap
 	fi
 	
 	# If aap is running from outside the ${appAutoPatchFolder}, then restart via LaunchDaemon to release any parent installer process.
 	if ! { [[ "${aapCurrentFolder}" == "${appAutoPatchFolder}" ]] || [[ "${aapCurrentFolder}" == $(dirname "${appAutoPatchLink}") ]]; }; then
-        if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-            log_aap "Status: Found App Auto-Patch is installing and Automatic Relaunch is disabled. Exiting."
-            log_status "Inactive: App Auto-Patch Installing. Automatic relaunch is disabled."
-            /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
-            { sleep 5; launchctl bootout system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
-            disown
-            exit_clean
-        else
 		log_status "Found that App Auto-Patch is installing, restarting via App Auto-Patch LaunchDaemon..."
-		{ sleep 5; launchctl bootout system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
-        disown
-		exit_clean
-        fi
+		restart_aap_sleep_seconds=5
+        restart_aap
 	fi
 	
 	# Wait for a valid network connection. If there is still no network after two minutes, an automatic deferral is started.
@@ -2377,6 +2357,21 @@ interactive_interrupt() {
     log_status "**** App Auto Patch. ${scriptVersion} - INTERACTIVE INTERRUPT - PRESS ENTER TO CONTINUE ****"
 
     /bin/bash read -n 1 -p -r >/dev/null 2>&1
+}
+
+# Restart AAP via the LaunchDaemon after waiting for ${restart_aap_sleep_seconds} seconds.
+restart_aap() {
+	/usr/libexec/PlistBuddy -c "Delete :NextAutoLaunch" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+	{
+		sleep $restart_aap_sleep_seconds
+		launchctl bootout "system/${appAutoPatchLaunchDaemonLabel}" >/dev/null 2>&1
+		launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" >/dev/null 2>&1
+	} &
+	disown -a
+	[[ "${verbose_mode}" == "TRUE" ]] && log_aap "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Local preference file at restart exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2>/dev/null)"
+	log_aap "**** App Auto-Patch ${scriptVersion} - EXIT AND RESTART WORKFLOW ****"
+	rm -f "${appAutoPatchPIDfile}" 2>/dev/null
+	exit 0
 }
 
 # Installation
@@ -3183,7 +3178,7 @@ exit_clean() {
 exit_error() {
 
     [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Local preference file at error exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
-    log_super "**** App Auto-Patch ${scriptVersion} - ERROR EXIT ****"
+    log_aap "**** App Auto-Patch ${scriptVersion} - ERROR EXIT ****"
     rm -f "${appAutoPatchPIDfile}" 2> /dev/null
     exit 1
 }
