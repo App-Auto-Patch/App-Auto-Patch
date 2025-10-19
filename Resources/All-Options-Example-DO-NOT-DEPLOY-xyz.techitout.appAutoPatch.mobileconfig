@@ -29,6 +29,8 @@
 			<string>15,60,240,1440</string>
 			<key>DeferralTimerWorkflowRelaunch</key>
 			<string>1440</string>
+			<key>DialogIcon</key>
+			<string>examplefilepath.png</string>
 			<key>DialogOnTop</key>
 			<string>TRUE</string>
 			<key>DialogTimeoutDeferral</key>
@@ -49,6 +51,14 @@
 			<string>Main</string>
 			<key>InteractiveMode</key>
 			<integer>1</integer>
+			<key>MonthlyPatchingCadenceEnabled</key>
+			<true/>
+			<key>MonthlyPatchingCadenceOrdinalValue</key>
+			<string>second</string>
+			<key>MonthlyPatchingCadenceWeekdayIndex</key>
+			<string>tuesday</string>
+			<key>MonthlyPatchingCadenceStartTime</key>
+			<string>09:00:00</string>
 			<key>OptionalLabels</key>
 			<string>iTerm2  imazingprofileeditor</string>
 			<key>PatchWeekStartDay</key>
@@ -67,6 +77,10 @@
 			<string>FALSE</string>
 			<key>RequiredLabels</key>
 			<string>googlechromepkg homebrew</string>
+			<key>SelfUpdateEnabled</key>
+			<true/>
+			<key>SelfUpdateFrequency</key>
+			<string>weekly</string>
 			<key>SupportTeamEmail</key>
 			<string>support@company.com</string>
 			<key>SupportTeamName</key>
