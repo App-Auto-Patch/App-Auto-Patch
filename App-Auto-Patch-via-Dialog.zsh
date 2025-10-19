@@ -124,6 +124,10 @@ echo "
     <key>InstallomatorVersionCustomRepoPath</key> <string>Installomator/Installomator</string>
     <key>InstallomatorVersionCustomBranchName</key> <string>main</string>
     <key>InteractiveMode</key> <integer>number</integer>
+    <key>MonthlyPatchingCadenceEnabled</key> <true/> | <false/>
+    <key>MonthlyPatchingCadenceOrdinalValue</key> <string>second</string>
+    <key>MonthlyPatchingCadenceWeekdayIndex</key> <string>tuesday</string>
+    <key>MonthlyPatchingCadenceStartTime</key> <string>09:00:00</string>
     <key>OptionalLabels</key> <string>label label label etc</string>
     <key>PatchWeekStartDay</key> <integer>number</integer>
     <key>RemoveInstallomatorPath</key> <string>TRUE,FALSE</string>
@@ -1043,6 +1047,14 @@ get_preferences() {
         self_update_frequency_managed=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateFrequency 2> /dev/null)
         local dialog_icon_path_managed
         dialog_icon_path_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogIcon 2> /dev/null)
+        local monthly_patching_cadence_enabled_managed
+        monthly_patching_cadence_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" MonthlyPatchingCadenceEnabled 2> /dev/null)
+        local monthly_patching_cadence_ordinal_value_managed
+        monthly_patching_cadence_ordinal_value_managed=$(defaults read "${appAutoPatchManagedPLIST}" MonthlyPatchingCadenceOrdinalValue 2> /dev/null)
+        local monthly_patching_cadence_weekday_index_managed
+        monthly_patching_cadence_weekday_index_managed=$(defaults read "${appAutoPatchManagedPLIST}" MonthlyPatchingCadenceWeekdayIndex 2> /dev/null)
+        local monthly_patching_cadence_start_time_managed
+        monthly_patching_cadence_start_time_managed=$(defaults read "${appAutoPatchManagedPLIST}" MonthlyPatchingCadenceStartTime 2> /dev/null)
     else
         log_verbose "No managed preference file found for App Auto-Patch"
     fi
@@ -1133,11 +1145,19 @@ get_preferences() {
         local support_team_website_local
         support_team_website_local=$(defaults read "${appAutoPatchLocalPLIST}" SupportTeamWebsite 2> /dev/null)
         local self_update_enabled_local
-        self_update_enabled_local=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateEnabled 2> /dev/null)
+        self_update_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateEnabled 2> /dev/null)
         local self_update_frequency_local
-        self_update_frequency_local=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateFrequency 2> /dev/null)
+        self_update_frequency_local=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateFrequency 2> /dev/null)
         local dialog_icon_path_local
-        dialog_icon_path_local=$(defaults read "${appAutoPatchManagedPLIST}" DialogIcon 2> /dev/null)
+        dialog_icon_path_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogIcon 2> /dev/null)
+        local monthly_patching_cadence_enabled_local
+        monthly_patching_cadence_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" MonthlyPatchingCadenceEnabled 2> /dev/null)
+        local monthly_patching_cadence_ordinal_value_local
+        monthly_patching_cadence_ordinal_value_local=$(defaults read "${appAutoPatchLocalPLIST}" MonthlyPatchingCadenceOrdinalValue 2> /dev/null)
+        local monthly_patching_cadence_weekday_index_local
+        monthly_patching_cadence_weekday_index_local=$(defaults read "${appAutoPatchLocalPLIST}" MonthlyPatchingCadenceWeekdayIndex 2> /dev/null)
+        local monthly_patching_cadence_start_time_local
+        monthly_patching_cadence_start_time_local=$(defaults read "${appAutoPatchLocalPLIST}" MonthlyPatchingCadenceStartTime 2> /dev/null)
     fi
     
     log_verbose  "Local preference file before startup validation: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
@@ -1252,6 +1272,21 @@ get_preferences() {
     [[ -n "${dialog_icon_path_managed}" ]] && dialog_icon_option="${dialog_icon_path_managed}"
     { [[ -z "${dialog_icon_path_managed}" ]] && [[ -z "${dialog_icon_option}" ]] && [[ -n "${dialog_icon_path_local}" ]]; } && dialog_icon_option="${dialog_icon_path_local}"
     
+
+    [[ -n "${monthly_patching_cadence_enabled_managed}" ]] && monthly_patching_cadence_enabled="${monthly_patching_cadence_enabled_managed}"
+    { [[ -z "${monthly_patching_cadence_enabled_managed}" ]] && [[ -n "${monthly_patching_cadence_enabled}" ]] && [[ -n "${monthly_patching_cadence_enabled_local}" ]]; } && monthly_patching_cadence_enabled="${monthly_patching_cadence_enabled_local}"
+
+    [[ -n "${monthly_patching_cadence_ordinal_value_managed}" ]] && monthly_patching_cadence_ordinal_value="${monthly_patching_cadence_ordinal_value_managed}"
+    { [[ -z "${monthly_patching_cadence_ordinal_value_managed}" ]] && [[ -n "${monthly_patching_cadence_ordinal_value}" ]] && [[ -n "${monthly_patching_cadence_ordinal_value_local}" ]]; } && monthly_patching_cadence_ordinal_value="${monthly_patching_cadence_ordinal_value_local}"
+
+    [[ -n "${monthly_patching_cadence_weekday_index_managed}" ]] && monthly_patching_cadence_weekday_index="${monthly_patching_cadence_weekday_index_managed}"
+    { [[ -z "${monthly_patching_cadence_weekday_index_managed}" ]] && [[ -n "${monthly_patching_cadence_weekday_index}" ]] && [[ -n "${monthly_patching_cadence_weekday_index_local}" ]]; } && monthly_patching_cadence_weekday_index="${monthly_patching_cadence_weekday_index_local}"
+    
+    [[ -n "${monthly_patching_cadence_start_time_managed}" ]] && monthly_patching_cadence_start_time="${monthly_patching_cadence_start_time_managed}"
+    { [[ -z "${monthly_patching_cadence_start_time_managed}" ]] && [[ -n "${monthly_patching_cadence_start_time}" ]] && [[ -n "${monthly_patching_cadence_start_time_local}" ]]; } && monthly_patching_cadence_start_time="${monthly_patching_cadence_start_time_local}"
+
+
+
     #Verbose Configuration Option Output
     log_verbose "DeferralTimerMenu: $deferral_timer_menu_option"
     log_verbose "DeferralTimerFocus: $deferral_timer_focus_option"
@@ -1296,6 +1331,10 @@ get_preferences() {
     log_verbose "self_update_enabled_option: $self_update_enabled_option"
     log_verbose "self_update_frequency_option: $self_update_frequency_option"
     log_verbose "dialog_icon_option: $dialog_icon_option"
+    log_verbose "monthly_patching_cadence_enabled: $monthly_patching_cadence_enabled"
+    log_verbose "monthly_patching_cadence_ordinal_value: $monthly_patching_cadence_ordinal_value"
+    log_verbose "monthly_patching_cadence_weekday_index: $monthly_patching_cadence_weekday_index"
+    log_verbose "monthly_patching_cadence_start_time: $monthly_patching_cadence_start_time"
     
     
     # Write App Labels to PLIST
