@@ -21,6 +21,7 @@
 	- monthly_patching_cadence_ordinal_value: Week of the month you want AAP to be scheduled (first|second|third|fourth|fifth|final)
 	- monthly_patching_cadence_weekday_index: Day of the week you want AAP to be scheduled (sunday|monday|tuesday|wednesday|thursday|friday|saturday)
 	- monthly_patching_cadence_start_time: Local time you want AAP to be scheduled
+ - Improvements to the LaunchDaemon restart logic
 
 ## Version 3.3.0
 ### 21-Aug-2025
