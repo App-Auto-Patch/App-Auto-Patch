@@ -24,7 +24,7 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.4.0"
-scriptDate="2025/08/26"
+scriptDate="2025/10/18"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -48,6 +48,11 @@ echo "
     [--reset-defaults]
     [--patch-week-start-day=number]
     [--days-until-reset=number]
+
+    App Auto-Patch Self Update Options
+    [--force-self-update-check]
+    [--self-update-enabled] [--self-update-disabled]
+    [--self-update-frequency=daily|weekly|monthly]
 
     Workflow Options:
     [--workflow-disable-relaunch] [--workflow-disable-relaunch-off]
@@ -78,6 +83,9 @@ echo "
     [--deferral-timer-focus=minutes] [--deferral-timer-error=minutes]
     [--deferral-timer-workflow-relaunch=minutes] [--deferral-timer-reset-all]
 
+    Dialog Options
+    [--dialog-icon-option=filepath|URL]
+    
     Webhook Options:
     [--webhook-feature-all] [--webhook-feature-failures] [--webhook-feature-off]
     [--webhook-url-slack=URL] [--webhook-url-teams=URL]
@@ -104,6 +112,7 @@ echo "
     <key>DeferralTimerFocus</key> <integer>minutes</integer>
     <key>DeferralTimerMenu</key> <string>minutes,minutes,minutes,etc...</string>
     <key>DeferralTimerWorkflowRelaunch</key> <integer>minutes</integer>
+    <key>DialogIcon</key> <string>Filepath|URL</string>
     <key>DialogOnTop</key> <string>TRUE,FALSE</string>
     <key>DialogTimeoutDeferral</key> <integer>seconds</integer>
     <key>DialogTimeoutDeferralAction</key> <string>Defer,Continue</string>
@@ -119,6 +128,8 @@ echo "
     <key>PatchWeekStartDay</key> <integer>number</integer>
     <key>RemoveInstallomatorPath</key> <string>TRUE,FALSE</string>
     <key>RequiredLabels</key> <string>label label label etc</string>
+    <key>SelfUpdateEnabled</key> <true/> | <false/>
+    <key>SelfUpdateFrequency</key> <string>daily|weekly|monthly</string>
     <key>SupportTeamEmail</key> <string>email</string>
     <key>SupportTeamName</key> <string>name</string>
     <key>SupportTeamPhone</key> <string>phoem</string>
@@ -282,7 +293,7 @@ set_defaults() {
     
     REGEX_CSV_WHOLE_NUMBERS="^[0-9*,]+$"
 
-    selfUpdateEnabled="FALSE"
+    self_update_enabled_option="FALSE"
 
     self_update_frequency_option="daily"
 
@@ -314,6 +325,26 @@ set_defaults() {
     DISPLAY_STRING_FORMAT_TIME="+%l:%M %p" # Formatting options can be found in the man page for the date command.
     readonly DISPLAY_STRING_FORMAT_TIME
     
+    # Monthly Cadence Settings (Patch Tuesday type cadence)
+    # Use these settings if you want App Auto-Patch to schedule its next run for the following month (e.g. Patch Tuesday)
+    # This applies only when patching has been completed successfully
+
+    # Set this to TRUE if you want AAP to set the next run date for the following month after successful patching
+    monthly_patching_cadence_enabled="FALSE"
+
+    # Set the Ordinal value and Weekday index for the weekday and specific week you want AAP to be scheduled (ex: second tuesday)
+    
+    # Ordinal value is the week of the month you want AAP to be scheduled
+    # (first|second|third|fourth|fifth|final)
+    monthly_patching_cadence_ordinal_value="second" 
+    
+    # Weekday Index is the day of the week you want AAP to be scheduled
+    # (sunday|monday|tuesday|wednesday|thursday|friday|saturday)
+    monthly_patching_cadence_weekday_index="tuesday"
+
+    # Monthly Patching Cadence Start Time: Set this to the local time you want AAP to start
+    monthly_patching_cadence_start_time="09:00:00"
+
 }
 
 # Set language strings for dialogs and notifications.
@@ -772,6 +803,9 @@ get_options() {
             --deadline-days-delete-all)
                 deadline_days_delete_all_option="TRUE"
             ;;
+            --dialog-icon-option=*)
+                dialog_icon_option=="${1##*=}"
+            ;;
             --patch-week-start-day=*)
                 patch_week_start_day_option="${1##*=}"
             ;;
@@ -880,7 +914,7 @@ get_preferences() {
         defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "${scriptVersion}"
         defaults write "${appAutoPatchLocalPLIST}" MacLastStartup -string "${mac_last_startup}"
         defaults write "${appAutoPatchLocalPLIST}" InteractiveMode -integer "${InteractiveMode}"
-        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool "${selfUpdateEnabled}"
+        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool "${self_update_enabled_option}"
         defaults write "${appAutoPatchLocalPLIST}" SelfUpdateFrequency -string "${self_update_frequency_option}"
         [[ "${verbose_mode_option}" == "TRUE" ]] && defaults write "${appAutoPatchLocalPLIST}" VerboseMode -bool true
         [[ "${debug_mode_option}" == "TRUE" ]] && defaults write "${appAutoPathLocalPLIST}" DebugMode -bool true
@@ -888,6 +922,15 @@ get_preferences() {
         rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
         
     else
+        if [[ "${reset_labels_option}" == "TRUE" ]]; then
+        log_status "Resetting labels for App Auto-Patch"
+        defaults delete "${appAutoPatchLocalPLIST}" ConvertedLabels 2> /dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" IgnoredLabels 2> /dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" RequiredLabels 2> /dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" OptionalLabels 2> /dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" DiscoveredLabels 2> /dev/null
+        fi
+
         if [[ "${deferral_timer_reset_all_option}" == "TRUE" ]]; then
             log_status "Resetting all local deferral timer preferences."
             defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerDefault 2> /dev/null
@@ -994,6 +1037,12 @@ get_preferences() {
         support_team_email_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamEmail 2> /dev/null)
         local support_team_website_managed
         support_team_website_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamWebsite 2> /dev/null)
+        local self_update_enabled_managed
+        self_update_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateEnabled 2> /dev/null)
+        local self_update_frequency_managed
+        self_update_frequency_managed=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateFrequency 2> /dev/null)
+        local dialog_icon_path_managed
+        dialog_icon_path_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogIcon 2> /dev/null)
     else
         log_verbose "No managed preference file found for App Auto-Patch"
     fi
@@ -1083,6 +1132,12 @@ get_preferences() {
         support_team_email_local=$(defaults read "${appAutoPatchLocalPLIST}" SupportTeamEmail 2> /dev/null)
         local support_team_website_local
         support_team_website_local=$(defaults read "${appAutoPatchLocalPLIST}" SupportTeamWebsite 2> /dev/null)
+        local self_update_enabled_local
+        self_update_enabled_local=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateEnabled 2> /dev/null)
+        local self_update_frequency_local
+        self_update_frequency_local=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateFrequency 2> /dev/null)
+        local dialog_icon_path_local
+        dialog_icon_path_local=$(defaults read "${appAutoPatchManagedPLIST}" DialogIcon 2> /dev/null)
     fi
     
     log_verbose  "Local preference file before startup validation: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
@@ -1185,6 +1240,17 @@ get_preferences() {
     { [[ -z "${support_team_email_managed}" ]] && [[ -n "${supportTeamEmail}" ]] && [[ -n "${support_team_email_local}" ]]; } && supportTeamEmail="${support_team_email_local}"
     [[ -n "${support_team_website_managed}" ]] && supportTeamWebsite="${support_team_website_managed}"
     { [[ -z "${support_team_website_managed}" ]] && [[ -n "${supportTeamWebsite}" ]] && [[ -n "${support_team_website_local}" ]]; } && supportTeamWebsite="${support_team_website_local}"
+
+
+
+    [[ -n "${self_update_enabled_managed}" ]] && self_update_enabled_option="${self_update_enabled_managed}"
+    { [[ -z "${self_update_enabled_managed}" ]] && [[ -n "${self_update_enabled_option}" ]] && [[ -n "${self_update_enabled_local}" ]]; } && self_update_enabled_option="${self_update_enabled_local}"
+
+    [[ -n "${self_update_frequency_managed}" ]] && self_update_frequency_option="${self_update_frequency_managed}"
+    { [[ -z "${self_update_frequency_managed}" ]] && [[ -n "${self_update_frequency_option}" ]] && [[ -n "${self_update_frequency_local}" ]]; } && self_update_frequency_option="${self_update_frequency_local}"
+
+    [[ -n "${dialog_icon_path_managed}" ]] && dialog_icon_option="${dialog_icon_path_managed}"
+    { [[ -z "${dialog_icon_path_managed}" ]] && [[ -z "${dialog_icon_option}" ]] && [[ -n "${dialog_icon_path_local}" ]]; } && dialog_icon_option="${dialog_icon_path_local}"
     
     #Verbose Configuration Option Output
     log_verbose "DeferralTimerMenu: $deferral_timer_menu_option"
@@ -1227,6 +1293,9 @@ get_preferences() {
     log_verbose "SupportTeamPhone: $supportTeamPhone"
     log_verbose "SupportTeamEmail: $supportTeamEmail"
     log_verbose "SupportTeamWebsite: $supportTeamWebsite"
+    log_verbose "self_update_enabled_option: $self_update_enabled_option"
+    log_verbose "self_update_frequency_option: $self_update_frequency_option"
+    log_verbose "dialog_icon_option: $dialog_icon_option"
     
     
     # Write App Labels to PLIST
@@ -1234,6 +1303,13 @@ get_preferences() {
     requiredLabelsArray=($(echo ${required_labels_option}))
     optionalLabelsArray=($(echo ${optional_labels_option}))
     convertedLabelsArray=($(echo ${convertedLabels}))
+
+    log_status "Clearing previously set labels"
+    defaults delete "${appAutoPatchLocalPLIST}" ConvertedLabels 2> /dev/null
+    defaults delete "${appAutoPatchLocalPLIST}" IgnoredLabels 2> /dev/null
+    defaults delete "${appAutoPatchLocalPLIST}" RequiredLabels 2> /dev/null
+    defaults delete "${appAutoPatchLocalPLIST}" OptionalLabels 2> /dev/null
+    defaults delete "${appAutoPatchLocalPLIST}" DiscoveredLabels 2> /dev/null
 
     /usr/libexec/PlistBuddy -c 'add ":DiscoveredLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
     /usr/libexec/PlistBuddy -c 'add ":IgnoredLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
@@ -1676,8 +1752,8 @@ manage_parameter_options() {
     if [[ -n "${self_update_enabled_option}" ]]; then
         defaults write "${appAutoPatchLocalPlist}" SelfUpdateEnabled -bool "${self_update_enabled_option}"
     else
-        defaults write "${appAutoPatchLocalPlsit}" SelfUpdateEnabled -bool "${selfUpdateEnabled}"
-        self_update_enabled_otption="${selfUpdateEnabled}"
+        defaults write "${appAutoPatchLocalPlsit}" SelfUpdateEnabled -bool "${self_update_enabled_option}"
+        SelfUpdateEnabled="${self_update_enabled_option}"
     fi
     log_verbose "SelfUpdateEnabledOption: $self_update_enabled_option"
     
@@ -1712,6 +1788,25 @@ manage_parameter_options() {
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${webhook_feature_option}" ]]; } && log_verbose "webhook_feature_option is: ${webhook_feature_option}"
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${webhook_url_slack_option}" ]]; } && log_verbose "webhook_url_slack_option is: ${webhook_url_slack_option}"
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${webhook_url_teams_option}" ]]; } && log_verbose "webhook_url_teams_option is: ${webhook_url_teams_option}"
+
+    # Manage ${self_update_enabled_option} and save to ${appAutoPatchLocalPLIST}.
+    if [[ "${self_update_enabled_option}" -eq 1 ]] || [[ "${self_update_enabled_option}" == "TRUE" ]]; then
+        self_update_enabled_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool true
+    else
+        self_update_enabled_option="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool false
+    fi
+
+    # Manage ${self_update_frequency_option} and save to ${appAutoPatchLocalPLIST}.
+    if [[ -n "${self_update_frequency_option:-}" ]]; then
+        # normalize to lower-case daily|weekly|monthly
+        local _freq_norm="${${self_update_frequency_option:l}}"
+        case "$_freq_norm" in daily|weekly|monthly) ;; *) _freq_norm="daily" ;; esac
+        /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateFrequency -string "$_freq_norm"
+        log_info "Self-update frequency set to: ${_freq_norm}"
+    fi
+
 }
 
 gather_error_log(){
@@ -2038,10 +2133,16 @@ workflow_startup() {
     fi
 	
     # Set icon based on whether the Mac is a desktop or laptop
-    if system_profiler SPPowerDataType | grep -q "Battery Power"; then
-        icon="SF=laptopcomputer.and.arrow.down,weight=regular,colour1=gray,colour2=red"
+    if [[ ! -n "$dialog_icon_option" ]]; then
+        log_warning ":warning:  App icon not found at $dialog_icon_option, using SF symbol instead"
+        if system_profiler SPPowerDataType | grep -q "Battery Power"; then
+            icon="SF=laptopcomputer.and.arrow.down,weight=regular,colour1=gray,colour2=red"
+        else
+            icon="SF=desktopcomputer.and.arrow.down,weight=regular,colour1=gray,colour2=red"
+        fi
     else
-        icon="SF=desktopcomputer.and.arrow.down,weight=regular,colour1=gray,colour2=red"
+        log_info ":frame_with_picture:  App icon found at $dialog_icon_option, setting icon variable"
+        icon="$dialog_icon_option"
     fi
 
     # Create `overlayicon` from Self Service's custom icon (thanks, @meschwartz!)
@@ -2156,6 +2257,115 @@ workflow_startup() {
     gather_error_log
 
 }
+
+# MARK: *** "Patch Tuesday" cadence date calc ***
+################################################################################
+
+# Map weekday tokens -> index used by `cal` header "Su Mo Tu We Th Fr Sa"
+# Sunday = 0 ... Saturday = 6
+weekday_index() {
+	local w="$(echo "$1" | tr '[:upper:]' '[:lower:]')"
+	case "$w" in
+		0|su|sun|sunday) echo 0 ;;
+		1|mo|mon|monday) echo 1 ;;
+		2|tu|tue|tuesday) echo 2 ;;
+		3|we|wed|wednesday) echo 3 ;;
+		4|th|thu|thursday) echo 4 ;;
+		5|fr|fri|friday) echo 5 ;;
+		6|sa|sat|saturday) echo 6 ;;
+		*) echo "ERR" ;;
+	esac
+}
+
+# Map ordinal tokens -> 1..5 or "last"
+ordinal_value() {
+	local n="$(echo "$1" | tr '[:upper:]' '[:lower:]')"
+	case "$n" in
+		1|1st|first) echo 1 ;;
+		2|2nd|second) echo 2 ;;
+		3|3rd|third) echo 3 ;;
+		4|4th|fourth) echo 4 ;;
+		5|5th|fifth) echo 5 ;;
+		last|final) echo "last" ;;
+		*) echo "ERR" ;;
+	esac
+}
+
+# Return YYYY-MM-DD for the Nth weekday within a given month/year
+# Usage: nth_weekday_ymd <year> <month> <weekdayToken> <ordinalToken>
+# Examples: nth_weekday_ymd 2025 11 Tuesday second
+#           nth_weekday_ymd 2025 11 wed 3
+#           nth_weekday_ymd 2025 11 fri last
+nth_weekday_ymd() {
+	local y="$1" m="$2" wtok="$3" ntok="$4"
+	local widx ord
+	widx="$(weekday_index "$wtok")" ; [ "$widx" = "ERR" ] && { echo "Invalid weekday: $wtok" >&2; return 1; }
+	ord="$(ordinal_value "$ntok")"  ; [ "$ord"  = "ERR" ] && { echo "Invalid ordinal: $ntok" >&2; return 1; }
+	
+	# Column math for `cal` header "Su Mo Tu We Th Fr Sa"
+	# Start positions are 1,4,7,10,13,16,19 (each col width 3, day width 2)
+	local col=$((1 + (widx * 3)))
+	
+	# Gather all weekday dates for the month from `cal` and select ordinal
+	local day
+	day="$(
+		cal "$m" "$y" | awk -v COL="$col" -v ORD="$ord" '
+			NR>2 {
+				d = substr($0, COL, 2); gsub(/ /, "", d);
+				if (d != "") { arr[++i] = d }
+			}
+			END {
+				if (i==0) exit 1
+				if (ORD == "last") print arr[i];
+				else {
+					n = ORD + 0;
+					if (n >= 1 && n <= i) print arr[n];
+				}
+			}'
+	)" || return 1
+								
+	[ -z "$day" ] && { echo "No matching day (check inputs)" >&2; return 1; }
+	printf "%04d-%02d-%02d\n" "$y" "$m" "$day"
+}
+
+# Return YYYY-MM-DD for the *next* occurrence (this month if still upcoming, else next month).
+# If today *is* the target, it returns next month’s target (i.e., strictly future).
+# Usage: next_nth_weekday_date <weekdayToken> <ordinalToken>
+next_nth_weekday_date() {
+	local wtok="$1" ntok="$2"
+	
+	local y m today target_this target_next
+	y="$(date +%Y)"; m="$(date +%m)"; today="$(date +%Y-%m-%d)"
+	
+	target_this="$(nth_weekday_ymd "$y" "$m" "$wtok" "$ntok")" || return 1
+	
+	# If target_this is strictly in the future (today < target), use it; else roll to next month.
+	if [[ "$today" < "$target_this" ]]; then
+		echo "$target_this"
+	else
+		local y2 m2
+		if [ "$m" -eq 12 ]; then y2=$((y+1)); m2=1; else y2="$y"; m2=$((10#$m + 1)); fi
+		nth_weekday_ymd "$y2" "$m2" "$wtok" "$ntok"
+	fi
+}
+
+# --- Main output -----------------------------------------------------------
+# Usage: next_nth_weekday_datetime <weekday> <ordinal> [HH:MM:SS]
+next_nth_weekday_datetime() {
+	local wtok="$1" ntok="$2" hhmmss="$3"
+	local date_part time_part
+	date_part="$(next_nth_weekday_date "$wtok" "$ntok")" || return 1
+	
+	if [ -n "$hhmmss" ]; then
+		time_part="$hhmmss"
+	else
+		time_part="$(date +%H:%M:%S)"
+	fi
+	
+	# Output in YYYY-MM-DD:HH:MM:SS format
+	printf "%s:%s\n" "$date_part" "$time_part"
+}
+################################################################################
 
 # MARK: *** Process Management ***
 ################################################################################
@@ -2302,6 +2512,16 @@ EOLD
 }
 
 function uninstall_app_auto_patch() {
+    
+    # Check for previous AAP instance and kill the PID and Dialog if true
+    local aapPreviousPID
+    aapPreviousPID=$(pgrep -F "${appAutoPatchPIDfile}" 2> /dev/null)
+    if [[ -n "${aapPreviousPID}" ]]; then
+        [[ -d "${appAutoPatchLogFolder}" ]] && log_status "Found previous aap instance running with PID ${aapPreviousPID}, killing processes..."
+        [[ ! -d "${appAutoPatchLogFolder}" ]] && log_echo "Status: Found previous aap instance running with PID ${aapPreviousPID}, killing processes..."
+        kill -9 "${aapPreviousPID}" > /dev/null 2>&1
+        killProcess "Dialog"
+    fi
 
     # Boot out launch daemon and remove
     log_uninstall "Removing previous AAP Launch Daemon: /Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
@@ -2918,6 +3138,13 @@ set_auto_launch_deferral() {
     exit_clean
 }
 
+set_auto_launch_monthly_cadence() {
+    log_verbose  "deferralNextLaunch is: ${next_nth_weekday}"
+    defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_nth_weekday}"
+    log_exit "AAP is scheduled to automatically relaunch at: ${next_nth_weekday}"
+    exit_clean
+}
+
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Kill a specified process
@@ -3503,10 +3730,17 @@ function PgetAppVersion() {
         applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0)
         if ([[ "$applist" == *"/Daemon Containers/"* ]]); then
             log_info "App found in the iPhone Mirroring folder: $applist, ignoring"
-            appList=""
+            applist=""
         elif ([[ "$applist" == *"/Library/Application Support/JAMF/Composer/"* ]]); then
-            infoOut "App found in the Jamf Composer folder: $applist, ignoring"
-            appList=""
+            log_info "App found in the Jamf Composer folder: $applist, ignoring"
+            applist=""
+        # 3.4.0 | 2025-10-17 | Adding Chrome & Edge PWA app filepaths to the exclusion to prevent being converted from PWA's to actual apps. Thanks @Cesar !
+        elif ([[ "$applist" == *"/Applications/Chrome Apps.localized/"* ]]); then
+            log_info "App found in the Chrome PWA app folder: $applist, ignoring"
+            applist=""
+        elif ([[ "$applist" == *"/Applications/Edge Apps.localized/"* ]]); then
+            log_info "App found in the Edge PWA app folder: $applist, ignoring"
+            applist=""
         elif ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "TRUE" ]]); then
             log_verbose "App found in User directory: $applist, coverting to default directory"
             # Adding the label to the converted labels
@@ -3800,7 +4034,7 @@ check_and_echo_errors() {
     lastPosition=$(cat "$marker_file")
     log_info "Last position: $lastPosition"
     
-	result="$(grep -aE 'ERROR[[:space:]]*:[[:space:]]*[^:]+[[:space:]]*:[[:space:]]*' "$duplicate_installomatorLogFile" | awk -F ' : ' '$2=="ERROR"{print $3 " : " $4; exit}')"
+    result="$(grep -aE 'ERROR[[:space:]]*:[[:space:]]*[^:]+[[:space:]]*:[[:space:]]*' "$duplicate_installomatorLogFile" | awk -F ' : ' '$2=="ERROR"{print $3 " : " $4; exit}')"
     #log_info "Install Error Result: $result"
     
     #Function to print with bullet points
@@ -4275,23 +4509,23 @@ main() {
     set_display_strings_language
     get_options "$@"
 
-    # Persist self-update choices if passed via CLI
-    if [[ -n "${self_update_enabled_option:-}" ]]; then
-        if [[ "${self_update_enabled_option}" == "TRUE" ]]; then
-            /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool true
-        else
-            /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool false
-        fi
-    log_info "Self-update enabled set to: ${self_update_enabled_option}"
-    fi
+    # # Persist self-update choices if passed via CLI
+    # if [[ -n "${self_update_enabled_option:-}" ]]; then
+    #     if [[ "${self_update_enabled_option}" == "TRUE" ]]; then
+    #         /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool true
+    #     else
+    #         /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool false
+    #     fi
+    # log_info "Self-update enabled set to: ${self_update_enabled_option}"
+    # fi
 
-    if [[ -n "${self_update_frequency_option:-}" ]]; then
-        # normalize to lower-case daily|weekly|monthly
-        local _freq_norm="${${self_update_frequency_option:l}}"
-        case "$_freq_norm" in daily|weekly|monthly) ;; *) _freq_norm="daily" ;; esac
-        /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateFrequency -string "$_freq_norm"
-        log_info "Self-update frequency set to: ${_freq_norm}"
-    fi
+    # if [[ -n "${self_update_frequency_option:-}" ]]; then
+    #     # normalize to lower-case daily|weekly|monthly
+    #     local _freq_norm="${${self_update_frequency_option:l}}"
+    #     case "$_freq_norm" in daily|weekly|monthly) ;; *) _freq_norm="daily" ;; esac
+    #     /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateFrequency -string "$_freq_norm"
+    #     log_info "Self-update frequency set to: ${_freq_norm}"
+    # fi
 
     # One-shot override
     if [[ "${force_self_update_check_option:-}" == "TRUE" ]]; then
@@ -4501,11 +4735,16 @@ main() {
         
         log_verbose "appName: $appName"
         appNamesArray+=(--listitem)
-    if [[ ! -e "/Applications/${appName}.app" ]]; then
-        appNamesArray+=(${appName},icon="${logoImage}")
-    else 
-        appNamesArray+=(${appName},icon="/Applications/${appName}.app")
-    fi
+        if [[ ! -e "/Applications/${appName}.app" ]]; then
+            appPath=$(mdfind "kMDItemFSName == '${appName}.app' && kMDItemContentType == 'com.apple.application-bundle'" -0)
+            if [[ -e ${appPath} ]]; then
+                appNamesArray+=(${appName},icon="${appPath}")
+            else
+                appNamesArray+=(${appName},icon="${logoImage}")
+            fi
+        else 
+            appNamesArray+=(${appName},icon="/Applications/${appName}.app")
+        fi
     done
 
     log_notice "Labels to install: $labelsArray"
@@ -4551,9 +4790,16 @@ main() {
                 disown
                 exit_clean
             else
-                deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
-                log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
-                set_auto_launch_deferral
+                if [[ ${monthly_patching_cadence_enabled} == "TRUE" ]]; then
+                    log_aap "Monthly Patching Cadence Enabled: Calculating next launch date"
+                    next_nth_weekday=$(next_nth_weekday_datetime ${monthly_patching_cadence_weekday_index} ${monthly_patching_cadence_ordinal_value} "${monthly_patching_cadence_start_time}")
+                    log_notice "Will auto launch on ${next_nth_weekday}"
+                    set_auto_launch_monthly_cadence
+                else
+                    deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
+                    log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
+                    set_auto_launch_deferral
+                fi
             fi
 
         else
@@ -4585,9 +4831,16 @@ main() {
                     disown
                     exit_clean
                 else
-                deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
-                log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
-                set_auto_launch_deferral
+                    if [[ ${monthly_patching_cadence_enabled} == "TRUE" ]]; then
+                        log_aap "Monthly Patching Cadence Enabled: Calculating next launch date"
+                        next_nth_weekday=$(next_nth_weekday_datetime ${monthly_patching_cadence_weekday_index} ${monthly_patching_cadence_ordinal_value} "${monthly_patching_cadence_start_time}")
+                        log_notice "Will auto launch on ${next_nth_weekday}"
+                        set_auto_launch_monthly_cadence
+                    else
+                        deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
+                        log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
+                        set_auto_launch_deferral
+                    fi
                 fi
                 
             elif [[ "${user_focus_active}" == "TRUE" ]]; then # No deferral deadlines have passed but a process has told the display to not sleep or the user has enabled Focus or Do Not Disturb.
@@ -4615,9 +4868,16 @@ main() {
                         disown
                         exit_clean
                     else
-                        deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
-                        log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
-                        set_auto_launch_deferral
+                        if [[ ${monthly_patching_cadence_enabled} == "TRUE" ]]; then
+                            log_aap "Monthly Patching Cadence Enabled: Calculating next launch date"
+                            next_nth_weekday=$(next_nth_weekday_datetime ${monthly_patching_cadence_weekday_index} ${monthly_patching_cadence_ordinal_value} "${monthly_patching_cadence_start_time}")
+                            log_notice "Will auto launch on ${next_nth_weekday}"
+                            set_auto_launch_monthly_cadence
+                        else
+                            deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
+                            log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
+                            set_auto_launch_deferral
+                        fi
                     fi
                 else # The user chose to defer. 
                     deferral_timer_minutes=${deferral_timer_minutes} 
