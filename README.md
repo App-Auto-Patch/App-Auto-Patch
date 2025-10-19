@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.3.0
+# App Auto-Patch 3.4.0
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch)
 
@@ -18,6 +18,30 @@ App Auto-Patch was developed based on a similar concept as the Patchomator proje
 The script simplifies the process of taking an inventory of installed applications and patching them, eliminating the need for creating multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy solution for keeping end-users' applications updated with minimal effort.
 
 This project has since been applied to MDMs outside of Jamf Pro, showcasing its versatility and adaptability. 
+
+## New features/Specific Changes in 3.4.0
+- Added App Auto-Patch Script Self Update functionality (Feature Request #128)
+	- Managed Config: Configure using the SelfUpdateEnabled | SelfUpdateFrequency keys
+ - CLI: Configure using the --self-update-enabled | --self-update-disabled | --self-update-frequency triggers. Force update using --force-self-update-check trigger
+- Monthly Patching Cadence Functionality: Added the ability to set a Monthly Patching Cadence (e.g., Patch Tuesday).
+	- MonthlyPatchingCadenceEnabled (TRUE|FALSE)
+	- MonthlyPatchingCadenceOrdinalValue: Week of the month you want AAP to be scheduled (first|second|third|fourth|fifth|final)
+	- MonthlyPatchingCadenceWeekdayIndex: Day of the week you want AAP to be scheduled (sunday|monday|tuesday|wednesday|thursday|friday|saturday)
+	- MonthlyPatchingCadenceStartTime: Local time you want AAP to be scheduled (ex: `09:00:00`)
+- Standardize timestamp format and use actual timezones instead of hard-coded UTC. Cleaned up and adjusted NextAutoLaunch format to use date datatype (#152)
+- Added check for appName in Installomator label to populate the correct app name to improve app detection (Issue #155)
+- Updated logic to populate app icons correctly for apps not located in /Applications folder
+- Added logic to check for appCustomVersion in Installomator label to pull the correct version of installed apps
+- Fixed logic to clear the targetDir variable when scrubbing Installomator label fragments
+- Fixed case on variables (Issue #178)
+- Added logic to ignore PWA apps from Chrome & Edge (Issue #178)
+- Added --reset-labels trigger functionality (Issue #171)
+- Fixed error extraction from Installomator logs. Used in webhooks. The previous implementation returned null. (PR #174)
+- Fixed Jamf Self Service Icon Overlay & added support for Jamf Self Service+ (PR #173)
+- Added option to set the Dialog Icon to a custom filepath or URL via MDM or CLI (#179)
+- New `restart_aap` function to handle all LaunchDaemon restart logic
+- Fixed a bug that would result in a `Print: Entry, ":userInterface:dialogElements", Does Not Exist` message if no language entries exist in the PLIST
+- Logging improvements
 
 ## New features/Specific Changes in 3.3
 - Added receipt support for patching events. Each app patched by App Auto Patch now writes a JSON receipt into the AAP management folder `/Library/Management/AppAutoPatch/receipts`. Successful and failed patch attempts are recorded. 
