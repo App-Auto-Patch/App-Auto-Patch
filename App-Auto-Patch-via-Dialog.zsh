@@ -2089,12 +2089,12 @@ workflow_startup() {
 	
 	# Detailed system and user checks.
 	get_logged_in_user
-	
-	# Initial Parameter and helper validation, if any of these fail then it's unsafe for the workflow to continue.
-	get_preferences
 
     # Check for Installomator
     get_installomator
+
+	# Initial Parameter and helper validation, if any of these fail then it's unsafe for the workflow to continue.
+	get_preferences
 
     # Management parameter options
     manage_parameter_options
@@ -4385,6 +4385,10 @@ check_webhook(){
 }
 
 self_update() {
+
+    # Check AAP & Log Folder exist for firs trun
+    [[ ! -d "${appAutoPatchFolder}" ]] && mkdir -p "${appAutoPatchFolder}"
+    [[ ! -d "${appAutoPatchLogFolder}" ]] && mkdir -p "${appAutoPatchLogFolder}"
 
     local enabled freq now nextDue
     enabled=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateEnabled 2>/dev/null || echo "1")
