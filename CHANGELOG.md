@@ -2,35 +2,58 @@
 
 # Version 3
 
+## Version 3.4.0
+### 18-Oct-2025
+- Added App Auto-Patch Script Self Update functionality (Feature Request #128)
+- Standardize timestamp format and use actual timezones instead of hard-coded UTC. Cleaned up and adjusted NextAutoLaunch format to use date datatype (#152)
+- Added check for appName in Installomator label to populate the correct app name to improve app detection (Issue #155)
+- Updated logic to populate app icons correctly for apps not located in /Applications folder
+- Added logic to check for appCustomVersion in Installomator label to pull the correct version of installed apps
+- Fixed logic to clear the targetDir variable when scrubbing Installomator label fragments
+- Fixed case on variables (Issue #178)
+- Added logic to ignore PWA apps from Chrome & Edge (Issue #178)
+- Added --reset-labels trigger functionality (Issue #171)
+- Fixed error extraction from Installomator logs. Used in webhooks. The previous implementation returned null. (PR #174)
+- Fixed Jamf Self Service Icon Overlay & added support for Jamf Self Service+ (PR #173)
+- Added option to set the Dialog Icon to a custom filepath or URL via MDM or CLI (#179)
+- Added the ability to set a Monthly Patching Cadence (e.g., Patch Tuesday).
+	- monthly_patching_cadence_enabled (TRUE|FALSE)
+	- monthly_patching_cadence_ordinal_value: Week of the month you want AAP to be scheduled (first|second|third|fourth|fifth|final)
+	- monthly_patching_cadence_weekday_index: Day of the week you want AAP to be scheduled (sunday|monday|tuesday|wednesday|thursday|friday|saturday)
+	- monthly_patching_cadence_start_time: Local time you want AAP to be scheduled
+ - New `restart_aap` function to handle all LaunchDaemon restart logic
+ - Fixed a bug that would result in a "Print: Entry, ":userInterface:dialogElements", Does Not Exist" message if no language entries exist in the PLIST
+ - Logging improvements
+
 ## Version 3.3.0
 ### 21-Aug-2025
 - Added functions to write patching receipts into the App Auto Patch management folder. Receipts are used to report success/failure on app patching
 
 ## Version 3.2.2
 ### 20-May-2025
-- Fixed logic for resetting PatchStartDate to use new date for deferrals instead of date prior to the reset
+- Fixed logic for resetting PatchStartDate to use the new date for deferrals instead of the date prior to the reset
 
 ## Version 3.2.1
 ### 01-May-2025
-- Added logic to kill Dialog process if a previous PID is found
+- Added logic to kill the Dialog process if a previous PID is found
 
 ## Version 3.2.0
 ### 29-Apr-2025
 - Added multi-language support: Entries can be added to the managed configuration profile for multiple languages, based on the setting for the user in macOS
 - Added --workflow-install-now-silent option which runs through the workflow without deferrals but does not display dialogs
 - Added option to disable Installomator Updates using <key>InstallomatorUpdateDisable</key> <string>TRUE,FALSE</string>
-- Added dialogTargetVersion and set to version 2.5.5 as minimum required due to issues with the deferral menu on older versions
+- Added dialogTargetVersion and set to version 2.5.5 as the minimum required due to issues with the deferral menu on older versions
 
 ## Version 3.1.2
 ### 11-Apr-2025
 - Fixed a bug that prevented the proper app name from populating for a small number of labels (Issue #140)
 - Fixed a bug when using wildcards for ignored and required labels that could cause the label to skip being added (Issue #141)
 - Fixed a bug that could prevent a label from being added if that label name matched part of a label in the ignoredLabelsArray (Issue #142)
-- Fixed a bug to pull the correct label name for cases where the label fragments file contains multiple label references (ex: Camtasia|Camtasia2025) (Issue #143)
+- Fixed a bug to pull the correct label name for cases where the label fragments file contains multiple label references (ex, Camtasia|Camtasia2025) (Issue #143)
 - Fixed a bug that prevented the proper app name and icon from populating for a small number of labels on the Patching Dialog (Issue #144)
 - Fixed a bug that prevented Installomator from sending the proper status updates to the swiftDialogCommandFile (Issue #144)
 - Updated syntax for some verbose logging
-- Added dialog to the ignored label list to prevent dialog from updating during runtime
+- Added the dialog label to the ignored label list to prevent the dialog from updating during runtime
 
 ## Version 3.1.1
 ### 09-Apr-2025
@@ -46,9 +69,9 @@
 - Added exit_error function to handle startup validation errors
 - Added the ability to pull from a custom Installomator fork. It must include all Installomator contents, including fragments
 - Added logic to check for a successful App Auto Patch installation.
-- Fixed logic for InteractiveMode to use default if no option is set via MDM or command line
-- Fixed logic for DaysUntilReset to use default if no option is set via mdm or command line
-- Fixed logic where script was improperly shifting CLI options when running from Jamf and not using built-in parameter options (Issues #45)
+- Fixed logic for InteractiveMode to use the default if no option is set via MDM or command line
+- Fixed logic for DaysUntilReset to use the default if no option is set via MDM or command line
+- Fixed logic where the script was improperly shifting CLI options when running from Jamf and not using built-in parameter options (Issue #45)
 - Updated Microsoft Teams Webhook per [Create incoming webhooks with Workflows for Microsoft Teams](https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498)
 - Fixed issues with dialog logic for Install Now Workflow
 
@@ -107,19 +130,19 @@
 
 ## Version 3.0.0-beta6
 ### 07-Feb-2025
-- Changes to permissions for command file for SwiftDialog 2.5.5+
+- Changes to permissions for the command file for SwiftDialog 2.5.5+
 
 ## Version 3.0.0-beta5
 ### 22-Dec-2024
 - Fixed a bug with the Days Since Patching Start Date logic that was causing it to be a day behind
-- Added preference key to set Dialog on top of other windows
+- Added preference key to set the Dialog on top of other windows
 - Added options to output version details
 - Added logic for switching Installomator between Release and Main (beta) branches
 - Set default branch to Main
 
 ## Version 3.0.0-beta4
 ### 14-Nov-2024
-- Added logic for deferral-timer-menu to pull via MDM, local PLIST or CLI trigger
+- Added logic for deferral-timer-menu to pull via MDM, local PLIST, or CLI trigger
 
 ## Version 3.0.0-beta3
 ### 10-Nov-2024
