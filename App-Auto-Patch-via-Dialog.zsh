@@ -2829,7 +2829,7 @@ get_mdm(){
 		;;
 		*microsoft*)
 			log_info "MDM is Intune"
-			mdmName="Microsoft Intune"
+			mdmName="Intune"
 		;;
         *jumpcloud*)
             log_info "MDM is Jumpcloud"
@@ -4113,19 +4113,19 @@ appsUpToDate(){
     # Extract the App up to date info from the AAP log
     if [[ $errorsCount -le 0 ]] && [[ ! -n $appsUpToDate ]]; then
         log_info "SUCCESS: Applications updates were installed with no errors"
-        webhookStatus="Success: Apps updated (S/N ${serialNumber})"
+        webhookStatus="✅ Success: App(s) updated"
         formatted_result=$(echo "$queuedLabelsArray")
         formatted_error_result="None"
         errorCount="0"
     elif
         [[ $errorsCount -gt 0 ]] && [[ ! -n $appsUpToDate ]]; then
             log_info "FAILURES DETECTED: Applications updates were installed with some errors"
-            webhookStatus="Error: Update(s) failed (S/N ${serialNumber})"
+            webhookStatus="❌ Error: Update(s) failed"
             formatted_result=$(echo "$queuedLabelsArray")
             check_and_echo_errors
         else
             log_info "SUCCESS: Applications were all up to date, nothing to install"
-            webhookStatus="Success: Apps already up-to-date (S/N ${serialNumber})"
+            webhookStatus="✅ Success: App(s) already up-to-date"
             formatted_result="None"
             formatted_error_result="None"
             errorCount="0"
@@ -4171,8 +4171,24 @@ webHookMessage() {
                     "type": "header",
                     "text": {
                         "type": "plain_text",
-                        "text": "'${appTitle}': '${webhookStatus}'",
+                        "text": "'${webhookStatus}'"
                     }
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "*'${serialNumber}'* (_'${modelName}'_)"
+                    }
+                },
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": "'${currentUserAccountName}'"
+                        }
+                    ]
                 },
                 {
                     "type": "divider"
@@ -4182,28 +4198,16 @@ webHookMessage() {
                     "fields": [
                         {
                             "type": "mrkdwn",
-                            "text": ">*Serial Number and Computer Name:*\n>'"$serialNumber"' on '"$computerName"'"
-                        },
-                                {
-                            "type": "mrkdwn",
-                            "text": ">*Computer Model:*\n>'"$modelName"'"
+                            "text": ">*Label(s):*\n>'"$formatted_result"'"
                         },
                         {
                             "type": "mrkdwn",
-                            "text": ">*Current User:*\n>'"$currentUserAccountName"'"
+                            "text": ">*Error(s):*\n>'"$formatted_error_result"'"
                         },
                         {
                             "type": "mrkdwn",
-                            "text": ">*Updates:*\n>'"$formatted_result"'"
+                            "text": ">*Version:*\n>'"*AAP:* $scriptVersion *INSTR:* $(cat "${installomatorScript}" | grep ^VERSION= | head -n1 | cut -d'"' -f2) *OS:* $osVersion"'"
                         },
-                        {
-                            "type": "mrkdwn",
-                            "text": ">*Errors:*\n>'"$formatted_error_result"'"
-                        },
-                                {
-                            "type": "mrkdwn",
-                            "text": ">*Computer Record:*\n>'"$mdmComputerURL"'"
-                        }
                     ]
                 },
                 {
@@ -4213,7 +4217,7 @@ webHookMessage() {
                             "type": "button",
                             "text": {
                                 "type": "plain_text",
-                                "text": "View computer in '"$mdmName"'",
+                                "text": "View in '"$mdmName"'",
                                 "emoji": true
                             },
                             "style": "primary",
@@ -4276,7 +4280,7 @@ webHookMessage() {
                                 "type": "TextBlock",
                                 "size": "Large",
                                 "weight": "Bolder",
-                                "text": "'${appTitle}': '${webhookStatus}'"
+                                "text": "'${webhookStatus}'"
                             },
                             {
                                 "type": "ColumnSet",
@@ -4298,14 +4302,13 @@ webHookMessage() {
                                         "items": [
                                             {
                                                 "type": "TextBlock",
-                                                "weight": "Bolder",
-                                                "text": "'${computerName}'",
+                                                "text": "**'${serialNumber}'** (*'${modelName}')*",
                                                 "wrap": true
                                             },
                                             {
                                                 "type": "TextBlock",
                                                 "spacing": "None",
-                                                "text": "'${serialNumber}'",
+                                                "text": "'${currentUserAccountName}'",
                                                 "isSubtle": true,
                                                 "wrap": true
                                             }
@@ -4315,18 +4318,63 @@ webHookMessage() {
                                 ]
                             },
                             {
+                                "type": "ColumnSet",
+                                "spacing": "Small",
+                                "bleed": true,
+                                "columns": [
+                                    {
+                                    "type": "Column",
+                                    "width": "auto",
+                                    "items": [
+                                        { "type": "TextBlock", "text": "AAP:", "weight": "Bolder", "wrap": false, "spacing": "None" }
+                                    ]
+                                    },
+                                    {
+                                    "type": "Column",
+                                    "width": "auto",
+                                    "items": [
+                                        { "type": "TextBlock", "text": "'${scriptVersion}'", "fontType": "Monospace", "wrap": false, "maxLines": 1, "spacing": "None" }
+                                    ]
+                                    },
+                                    {
+                                    "type": "Column",
+                                    "width": "auto",
+                                    "items": [
+                                        { "type": "TextBlock", "text": "INSTR:", "weight": "Bolder", "wrap": false, "spacing": "None" }
+                                    ]
+                                    },
+                                    {
+                                    "type": "Column",
+                                    "width": "auto",
+                                    "items": [
+                                        { "type": "TextBlock", "text": "'$(cat "${installomatorScript}" | grep ^VERSION= | head -n1 | cut -d'"' -f2)'", "fontType": "Monospace", "wrap": false, "maxLines": 1, "spacing": "None" }
+                                    ]
+                                    },
+                                    {
+                                    "type": "Column",
+                                    "width": "auto",
+                                    "items": [
+                                        { "type": "TextBlock", "text": "OS:", "weight": "Bolder", "wrap": false, "spacing": "None" }
+                                    ]
+                                    },
+                                    {
+                                    "type": "Column",
+                                    "width": "auto",
+                                    "items": [
+                                        { "type": "TextBlock", "text": "'${osVersion}'", "fontType": "Monospace", "wrap": false, "maxLines": 1, "spacing": "None" }
+                                    ]
+                                    }
+                                ]
+                            },
+                            {
                                 "type": "FactSet",
                                 "facts": [
                                     {
-                                        "title": "User",
-                                        "value": "'${currentUserAccountName}'"
-                                    },
-                                    {
-                                        "title": "Updates",
+                                        "title": "Label(s)",
                                         "value": "'${formatted_result}'"
                                     },
                                     {
-                                        "title": "Errors",
+                                        "title": "Error(s)",
                                         "value": "'${formatted_error_result}'"
                                     }
                                 ]
@@ -4344,7 +4392,7 @@ webHookMessage() {
                     }
                 }
             ]
-}'
+        }'
         
         # Send the JSON payload using curl
         curlResult=$(curl -s -X POST -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_teams_option")
