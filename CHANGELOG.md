@@ -5,7 +5,7 @@
 ## Version 3.4.1
 ### 19-Oct-2025
 - Fixed order of `get_installomator` and `get_preferences`
-- Fixed `DIALOG_LIST_ITEM_NAME` and icon logic for Installation Dialog to allow status and statustext to update properly
+- Complete re-write of logic to populate app names and icons in the various dialogs: Fixes missing icons, inconsistent app names, status and statustext updates
 
 ## Version 3.4.0
 ### 18-Oct-2025
