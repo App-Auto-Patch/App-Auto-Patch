@@ -3971,24 +3971,57 @@ workflow_do_Installations() {
         if [ ${InteractiveModeOption} -ge 1 ]; then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
             
-            # Get the "name=" value from the current label and use it in our swiftDialog list
-            # Issue 144 Fix: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/144
-            #currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
-            currentDisplayName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-            # There are some weird \' shenanigans here because Installomator passes this through eval
-            swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplayName}"\')
+            # # Get the "name=" value from the current label and use it in our swiftDialog list
+            # # Issue 144 Fix: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/144
+            # #currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
+            # currentDisplayName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            # # There are some weird \' shenanigans here because Installomator passes this through eval
+            # swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplayName}"\')
+            # sleep .5
+            # # Issue 144 Fix https://github.com/App-Auto-Patch/App-Auto-Patch/issues/144
+            # if [[ ! -e "/Applications/${currentDisplayName}.app" ]]; then
+            # swiftDialogUpdate "icon: ${logoImage}"
+            # else
+            # swiftDialogUpdate "icon: /Applications/${currentDisplayName}.app"
+            # fi
+            # swiftDialogUpdate "progresstext: ${display_string_patching_progress} ${currentDisplayName} …"
+            # swiftDialogUpdate "listitem: index: $i, icon: /Applications/${currentDisplayName}.app, status: wait, statustext: ${display_string_patching_checking} …"
+
+            currentDisplay_appName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+
+
+            swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplay_name}"\')
             sleep .5
-            # Issue 144 Fix https://github.com/App-Auto-Patch/App-Auto-Patch/issues/144
-            if [[ ! -e "/Applications/${currentDisplayName}.app" ]]; then
-            swiftDialogUpdate "icon: ${logoImage}"
+
+            # Check if appName is populated, otherwise re-pull using the name variable
+            if [ -z "$currentDisplay_appName" ]; then
+                appName=${currentDisplay_name}
             else
-            swiftDialogUpdate "icon: /Applications/${currentDisplayName}.app"
+                # drop the .app portion
+                appName="${currentDisplay_appName%.app}"
             fi
-            swiftDialogUpdate "progresstext: ${display_string_patching_progress} ${currentDisplayName} …"
-            swiftDialogUpdate "listitem: index: $i, icon: /Applications/${currentDisplayName}.app, status: wait, statustext: ${display_string_patching_checking} …"
+
+            if [[ ! -e "/Applications/${appName}.app" ]]; then
+                appPath=$(mdfind "kMDItemFSName == '${appName}.app' && kMDItemContentType == 'com.apple.application-bundle'" -0)
+                appPath=$(print -r -- "$appPath" | tr -d '\000')
+                if [[ -e ${appPath} ]]; then
+                    swiftDialogUpdate "icon: $appPath"
+                    swiftDialogUpdate "progresstext: ${display_string_patching_progress} ${currentDisplay_name} …"
+                    swiftDialogUpdate "listitem: index: $i, icon: $appPath, status: wait, statustext: ${display_string_patching_checking} …"
+                else
+                    swiftDialogUpdate "icon: $logoImage"
+                    swiftDialogUpdate "progresstext: ${display_string_patching_progress} ${currentDisplay_name} …"
+                    swiftDialogUpdate "listitem: index: $i, icon: $logoImage, status: wait, statustext: ${display_string_patching_checking} …"
+                fi
+            else
+                swiftDialogUpdate "icon: /Applications/$appName.app"
+                swiftDialogUpdate "progresstext: ${display_string_patching_progress} ${currentDisplay_name} …"
+                swiftDialogUpdate "listitem: index: $i, icon: /Applications/$appName.app, status: wait, statustext: ${display_string_patching_checking} …"
+            fi
             
         fi
-        
+
         # Run Installomator
         ${installomatorScript} ${label} ${installomatorOptions} ${swiftDialogOptions[@]}
         installomatorExitCode=$?
@@ -4755,32 +4788,30 @@ main() {
     queuedLabelsForNames=("${(@s/ /)labelsArray}")
     for label in $queuedLabelsForNames; do
         log_verbose "Obtaining proper name for $label"
-        # Issue 140 Fix: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/140
-        #appName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
-        # 3.4.0 - appName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
         
         # Check for App Name using the appName variable from the label fragment
-        appName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-        
+        currentDisplay_appName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+
         # Check if appName is populated, otherwise re-pull using the name variable
-        if [ -z "$appName" ]; then
-        appName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        if [ -z "$currentDisplay_appName" ]; then
+            appName=${currentDisplay_name}
         else
             # drop the .app portion
-            appName="${appName%.app}"
+            appName="${currentDisplay_appName%.app}"
         fi
-        
+
         log_verbose "appName: $appName"
-        appNamesArray+=(--listitem)
+        appNamesArray+=("--listitem")
         if [[ ! -e "/Applications/${appName}.app" ]]; then
             appPath=$(mdfind "kMDItemFSName == '${appName}.app' && kMDItemContentType == 'com.apple.application-bundle'" -0)
             if [[ -e ${appPath} ]]; then
-                appNamesArray+=(${appName},icon="${appPath}")
+                appNamesArray+=(${currentDisplay_name},icon="${appPath}")
             else
-                appNamesArray+=(${appName},icon="${logoImage}")
+                appNamesArray+=(${currentDisplay_name},icon="${logoImage}")
             fi
-        else 
-            appNamesArray+=(${appName},icon="/Applications/${appName}.app")
+        else
+            appNamesArray+=(${currentDisplay_name},icon="/Applications/${appName}.app")
         fi
     done
 
