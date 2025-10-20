@@ -4,7 +4,8 @@
 
 ## Version 3.4.1
 ### 19-Oct-2025
-- Installomator custom repo fix
+- Fixed order of `get_installomator` and `get_preferences`
+- Fixed `DIALOG_LIST_ITEM_NAME` and icon logic for Installation Dialog to allow status and statustext to update properly
 
 ## Version 3.4.0
 ### 18-Oct-2025
