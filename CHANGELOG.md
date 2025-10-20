@@ -2,6 +2,10 @@
 
 # Version 3
 
+## Version 3.4.1
+### 19-Oct-2025
+- Installomator custom repo fix
+
 ## Version 3.4.0
 ### 18-Oct-2025
 - Added App Auto-Patch Script Self Update functionality (Feature Request #128)
