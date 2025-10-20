@@ -23,8 +23,8 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.4.0"
-scriptDate="2025/10/18"
+scriptVersion="3.4.1"
+scriptDate="2025/10/19"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
@@ -2090,11 +2090,11 @@ workflow_startup() {
 	# Detailed system and user checks.
 	get_logged_in_user
 
+    # Initial Parameter and helper validation, if any of these fail then it's unsafe for the workflow to continue.
+	get_preferences
+    
     # Check for Installomator
     get_installomator
-
-	# Initial Parameter and helper validation, if any of these fail then it's unsafe for the workflow to continue.
-	get_preferences
 
     # Management parameter options
     manage_parameter_options
@@ -3349,29 +3349,28 @@ swiftDialogPatchingWindow(){
         
         # Build our list of Display Names for the SwiftDialog list
         for label in $queuedLabelsArray; do
-            # Get the "name=" value from the current label and use it in our SwiftDialog list
-            # Issue 144 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/144
-            #currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
-            # 3.4.0 - currentDisplayName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-            
             # Check for App Name using the appName variable from the label fragment
-            currentDisplayName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            currentDisplay_appName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
             
-            # Check if currentDisplayName is populated, otherwise re-pull using the name variable
-            if [ -z "$currentDisplayName" ]; then
-            currentDisplayName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            # Check if appName is populated, otherwise re-pull using the name variable
+            if [ -z "$currentDisplay_appName" ]; then
+                appName=${currentDisplay_name}
             else
                 # drop the .app portion
-                currentDisplayName="${currentDisplayName%.app}"
+                appName="${currentDisplay_appName%.app}"
             fi
             
-            if [ -n "$currentDisplayName" ]; then
-                displayNames+=("--listitem")
-                if [[ ! -e "/Applications/${currentDisplayName}.app" ]]; then
-                    displayNames+=(${currentDisplayName},icon="${logoImage}")
-                else 
-                    displayNames+=(${currentDisplayName},icon="/Applications/${currentDisplayName}.app")
+            displayNames+=("--listitem")
+            if [[ ! -e "/Applications/${appName}.app" ]]; then
+                appPath=$(mdfind "kMDItemFSName == '${appName}.app' && kMDItemContentType == 'com.apple.application-bundle'" -0)
+                if [[ -e ${appPath} ]]; then
+                    displayNames+=(${currentDisplay_name},icon="${appPath}")
+                else
+                    displayNames+=(${currentDisplay_name},icon="${logoImage}")
                 fi
+            else
+                displayNames+=(${currentDisplay_name},icon="/Applications/${appName}.app")
             fi
         done
         
