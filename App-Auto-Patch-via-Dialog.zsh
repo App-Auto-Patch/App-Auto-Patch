@@ -379,8 +379,8 @@ set_display_strings_language() {
     display_string_discovery_progress="Scanning"
     
     #### Language for the Deferral Dialog with Deferrals
-    display_string_deferral_button1="Continue"
-    display_string_deferral_button2="Defer"
+    display_string_deferral_button1="Defer"
+    display_string_deferral_button2="Install Now"
     display_string_deferral_infobox1="Deferral available until"
     display_string_deferral_infobox2="out of"
     display_string_deferral_infobox3="deferrals remaining\n"
@@ -389,8 +389,8 @@ set_display_strings_language() {
     display_string_deferral_unlimited="No deadline date and unlimited deferrals\n"
     
     #### Language for the Deferral Dialog with NO deferrals remaining
-    display_string_deferraldeadline_button1="Continue"
-    display_string_deferraldeadline_button2="Max Deferrals Reached"
+    display_string_deferraldeadline_button1="No Deferrals Remain"
+    display_string_deferraldeadline_button2="Install Now"
     display_string_deferraldeadline_infobox="Updates will automatically install after the timer expires. \n\n #### No Deferrals Remaining ####"
     display_string_deferraldeadline_message_deadline="application(s) that require updates\n\n You have deferred the maximum number of"
     
@@ -2155,9 +2155,9 @@ workflow_startup() {
     if [[ ! -n "$dialog_icon_option" ]]; then
         log_warning ":warning:  App icon not found at $dialog_icon_option, using SF symbol instead"
         if system_profiler SPPowerDataType | grep -q "Battery Power"; then
-            icon="SF=laptopcomputer.and.arrow.down,weight=regular,colour1=gray,colour2=red"
+            icon="SF=laptopcomputer.and.arrow.down,weight=regular,palette=gray,red"
         else
-            icon="SF=desktopcomputer.and.arrow.down,weight=regular,colour1=gray,colour2=red"
+            icon="SF=desktopcomputer.and.arrow.down,weight=regular,palette=gray,red"
         fi
     else
         log_info ":frame_with_picture:  App icon found at $dialog_icon_option, setting icon variable"
@@ -3566,10 +3566,10 @@ dialog_install_or_defer() {
             --helpmessage "$helpMessage"
             --icon "$icon"
             --overlayicon "$overlayicon"
-            --button2text "${display_string_deferral_button2}" # "$infobuttontext"
+            --button2text "${display_string_deferral_button2}"
             --infobox "$infobox"
             --timer $DialogTimeoutDeferral
-            --button1text "${display_string_deferral_button1}" # "Continue"
+            --button1text "${display_string_deferral_button1}"
             --selecttitle "${display_string_deferral_selecttitle}" --selectvalues $display_string_deferral_menu --selectdefault $selectDefault
         )
     else
@@ -3579,10 +3579,10 @@ dialog_install_or_defer() {
             --helpmessage "$helpMessage"
             --icon "$icon"
             --overlayicon "$overlayicon"
-            --button2text "${display_string_deferral_button2}" # "$infobuttontext"
+            --button2text "${display_string_deferral_button2}"
             --infobox "$infobox"
             --timer $DialogTimeoutDeferral
-            --button1text "${display_string_deferral_button1}" # "Continue"
+            --button1text "${display_string_deferral_button1}" 
         )
     fi
 			
@@ -3608,7 +3608,7 @@ dialog_install_or_defer() {
 	dialogOutput=$?
 	
 	case "${dialogOutput}" in
-		2)
+		0)
 			dialog_user_choice_install="FALSE"
 			if [[ -n "${deferral_timer_menu_minutes}" ]]; then
                 INDEX_CHOICE=$(echo "$SELECTION" | grep "SelectedIndex" | awk -F ": " '{print $NF}')
@@ -3659,8 +3659,8 @@ dialog_install_hard_deadline() {
 		--overlayicon "$overlayicon"
 		--infobox "${display_string_deferraldeadline_infobox}"
 		--timer $DialogTimeoutDeferral
-		--button1text "${display_string_deferraldeadline_button1}" # "Continue"
-        --button2text "${display_string_deferraldeadline_button2}" # "Max Deferrals Reached"
+		--button1text "${display_string_deferraldeadline_button1}"
+        --button2text "${display_string_deferraldeadline_button2}"
         --button2disabled
 	)
 	
