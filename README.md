@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.4.1
+# App Auto-Patch 3.4.2
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch)
 
@@ -17,7 +17,7 @@ App Auto-Patch simplifies the process of taking an inventory of installed applic
 
 This project has since been applied to MDMs outside of Jamf Pro, showcasing its versatility and adaptability. 
 
-## New features/Specific Changes in 3.4.1
+## New features/Specific Changes in 3.4.2
 - Fixed order of `get_installomator` and `get_preferences`
 - Complete re-write of logic to populate app names, icons, status and statustext in the various dialogs: Fixes missing icons, inconsistent app names, status and statustext updates
 - Flipped buttons on deferral dialog so that Defer is the primary button, preventing accidental installs. Renamed `Continue` to `Install Now`
