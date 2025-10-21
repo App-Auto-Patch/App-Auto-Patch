@@ -4166,67 +4166,37 @@ webHookMessage() {
         
         log_info "Sending Slack WebHook"
         jsonPayload='{
-            "blocks": [
-                {
-                    "type": "header",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "'${webhookStatus}'"
-                    }
-                },
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": "*'${serialNumber}'* (_'${modelName}'_)"
-                    }
-                },
-                {
-                    "type": "context",
-                    "elements": [
-                        {
-                            "type": "mrkdwn",
-                            "text": "'${currentUserAccountName}'"
-                        }
-                    ]
-                },
-                {
-                    "type": "divider"
-                },
-                {
-                    "type": "section",
-                    "fields": [
-                        {
-                            "type": "mrkdwn",
-                            "text": ">*Label(s):*\n>'"$formatted_result"'"
-                        },
-                        {
-                            "type": "mrkdwn",
-                            "text": ">*Error(s):*\n>'"$formatted_error_result"'"
-                        },
-                        {
-                            "type": "mrkdwn",
-                            "text": ">*Version:*\n>'"*AAP:* $scriptVersion *INSTR:* $(cat "${installomatorScript}" | grep ^VERSION= | head -n1 | cut -d'"' -f2) *OS:* $osVersion"'"
-                        },
-                    ]
-                },
-                {
-                "type": "actions",
-                    "elements": [
-                        {
-                            "type": "button",
-                            "text": {
-                                "type": "plain_text",
-                                "text": "View in '"$mdmName"'",
-                                "emoji": true
-                            },
-                            "style": "primary",
-                            "action_id": "actionId-0",
-                            "url": "'"$mdmComputerURL"'"
-                        }
-                    ]
-                }
+        "blocks": [
+            {
+            "type": "header",
+            "text": { "type": "plain_text", "text": "'${webhookStatus}'" }
+            },
+            {
+            "type": "section",
+            "text": { "type": "mrkdwn", "text": "*'${serialNumber}'* (_'${modelName}'_)" }
+            },
+            {
+            "type": "context",
+            "elements": [
+                { "type": "mrkdwn", "text": "'${currentUserAccountName}'" }
             ]
+            },
+            { "type": "divider" },
+            {
+            "type": "section",
+            "fields": [
+                { "type": "mrkdwn", "text": ">*Label(s):*\n>'"$formatted_result"'" },
+                { "type": "mrkdwn", "text": ">*Error(s):*\n>'"$formatted_error_result"'" },
+                { "type": "mrkdwn", "text": ">*Version:*\n>'"*AAP:* $scriptVersion *INSTR:* $(cat "${installomatorScript}" | grep ^VERSION= | head -n1 | cut -d'"' -f2) *OS:* $osVersion"'" }
+            ]
+            },
+            {
+            "type": "context",
+            "elements": [
+                { "type": "mrkdwn", "text": "<'"$mdmComputerURL"'|View in '"$mdmName"'>" }
+            ]
+            }
+        ]
         }'
         
         curlResult=$(curl -s -X POST -H 'Content-type: application/json' -d "$jsonPayload" "$webhook_url_slack_option")
