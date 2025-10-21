@@ -202,6 +202,97 @@
             ],
             "property_order": 55
         },
+        "MonthlyPatchingCadenceEnabled": {
+            "type": "boolean",
+            "title": "Monthly Patching Cadence Enabled",
+            "description": "Determines if Monthly Patching Cadence is enabled. If True, must also configure Ordinal Value, Weekday Index and Start Time",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings"
+                }
+            ],
+            "property_order": 56
+        },
+        "MonthlyPatchingCadenceOrdinalValue": {
+            "type": "string",
+            "title": "Monthly Patching Cadence Ordinal Value",
+            "description": "Week of the month you want AAP to be scheduled",
+            "enum": [
+                "first",
+                "second",
+                "third",
+                "fourth",
+                "fifth",
+                "final"
+            ],
+            "options": {
+                "enum_titles": [
+                    "First Week",
+                    "Second Week",
+                    "Third Week",
+                    "Fourth Week",
+                    "Fifth Week",
+                    "Final Week"
+                ]
+            },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#"
+                }
+            ],
+            "property_order": 57
+        },
+        "MonthlyPatchingCadenceWeekdayIndex": {
+            "type": "string",
+            "title": "Monthly Patching Cadence Weekday Index",
+            "description": "Day of the week you want AAP to be scheduled",
+            "enum": [
+                "sunday",
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday"
+            ],
+            "options": {
+                "enum_titles": [
+                    "Sunday",
+                    "Monday",
+                    "Tuesday",
+                    "Wednesday",
+                    "Thursday",
+                    "Friday",
+                    "Saturday"
+                ]
+            },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings"
+                }
+            ],
+            "property_order": 58
+        },
+        "MonthlyPatchingCadenceStartTime": {
+            "type": "string",
+            "title": "Monthly Patching Cadence Start Time",
+            "description": "Local time you want AAP to be scheduled",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "09:00:00"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings"
+                }
+            ],
+            "property_order": 59
+        },
         "DialogOnTop": {
             "type": "string",
             "title": "Dialog On Top",
@@ -326,11 +417,22 @@
             ],
             "property_order": 85
         },
+        "DialogIcon": {
+            "type": "string",
+            "title": "Dialog Icon",
+            "description": "Allows you to set a custom icon for the dialog vs. the default Laptop/Desktop symbol",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings"
+                }
+            ],
+            "property_order": 86
+        },
         "IgnoredLabels": {
             "type": "string",
             "title": "Ignored Labels",
             "description": "A space-separated list of Installomator labels to ignore for the AAP workflow. Supports wilddcards",
-            "default": "microsoft* googlechrome*",
             "options": {
                 "inputAttributes": {
                     "placeholder": "microsoft* googlechrome*"
@@ -348,7 +450,6 @@
             "type": "string",
             "title": "Required Labels",
             "description": "a space-separated list of Installomator labels that are required, regardless if the app is installed or or the latest version. Supports wildcards.",
-            "default": "desktoppr dockutil nudgesuite",
             "options": {
                 "inputAttributes": {
                     "placeholder": "desktoppr dockutil nudgesuite"
@@ -366,7 +467,6 @@
             "type": "string",
             "title": "Optional Labels",
             "description": "A space-separated list of optional Installomator labels. Labels in this category are only included if the app exists on the end-users device and will force install even if its the latest version. **Does not** support wildcards!",
-            "default": "1password8 adobereaderdc amazonchime apparency firefoxpkg vlc zoom",
             "options": {
                 "inputAttributes": {
                     "placeholder": "1password8 adobereaderdc amazonchime apparency firefoxpkg vlc zoom"
@@ -788,6 +888,31 @@
                 ]
             },
             "property_order": 200
+        },
+        "SelfUpdateEnabled": {
+            "type": "boolean",
+            "title": "Self Update Enabled",
+            "description": "Determines if the Self Update feature is enabled. this will automatically update App Auto-Patch if a new version is posted on github",
+            "property_order": 201
+        },
+        "SelfUpdateFrequency": {
+            "type": "string",
+            "title": "Self Update Frequency",
+            "default": "daily",
+            "description": "The frequency to check for updates to the App Auto-Patch script",
+            "enum": [
+                "daily",
+                "weekly",
+                "monthly"
+            ],
+            "options": {
+                "enum_titles": [
+                    "Daily",
+                    "Weekly",
+                    "Monthly"
+                ]
+            },
+            "property_order": 202
         },
         "userInterface": {
             "type": "object",

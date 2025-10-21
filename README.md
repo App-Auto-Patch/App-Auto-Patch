@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.4.0
+# App Auto-Patch 3.4.1
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch)
 
@@ -13,11 +13,14 @@ App Auto-Patch combines local application discovery, an Installomator integratio
 
 ## Why Build This
 
-App Auto-Patch was developed based on a similar concept as the Patchomator project, with a significant portion of its code borrowed from there. The main requirement for its use was to create a script deployable through Jamf Pro without the need for installing multiple dependencies on end-user computers. Since the original concept, it has since become an independent repository hosted here.
-
-The script simplifies the process of taking an inventory of installed applications and patching them, eliminating the need for creating multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy solution for keeping end-users' applications updated with minimal effort.
+App Auto-Patch simplifies the process of taking an inventory of installed applications and patching them, eliminating the need for creating multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy solution for keeping end-users' applications updated with minimal effort.
 
 This project has since been applied to MDMs outside of Jamf Pro, showcasing its versatility and adaptability. 
+
+## New features/Specific Changes in 3.4.1
+- Fixed order of `get_installomator` and `get_preferences`
+- Complete re-write of logic to populate app names, icons, status and statustext in the various dialogs: Fixes missing icons, inconsistent app names, status and statustext updates
+- Flipped buttons on deferral dialog so that Defer is the primary button, preventing accidental installs. Renamed `Continue` to `Install Now`
 
 ## New features/Specific Changes in 3.4.0
 - Added App Auto-Patch Script Self Update functionality (Feature Request #128)

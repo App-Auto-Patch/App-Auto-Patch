@@ -2,6 +2,12 @@
 
 # Version 3
 
+## Version 3.4.1
+### 19-Oct-2025
+- Fixed order of `get_installomator` and `get_preferences`
+- Complete re-write of logic to populate app names, icons, status and statustext in the various dialogs: Fixes missing icons, inconsistent app names, status and statustext updates
+- Flipped buttons on deferral dialog so that Defer is the primary button, preventing accidental installs. Renamed `Continue` to `Install Now`
+
 ## Version 3.4.0
 ### 18-Oct-2025
 - Added App Auto-Patch Script Self Update functionality (Feature Request #128)
