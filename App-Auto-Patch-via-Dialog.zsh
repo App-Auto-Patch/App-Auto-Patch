@@ -23,7 +23,7 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.4.1"
+scriptVersion="3.4.2"
 scriptDate="2025/10/19"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
@@ -389,8 +389,8 @@ set_display_strings_language() {
     display_string_deferral_unlimited="No deadline date and unlimited deferrals\n"
     
     #### Language for the Deferral Dialog with NO deferrals remaining
-    display_string_deferraldeadline_button1="No Deferrals Remain"
-    display_string_deferraldeadline_button2="Install Now"
+    display_string_deferraldeadline_button1="Install Now"
+    display_string_deferraldeadline_button2="No Deferrals Remain"
     display_string_deferraldeadline_infobox="Updates will automatically install after the timer expires. \n\n #### No Deferrals Remaining ####"
     display_string_deferraldeadline_message_deadline="application(s) that require updates\n\n You have deferred the maximum number of"
     
