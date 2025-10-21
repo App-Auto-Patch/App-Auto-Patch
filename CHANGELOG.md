@@ -2,6 +2,10 @@
 
 # Version 3
 
+## Version 3.4.2
+### 20-Oct-2025
+- Fixed button order on deadline dialog (button 1 cannot be disabled when using a dialog timer)
+
 ## Version 3.4.1
 ### 19-Oct-2025
 - Fixed order of `get_installomator` and `get_preferences`
