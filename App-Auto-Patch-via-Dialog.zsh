@@ -416,11 +416,13 @@ set_display_strings_language() {
     display_string_help_message_email="Email"
     display_string_help_message_help_website="Help Website"
     display_string_help_message_computer_info="Computer Information"
-    display_string_help_message_operating_system="Operating System"
+    display_string_help_message_operating_system="macOS"
     display_string_help_message_serial="Serial Number"
-    display_string_help_message_dialog="Dialog"
-    display_string_help_message_started="Started"
-    display_string_help_message_script_version="Script Version"
+    display_string_help_message_dialog="swiftDialog"
+    display_string_help_message_started="AAP Started"
+    display_string_help_message_script_version="App Auto-Patch"
+    display_string_help_message_software_version="Software Version"
+    display_string_help_message_installomator="Installomator"
     
     # Count the number of dictionaries in dialogElements
     numElements=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements" "$appAutoPatchManagedPLIST.plist" 2> /dev/null | grep -c "Dict")
@@ -533,6 +535,10 @@ set_display_strings_language() {
             display_string_help_message_started_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_help_message_started" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_help_message_script_version_managed
             display_string_help_message_script_version_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_help_message_script_version" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            # local display_string_help_message_software_version_managed
+            display_string_help_message_software_version_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_help_message_software_version" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            # local display_string_help_message_installomator_managed
+            display_string_help_message_installomator_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_help_message_installomator" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
         fi
         
     done
@@ -634,6 +640,8 @@ set_display_strings_language() {
     [[ -n "${display_string_help_message_started_managed}" ]] && display_string_help_message_started="${display_string_help_message_started_managed}"
     # [[ -z "${display_string_help_message_started_managed}" ]] && display_string_help_message_started="${display_string_help_message_started}"
     [[ -n "${display_string_help_message_script_version_managed}" ]] && display_string_help_message_script_version="${display_string_help_message_script_version_managed}"
+    [[ -n "${display_string_help_message_software_version_managed}" ]] && display_string_help_message_software_version="${display_string_help_message_software_version_managed}"
+    [[ -n "${display_string_help_message_installomator_managed}" ]] && display_string_help_message_installomator="${display_string_help_message_installomator_managed}"
     # [[ -z "${display_string_help_message_script_version_managed}" ]] && display_string_help_message_script_version="${display_string_help_message_script_version}"
     
     log_verbose "display_string_defer_today_button: $display_string_defer_today_button"
@@ -681,6 +689,8 @@ set_display_strings_language() {
     log_verbose "display_string_help_message_dialog: $display_string_help_message_dialog"
     log_verbose "display_string_help_message_started: $display_string_help_message_started"
     log_verbose "display_string_help_message_script_version: $display_string_help_message_script_version"
+    log_verbose "display_string_help_message_software_version: $display_string_help_message_software_version"
+    log_verbose "display_string_help_message_installomator: $display_string_help_message_installomator"
 
 }
 
@@ -2216,7 +2226,26 @@ workflow_startup() {
     
     set_display_strings_language
     supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
-    helpMessage="${display_string_help_message_intro} ${supportTeamName}: \n- ${display_string_help_message_telephone} ${supportTeamPhone} \n- ${display_string_help_message_email} ${supportTeamEmail}  \n- ${display_string_help_message_help_website} ${supportTeamHyperlink}  \n\n${display_string_help_message_computer_info} \n- ${display_string_help_message_operating_system} $osVersion ($osBuild)  \n- ${display_string_help_message_serial} $serialNumber  \n- ${display_string_help_message_dialog} $dialogVersion  \n- ${display_string_help_message_started} $timestamp  \n- ${display_string_help_message_script_version} $scriptVersion" # helpMessage="If you need assistance, please contact ${supportTeamName}:  \n- **Telephone:** ${supportTeamPhone}  \n- **Email:** ${supportTeamEmail}  \n- **Help Website:** ${supportTeamHyperlink}  \n\n**Computer Information:**  \n- **Operating System:**  $osVersion ($osBuild)  \n- **Serial Number:** $serialNumber  \n- **Dialog:** $dialogVersion  \n- **Started:** $timestamp  \n- **Script Version:** $scriptVersion"
+    helpMessage="${display_string_help_message_intro} **${supportTeamName}:**"
+
+    [[ "${supportTeamPhone}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_telephone}:** ${supportTeamPhone}"
+    [[ "${supportTeamEmail}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_email}:** ${supportTeamEmail}"
+    [[ "${supportTeamHyperlink}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_help_website}:** ${supportTeamHyperlink}"
+
+    # Computer Information
+    helpMessage+="\n\n**${display_string_help_message_computer_info}:**"
+    
+    helpMessage+="\n- **${display_string_help_message_serial}:** $serialNumber"
+    helpMessage+="\n- **${display_string_help_message_started}:** $timestamp"
+
+    # Software Version
+    helpMessage+="\n\n**${display_string_help_message_software_version}:**"
+
+    helpMessage+="\n- **${display_string_help_message_script_version}:** $scriptVersion"
+    helpMessage+="\n- **${display_string_help_message_installomator}:** $(cat "${installomatorScript}" | grep ^VERSION= | head -n1 | cut -d'"' -f2) ($(cat "${installomatorScript}" | grep ^VERSIONDATE= | head -n1 | cut -d'"' -f2))"
+    helpMessage+="\n- **${display_string_help_message_dialog}:** $dialogVersion"
+    helpMessage+="\n- **${display_string_help_message_operating_system}:** $osVersion ($osBuild)"
+
     infobox="${display_string_patching_infobox_computer_name} \n\n- $computerName \n\n${display_string_patching_infobox_macos_version} \n\n- $osVersion ($osBuild)"
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
