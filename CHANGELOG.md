@@ -2,22 +2,39 @@
 
 # Version 3
 
+## Version 3.5.0
+### 21-Oct-2025
+- Updated info dialog with more information and easier-to-read formatting (PR #184)(Thanks @maxsundellacne)
+	- Bolded labels and SupportTeamName
+ 	- Added a new section called "Software Information"
+	- Added line for Installomator version (both version and versiondate)
+	- Added the option to hide Telephone, Email, and/or Help Website by setting their value to "hide"
+	- Renamed default label from "Started" to "AAP Started" to clarify timestamp intent
+	- Renamed default software-version labels for a unified look
+- Updated webhooks for both Slack and Teams (PR #185)(Thanks @maxsundellacne)
+	- Renamed “Microsoft Intune” to “Intune” to prevent the button text from being truncated.
+	- Shortened the title and added emojis for quick identification of success and failure.
+	- Added version information for OS, Installomator, and AAP.
+	- Removed the computer record URL since the button serves the same purpose.
+	- Removed the hostname because it often matches the S/N, and the S/N is easier to search.
+	- Made the card more compact and information-dense.
+
 ## Version 3.4.2
 ### 20-Oct-2025
-- Fixed button order on deadline dialog (button 1 cannot be disabled when using a dialog timer)
+- Fixed button order on deadline dialog (button one cannot be disabled when using a dialog timer)
 
 ## Version 3.4.1
 ### 19-Oct-2025
 - Fixed order of `get_installomator` and `get_preferences`
-- Complete re-write of logic to populate app names, icons, status and statustext in the various dialogs: Fixes missing icons, inconsistent app names, status and statustext updates
-- Flipped buttons on deferral dialog so that Defer is the primary button, preventing accidental installs. Renamed `Continue` to `Install Now`
+- Complete re-write of logic to populate app names, icons, status, and statustext in the various dialogs: Fixes missing icons, inconsistent app names, status, and statustext updates
+- Flipped buttons on the deferral dialog so that Defer is the primary button, preventing accidental installs. Renamed `Continue` to `Install Now`
 
 ## Version 3.4.0
 ### 18-Oct-2025
 - Added App Auto-Patch Script Self Update functionality (Feature Request #128)
 - Standardize timestamp format and use actual timezones instead of hard-coded UTC. Cleaned up and adjusted NextAutoLaunch format to use date datatype (#152)
 - Added check for appName in Installomator label to populate the correct app name to improve app detection (Issue #155)
-- Updated logic to populate app icons correctly for apps not located in /Applications folder
+- Updated logic to populate app icons correctly for apps not located in the /Applications folder
 - Added logic to check for appCustomVersion in Installomator label to pull the correct version of installed apps
 - Fixed logic to clear the targetDir variable when scrubbing Installomator label fragments
 - Fixed case on variables (Issue #178)
