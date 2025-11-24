@@ -23,10 +23,11 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.4.2"
-scriptDate="2025/10/20"
+scriptVersion="3.5.0"
+scriptDate="2025/11/24"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+autoload -Uz is-at-least
 
 ### Usage and Help ###
 show_usage() {
@@ -349,6 +350,11 @@ set_defaults() {
     # Monthly Patching Cadence Start Time: Set this to the local time you want AAP to start
     monthly_patching_cadence_start_time="09:00:00"
 
+    #Controls how current and new versions are compared
+        #TRUE: uses the "is-at-least" function. if Current version is greater than or equal to new Version, app is considered up to date
+        #FALSE: Uses the "equal to" logic. Current and New version must match to be considered up to date. Newer or older versions 
+    versionComparisonIsAtLeast="TRUE"
+
 }
 
 # Set language strings for dialogs and notifications.
@@ -384,7 +390,7 @@ set_display_strings_language() {
     display_string_deferral_infobox1="Deferral available until"
     display_string_deferral_infobox2="out of"
     display_string_deferral_infobox3="deferrals remaining\n"
-    display_string_deferral_message_01="You can **Defer** the updates or **Continue** to close the applications and apply updates.  \n\n"
+    display_string_deferral_message_01="You can **Defer** the updates or **Install Now** to close the applications and apply updates.  \n\n"
     display_string_deferral_message_02="application(s) that require updates:"
     display_string_deferral_unlimited="No deadline date and unlimited deferrals\n"
     
@@ -1366,11 +1372,35 @@ get_preferences() {
     /usr/libexec/PlistBuddy -c 'add ":OptionalLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
     /usr/libexec/PlistBuddy -c 'add ":ConvertedLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
 
+     # Attempt to populate the Optional Labels
+    log_info "Attempting to populate optional labels"
+    for optionalLabel in "${optionalLabelsArray[@]}"; do
+        if [[ -f "${fragmentsPath}/labels/${optionalLabel}.sh" ]]; then
+            # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+            #if /usr/libexec/PlistBuddy -c "Print :OptionalLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $optionalLabel; then
+            if /usr/libexec/PlistBuddy -c "Print :OptionalLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$optionalLabel"; then
+                log_verbose "$optionalLabel already exists, skip adding to OptionalLabels"
+            else
+                log_verbose "Writing optional label $optionalLabel to configuration plist"
+                /usr/libexec/PlistBuddy -c "add \":OptionalLabels:\" string \"${optionalLabel}\"" "${appAutoPatchLocalPLIST}.plist"
+            fi
+        else
+            log_verbose "No such label ${optionalLabel}"
+        fi
+    done
+    
+    # Attempt to populate the Ignored Labels
     log_info "Attempting to populate ignored labels"
     for ignoredLabel in "${ignoredLabelsArray[@]}"; do
         if [[ -f "${fragmentsPath}/labels/${ignoredLabel}.sh" ]]; then
-            if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $ignoredLabel; then
-                log_verbose "$ignoredLabel already exists, skipping for now"
+            # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+            #if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $ignoredLabel; then
+            if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$ignoredLabel"; then
+                log_verbose "$ignoredLabel already exists, skip adding to IgnoredLabels"
+            # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+            #elif /usr/libexec/PlistBuddy -c "Print :OptionalLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $ignoredLabel; then
+            elif /usr/libexec/PlistBuddy -c "Print :OptionalLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$ignoredLabel"; then
+                log_verbose "$ignoredLabel is listed as Optional, skip adding to IgnoredLabels"
             else
                 log_verbose "Writing ignored label $ignoredLabel to configuration plist"
                 /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"${ignoredLabel}\"" "${appAutoPatchLocalPLIST}.plist"
@@ -1384,8 +1414,14 @@ get_preferences() {
                     if [[ ! "$ignored" == "Application" ]]; then
                         # Issue 141 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/141
                         #if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -w -q $ignored; then
-                        if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -x -q "$ignored"; then
-                            log_verbose "$ignored already exists, skipping for now"
+                        # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+                        #if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -x -q "$ignored"; then
+                        if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$ignored"; then
+                            log_verbose "$ignored already exists, skip adding to IgnoredLabels"
+                        # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+                        #elif /usr/libexec/PlistBuddy -c "Print :OptionalLabels:" "${appAutoPatchLocalPLIST}".plist | grep -qw -- "$ignored"; then
+                        elif /usr/libexec/PlistBuddy -c "Print :OptionalLabels:" "${appAutoPatchLocalPLIST}".plist | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$ignored"; then
+                            log_verbose "$ignored is listed as Optional, skip adding to IgnoredLabels"
                         else
                             log_verbose "Writing ignored label $ignored to configuration plist"
                             ignored=$(echo $ignored | sed "s/[\"]//g" )
@@ -1406,7 +1442,9 @@ get_preferences() {
     log_info "Attempting to populate required labels"
     for requiredLabel in "${requiredLabelsArray[@]}"; do
         if [[ -f "${fragmentsPath}/labels/${requiredLabel}.sh" ]]; then
-            if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $requiredLabel; then
+            # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+            #if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $requiredLabel; then
+            if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$requiredLabel"; then
                 log_verbose "$requiredLabel already exists, skipping for now"
             else
                 log_verbose "Writing required label $requiredLabel to configuration plist"
@@ -1414,14 +1452,16 @@ get_preferences() {
             fi
         else
             if [[ "${requiredLabel}" == *"*"* ]]; then
-                log_verbose "Ignoring all labels with $requiredLabel"
+                log_verbose "Adding all labels with $requiredLabel"
                 wildrequired=( $(find $fragmentsPath/labels -name "$requiredLabel") )
                 for i in "${wildrequired[@]}"; do
                     required=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
                     if [[ ! "$required" == "Application" ]]; then
                         # Issue 141 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/141
                         #if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -w -q $required; then
-                        if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -x -q $required; then
+                        # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+                        #if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -x -q "$required"; then
+                        if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}".plist | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$required"; then
                             log_verbose "$required already exists, skipping for now"
                         else
                             log_verbose "Writing required label $required to configuration plist"
@@ -1438,43 +1478,20 @@ get_preferences() {
         fi
     done
 
-    # Attempt to populate the Optional Labels
-    log_info "Attempting to populate optional labels"
-    for optionalLabel in "${optionalLabelsArray[@]}"; do
-        if [[ -f "${fragmentsPath}/labels/${optionalLabel}.sh" ]]; then
-            if /usr/libexec/PlistBuddy -c "Print :OptionalLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $optionalLabel; then
-                log_verbose "$optionalLabel already exists, skipping for now"
-            else
-                log_verbose "Writing optional label $optionalLabel to configuration plist"
-                /usr/libexec/PlistBuddy -c "add \":OptionalLabels:\" string \"${optionalLabel}\"" "${appAutoPatchLocalPLIST}.plist"
-            fi
-            # Checking if app is installed and adding Optional Label to Required if it exists
-            if ${installomatorScript} ${optionalLabel} DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" | grep "No previous app found" >/dev/null 2>&1
-            then
-                log_notice "$optionalLabel is not installed, skipping ..."
-            elif /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $optionalLabel; then
-                log_verbose "$optionalLabel Installed but already exists in Required list, skipping for now"
-            else
-                log_verbose "Writing optional label ${optionalLabel} to required configuration plist"
-                /usr/libexec/PlistBuddy -c "add \":RequiredLabels:\" string \"${optionalLabel}\"" "${appAutoPatchLocalPLIST}.plist"
-            fi
-            
-            
-            
-        else
-            log_verbose "No such label ${optionalLabel}"
-        fi
-    done
 
     # Ignore swiftDialog as it should already be installed. This is to reduce issues re-downloading swiftDialog
-    if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q swiftdialog; then
+    # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+    #if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q swiftdialog; then
+    if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- swiftdialog; then
         log_verbose "swiftDialog is already ignored"
     else
         log_verbose "Ignoring swiftDialog"
         /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"swiftdialog\"" "${appAutoPatchLocalPLIST}.plist"
         ignoredLabelsArray+=("swiftdialog")
     fi
-    if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q dialog; then
+    # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+    #if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q dialog; then
+    if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- dialog; then
         log_verbose "dialog is already ignored"
     else
         log_verbose "Ignoring dialog"
@@ -1644,9 +1661,11 @@ manage_parameter_options() {
     if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
         workflow_disable_relaunch_option="TRUE"
         defaults write "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch -bool true
+        /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
     else
         workflow_disable_relaunch_option="FALSE"
         defaults delete "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
     fi
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${workflow_disable_relaunch_option}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: workflow_disable_relaunch_option is: ${workflow_disable_relaunch_option}"
     
@@ -1798,12 +1817,8 @@ manage_parameter_options() {
     fi
     log_verbose "InteractiveModeOption: $InteractiveModeOption"
 
-    if [[ -n "${self_update_enabled_option}" ]]; then
         defaults write "${appAutoPatchLocalPlist}" SelfUpdateEnabled -bool "${self_update_enabled_option}"
-    else
-        defaults write "${appAutoPatchLocalPlsit}" SelfUpdateEnabled -bool "${self_update_enabled_option}"
         SelfUpdateEnabled="${self_update_enabled_option}"
-    fi
     log_verbose "SelfUpdateEnabledOption: $self_update_enabled_option"
     
     # Manage ${workflow_install_now_patching_status_action_option} and save to ${appAutoPatchLocalPLIST}
@@ -3788,6 +3803,8 @@ function PgetAppVersion() {
         applist="/Applications/$appName"
     elif [[ -d "/Applications/Utilities/$appName" ]]; then
         applist="/Applications/Utilities/$appName"
+    elif [[ -d "${targetDir}${appName}" ]]; then
+        applist="${targetDir}${appName}"
     else
         applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0)
         if ([[ "$applist" == *"/Daemon Containers/"* ]]); then
@@ -3820,10 +3837,12 @@ function PgetAppVersion() {
         filteredAppPaths=( ${(M)appPathArray:#${targetDir}*} )
         if [[ ${#filteredAppPaths} -eq 1 ]]; then
             installedAppPath=$filteredAppPaths[1]
-            
+            log_verbose "installedAppPath: $installedAppPath"
             appversion=$(defaults read $installedAppPath/Contents/Info.plist $versionKey)
-            appversionLong=$(defaults read $installedAppPath/Contents/Info.plist $versionKeyLong)
-            
+            #appversionLong=$(defaults read $installedAppPath/Contents/Info.plist $versionKeyLong)
+            log_verbose "appversion: $appversion"
+            if [[ -n "${appCustomVersion}" ]]; then log_verbose "appCustomVersion: $appCustomVersion"
+            #log_verbose "appversionLong: $appversionLong"
             log_info "Found $appName version $appversion"
             sleep .2
             
@@ -3905,50 +3924,97 @@ function verifyApp() {
                     
                     appNewVersion=$( echo "${appNewVersion}" | sed 's/[^a-zA-Z0-9]*$//g' )
                     previousVersion=$( echo "${appversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
-                    previousVersionLong=$( echo "${appversionLong}" | sed 's/[^a-zA-Z0-9]*$//g' )
+                    #previousVersionLong=$( echo "${appversionLong}" | sed 's/[^a-zA-Z0-9]*$//g' )
                     
                     # Compare version strings
-                    if [[ "$previousVersion" == "$appNewVersion" ]]; then
-                        log_notice "--- Latest version installed."
-                    elif [[ "$previousVersionLong" == "$appNewVersion" ]]; then
-                        log_notice "--- Latest version installed."
-                    elif [[ "$appCustomVersion" == "$appNewVersion" ]]; then
-                        log_notice "--- Latest version installed."
+                    if [[ ${versionComparisonIsAtLeast} == "TRUE" ]]; then
+                        if [[ -n "$appNewVersion" ]]; then
+                            log_notice "--- Newest version: ${appNewVersion}"
+                            if [[ -n "${previousVersion}" ]] &&  is-at-least "$appNewVersion" "$previousVersion"; then
+                                log_notice "--- Latest version installed."
+                            # elif [[ -n "${previousVersionLong}" ]] &&  is-at-least "$appNewVersion" "$previousVersionLong"; then
+                            #     log_notice "--- Latest version installed."
+                            elif [[ -n "${appCustomVersion}" ]] &&  is-at-least "$appNewVersion" "$appCustomVersion"; then
+                                log_notice "--- Latest version installed."
+                            else
+                                # # Lastly, verify with Installomator before queueing the label
+                                # tmp=$(mktemp -t installomator.XXXXXX)
+                                
+                                # "${installomatorScript}" "${label_name}" DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" \
+                                # >"$tmp" 2>&1
+                                # rc=$?                         # exit status of Installomator
+                                # out=$(<"$tmp")                # full output as a single string
+                                # rm -f "$tmp"
+                                
+                                # custom_version=""
+                                # custom_version=$(sed -nE 's/.*Custom App Version detection is used, found[[:space:]]+([^[:space:]]+).*/\1/p' <<< "$out" | head -n1)
+                                # log_verbose "custom_version: $custom_version"
+                                # if [[ -n "${custom_version}" ]] &&  is-at-least "$appNewVersion" "$custom_version"; then
+                                #     log_notice "--- Latest version installed."
+                                # elif [[ "$out" == *"same as installed"* ]] 
+                                # then
+                                #     log_notice "--- Latest version installed."
+                                # else
+                                    /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
+                                    AAPVersionByLabel[$label_name]="$appNewVersion"
+                                    queueLabel
+                                # fi
+                            fi
+                        else
+                            log_notice "--- Unable to find newest version."
+                            # Lastly, verify with Installomator before queueing the label
+                            tmp=$(mktemp -t installomator.XXXXXX)
+                            
+                            "${installomatorScript}" "${label_name}" DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" \
+                            >"$tmp" 2>&1
+                            rc=$?                         # exit status of Installomator
+                            out=$(<"$tmp")                # full output as a single string
+                            rm -f "$tmp"
+                            
+                            if [[ "$out" == *"same as installed"* ]] 
+                            then
+                                log_notice "--- Latest version installed."
+                            else
+                                /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
+                                AAPVersionByLabel[$label_name]="$appNewVersion"
+                                queueLabel
+                            fi
+                        fi
                     else
-#                       # Lastly, verify with Installomator before queueing the label
-#                       if ${installomatorScript} ${label_name} DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" | grep "same as installed" >/dev/null 2>&1
-#                       then
-#                           log_notice "--- Latest version installed."
-#                       else
-#                           log_notice "--- New version: ${appNewVersion}"
-#                           /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
-#                           AAPVersionByLabel[$label_name]="$appNewVersion"
-#                           queueLabel
-#                       fi
-                        
-                        # Lastly, verify with Installomator before queueing the label
-                        tmp=$(mktemp -t installomator.XXXXXX)
-                        
-                        "${installomatorScript}" "${label_name}" DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" \
-                        >"$tmp" 2>&1
-                        rc=$?                         # exit status of Installomator
-                        out=$(<"$tmp")                # full output as a single string
-                        rm -f "$tmp"
-                        
-                        custom_version=""
-                        custom_version=$(sed -nE 's/.*Custom App Version detection is used, found[[:space:]]+([^[:space:]]+).*/\1/p' <<< "$out" | head -n1)
-                        
-                        if [[ "$custom_version" == "$appNewVersion" ]]; then
+                        if [[ "$previousVersion" == "$appNewVersion" ]]; then
                             log_notice "--- Latest version installed."
-                        elif [[ "$out" == *"same as installed"* ]] 
-                        then
+                        #elif [[ "$previousVersionLong" == "$appNewVersion" ]]; then
+                        #    log_notice "--- Latest version installed."
+                        elif [[ "$appCustomVersion" == "$appNewVersion" ]]; then
                             log_notice "--- Latest version installed."
                         else
-                            log_notice "--- New version: ${appNewVersion}"
-                            /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
-                            AAPVersionByLabel[$label_name]="$appNewVersion"
-                            queueLabel
+                            
+                            
+                            # Lastly, verify with Installomator before queueing the label
+                            tmp=$(mktemp -t installomator.XXXXXX)
+                            
+                            "${installomatorScript}" "${label_name}" DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" \
+                            >"$tmp" 2>&1
+                            rc=$?                         # exit status of Installomator
+                            out=$(<"$tmp")                # full output as a single string
+                            rm -f "$tmp"
+                            
+                            custom_version=""
+                            custom_version=$(sed -nE 's/.*Custom App Version detection is used, found[[:space:]]+([^[:space:]]+).*/\1/p' <<< "$out" | head -n1)
+                            log_verbose "custom_version: $custom_version"
+                            if [[ "$custom_version" == "$appNewVersion" ]]; then
+                                log_notice "--- Latest version installed."
+                            elif [[ "$out" == *"same as installed"* ]] 
+                            then
+                                log_notice "--- Latest version installed."
+                            else
+                                log_notice "--- New version: ${appNewVersion}"
+                                /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
+                                AAPVersionByLabel[$label_name]="$appNewVersion"
+                                queueLabel
+                            fi
                         fi
+
                     fi
                 fi
             fi
@@ -4423,7 +4489,7 @@ webHookMessage() {
                     }
                 }
             ]
-        }'
+}'
         
         # Send the JSON payload using curl
         curlResult=$(curl -s -X POST -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_teams_option")
@@ -4694,7 +4760,7 @@ main() {
 
         targetDir="/"
         versionKey="CFBundleShortVersionString"
-        versionKeyLong="CFBundleVersion"
+        #versionKeyLong="CFBundleVersion"
 
         IFS=$'\n'
         in_label=0
@@ -4714,7 +4780,6 @@ main() {
         for labelFragment in "$fragmentsPath"/labels/*.sh; do 
             
             appCustomVersion=""
-            log_verbose "checking for appCustomVersion"
             if grep -q '^\s*appCustomVersion\s*()' "$labelFragment"
             then
                 appCustomVersion=$(grep -E -m1 '^\s*appCustomVersion' "$labelFragment" | sed -E 's/^.*\(\)[[:space:]]*\{[[:space:]]*(.*)[[:space:]]*\}/\1/')
@@ -4728,10 +4793,10 @@ main() {
                         print
                     }' "$labelFragment")
                 fi
-                        if [[ ! "$appCustomVersion" =~ ^[[:space:]]*strings ]]; then
-                                    appCustomVersion=$(eval "$appCustomVersion" 2>/dev/null)
-                        fi
+                if [[ ! "$appCustomVersion" =~ ^[[:space:]]*strings ]]; then
+                    appCustomVersion=$(eval "$appCustomVersion" 2>/dev/null)
                 fi
+            fi
             
             
             labelFile=$(basename -- "$labelFragment")
@@ -4787,7 +4852,7 @@ main() {
                         
                         case $scrubbedLine in
                             
-                            'name='*|'appName='*|'packageID'*|'expectedTeamID'*)
+                            'name='*|'appName='*|'packageID'*|'expectedTeamID'*|'targetDir'*)
                                 eval "$scrubbedLine"
                             ;;
                             
