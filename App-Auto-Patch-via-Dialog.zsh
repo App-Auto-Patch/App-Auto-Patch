@@ -24,7 +24,7 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.5.0"
-scriptDate="2025/11/24"
+scriptDate="2025/11/25"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -142,6 +142,7 @@ echo "
     <key>UnattendedExit</key> <string>TRUE,FALSE</string>
     <key>UnattendedExitSeconds</key> <integer>seconds</integer>
     <key>UseOverlayIcon</key> <string>TRUE,FALSE</string>
+    <key>VersionComparisonInstallomatorFallback</key> <true/> | <false/>
     <key>VersionComparisonMethod</key> <string>IS_AT_LEAST,EQUAL_TO</string>
     <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
     <key>WebhookURLSlack</key> <string>URL</string>
@@ -356,6 +357,11 @@ set_defaults() {
         #EQUAL_TO: Uses the "equal to" logic. Current and New version must match to be considered up to date
     VersionComparisonMethod="IS_AT_LEAST"
 
+    # If appNewVersion is not available, Installomator debug mode will be used to have it's logic try to determine if an app is up to date o rnot
+    # Installomator Debug mode will download the app in order to run its comparison which can increase the AAP runtime and bandwidth usage
+    # TRUE (default): Allows Installomator Debug Fallback to run
+    # FALSE: Does not allow Installomator Debug Fallback to run and will not add the app to the queue for updates
+    VersionComparisonInstallomatorFallback="TRUE"
 }
 
 # Set language strings for dialogs and notifications.
@@ -1074,6 +1080,9 @@ get_preferences() {
         monthly_patching_cadence_start_time_managed=$(defaults read "${appAutoPatchManagedPLIST}" MonthlyPatchingCadenceStartTime 2> /dev/null)
         local version_comparison_method_managed
         version_comparison_method_managed=$(defaults read "${appAutoPatchManagedPLIST}" VersionComparisonMethod 2> /dev/null)
+        local version_comparison_installomator_fallback_managed
+        version_comparison_installomator_fallback_managed=$(defaults read "${appAutoPatchManagedPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
+        
     else
         log_verbose "No managed preference file found for App Auto-Patch"
     fi
@@ -1179,6 +1188,8 @@ get_preferences() {
         monthly_patching_cadence_start_time_local=$(defaults read "${appAutoPatchLocalPLIST}" MonthlyPatchingCadenceStartTime 2> /dev/null)
         local version_comparison_method_local
         version_comparison_method_local=$(defaults read "${appAutoPatchLocalPLIST}" VersionComparisonMethod 2> /dev/null)
+        local version_comparison_installomator_fallback_local
+        version_comparison_installomator_fallback_local=$(defaults read "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
     fi
     
     log_verbose  "Local preference file before startup validation: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
@@ -1307,7 +1318,10 @@ get_preferences() {
     { [[ -z "${monthly_patching_cadence_start_time_managed}" ]] && [[ -n "${monthly_patching_cadence_start_time}" ]] && [[ -n "${monthly_patching_cadence_start_time_local}" ]]; } && monthly_patching_cadence_start_time="${monthly_patching_cadence_start_time_local}"
 
     [[ -n "${version_comparison_method_managed}" ]] && version_comparison_method_option="${version_comparison_method_managed}"
-    { [[ -z "${version_comparison_method_managed}" ]] && [[ -n "${version_comparison_method_option}" ]] && [[ -n "${version_comparison_method_local}" ]]; } && version_comparison_method_option="${version_comparison_method_local}"
+    { [[ -z "${version_comparison_method_managed}" ]] && [[ -z "${version_comparison_method_option}" ]] && [[ -n "${version_comparison_method_local}" ]]; } && version_comparison_method_option="${version_comparison_method_local}"
+
+    [[ -n "${version_comparison_installomator_fallback_managed}" ]] && version_comparison_installomator_fallback_option="${version_comparison_installomator_fallback_managed}"
+    { [[ -z "${version_comparison_installomator_fallback_managed}" ]] && [[ -z "${version_comparison_installomator_fallback_option}" ]] && [[ -n "${version_comparison_installomator_fallback_local}" ]]; } && version_comparison_installomator_fallback_option="${version_comparison_installomator_fallback_local}"
 
     #Verbose Configuration Option Output
     log_verbose "DeferralTimerMenu: $deferral_timer_menu_option"
@@ -1883,6 +1897,19 @@ manage_parameter_options() {
     /usr/bin/defaults write "${appAutoPatchLocalPLIST}" VersionComparisonMethod -string "${version_comparison_method_option}"
     else
         version_comparison_method_option=${VersionComparisonMethod}
+    fi
+
+    # Manage ${workflow_disable_app_discovery_option} and save to ${appAutoPatchLocalPLIST}.
+    if [[ -n "${version_comparison_installomator_fallback_option}" ]]; then
+        if [[ "${version_comparison_installomator_fallback_option}" -eq 1 ]] || [[ "${version_comparison_installomator_fallback_option}" == "TRUE" ]]; then
+            version_comparison_installomator_fallback_option="TRUE"
+            defaults write "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallbackOption -bool true
+        else
+            version_comparison_installomator_fallback_option="FALSE"
+            defaults delete "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallbackOption 2> /dev/null
+        fi
+    else
+        version_comparison_installomator_fallback_option="${VersionComparisonInstallomatorFallback}"
     fi
 }
 
@@ -3977,22 +4004,30 @@ function verifyApp() {
                             fi
                         else
                             log_notice "--- Unable to find newest version."
-                            # Lastly, verify with Installomator before queueing the label
-                            tmp=$(mktemp -t installomator.XXXXXX)
-                            
-                            "${installomatorScript}" "${label_name}" DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" \
-                            >"$tmp" 2>&1
-                            rc=$?                         # exit status of Installomator
-                            out=$(<"$tmp")                # full output as a single string
-                            rm -f "$tmp"
-                            
-                            if [[ "$out" == *"same as installed"* ]] 
-                            then
-                                log_notice "--- Latest version installed."
-                            else
-                                /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
-                                AAPVersionByLabel[$label_name]="$appNewVersion"
-                                queueLabel
+
+                            if [[ ${version_comparison_installomator_fallback_option} == "TRUE" ]]; then
+                                log_notice "--- Using Installomator Debug Fallback to compare version."
+                                # Lastly, verify with Installomator before queueing the label
+                                tmp=$(mktemp -t installomator.XXXXXX)
+                                
+                                "${installomatorScript}" "${label_name}" DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" \
+                                >"$tmp" 2>&1
+                                rc=$?                         # exit status of Installomator
+                                out=$(<"$tmp")                # full output as a single string
+                                rm -f "$tmp"
+                                
+                                if [[ "$out" == *"same as installed"* ]] 
+                                then
+                                    log_notice "--- Latest version installed."
+                                elif [[ "$out" == *"No previous app found"* ]]
+                                then
+                                    log_notice "--- Installomator failed to find previous version properly... Not adding to queue."
+                                else
+                                    log_notice "--- Assuming new version available based on Installomator debug output. False positives may be possible. Add $label_name to ignore list to avoid in future runs"
+                                    /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
+                                    AAPVersionByLabel[$label_name]="$appNewVersion"
+                                    queueLabel
+                                fi
                             fi
                         fi
                     else
