@@ -12,6 +12,10 @@
 	- Optional Labels will now be checked for both Installed and Update Available
  	- **Breaking Change**: Optional labels will be checked during the discovery phase. If you use Optional labels and had previously disabled the discovery workflow, it must now be enabled in order for the labels to be checked
  	- You can use an asterisk `*` to ignore all labels, and any optional labels will be omitted from the ignore list to be checked if installed and update available
+- Option to disable Installomator Debug Fallback for version comparison
+	- Key: `VersionComparisonInstallomatorFallback` `<true/>` | `<false/>`
+ 	- TRUE (Default): If AAP is unable to do a version comparison due to a missing `appNewVersion` in Installomator, it falls back to using Installomator Debug mode which will usually indicate if there is a new version or not for an app. Setting this key to TRUE will keep this functionality enabled
+  	- FALSE: Disables the Installomator Debug Fallback. If the `appNewVersion` is unavailable, AAP will ignore the app and not add it to the queue
 - Updated info dialog with more information and easier-to-read formatting (PR #184)
 	- Bolded labels and SupportTeamName
  	- Added a new section called "Software Information."
@@ -33,6 +37,7 @@
  - Removed PreviousVersionLong comparison: could not find any cases where the long version number was being used in Installomator
  - Added various verbose logging
  - Removed redundant Self Update Enabled logic
+ - Added logic to the Installomator Debug Fallback to check output for "No previous app found" and ignore the app if so
 
 ## Version 3.4.2
 ### 20-Oct-2025
