@@ -142,6 +142,7 @@ echo "
     <key>UnattendedExit</key> <string>TRUE,FALSE</string>
     <key>UnattendedExitSeconds</key> <integer>seconds</integer>
     <key>UseOverlayIcon</key> <string>TRUE,FALSE</string>
+    <key>VersionComparisonMethod</key> <string>IS_AT_LEAST,EQUAL_TO</string>
     <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
     <key>WebhookURLSlack</key> <string>URL</string>
     <key>WebhookURLTeams</key> <string>URL</string>
@@ -351,9 +352,9 @@ set_defaults() {
     monthly_patching_cadence_start_time="09:00:00"
 
     #Controls how current and new versions are compared
-        #TRUE: uses the "is-at-least" function. if Current version is greater than or equal to new Version, app is considered up to date
-        #FALSE: Uses the "equal to" logic. Current and New version must match to be considered up to date. Newer or older versions 
-    versionComparisonIsAtLeast="TRUE"
+        #IS_AT_LEAST: uses the "is-at-least" function. if Current version is greater than or equal to new Version, app is considered up to date
+        #EQUAL_TO: Uses the "equal to" logic. Current and New version must match to be considered up to date
+    VersionComparisonMethod="IS_AT_LEAST"
 
 }
 
@@ -1071,6 +1072,8 @@ get_preferences() {
         monthly_patching_cadence_weekday_index_managed=$(defaults read "${appAutoPatchManagedPLIST}" MonthlyPatchingCadenceWeekdayIndex 2> /dev/null)
         local monthly_patching_cadence_start_time_managed
         monthly_patching_cadence_start_time_managed=$(defaults read "${appAutoPatchManagedPLIST}" MonthlyPatchingCadenceStartTime 2> /dev/null)
+        local version_comparison_method_managed
+        version_comparison_method_managed=$(defaults read "${appAutoPatchManagedPLIST}" VersionComparisonMethod 2> /dev/null)
     else
         log_verbose "No managed preference file found for App Auto-Patch"
     fi
@@ -1174,6 +1177,8 @@ get_preferences() {
         monthly_patching_cadence_weekday_index_local=$(defaults read "${appAutoPatchLocalPLIST}" MonthlyPatchingCadenceWeekdayIndex 2> /dev/null)
         local monthly_patching_cadence_start_time_local
         monthly_patching_cadence_start_time_local=$(defaults read "${appAutoPatchLocalPLIST}" MonthlyPatchingCadenceStartTime 2> /dev/null)
+        local version_comparison_method_local
+        version_comparison_method_local=$(defaults read "${appAutoPatchLocalPLIST}" VersionComparisonMethod 2> /dev/null)
     fi
     
     log_verbose  "Local preference file before startup validation: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
@@ -1301,7 +1306,8 @@ get_preferences() {
     [[ -n "${monthly_patching_cadence_start_time_managed}" ]] && monthly_patching_cadence_start_time="${monthly_patching_cadence_start_time_managed}"
     { [[ -z "${monthly_patching_cadence_start_time_managed}" ]] && [[ -n "${monthly_patching_cadence_start_time}" ]] && [[ -n "${monthly_patching_cadence_start_time_local}" ]]; } && monthly_patching_cadence_start_time="${monthly_patching_cadence_start_time_local}"
 
-
+    [[ -n "${version_comparison_method_managed}" ]] && version_comparison_method_option="${version_comparison_method_managed}"
+    { [[ -z "${version_comparison_method_managed}" ]] && [[ -n "${version_comparison_method_option}" ]] && [[ -n "${version_comparison_method_local}" ]]; } && version_comparison_method_option="${version_comparison_method_local}"
 
     #Verbose Configuration Option Output
     log_verbose "DeferralTimerMenu: $deferral_timer_menu_option"
@@ -1351,6 +1357,7 @@ get_preferences() {
     log_verbose "monthly_patching_cadence_ordinal_value: $monthly_patching_cadence_ordinal_value"
     log_verbose "monthly_patching_cadence_weekday_index: $monthly_patching_cadence_weekday_index"
     log_verbose "monthly_patching_cadence_start_time: $monthly_patching_cadence_start_time"
+    log_verbose "version_comparison_method_option: $version_comparison_method_option"
     
     
     # Write App Labels to PLIST
@@ -1871,6 +1878,12 @@ manage_parameter_options() {
         log_info "Self-update frequency set to: ${_freq_norm}"
     fi
 
+    # Manage ${version_comparison_method_option} and save to ${appAutoPatchLocalPLIST}
+    if [[ -n "${version_comparison_method_option}" ]]; then
+    /usr/bin/defaults write "${appAutoPatchLocalPLIST}" VersionComparisonMethod -string "${version_comparison_method_option}"
+    else
+        version_comparison_method_option=${VersionComparisonMethod}
+    fi
 }
 
 gather_error_log(){
@@ -3927,7 +3940,7 @@ function verifyApp() {
                     #previousVersionLong=$( echo "${appversionLong}" | sed 's/[^a-zA-Z0-9]*$//g' )
                     
                     # Compare version strings
-                    if [[ ${versionComparisonIsAtLeast} == "TRUE" ]]; then
+                    if [[ ${version_comparison_method_option} == "IS_AT_LEAST" ]]; then
                         if [[ -n "$appNewVersion" ]]; then
                             log_notice "--- Newest version: ${appNewVersion}"
                             if [[ -n "${previousVersion}" ]] &&  is-at-least "$appNewVersion" "$previousVersion"; then
