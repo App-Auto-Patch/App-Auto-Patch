@@ -3854,7 +3854,9 @@ function PgetAppVersion() {
             appversion=$(defaults read $installedAppPath/Contents/Info.plist $versionKey)
             #appversionLong=$(defaults read $installedAppPath/Contents/Info.plist $versionKeyLong)
             log_verbose "appversion: $appversion"
-            if [[ -n "${appCustomVersion}" ]]; then log_verbose "appCustomVersion: $appCustomVersion"
+            if [[ -n "${appCustomVersion}" ]]; then 
+              log_verbose "appCustomVersion: $appCustomVersion" 
+            fi
             #log_verbose "appversionLong: $appversionLong"
             log_info "Found $appName version $appversion"
             sleep .2
