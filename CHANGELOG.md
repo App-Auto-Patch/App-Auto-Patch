@@ -38,6 +38,7 @@
  - Added various verbose logging
  - Removed redundant Self Update Enabled logic
  - Added logic to the Installomator Debug Fallback to check output for "No previous app found" and ignore the app if so
+ - Added missing `display_string_deferral_selecttitle` key
 
 ## Version 3.4.2
 ### 20-Oct-2025
