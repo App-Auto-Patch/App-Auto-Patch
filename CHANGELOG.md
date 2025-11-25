@@ -3,10 +3,18 @@
 # Version 3
 
 ## Version 3.5.0
-### 21-Oct-2025
+### 24-Nov-2025
+- New Version Comparison Method options
+	- New `versionComparisonMethod` key with the options `IS_AT_LEAST` and `EQUAL_TO`
+ 	- `IS_AT_LEAST`: Checks if the currently installed version is the same or greater than the new version available. Utilizes the "Is-At-Least" function.
+ 	- `EQUAL_TO`: Checks if the currently installed version is equal to the new version available
+- Optional Label logic updates
+	- Optional Labels will now be checked for both Installed and Update Available
+ 	- **Breaking Change**: Optional labels will be checked during the discovery phase. If you use Optional labels and had previously disabled the discovery workflow, it must now be enabled in order for the labels to be checked
+ 	- You can use an asterisk `*` to ignore all labels, and any optional labels will be omitted from the ignore list to be checked if installed and update available
 - Updated info dialog with more information and easier-to-read formatting (PR #184)(Thanks @maxsundellacne)
 	- Bolded labels and SupportTeamName
- 	- Added a new section called "Software Information"
+ 	- Added a new section called "Software Information."
 	- Added line for Installomator version (both version and versiondate)
 	- Added the option to hide Telephone, Email, and/or Help Website by setting their value to "hide"
 	- Renamed default label from "Started" to "AAP Started" to clarify timestamp intent
@@ -18,6 +26,12 @@
 	- Removed the computer record URL since the button serves the same purpose.
 	- Removed the hostname because it often matches the S/N, and the S/N is easier to search.
 	- Made the card more compact and information-dense.
+ - Fixed label matching to ensure all labels are properly added to arrays without duplicates (#197)
+ - Fixed NextAutoLaunch logic to prevent AAP from launching after install when WorkflowDisableRelaunch is set to TRUE
+ - Added logic to pull and use the targetDir value from Installomator labels if present and the app is not in the /Applications folder
+ - Removed PreviousVersionLong comparison: could not find any cases where the long version number was being used in Installomator
+ - Added various verbose logging
+ - Removed redundant Self Update Enabled logic
 
 ## Version 3.4.2
 ### 20-Oct-2025
