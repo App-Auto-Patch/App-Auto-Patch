@@ -12,14 +12,14 @@
 	- Optional Labels will now be checked for both Installed and Update Available
  	- **Breaking Change**: Optional labels will be checked during the discovery phase. If you use Optional labels and had previously disabled the discovery workflow, it must now be enabled in order for the labels to be checked
  	- You can use an asterisk `*` to ignore all labels, and any optional labels will be omitted from the ignore list to be checked if installed and update available
-- Updated info dialog with more information and easier-to-read formatting (PR #184)(Thanks @maxsundellacne)
+- Updated info dialog with more information and easier-to-read formatting (PR #184)
 	- Bolded labels and SupportTeamName
  	- Added a new section called "Software Information."
 	- Added line for Installomator version (both version and versiondate)
 	- Added the option to hide Telephone, Email, and/or Help Website by setting their value to "hide"
 	- Renamed default label from "Started" to "AAP Started" to clarify timestamp intent
 	- Renamed default software-version labels for a unified look
-- Updated webhooks for both Slack and Teams (PR #185)(Thanks @maxsundellacne)
+- Updated webhooks for both Slack and Teams (PR #185)
 	- Renamed “Microsoft Intune” to “Intune” to prevent the button text from being truncated.
 	- Shortened the title and added emojis for quick identification of success and failure.
 	- Added version information for OS, Installomator, and AAP.
