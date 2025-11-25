@@ -4858,6 +4858,7 @@ main() {
                         current_label=""
                         appNewVersion=""
                         targetDir="/"
+                        folderName=""
                         
                         continue
                     fi
@@ -4867,7 +4868,7 @@ main() {
                         
                         case $scrubbedLine in
                             
-                            'name='*|'appName='*|'packageID'*|'expectedTeamID'*|'targetDir'*)
+                            'name='*|'appName='*|'packageID'*|'expectedTeamID'*|'targetDir'*|'folderName'*)
                                 eval "$scrubbedLine"
                             ;;
                             
