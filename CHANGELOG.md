@@ -35,11 +35,11 @@
  - Added logic to pull and use the targetDir value from Installomator labels if present and the app is not in the /Applications folder
  - Added logic to pull folderName value from Installomator labels if present
  - Added logic to pull versionKey value from Installomator labels if present
- - Removed PreviousVersionLong comparison: could not find any cases where the long version number was being used in Installomator
  - Added various verbose logging
  - Removed redundant Self Update Enabled logic
  - Added logic to the Installomator Debug Fallback to check output for "No previous app found" and ignore the app if so
  - Added missing `display_string_deferral_selecttitle` key
+ - Various spelling and case corrections throughout
 
 ## Version 3.4.2
 ### 20-Oct-2025
