@@ -400,6 +400,7 @@ set_display_strings_language() {
     display_string_deferral_message_01="You can **Defer** the updates or **Install Now** to close the applications and apply updates.  \n\n"
     display_string_deferral_message_02="application(s) that require updates:"
     display_string_deferral_unlimited="No deadline date and unlimited deferrals\n"
+    display_string_deferral_selecttitle="Defer updates for:"
     
     #### Language for the Deferral Dialog with NO deferrals remaining
     display_string_deferraldeadline_button1="Install Now"
@@ -500,6 +501,8 @@ set_display_strings_language() {
             display_string_deferral_message_02_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_message_02" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferral_unlimited_managed
             display_string_deferral_unlimited_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_unlimited" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            # local display_string_deferral_selecttitle_managed
+            display_string_deferral_selecttitle_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_selecttitle" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferraldeadline_button1_managed
             display_string_deferraldeadline_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferraldeadline_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferraldeadline_button2_managed
@@ -606,6 +609,8 @@ set_display_strings_language() {
     # [[ -z "${display_string_deferral_message_02_managed}" ]] && display_string_deferral_message_02="${display_string_deferral_message_02}"
     [[ -n "${display_string_deferral_unlimited_managed}" ]] && display_string_deferral_unlimited="${display_string_deferral_unlimited_managed}"
     # [[ -z "${display_string_deferral_unlimited_managed}" ]] && display_string_deferral_unlimited="${display_string_deferral_unlimited}"
+    [[ -n "${display_string_deferral_selecttitle_managed}" ]] && display_string_deferral_selecttitle="${display_string_deferral_selecttitle_managed}"
+    # [[ -z "${display_string_deferral_selecttitle_managed}" ]] && display_string_deferral_selecttitle="${display_string_deferral_selecttitle}"
     [[ -n "${display_string_deferraldeadline_button1_managed}" ]] && display_string_deferraldeadline_button1="${display_string_deferraldeadline_button1_managed}"
     # [[ -z "${display_string_deferraldeadline_button1_managed}" ]] && display_string_deferraldeadline_button1="${display_string_deferraldeadline_button1}"
     [[ -n "${display_string_deferraldeadline_button2_managed}" ]] && display_string_deferraldeadline_button2="${display_string_deferraldeadline_button2_managed}"
@@ -678,6 +683,7 @@ set_display_strings_language() {
     log_verbose "display_string_deferral_message_01: $display_string_deferral_message_01"
     log_verbose "display_string_deferral_message_02: $display_string_deferral_message_02"
     log_verbose "display_string_deferral_unlimited: $display_string_deferral_unlimited"
+    log_verbose "display_string_deferral_selecttitle: $display_string_deferral_selecttitle"
     log_verbose "display_string_deferraldeadline_button1: $display_string_deferraldeadline_button1"
     log_verbose "display_string_deferraldeadline_button2: $display_string_deferraldeadline_button2"
     log_verbose "display_string_deferraldeadline_infobox: $display_string_deferraldeadline_infobox"
@@ -3878,6 +3884,7 @@ function PgetAppVersion() {
         if [[ ${#filteredAppPaths} -eq 1 ]]; then
             installedAppPath=$filteredAppPaths[1]
             log_verbose "installedAppPath: $installedAppPath"
+            log_verbose "versionKey: $versionKey"
             appversion=$(defaults read $installedAppPath/Contents/Info.plist $versionKey)
             #appversionLong=$(defaults read $installedAppPath/Contents/Info.plist $versionKeyLong)
             log_verbose "appversion: $appversion"
@@ -4894,6 +4901,8 @@ main() {
                         appNewVersion=""
                         targetDir="/"
                         folderName=""
+                        #versionKey=""
+                        versionKey="CFBundleShortVersionString"
                         
                         continue
                     fi
@@ -4903,7 +4912,7 @@ main() {
                         
                         case $scrubbedLine in
                             
-                            'name='*|'appName='*|'packageID'*|'expectedTeamID'*|'targetDir'*|'folderName'*)
+                            'name='*|'appName='*|'packageID'*|'expectedTeamID'*|'targetDir'*|'folderName'*|'versionKey'*)
                                 eval "$scrubbedLine"
                             ;;
                             
