@@ -25,6 +25,7 @@
 
 scriptVersion="3.5.0"
 scriptDate="2025/11/26"
+scriptBuild="3.5.0.251126077"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
