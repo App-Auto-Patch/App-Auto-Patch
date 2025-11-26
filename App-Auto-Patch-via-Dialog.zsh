@@ -837,7 +837,7 @@ get_options() {
                 deadline_days_delete_all_option="TRUE"
             ;;
             --dialog-icon-option=*)
-                dialog_icon_option=="${1##*=}"
+                dialog_icon_option="${1##*=}"
             ;;
             --patch-week-start-day=*)
                 patch_week_start_day_option="${1##*=}"
