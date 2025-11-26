@@ -1536,29 +1536,6 @@ manage_parameter_options() {
     option_error="FALSE"
 
     if [[ "${deferral_timer_default_option}" == "X" ]]; then
-        log_status "Deleting local preference for the --deferral-timer-default option, defaulting to ${DEFERRAL_TIMER_DEFAULT_MINUTES} minutes."
-        defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerDefault 2> /dev/null
-    elif [[ -n "${deferral_timer_default_option}" ]] && [[ "${deferral_timer_default_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
-        if [[ "${deferral_timer_default_option}" -lt 2 ]]; then
-            log_warning "Specified --deferral-timer-default=minutes value of ${deferral_timer_default_option} is too low, rounding to 2 minutes."
-            deferral_timer_minutes=2
-        elif [[ "${deferral_timer_default_option}" -gt 10080 ]]; then
-            log_warning "Specified --deferral-timer-default=minutes value of ${deferral_timer_default_option} is too high, rounding down to 10080 minutes (1 week)."
-            deferral_timer_minutes=10080
-        else
-            deferral_timer_minutes="${deferral_timer_default_option}"
-        fi
-        defaults write "${appAutoPatchLocalPLIST}" DeferralTimerDefault -string "${deferral_timer_minutes}"
-        # deprecate next_auto_launch_minutes: next_auto_launch_minutes="${deferral_timer_minutes}"
-        elif [[ -n "${deferral_timer_default_option}" ]] && ! [[ "${deferral_timer_default_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
-            log_error "The --deferral-timer-default=minutes value must only be a number."; option_error="TRUE"
-        fi
-    [[ -z "${deferral_timer_minutes}" ]] && deferral_timer_minutes="${DEFERRAL_TIMER_DEFAULT_MINUTES}"
-    # deprecate next_auto_launch_minutes: next_auto_launch_minutes="${deferral_timer_minutes}"
-    log_verbose  "deferral_timer_minutes is: ${deferral_timer_minutes}"
-
-
-    if [[ "${deferral_timer_default_option}" == "X" ]]; then
         log_status "Status: Deleting local preference for the --deferral-timer-default option, defaulting to ${DEFERRAL_TIMER_DEFAULT_MINUTES} minutes."
         defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerDefault 2>/dev/null
         unset deferral_timer_default_option
@@ -1844,7 +1821,7 @@ manage_parameter_options() {
     fi
     log_verbose "InteractiveModeOption: $InteractiveModeOption"
 
-        defaults write "${appAutoPatchLocalPlist}" SelfUpdateEnabled -bool "${self_update_enabled_option}"
+        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool "${self_update_enabled_option}"
         SelfUpdateEnabled="${self_update_enabled_option}"
     log_verbose "SelfUpdateEnabledOption: $self_update_enabled_option"
     
@@ -1909,10 +1886,10 @@ manage_parameter_options() {
     if [[ -n "${version_comparison_installomator_fallback_option}" ]]; then
         if [[ "${version_comparison_installomator_fallback_option}" -eq 1 ]] || [[ "${version_comparison_installomator_fallback_option}" == "TRUE" ]]; then
             version_comparison_installomator_fallback_option="TRUE"
-            defaults write "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallbackOption -bool true
+            defaults write "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallback -bool true
         else
             version_comparison_installomator_fallback_option="FALSE"
-            defaults delete "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallbackOption 2> /dev/null
+            defaults delete "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null
         fi
     else
         version_comparison_installomator_fallback_option="${VersionComparisonInstallomatorFallback}"
