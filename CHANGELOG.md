@@ -40,6 +40,7 @@
  - Added logic to the Installomator Debug Fallback to check output for "No previous app found" and ignore the app if so
  - Added missing `display_string_deferral_selecttitle` key
  - Various spelling and case corrections throughout
+ - Fixed an issue preventing the monthly patching cadence flow from being triggered if no apps were found that need updates (Thanks @dan-snelson)
 
 ## Version 3.4.2
 ### 20-Oct-2025
