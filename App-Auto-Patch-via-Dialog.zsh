@@ -25,7 +25,7 @@
 
 scriptVersion="3.5.0"
 scriptDate="2025/11/26"
-scriptBuild="3.5.0.251126077"
+scriptBuild="3.5.0.251126249"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -3909,13 +3909,24 @@ function PgetAppVersion() {
             installedAppPath=$filteredAppPaths[1]
             log_verbose "installedAppPath: $installedAppPath"
             log_verbose "versionKey: $versionKey"
-            appversion=$(defaults read $installedAppPath/Contents/Info.plist $versionKey)
-            #appversionLong=$(defaults read $installedAppPath/Contents/Info.plist $versionKeyLong)
+            # Primary attempt (fragment or default)
+            appversion=$(/usr/bin/defaults read "$installedAppPath/Contents/Info.plist" "$versionKey" 2>/dev/null)
+
+            # Try CFBundleShortVersionString
+            if [[ -z "$appversion" ]]; then
+                appversion=$(/usr/bin/defaults read "$installedAppPath/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null)
+            fi
+
+            # Try CFBundleVersion
+            if [[ -z "$appversion" ]]; then
+                appversion=$(/usr/bin/defaults read "$installedAppPath/Contents/Info.plist" CFBundleVersion 2>/dev/null)
+            fi
+
             log_verbose "appversion: $appversion"
             if [[ -n "${appCustomVersion}" ]]; then 
               log_verbose "appCustomVersion: $appCustomVersion" 
             fi
-            #log_verbose "appversionLong: $appversionLong"
+
             log_info "Found $appName version $appversion"
             sleep .2
             
@@ -4840,8 +4851,8 @@ main() {
         endlabel_re='^;;'
 
         targetDir="/"
-        versionKey="CFBundleShortVersionString"
-        #versionKeyLong="CFBundleVersion"
+        defaultVersionKey="CFBundleShortVersionString"
+        versionKey="$defaultVersionKey"
 
         IFS=$'\n'
         in_label=0
@@ -4925,8 +4936,7 @@ main() {
                         appNewVersion=""
                         targetDir="/"
                         folderName=""
-                        #versionKey=""
-                        versionKey="CFBundleShortVersionString"
+                        versionKey="$defaultVersionKey"
                         
                         continue
                     fi
