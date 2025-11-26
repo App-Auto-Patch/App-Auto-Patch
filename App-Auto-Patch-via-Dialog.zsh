@@ -24,7 +24,7 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.5.0"
-scriptDate="2025/11/25"
+scriptDate="2025/11/26"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -915,18 +915,25 @@ get_options() {
         shift
     done
 
-    # Normalize self-update frequency if provided
-    if [[ -n "${self_update_frequency_option:-}" ]]; then
-        case "${self_update_frequency_option:l}" in
-            daily|weekly|monthly) ;;   # ok
+    # Normalize self-update frequency (always ensure a valid value)
+    # Valid values: daily | weekly | monthly
+    # Empty, unset, or invalid = daily
+
+    # Force lowercase, provide default if empty
+    local _freq_norm="${${self_update_frequency_option:l}:-daily}"
+
+    case "$_freq_norm" in
+        daily|weekly|monthly)
+            # OK
+        ;;
             *)
-                log_error "Invalid value for --self-update-frequency: '${self_update_frequency_option}'. Use daily|weekly|monthly."
-                show_usage
+            log_warning "Invalid or empty SelfUpdateFrequency '${self_update_frequency_option:-<empty>}' — defaulting to 'daily'."
+            _freq_norm="daily"
             ;;
         esac
-        self_update_frequency_option="${self_update_frequency_option:l}"
-    fi
 
+    # Save the normalized value back
+    self_update_frequency_option="$_freq_norm"
 
     [[ -n "${unrecognized_options_array[*]}" ]] && show_usage
 
@@ -950,7 +957,7 @@ get_preferences() {
         defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool "${self_update_enabled_option}"
         defaults write "${appAutoPatchLocalPLIST}" SelfUpdateFrequency -string "${self_update_frequency_option}"
         [[ "${verbose_mode_option}" == "TRUE" ]] && defaults write "${appAutoPatchLocalPLIST}" VerboseMode -bool true
-        [[ "${debug_mode_option}" == "TRUE" ]] && defaults write "${appAutoPathLocalPLIST}" DebugMode -bool true
+        [[ "${debug_mode_option}" == "TRUE" ]] && defaults write "${appAutoPatchLocalPLIST}" DebugMode -bool true
         rm -f "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
         rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
         
@@ -1821,9 +1828,15 @@ manage_parameter_options() {
     fi
     log_verbose "InteractiveModeOption: $InteractiveModeOption"
 
-        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool "${self_update_enabled_option}"
-        SelfUpdateEnabled="${self_update_enabled_option}"
-    log_verbose "SelfUpdateEnabledOption: $self_update_enabled_option"
+        # self_update_enabled_option normalization
+    case "${self_update_enabled_option:l}" in
+        true|1|yes)  _sue_norm="TRUE"  ;;
+        false|0|no|"") _sue_norm="FALSE" ;;
+        *)
+            log_warning "Invalid SelfUpdateEnabled value '${self_update_enabled_option:-<empty>}' — forcing to FALSE."
+            _sue_norm="FALSE"
+        ;;
+    esac
     
     # Manage ${workflow_install_now_patching_status_action_option} and save to ${appAutoPatchLocalPLIST}
     if [[ -n "${workflow_install_now_patching_status_action_option}" ]]; then
@@ -2522,23 +2535,56 @@ install_app_auto_patch() {
     log_install "Creating AAP LauchDaemon helper: ${appAutoPatchFolder}/aap-starter"
   /bin/cat <<'EOAS' > "${appAutoPatchFolder}/aap-starter"
 #!/bin/bash
-# Exit if App Auto Patch is already running.
-[[ "$(pgrep -F "__APP_AUTOPATCH_PIDFILE__" 2> /dev/null)" ]] && exit 0
+#
+# App Auto-Patch LaunchDaemon helper
+#
 
-# Exit if the App Auto Patch auto launch workflow is disabled, or deferred until a system restart, or deferred until a later date.
-next_auto_launch=$(defaults read "__AAP_LOCAL_PLIST__" NextAutoLaunch 2> /dev/null)
-if [[ "${next_auto_launch}" == "FALSE" ]]; then
-  exit 0
-elif [[ -z "${next_auto_launch}" ]]; then
-  mac_last_startup_saved_epoch=$(date -j -f "__TIMESTAMP_FORMAT__" "$(defaults read "__AAP_LOCAL_PLIST__" MacLastStartup 2> /dev/null)" +"%s" 2> /dev/null)
-  mac_last_startup_epoch=$(date -j -f "%b %d %H:%M:%S" "$(last reboot | head -1 | cut -c 41- | xargs):00" +"%s" 2> /dev/null)
-  [[ -n "${mac_last_startup_saved_epoch}" ]] && [[ -n "${mac_last_startup_epoch}" ]] && [[ "${mac_last_startup_saved_epoch}" -ge "${mac_last_startup_epoch}" ]] && exit 0
-elif [[ $(date +%s) -lt $(date -j -f "__TIMESTAMP_FORMAT__" "${next_auto_launch}" +"%s" 2> /dev/null) ]]; then
-  exit 0
+# Exit if App Auto Patch is already running.
+[[ "$(pgrep -F "__APP_AUTOPATCH_PIDFILE__" 2>/dev/null)" ]] && exit 0
+
+# Read NextAutoLaunch — may be:
+#   - "FALSE"    (string disable)
+#   - "0"        (boolean false → defaults prints "0")
+#   - ""         (unset, no key)
+#   - date stamp (formatted per __TIMESTAMP_FORMAT__)
+next_auto_launch="$(defaults read "__AAP_LOCAL_PLIST__" NextAutoLaunch 2>/dev/null)"
+
+# Explicit disable states
+if [[ "$next_auto_launch" == "FALSE" ]] || [[ "$next_auto_launch" == "0" ]]; then
+    exit 0
 fi
 
-echo "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: **** App Auto-Patch __SCRIPT_VERSION__ - LAUNCHDAEMON ****" | tee -a "__AAP_LOG__"
-"__AAP_FOLDER__/appautopatch" &
+# Unset case (no NextAutoLaunch key)
+if [[ -z "$next_auto_launch" ]]; then
+    # Read last saved startup timestamp
+    saved="$(defaults read "__AAP_LOCAL_PLIST__" MacLastStartup 2>/dev/null)"
+    saved_epoch="$(date -j -f "__TIMESTAMP_FORMAT__" "$saved" +%s 2>/dev/null)"
+
+    # Read actual last boot time (safe, locale-independent)
+    boot_epoch="$(sysctl -n kern.boottime | awk -F'[=,]' '{print $2}' | tr -d ' ')"
+
+    # If saved >= last reboot → skip auto-run
+    if [[ -n "$saved_epoch" && -n "$boot_epoch" && "$saved_epoch" -ge "$boot_epoch" ]]; then
+        exit 0
+    fi
+fi
+
+# If NextAutoLaunch is a valid date, compare to now.
+next_epoch="$(date -j -f "__TIMESTAMP_FORMAT__" "$next_auto_launch" +%s 2>/dev/null)"
+
+# If date parsed successfully and next_epoch > now → not time yet
+if [[ -n "$next_epoch" ]]; then
+    now="$(date +%s)"
+    if (( now < next_epoch )); then
+        exit 0
+    fi
+fi
+
+# Launch App Auto-Patch
+echo "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: **** App Auto-Patch __SCRIPT_VERSION__ - LAUNCHDAEMON ****" \
+    | tee -a "__AAP_LOG__"
+
+/bin/bash "__AAP_FOLDER__/appautopatch" &
 disown
 exit 0
 EOAS
@@ -2589,9 +2635,9 @@ EOLD
 
     log_install "Setting permissions for installed items"
     chown -R root:wheel "${appAutoPatchFolder}"
-    chmod -R 777 "${appAutoPatchFolder}"
-    chmod -R a+r "${appAutoPatchFolder}"
+    chmod -R 755 "${appAutoPatchFolder}"
     chmod -R go-w "${appAutoPatchFolder}"
+    chmod -R a+r "${appAutoPatchFolder}"
     chmod a+x "${appAutoPatchFolder}/appautopatch"
     chmod a+x "${appAutoPatchFolder}/aap-starter"
 
