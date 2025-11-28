@@ -24,9 +24,11 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.5.0"
-scriptDate="2025/10/22"
+scriptDate="2025/11/26"
+scriptBuild="3.5.0.251126330"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+autoload -Uz is-at-least
 
 ### Usage and Help ###
 show_usage() {
@@ -60,7 +62,7 @@ echo "
     [--workflow-install-now] [--workflow-install-now-silent]
     [--workflow-install-now-patching-status-action-never]
     [--workflow-install-now-patching-status-action-always]
-    [--workflow-install-now-patching-status-action-sucess]
+    [--workflow-install-now-patching-status-action-success]
 
     Deferral Deadline COUNT Options:
     [--deadline-count-focus=number]
@@ -136,11 +138,13 @@ echo "
     <key>SelfUpdateFrequency</key> <string>daily|weekly|monthly</string>
     <key>SupportTeamEmail</key> <string>email</string>
     <key>SupportTeamName</key> <string>name</string>
-    <key>SupportTeamPhone</key> <string>phoem</string>
+    <key>SupportTeamPhone</key> <string>phone</string>
     <key>SupportTeamWebsite</key> <string>URL</string>
     <key>UnattendedExit</key> <string>TRUE,FALSE</string>
     <key>UnattendedExitSeconds</key> <integer>seconds</integer>
     <key>UseOverlayIcon</key> <string>TRUE,FALSE</string>
+    <key>VersionComparisonInstallomatorFallback</key> <true/> | <false/>
+    <key>VersionComparisonMethod</key> <string>IS_AT_LEAST,EQUAL_TO</string>
     <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
     <key>WebhookURLSlack</key> <string>URL</string>
     <key>WebhookURLTeams</key> <string>URL</string>
@@ -349,6 +353,16 @@ set_defaults() {
     # Monthly Patching Cadence Start Time: Set this to the local time you want AAP to start
     monthly_patching_cadence_start_time="09:00:00"
 
+    #Controls how current and new versions are compared
+        #IS_AT_LEAST: uses the "is-at-least" function. if Current version is greater than or equal to new Version, app is considered up to date
+        #EQUAL_TO: Uses the "equal to" logic. Current and New version must match to be considered up to date
+    VersionComparisonMethod="IS_AT_LEAST"
+
+    # If appNewVersion is not available, Installomator debug mode will be used to have it's logic try to determine if an app is up to date or not
+    # Installomator Debug mode will download the app in order to run its comparison which can increase the AAP runtime and bandwidth usage
+    # TRUE (default): Allows Installomator Debug Fallback to run
+    # FALSE: Does not allow Installomator Debug Fallback to run and will not add the app to the queue for updates
+    VersionComparisonInstallomatorFallback="TRUE"
 }
 
 # Set language strings for dialogs and notifications.
@@ -387,6 +401,7 @@ set_display_strings_language() {
     display_string_deferral_message_01="You can **Install Now** to close the applications and apply the updates, or **Defer** to postpone them."
     display_string_deferral_message_02="**application(s)** require updates.\n\n"
     display_string_deferral_unlimited="No deadline date and unlimited deferrals\n"
+    display_string_deferral_selecttitle="Defer updates for:"
     
     #### Language for the Deferral Dialog with NO deferrals remaining
     display_string_deferraldeadline_button1="Install Now"
@@ -427,7 +442,7 @@ set_display_strings_language() {
     # Count the number of dictionaries in dialogElements
     numElements=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements" "$appAutoPatchManagedPLIST.plist" 2> /dev/null | grep -c "Dict")
     log_verbose "Language Element Count: $numElements"
-    log_verbose "User Languaget: ${langUser}"
+    log_verbose "User Language: ${langUser}"
     # Loop through each index and check the _language key
     # Optionally, enforce that numElements is treated as an integer.
     typeset -i numElements=$numElements
@@ -437,7 +452,6 @@ set_display_strings_language() {
         log_verbose "Language elements found in Managed Configuration Profile... Checking for matching language"
     for (( elements=0; elements<numElements; elements++ )); do
     
-        #lang=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:language" "$appAutoPatchManagedPLIST.plist")
         lang="$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:${elements}:language" "$appAutoPatchManagedPLIST.plist")"
         log_verbose "Found Language $lang in Managed Config Profile"
         if [ "$lang" = "${langUser}" ]; then
@@ -487,6 +501,8 @@ set_display_strings_language() {
             display_string_deferral_message_02_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_message_02" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferral_unlimited_managed
             display_string_deferral_unlimited_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_unlimited" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            # local display_string_deferral_selecttitle_managed
+            display_string_deferral_selecttitle_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_selecttitle" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferraldeadline_button1_managed
             display_string_deferraldeadline_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferraldeadline_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferraldeadline_button2_managed
@@ -545,104 +561,54 @@ set_display_strings_language() {
         fi
     
     
-#   if [[ -n "${display_string_defer_today_button_managed}" ]]; then
-#       #display_string_defer_future_button=$display_string_defer_future_button_managed
-#       display_string_defer_today_button="${display_string_defer_today_button_managed}"
-#   fi
-    
-    
     [[ -n "${display_string_defer_today_button_managed}" ]] && display_string_defer_today_button="${display_string_defer_today_button_managed}"
-    # [[ -z "${display_string_defer_today_button_managed}" ]] && display_string_defer_today_button="${display_string_defer_today_button}"
     [[ -n "${display_string_defer_tomorrow_button_managed}" ]] && display_string_defer_tomorrow_button="${display_string_defer_tomorrow_button_managed}"
-    # [[ -z "${display_string_defer_tomorrow_button_managed}" ]] && display_string_defer_tomorrow_button="${display_string_defer_tomorrow_button}"
     [[ -n "${display_string_defer_future_button_managed}" ]] && display_string_defer_future_button="${display_string_defer_future_button_managed}"
-    # [[ -z "${display_string_defer_future_button_managed}" ]] && display_string_defer_future_button="${display_string_defer_future_button}"
     [[ -n "${display_string_minutes_managed}" ]] && display_string_minutes="${display_string_minutes_managed}"
-    # [[ -z "${display_string_minutes_managed}" ]] && display_string_minutes="${display_string_minutes}"
     [[ -n "${display_string_hour_managed}" ]] && display_string_hour="${display_string_hour_managed}"
-    # [[ -z "${display_string_hour_managed}" ]] && display_string_hour="${display_string_hour}"
     [[ -n "${display_string_hours_managed}" ]] && display_string_hours="${display_string_hours_managed}"
-    # [[ -z "${display_string_hours_managed}" ]] && display_string_hours="${display_string_hours}"
     [[ -n "${display_string_and_managed}" ]] && display_string_and="${display_string_and_managed}"
-    # [[ -z "${display_string_and_managed}" ]] && display_string_and="${display_string_and}"
     [[ -n "${display_string_days_managed}" ]] && display_string_days="${display_string_days_managed}"
-    # [[ -z "${display_string_days_managed}" ]] && display_string_days="${display_string_days}"
     [[ -n "${display_string_times_managed}" ]] && display_string_times="${display_string_times_managed}"
-    # [[ -z "${display_string_times_managed}" ]] && display_string_times="${display_string_times}"
     [[ -n "${display_string_there_are_managed}" ]] && display_string_there_are="${display_string_there_are_managed}"
-    # [[ -z "${display_string_there_are_managed}" ]] && display_string_there_are="${display_string_there_are}"
     [[ -n "${display_string_discovery_message_managed}" ]] && display_string_discovery_message="${display_string_discovery_message_managed}"
-    # [[ -z "${display_string_discovery_message_managed}" ]] && display_string_discovery_message="${display_string_discovery_message}"
     [[ -n "${display_string_discovery_action_message_managed}" ]] && display_string_discovery_action_message="${display_string_discovery_action_message_managed}"
-    # [[ -z "${display_string_discovery_action_message_managed}" ]] && display_string_discovery_action_message="${display_string_discovery_action_message}"
     [[ -n "${display_string_discovery_progress_managed}" ]] && display_string_discovery_progress="${display_string_discovery_progress_managed}"
-    # [[ -z "${display_string_discovery_progress_managed}" ]] && display_string_discovery_progress="${display_string_discovery_progress}"
     [[ -n "${display_string_deferral_button1_managed}" ]] && display_string_deferral_button1="${display_string_deferral_button1_managed}"
-    # [[ -z "${display_string_deferral_button1_managed}" ]] && display_string_deferral_button1="${display_string_deferral_button1}"
     [[ -n "${display_string_deferral_button2_managed}" ]] && display_string_deferral_button2="${display_string_deferral_button2_managed}"
-    # [[ -z "${display_string_deferral_button2_managed}" ]] && display_string_deferral_button2="${display_string_deferral_button2}"
     [[ -n "${display_string_deferral_infobox1_managed}" ]] && display_string_deferral_infobox1="${display_string_deferral_infobox1_managed}"
-    # [[ -z "${display_string_deferral_infobox1_managed}" ]] && display_string_deferral_infobox1="${display_string_deferral_infobox1}"
     [[ -n "${display_string_deferral_infobox2_managed}" ]] && display_string_deferral_infobox2="${display_string_deferral_infobox2_managed}"
-    # [[ -z "${display_string_deferral_infobox2_managed}" ]] && display_string_deferral_infobox2="${display_string_deferral_infobox2}"
     [[ -n "${display_string_deferral_infobox3_managed}" ]] && display_string_deferral_infobox3="${display_string_deferral_infobox3_managed}"
-    # [[ -z "${display_string_deferral_infobox3_managed}" ]] && display_string_deferral_infobox3="${display_string_deferral_infobox3}"
     [[ -n "${display_string_deferral_message_01_managed}" ]] && display_string_deferral_message_01="${display_string_deferral_message_01_managed}"
-    # [[ -z "${display_string_deferral_message_01_managed}" ]] && display_string_deferral_message_01="${display_string_deferral_message_01}"
     [[ -n "${display_string_deferral_message_02_managed}" ]] && display_string_deferral_message_02="${display_string_deferral_message_02_managed}"
-    # [[ -z "${display_string_deferral_message_02_managed}" ]] && display_string_deferral_message_02="${display_string_deferral_message_02}"
     [[ -n "${display_string_deferral_unlimited_managed}" ]] && display_string_deferral_unlimited="${display_string_deferral_unlimited_managed}"
-    # [[ -z "${display_string_deferral_unlimited_managed}" ]] && display_string_deferral_unlimited="${display_string_deferral_unlimited}"
+    [[ -n "${display_string_deferral_selecttitle_managed}" ]] && display_string_deferral_selecttitle="${display_string_deferral_selecttitle_managed}"
     [[ -n "${display_string_deferraldeadline_button1_managed}" ]] && display_string_deferraldeadline_button1="${display_string_deferraldeadline_button1_managed}"
-    # [[ -z "${display_string_deferraldeadline_button1_managed}" ]] && display_string_deferraldeadline_button1="${display_string_deferraldeadline_button1}"
     [[ -n "${display_string_deferraldeadline_button2_managed}" ]] && display_string_deferraldeadline_button2="${display_string_deferraldeadline_button2_managed}"
-    # [[ -z "${display_string_deferraldeadline_button2_managed}" ]] && display_string_deferraldeadline_button2="${display_string_deferraldeadline_button2}"
     [[ -n "${display_string_deferraldeadline_infobox_managed}" ]] && display_string_deferraldeadline_infobox="${display_string_deferraldeadline_infobox_managed}"
-    # [[ -z "${display_string_deferraldeadline_infobox_managed}" ]] && display_string_deferraldeadline_infobox="${display_string_deferraldeadline_infobox}"
     [[ -n "${display_string_deferraldeadline_message_deadline_managed}" ]] && display_string_deferraldeadline_message_deadline="${display_string_deferraldeadline_message_deadline_managed}"
-    # [[ -z "${display_string_deferraldeadline_message_deadline_managed}" ]] && display_string_deferraldeadline_message_deadline="${display_string_deferraldeadline_message_deadline}"
     [[ -n "${display_string_patching_button1_managed}" ]] && display_string_patching_button1="${display_string_patching_button1_managed}"
-    # [[ -z "${display_string_patching_button1_managed}" ]] && display_string_patching_button1="${display_string_patching_button1}"
     [[ -n "${display_string_patching_checking_managed}" ]] && display_string_patching_checking="${display_string_patching_checking_managed}"
-    # [[ -z "${display_string_patching_checking_managed}" ]] && display_string_patching_checking="${display_string_patching_checking}"
     [[ -n "${display_string_patching_progress_managed}" ]] && display_string_patching_progress="${display_string_patching_progress_managed}"
-    # [[ -z "${display_string_patching_progress_managed}" ]] && display_string_patching_progress="${display_string_patching_progress}"
     [[ -n "${display_string_patching_infobox_computer_name_managed}" ]] && display_string_patching_infobox_computer_name="${display_string_patching_infobox_computer_name_managed}"
-    # [[ -z "${display_string_patching_infobox_computer_name_managed}" ]] && display_string_patching_infobox_computer_name="${display_string_patching_infobox_computer_name}"
     [[ -n "${display_string_patching_infobox_macos_version_managed}" ]] && display_string_patching_infobox_macos_version="${display_string_patching_infobox_macos_version_managed}"
-    # [[ -z "${display_string_patching_infobox_macos_version_managed}" ]] && display_string_patching_infobox_macos_version="${display_string_patching_infobox_macos_version}"
     [[ -n "${display_string_patching_infobox_updates_managed}" ]] && display_string_patching_infobox_updates="${display_string_patching_infobox_updates_managed}"
-    # [[ -z "${display_string_patching_infobox_updates_managed}" ]] && display_string_patching_infobox_updates="${display_string_patching_infobox_updates}"
     [[ -n "${display_string_patching_message_managed}" ]] && display_string_patching_message="${display_string_patching_message_managed}"
-    # [[ -z "${display_string_patching_message_managed}" ]] && display_string_patching_message="${display_string_patching_message}"
     [[ -n "${display_string_complete_progress_managed}" ]] && display_string_complete_progress="${display_string_complete_progress_managed}"
-    # [[ -z "${display_string_complete_progress_managed}" ]] && display_string_complete_progress="${display_string_complete_progress}"
     [[ -n "${display_string_uptodate_button1_managed}" ]] && display_string_uptodate_button1="${display_string_uptodate_button1_managed}"
-    # [[ -z "${display_string_uptodate_button1_managed}" ]] && display_string_uptodate_button1="${display_string_uptodate_button1}"
     [[ -n "${display_string_uptodate_message_managed}" ]] && display_string_uptodate_message="${display_string_uptodate_message_managed}"
-    # [[ -z "${display_string_uptodate_message_managed}" ]] && display_string_uptodate_message="${display_string_uptodate_message}"
     [[ -n "${display_string_help_message_intro_managed}" ]] && display_string_help_message_intro="${display_string_help_message_intro_managed}"
-    # [[ -z "${display_string_help_message_intro_managed}" ]] && display_string_help_message_intro="${display_string_help_message_intro}"
     [[ -n "${display_string_help_message_telephone_managed}" ]] && display_string_help_message_telephone="${display_string_help_message_telephone_managed}"
-    # [[ -z "${display_string_help_message_telephone_managed}" ]] && display_string_help_message_telephone="${display_string_help_message_telephone}"
     [[ -n "${display_string_help_message_email_managed}" ]] && display_string_help_message_email="${display_string_help_message_email_managed}"
-    # [[ -z "${display_string_help_message_email_managed}" ]] && display_string_help_message_email="${display_string_help_message_email}"
     [[ -n "${display_string_help_message_help_website_managed}" ]] && display_string_help_message_help_website="${display_string_help_message_help_website_managed}"
-    # [[ -z "${display_string_help_message_help_website_managed}" ]] && display_string_help_message_help_website="${display_string_help_message_help_website}"
     [[ -n "${display_string_help_message_computer_info_managed}" ]] && display_string_help_message_computer_info="${display_string_help_message_computer_info_managed}"
-    # [[ -z "${display_string_help_message_computer_info_managed}" ]] && display_string_help_message_computer_info="${display_string_help_message_computer_info}"
     [[ -n "${display_string_help_message_operating_system_managed}" ]] && display_string_help_message_operating_system="${display_string_help_message_operating_system_managed}"
-    # [[ -z "${display_string_help_message_operating_system_managed}" ]] && display_string_help_message_operating_system="${display_string_help_message_operating_system}"
     [[ -n "${display_string_help_message_serial_managed}" ]] && display_string_help_message_serial="${display_string_help_message_serial_managed}"
-    # [[ -z "${display_string_help_message_serial_managed}" ]] && display_string_help_message_serial="${display_string_help_message_serial}"
     [[ -n "${display_string_help_message_dialog_managed}" ]] && display_string_help_message_dialog="${display_string_help_message_dialog_managed}"
-    # [[ -z "${display_string_help_message_dialog_managed}" ]] && display_string_help_message_dialog="${display_string_help_message_dialog}"
     [[ -n "${display_string_help_message_started_managed}" ]] && display_string_help_message_started="${display_string_help_message_started_managed}"
-    # [[ -z "${display_string_help_message_started_managed}" ]] && display_string_help_message_started="${display_string_help_message_started}"
     [[ -n "${display_string_help_message_script_version_managed}" ]] && display_string_help_message_script_version="${display_string_help_message_script_version_managed}"
     [[ -n "${display_string_help_message_software_version_managed}" ]] && display_string_help_message_software_version="${display_string_help_message_software_version_managed}"
     [[ -n "${display_string_help_message_installomator_managed}" ]] && display_string_help_message_installomator="${display_string_help_message_installomator_managed}"
-    # [[ -z "${display_string_help_message_script_version_managed}" ]] && display_string_help_message_script_version="${display_string_help_message_script_version}"
     
     log_verbose "display_string_defer_today_button: $display_string_defer_today_button"
     log_verbose "display_string_defer_tomorrow_button: $display_string_defer_tomorrow_button"
@@ -665,6 +631,7 @@ set_display_strings_language() {
     log_verbose "display_string_deferral_message_01: $display_string_deferral_message_01"
     log_verbose "display_string_deferral_message_02: $display_string_deferral_message_02"
     log_verbose "display_string_deferral_unlimited: $display_string_deferral_unlimited"
+    log_verbose "display_string_deferral_selecttitle: $display_string_deferral_selecttitle"
     log_verbose "display_string_deferraldeadline_button1: $display_string_deferraldeadline_button1"
     log_verbose "display_string_deferraldeadline_button2: $display_string_deferraldeadline_button2"
     log_verbose "display_string_deferraldeadline_infobox: $display_string_deferraldeadline_infobox"
@@ -811,14 +778,11 @@ get_options() {
             --deadline-days-hard=*)
                 deadline_days_hard_option="${1##*=}"
             ;;
-            --deadline-days-restart-all)
-                deadline_days_restart_all_option="TRUE"
-            ;;
             --deadline-days-delete-all)
                 deadline_days_delete_all_option="TRUE"
             ;;
             --dialog-icon-option=*)
-                dialog_icon_option=="${1##*=}"
+                dialog_icon_option="${1##*=}"
             ;;
             --patch-week-start-day=*)
                 patch_week_start_day_option="${1##*=}"
@@ -896,18 +860,25 @@ get_options() {
         shift
     done
 
-    # Normalize self-update frequency if provided
-    if [[ -n "${self_update_frequency_option:-}" ]]; then
-        case "${self_update_frequency_option:l}" in
-            daily|weekly|monthly) ;;   # ok
+    # Normalize self-update frequency (always ensure a valid value)
+    # Valid values: daily | weekly | monthly
+    # Empty, unset, or invalid = daily
+
+    # Force lowercase, provide default if empty
+    local _freq_norm="${${self_update_frequency_option:l}:-daily}"
+
+    case "$_freq_norm" in
+        daily|weekly|monthly)
+            # OK
+        ;;
             *)
-                log_error "Invalid value for --self-update-frequency: '${self_update_frequency_option}'. Use daily|weekly|monthly."
-                show_usage
+            log_warning "Invalid or empty SelfUpdateFrequency '${self_update_frequency_option:-<empty>}' — defaulting to 'daily'."
+            _freq_norm="daily"
             ;;
         esac
-        self_update_frequency_option="${self_update_frequency_option:l}"
-    fi
 
+    # Save the normalized value back
+    self_update_frequency_option="$_freq_norm"
 
     [[ -n "${unrecognized_options_array[*]}" ]] && show_usage
 
@@ -931,7 +902,7 @@ get_preferences() {
         defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool "${self_update_enabled_option}"
         defaults write "${appAutoPatchLocalPLIST}" SelfUpdateFrequency -string "${self_update_frequency_option}"
         [[ "${verbose_mode_option}" == "TRUE" ]] && defaults write "${appAutoPatchLocalPLIST}" VerboseMode -bool true
-        [[ "${debug_mode_option}" == "TRUE" ]] && defaults write "${appAutoPathLocalPLIST}" DebugMode -bool true
+        [[ "${debug_mode_option}" == "TRUE" ]] && defaults write "${appAutoPatchLocalPLIST}" DebugMode -bool true
         rm -f "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
         rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
         
@@ -1065,6 +1036,11 @@ get_preferences() {
         monthly_patching_cadence_weekday_index_managed=$(defaults read "${appAutoPatchManagedPLIST}" MonthlyPatchingCadenceWeekdayIndex 2> /dev/null)
         local monthly_patching_cadence_start_time_managed
         monthly_patching_cadence_start_time_managed=$(defaults read "${appAutoPatchManagedPLIST}" MonthlyPatchingCadenceStartTime 2> /dev/null)
+        local version_comparison_method_managed
+        version_comparison_method_managed=$(defaults read "${appAutoPatchManagedPLIST}" VersionComparisonMethod 2> /dev/null)
+        local version_comparison_installomator_fallback_managed
+        version_comparison_installomator_fallback_managed=$(defaults read "${appAutoPatchManagedPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
+        
     else
         log_verbose "No managed preference file found for App Auto-Patch"
     fi
@@ -1168,6 +1144,10 @@ get_preferences() {
         monthly_patching_cadence_weekday_index_local=$(defaults read "${appAutoPatchLocalPLIST}" MonthlyPatchingCadenceWeekdayIndex 2> /dev/null)
         local monthly_patching_cadence_start_time_local
         monthly_patching_cadence_start_time_local=$(defaults read "${appAutoPatchLocalPLIST}" MonthlyPatchingCadenceStartTime 2> /dev/null)
+        local version_comparison_method_local
+        version_comparison_method_local=$(defaults read "${appAutoPatchLocalPLIST}" VersionComparisonMethod 2> /dev/null)
+        local version_comparison_installomator_fallback_local
+        version_comparison_installomator_fallback_local=$(defaults read "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
     fi
     
     log_verbose  "Local preference file before startup validation: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
@@ -1295,7 +1275,11 @@ get_preferences() {
     [[ -n "${monthly_patching_cadence_start_time_managed}" ]] && monthly_patching_cadence_start_time="${monthly_patching_cadence_start_time_managed}"
     { [[ -z "${monthly_patching_cadence_start_time_managed}" ]] && [[ -n "${monthly_patching_cadence_start_time}" ]] && [[ -n "${monthly_patching_cadence_start_time_local}" ]]; } && monthly_patching_cadence_start_time="${monthly_patching_cadence_start_time_local}"
 
+    [[ -n "${version_comparison_method_managed}" ]] && version_comparison_method_option="${version_comparison_method_managed}"
+    { [[ -z "${version_comparison_method_managed}" ]] && [[ -z "${version_comparison_method_option}" ]] && [[ -n "${version_comparison_method_local}" ]]; } && version_comparison_method_option="${version_comparison_method_local}"
 
+    [[ -n "${version_comparison_installomator_fallback_managed}" ]] && version_comparison_installomator_fallback_option="${version_comparison_installomator_fallback_managed}"
+    { [[ -z "${version_comparison_installomator_fallback_managed}" ]] && [[ -z "${version_comparison_installomator_fallback_option}" ]] && [[ -n "${version_comparison_installomator_fallback_local}" ]]; } && version_comparison_installomator_fallback_option="${version_comparison_installomator_fallback_local}"
 
     #Verbose Configuration Option Output
     log_verbose "DeferralTimerMenu: $deferral_timer_menu_option"
@@ -1345,6 +1329,7 @@ get_preferences() {
     log_verbose "monthly_patching_cadence_ordinal_value: $monthly_patching_cadence_ordinal_value"
     log_verbose "monthly_patching_cadence_weekday_index: $monthly_patching_cadence_weekday_index"
     log_verbose "monthly_patching_cadence_start_time: $monthly_patching_cadence_start_time"
+    log_verbose "version_comparison_method_option: $version_comparison_method_option"
     
     
     # Write App Labels to PLIST
@@ -1366,11 +1351,32 @@ get_preferences() {
     /usr/libexec/PlistBuddy -c 'add ":OptionalLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
     /usr/libexec/PlistBuddy -c 'add ":ConvertedLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
 
+     # Attempt to populate the Optional Labels
+    log_info "Attempting to populate optional labels"
+    for optionalLabel in "${optionalLabelsArray[@]}"; do
+        if [[ -f "${fragmentsPath}/labels/${optionalLabel}.sh" ]]; then
+            # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+            if /usr/libexec/PlistBuddy -c "Print :OptionalLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$optionalLabel"; then
+                log_verbose "$optionalLabel already exists, skip adding to OptionalLabels"
+            else
+                log_verbose "Writing optional label $optionalLabel to configuration plist"
+                /usr/libexec/PlistBuddy -c "add \":OptionalLabels:\" string \"${optionalLabel}\"" "${appAutoPatchLocalPLIST}.plist"
+            fi
+        else
+            log_verbose "No such label ${optionalLabel}"
+        fi
+    done
+    
+    # Attempt to populate the Ignored Labels
     log_info "Attempting to populate ignored labels"
     for ignoredLabel in "${ignoredLabelsArray[@]}"; do
         if [[ -f "${fragmentsPath}/labels/${ignoredLabel}.sh" ]]; then
-            if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $ignoredLabel; then
-                log_verbose "$ignoredLabel already exists, skipping for now"
+            # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+            if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$ignoredLabel"; then
+                log_verbose "$ignoredLabel already exists, skip adding to IgnoredLabels"
+            # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+            elif /usr/libexec/PlistBuddy -c "Print :OptionalLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$ignoredLabel"; then
+                log_verbose "$ignoredLabel is listed as Optional, skip adding to IgnoredLabels"
             else
                 log_verbose "Writing ignored label $ignoredLabel to configuration plist"
                 /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"${ignoredLabel}\"" "${appAutoPatchLocalPLIST}.plist"
@@ -1383,9 +1389,11 @@ get_preferences() {
                     ignored=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
                     if [[ ! "$ignored" == "Application" ]]; then
                         # Issue 141 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/141
-                        #if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -w -q $ignored; then
-                        if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -x -q "$ignored"; then
-                            log_verbose "$ignored already exists, skipping for now"
+                        if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$ignored"; then
+                            log_verbose "$ignored already exists, skip adding to IgnoredLabels"
+                        # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+                        elif /usr/libexec/PlistBuddy -c "Print :OptionalLabels:" "${appAutoPatchLocalPLIST}".plist | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$ignored"; then
+                            log_verbose "$ignored is listed as Optional, skip adding to IgnoredLabels"
                         else
                             log_verbose "Writing ignored label $ignored to configuration plist"
                             ignored=$(echo $ignored | sed "s/[\"]//g" )
@@ -1406,7 +1414,8 @@ get_preferences() {
     log_info "Attempting to populate required labels"
     for requiredLabel in "${requiredLabelsArray[@]}"; do
         if [[ -f "${fragmentsPath}/labels/${requiredLabel}.sh" ]]; then
-            if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $requiredLabel; then
+            # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+            if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$requiredLabel"; then
                 log_verbose "$requiredLabel already exists, skipping for now"
             else
                 log_verbose "Writing required label $requiredLabel to configuration plist"
@@ -1414,14 +1423,14 @@ get_preferences() {
             fi
         else
             if [[ "${requiredLabel}" == *"*"* ]]; then
-                log_verbose "Ignoring all labels with $requiredLabel"
+                log_verbose "Adding all labels with $requiredLabel"
                 wildrequired=( $(find $fragmentsPath/labels -name "$requiredLabel") )
                 for i in "${wildrequired[@]}"; do
                     required=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
                     if [[ ! "$required" == "Application" ]]; then
                         # Issue 141 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/141
-                        #if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -w -q $required; then
-                        if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}".plist | grep -x -q $required; then
+                        # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+                        if /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}".plist | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$required"; then
                             log_verbose "$required already exists, skipping for now"
                         else
                             log_verbose "Writing required label $required to configuration plist"
@@ -1438,51 +1447,24 @@ get_preferences() {
         fi
     done
 
-    # Attempt to populate the Optional Labels
-    log_info "Attempting to populate optional labels"
-    for optionalLabel in "${optionalLabelsArray[@]}"; do
-        if [[ -f "${fragmentsPath}/labels/${optionalLabel}.sh" ]]; then
-            if /usr/libexec/PlistBuddy -c "Print :OptionalLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $optionalLabel; then
-                log_verbose "$optionalLabel already exists, skipping for now"
-            else
-                log_verbose "Writing optional label $optionalLabel to configuration plist"
-                /usr/libexec/PlistBuddy -c "add \":OptionalLabels:\" string \"${optionalLabel}\"" "${appAutoPatchLocalPLIST}.plist"
-            fi
-            # Checking if app is installed and adding Optional Label to Required if it exists
-            if ${installomatorScript} ${optionalLabel} DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" | grep "No previous app found" >/dev/null 2>&1
-            then
-                log_notice "$optionalLabel is not installed, skipping ..."
-            elif /usr/libexec/PlistBuddy -c "Print :RequiredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q $optionalLabel; then
-                log_verbose "$optionalLabel Installed but already exists in Required list, skipping for now"
-            else
-                log_verbose "Writing optional label ${optionalLabel} to required configuration plist"
-                /usr/libexec/PlistBuddy -c "add \":RequiredLabels:\" string \"${optionalLabel}\"" "${appAutoPatchLocalPLIST}.plist"
-            fi
-            
-            
-            
-        else
-            log_verbose "No such label ${optionalLabel}"
-        fi
-    done
 
     # Ignore swiftDialog as it should already be installed. This is to reduce issues re-downloading swiftDialog
-    if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q swiftdialog; then
+    # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+    if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- swiftdialog; then
         log_verbose "swiftDialog is already ignored"
     else
         log_verbose "Ignoring swiftDialog"
         /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"swiftdialog\"" "${appAutoPatchLocalPLIST}.plist"
         ignoredLabelsArray+=("swiftdialog")
     fi
-    if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | grep -w -q dialog; then
+    # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
+    if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- dialog; then
         log_verbose "dialog is already ignored"
     else
         log_verbose "Ignoring dialog"
         /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"dialog\"" "${appAutoPatchLocalPLIST}.plist"
         ignoredLabelsArray+=("dialog")
     fi
-
-    
     
     write_status "Completed: Collecting preferences"
 }
@@ -1490,29 +1472,6 @@ get_preferences() {
 manage_parameter_options() {
 
     option_error="FALSE"
-
-    if [[ "${deferral_timer_default_option}" == "X" ]]; then
-        log_status "Deleting local preference for the --deferral-timer-default option, defaulting to ${DEFERRAL_TIMER_DEFAULT_MINUTES} minutes."
-        defaults delete "${appAutoPatchLocalPLIST}" DeferralTimerDefault 2> /dev/null
-    elif [[ -n "${deferral_timer_default_option}" ]] && [[ "${deferral_timer_default_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
-        if [[ "${deferral_timer_default_option}" -lt 2 ]]; then
-            log_warning "Specified --deferral-timer-default=minutes value of ${deferral_timer_default_option} is too low, rounding to 2 minutes."
-            deferral_timer_minutes=2
-        elif [[ "${deferral_timer_default_option}" -gt 10080 ]]; then
-            log_warning "Specified --deferral-timer-default=minutes value of ${deferral_timer_default_option} is too high, rounding down to 10080 minutes (1 week)."
-            deferral_timer_minutes=10080
-        else
-            deferral_timer_minutes="${deferral_timer_default_option}"
-        fi
-        defaults write "${appAutoPatchLocalPLIST}" DeferralTimerDefault -string "${deferral_timer_minutes}"
-        # deprecate next_auto_launch_minutes: next_auto_launch_minutes="${deferral_timer_minutes}"
-        elif [[ -n "${deferral_timer_default_option}" ]] && ! [[ "${deferral_timer_default_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
-            log_error "The --deferral-timer-default=minutes value must only be a number."; option_error="TRUE"
-        fi
-    [[ -z "${deferral_timer_minutes}" ]] && deferral_timer_minutes="${DEFERRAL_TIMER_DEFAULT_MINUTES}"
-    # deprecate next_auto_launch_minutes: next_auto_launch_minutes="${deferral_timer_minutes}"
-    log_verbose  "deferral_timer_minutes is: ${deferral_timer_minutes}"
-
 
     if [[ "${deferral_timer_default_option}" == "X" ]]; then
         log_status "Status: Deleting local preference for the --deferral-timer-default option, defaulting to ${DEFERRAL_TIMER_DEFAULT_MINUTES} minutes."
@@ -1560,7 +1519,6 @@ manage_parameter_options() {
     fi
     
     #Validate Custom Installomator Options
-    
     if [[ "${installomatorVersion}" == "Custom" ]] || [[ "${installomatorVersion}" == "custom" ]]; then
         if [[ -z "${installomatorVersionCustomRepoPath}" ]] || [[ -z "${installomatorVersionCustomBranchName}" ]]; then
             log_status "Parameter Error: The Custom InstallomatorVersion option requires both the InstallomatorVersionCustomRepoPath and InstallomatorVersionCustomBranchName keys"; option_error="TRUE"
@@ -1644,9 +1602,11 @@ manage_parameter_options() {
     if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
         workflow_disable_relaunch_option="TRUE"
         defaults write "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch -bool true
+        /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
     else
         workflow_disable_relaunch_option="FALSE"
         defaults delete "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
     fi
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${workflow_disable_relaunch_option}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: workflow_disable_relaunch_option is: ${workflow_disable_relaunch_option}"
     
@@ -1675,7 +1635,6 @@ manage_parameter_options() {
     fi
     [[ -z "${UnattendedExitSeconds}" ]] && UnattendedExitSeconds=60
     [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: UnattendedExitSeconds is: ${UnattendedExitSeconds}"
-    
 
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_count_focus}" ]]; } && log_verbose "deadline_count_focus is: ${deadline_count_focus}"
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_count_hard}" ]]; } && log_verbose "deadline_count_hard is: ${deadline_count_hard}"
@@ -1798,13 +1757,15 @@ manage_parameter_options() {
     fi
     log_verbose "InteractiveModeOption: $InteractiveModeOption"
 
-    if [[ -n "${self_update_enabled_option}" ]]; then
-        defaults write "${appAutoPatchLocalPlist}" SelfUpdateEnabled -bool "${self_update_enabled_option}"
-    else
-        defaults write "${appAutoPatchLocalPlsit}" SelfUpdateEnabled -bool "${self_update_enabled_option}"
-        SelfUpdateEnabled="${self_update_enabled_option}"
-    fi
-    log_verbose "SelfUpdateEnabledOption: $self_update_enabled_option"
+        # self_update_enabled_option normalization
+    case "${self_update_enabled_option:l}" in
+        true|1|yes)  _sue_norm="TRUE"  ;;
+        false|0|no|"") _sue_norm="FALSE" ;;
+        *)
+            log_warning "Invalid SelfUpdateEnabled value '${self_update_enabled_option:-<empty>}' — forcing to FALSE."
+            _sue_norm="FALSE"
+        ;;
+    esac
     
     # Manage ${workflow_install_now_patching_status_action_option} and save to ${appAutoPatchLocalPLIST}
     if [[ -n "${workflow_install_now_patching_status_action_option}" ]]; then
@@ -1856,6 +1817,25 @@ manage_parameter_options() {
         log_info "Self-update frequency set to: ${_freq_norm}"
     fi
 
+    # Manage ${version_comparison_method_option} and save to ${appAutoPatchLocalPLIST}
+    if [[ -n "${version_comparison_method_option}" ]]; then
+    /usr/bin/defaults write "${appAutoPatchLocalPLIST}" VersionComparisonMethod -string "${version_comparison_method_option}"
+    else
+        version_comparison_method_option=${VersionComparisonMethod}
+    fi
+
+    # Manage ${workflow_disable_app_discovery_option} and save to ${appAutoPatchLocalPLIST}.
+    if [[ -n "${version_comparison_installomator_fallback_option}" ]]; then
+        if [[ "${version_comparison_installomator_fallback_option}" -eq 1 ]] || [[ "${version_comparison_installomator_fallback_option}" == "TRUE" ]]; then
+            version_comparison_installomator_fallback_option="TRUE"
+            defaults write "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallback -bool true
+        else
+            version_comparison_installomator_fallback_option="FALSE"
+            defaults delete "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null
+        fi
+    else
+        version_comparison_installomator_fallback_option="${VersionComparisonInstallomatorFallback}"
+    fi
 }
 
 gather_error_log(){
@@ -2009,8 +1989,6 @@ workflow_startup() {
         # The Mac is running an operating system older than macOS 12 Monterey; exit with an error
         log_error "swiftDialog and ${appTitle} require at least macOS 12 Monterey and this Mac is running ${osVersion} (${osBuild}), exiting with an error."
         osascript -e 'display dialog "Please advise your Support Representative of the following error:\r\rExpected macOS Monterey (or newer), but found macOS '"${osVersion}"' ('"${osBuild}"').\r\r" with title "'"${scriptFunctionalName}"': Detected Outdated Operating System" buttons {"Open Software Update"} with icon caution'
-        #preFlight "Executing /usr/bin/open '${outdatedOsAction}' …"
-        #su - "${currentUserAccountName}" -c "/usr/bin/open \"${outdatedOsAction}\""
         exit 1
     fi
 
@@ -2109,7 +2087,7 @@ workflow_startup() {
     # Management parameter options
     manage_parameter_options
 
-	#Check if workflow_install_now workflow was triggered
+	# Check if workflow_install_now workflow was triggered
     if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ -f "${WORKFLOW_INSTALL_NOW_FILE}" ]]; then
         log_status "Install now alternate workflow enabled."
         workflow_install_now_option="TRUE" # This is re-set in case the script restarts.
@@ -2424,7 +2402,8 @@ interactive_interrupt() {
 
     log_status "**** App Auto Patch. ${scriptVersion} - INTERACTIVE INTERRUPT - PRESS ENTER TO CONTINUE ****"
 
-    /bin/bash read -n 1 -p -r >/dev/null 2>&1
+    /bin/bash -c 'read -n 1 -r'
+
 }
 
 # Restart AAP via the LaunchDaemon after waiting for ${restart_aap_sleep_seconds} seconds.
@@ -2484,23 +2463,56 @@ install_app_auto_patch() {
     log_install "Creating AAP LauchDaemon helper: ${appAutoPatchFolder}/aap-starter"
   /bin/cat <<'EOAS' > "${appAutoPatchFolder}/aap-starter"
 #!/bin/bash
-# Exit if App Auto Patch is already running.
-[[ "$(pgrep -F "__APP_AUTOPATCH_PIDFILE__" 2> /dev/null)" ]] && exit 0
+#
+# App Auto-Patch LaunchDaemon helper
+#
 
-# Exit if the App Auto Patch auto launch workflow is disabled, or deferred until a system restart, or deferred until a later date.
-next_auto_launch=$(defaults read "__AAP_LOCAL_PLIST__" NextAutoLaunch 2> /dev/null)
-if [[ "${next_auto_launch}" == "FALSE" ]]; then
-  exit 0
-elif [[ -z "${next_auto_launch}" ]]; then
-  mac_last_startup_saved_epoch=$(date -j -f "__TIMESTAMP_FORMAT__" "$(defaults read "__AAP_LOCAL_PLIST__" MacLastStartup 2> /dev/null)" +"%s" 2> /dev/null)
-  mac_last_startup_epoch=$(date -j -f "%b %d %H:%M:%S" "$(last reboot | head -1 | cut -c 41- | xargs):00" +"%s" 2> /dev/null)
-  [[ -n "${mac_last_startup_saved_epoch}" ]] && [[ -n "${mac_last_startup_epoch}" ]] && [[ "${mac_last_startup_saved_epoch}" -ge "${mac_last_startup_epoch}" ]] && exit 0
-elif [[ $(date +%s) -lt $(date -j -f "__TIMESTAMP_FORMAT__" "${next_auto_launch}" +"%s" 2> /dev/null) ]]; then
-  exit 0
+# Exit if App Auto Patch is already running.
+[[ "$(pgrep -F "__APP_AUTOPATCH_PIDFILE__" 2>/dev/null)" ]] && exit 0
+
+# Read NextAutoLaunch — may be:
+#   - "FALSE"    (string disable)
+#   - "0"        (boolean false → defaults prints "0")
+#   - ""         (unset, no key)
+#   - date stamp (formatted per __TIMESTAMP_FORMAT__)
+next_auto_launch="$(defaults read "__AAP_LOCAL_PLIST__" NextAutoLaunch 2>/dev/null)"
+
+# Explicit disable states
+if [[ "$next_auto_launch" == "FALSE" ]] || [[ "$next_auto_launch" == "0" ]]; then
+    exit 0
 fi
 
-echo "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: **** App Auto-Patch __SCRIPT_VERSION__ - LAUNCHDAEMON ****" | tee -a "__AAP_LOG__"
-"__AAP_FOLDER__/appautopatch" &
+# Unset case (no NextAutoLaunch key)
+if [[ -z "$next_auto_launch" ]]; then
+    # Read last saved startup timestamp
+    saved="$(defaults read "__AAP_LOCAL_PLIST__" MacLastStartup 2>/dev/null)"
+    saved_epoch="$(date -j -f "__TIMESTAMP_FORMAT__" "$saved" +%s 2>/dev/null)"
+
+    # Read actual last boot time (safe, locale-independent)
+    boot_epoch="$(sysctl -n kern.boottime | awk -F'[=,]' '{print $2}' | tr -d ' ')"
+
+    # If saved >= last reboot → skip auto-run
+    if [[ -n "$saved_epoch" && -n "$boot_epoch" && "$saved_epoch" -ge "$boot_epoch" ]]; then
+        exit 0
+    fi
+fi
+
+# If NextAutoLaunch is a valid date, compare to now.
+next_epoch="$(date -j -f "__TIMESTAMP_FORMAT__" "$next_auto_launch" +%s 2>/dev/null)"
+
+# If date parsed successfully and next_epoch > now → not time yet
+if [[ -n "$next_epoch" ]]; then
+    now="$(date +%s)"
+    if (( now < next_epoch )); then
+        exit 0
+    fi
+fi
+
+# Launch App Auto-Patch
+echo "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: **** App Auto-Patch __SCRIPT_VERSION__ - LAUNCHDAEMON ****" \
+    | tee -a "__AAP_LOG__"
+
+/bin/bash "__AAP_FOLDER__/appautopatch" &
 disown
 exit 0
 EOAS
@@ -2551,9 +2563,9 @@ EOLD
 
     log_install "Setting permissions for installed items"
     chown -R root:wheel "${appAutoPatchFolder}"
-    chmod -R 777 "${appAutoPatchFolder}"
-    chmod -R a+r "${appAutoPatchFolder}"
+    chmod -R 755 "${appAutoPatchFolder}"
     chmod -R go-w "${appAutoPatchFolder}"
+    chmod -R a+r "${appAutoPatchFolder}"
     chmod a+x "${appAutoPatchFolder}/appautopatch"
     chmod a+x "${appAutoPatchFolder}/aap-starter"
 
@@ -2906,13 +2918,6 @@ check_completion_status() {
         PatchingStartDate=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingStartDate 2> /dev/null)
     fi
 
-    # Commenting out old logic due to issue with timing of caluclation
-    # statusDateEpoch=$(date -j -f "%Y-%m-%d" "$PatchingStartDate" "+%s")
-    # EpochTimeSinceStatus=$(($CurrentDateEpoch - $statusDateEpoch))
-    # DaysSinceStatus=$(($EpochTimeSinceStatus / 86400))
-
-    # New Logic
-    # Load the zsh datetime module
     zmodload zsh/datetime
     
     # Define the two dates (in YYYY-MM-DD format)
@@ -3031,7 +3036,6 @@ check_deadlines_days_date() {
         [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: display_string_deadline_days_only_time is: ${display_string_deadline_days_only_time}"
         [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: display_string_deadline_days is: ${display_string_deadline_days}"
     fi
-    
     
     # Set ${deadline_epoch} and ${display_string_deadline} to the soonest of either days or date deadlines.
     
@@ -3564,9 +3568,7 @@ set_deferral_menu() {
 }
 
 dialog_install_or_defer() {
-    #if [[ -z $display_string_deadline_count ]]; then 
-    #    display_string_deadline_count="Unlimited"
-    #fi
+    
     set_display_strings_language
     [[ -n "${deferral_timer_menu_minutes}" ]] && set_deferral_menu
     
@@ -3788,6 +3790,8 @@ function PgetAppVersion() {
         applist="/Applications/$appName"
     elif [[ -d "/Applications/Utilities/$appName" ]]; then
         applist="/Applications/Utilities/$appName"
+    elif [[ -d "${targetDir}${appName}" ]]; then
+        applist="${targetDir}${appName}"
     else
         applist=$(mdfind "kMDItemFSName == '$appName' && kMDItemContentType == 'com.apple.application-bundle'" -0)
         if ([[ "$applist" == *"/Daemon Containers/"* ]]); then
@@ -3820,10 +3824,26 @@ function PgetAppVersion() {
         filteredAppPaths=( ${(M)appPathArray:#${targetDir}*} )
         if [[ ${#filteredAppPaths} -eq 1 ]]; then
             installedAppPath=$filteredAppPaths[1]
-            
-            appversion=$(defaults read $installedAppPath/Contents/Info.plist $versionKey)
-            appversionLong=$(defaults read $installedAppPath/Contents/Info.plist $versionKeyLong)
-            
+            log_verbose "installedAppPath: $installedAppPath"
+            log_verbose "versionKey: $versionKey"
+            # Primary attempt (fragment or default)
+            appversion=$(/usr/bin/defaults read "$installedAppPath/Contents/Info.plist" "$versionKey" 2>/dev/null)
+
+            # Try CFBundleShortVersionString
+            if [[ -z "$appversion" ]]; then
+                appversion=$(/usr/bin/defaults read "$installedAppPath/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null)
+            fi
+
+            # Try CFBundleVersion
+            if [[ -z "$appversion" ]]; then
+                appversion=$(/usr/bin/defaults read "$installedAppPath/Contents/Info.plist" CFBundleVersion 2>/dev/null)
+            fi
+
+            log_verbose "appversion: $appversion"
+            if [[ -n "${appCustomVersion}" ]]; then 
+              log_verbose "appCustomVersion: $appCustomVersion" 
+            fi
+
             log_info "Found $appName version $appversion"
             sleep .2
             
@@ -3905,50 +3925,81 @@ function verifyApp() {
                     
                     appNewVersion=$( echo "${appNewVersion}" | sed 's/[^a-zA-Z0-9]*$//g' )
                     previousVersion=$( echo "${appversion}" | sed 's/[^a-zA-Z0-9]*$//g' )
-                    previousVersionLong=$( echo "${appversionLong}" | sed 's/[^a-zA-Z0-9]*$//g' )
                     
                     # Compare version strings
-                    if [[ "$previousVersion" == "$appNewVersion" ]]; then
-                        log_notice "--- Latest version installed."
-                    elif [[ "$previousVersionLong" == "$appNewVersion" ]]; then
-                        log_notice "--- Latest version installed."
-                    elif [[ "$appCustomVersion" == "$appNewVersion" ]]; then
-                        log_notice "--- Latest version installed."
+                    if [[ ${version_comparison_method_option} == "IS_AT_LEAST" ]]; then
+                        if [[ -n "$appNewVersion" ]]; then
+                            log_notice "--- Newest version: ${appNewVersion}"
+                            if [[ -n "${previousVersion}" ]] &&  is-at-least "$appNewVersion" "$previousVersion"; then
+                                log_notice "--- Latest version installed."
+                            elif [[ -n "${appCustomVersion}" ]] &&  is-at-least "$appNewVersion" "$appCustomVersion"; then
+                                log_notice "--- Latest version installed."
+                            else
+                                    /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
+                                    AAPVersionByLabel[$label_name]="$appNewVersion"
+                                    queueLabel
+                            fi
+                        else
+                            log_notice "--- Unable to find newest version."
+
+                            if [[ ${version_comparison_installomator_fallback_option} == "TRUE" ]]; then
+                                log_notice "--- Using Installomator Debug Fallback to compare version."
+                                # Lastly, verify with Installomator before queueing the label
+                                tmp=$(mktemp -t installomator.XXXXXX)
+                                
+                                "${installomatorScript}" "${label_name}" DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" \
+                                >"$tmp" 2>&1
+                                rc=$?                         # exit status of Installomator
+                                out=$(<"$tmp")                # full output as a single string
+                                rm -f "$tmp"
+                                
+                                if [[ "$out" == *"same as installed"* ]] 
+                                then
+                                    log_notice "--- Latest version installed."
+                                elif [[ "$out" == *"No previous app found"* ]]
+                                then
+                                    log_notice "--- Installomator failed to find previous version properly... Not adding to queue."
+                                else
+                                    log_notice "--- Assuming new version available based on Installomator debug output. False positives may be possible. Add $label_name to ignore list to avoid in future runs"
+                                    /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
+                                    AAPVersionByLabel[$label_name]="$appNewVersion"
+                                    queueLabel
+                                fi
+                            fi
+                        fi
                     else
-#                       # Lastly, verify with Installomator before queueing the label
-#                       if ${installomatorScript} ${label_name} DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" | grep "same as installed" >/dev/null 2>&1
-#                       then
-#                           log_notice "--- Latest version installed."
-#                       else
-#                           log_notice "--- New version: ${appNewVersion}"
-#                           /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
-#                           AAPVersionByLabel[$label_name]="$appNewVersion"
-#                           queueLabel
-#                       fi
-                        
-                        # Lastly, verify with Installomator before queueing the label
-                        tmp=$(mktemp -t installomator.XXXXXX)
-                        
-                        "${installomatorScript}" "${label_name}" DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" \
-                        >"$tmp" 2>&1
-                        rc=$?                         # exit status of Installomator
-                        out=$(<"$tmp")                # full output as a single string
-                        rm -f "$tmp"
-                        
-                        custom_version=""
-                        custom_version=$(sed -nE 's/.*Custom App Version detection is used, found[[:space:]]+([^[:space:]]+).*/\1/p' <<< "$out" | head -n1)
-                        
-                        if [[ "$custom_version" == "$appNewVersion" ]]; then
+                        if [[ "$previousVersion" == "$appNewVersion" ]]; then
                             log_notice "--- Latest version installed."
-                        elif [[ "$out" == *"same as installed"* ]] 
-                        then
+                        elif [[ "$appCustomVersion" == "$appNewVersion" ]]; then
                             log_notice "--- Latest version installed."
                         else
-                            log_notice "--- New version: ${appNewVersion}"
-                            /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
-                            AAPVersionByLabel[$label_name]="$appNewVersion"
-                            queueLabel
+                            
+                            
+                            # Lastly, verify with Installomator before queueing the label
+                            tmp=$(mktemp -t installomator.XXXXXX)
+                            
+                            "${installomatorScript}" "${label_name}" DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" \
+                            >"$tmp" 2>&1
+                            rc=$?                         # exit status of Installomator
+                            out=$(<"$tmp")                # full output as a single string
+                            rm -f "$tmp"
+                            
+                            custom_version=""
+                            custom_version=$(sed -nE 's/.*Custom App Version detection is used, found[[:space:]]+([^[:space:]]+).*/\1/p' <<< "$out" | head -n1)
+                            log_verbose "custom_version: $custom_version"
+                            if [[ "$custom_version" == "$appNewVersion" ]]; then
+                                log_notice "--- Latest version installed."
+                            elif [[ "$out" == *"same as installed"* ]] 
+                            then
+                                log_notice "--- Latest version installed."
+                            else
+                                log_notice "--- New version: ${appNewVersion}"
+                                /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
+                                AAPVersionByLabel[$label_name]="$appNewVersion"
+                                queueLabel
+                            fi
                         fi
+
                     fi
                 fi
             fi
@@ -3999,27 +4050,8 @@ workflow_do_Installations() {
         swiftDialogOptions=()
         if [ ${InteractiveModeOption} -ge 1 ]; then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
-            
-            # # Get the "name=" value from the current label and use it in our swiftDialog list
-            # # Issue 144 Fix: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/144
-            # #currentDisplayName="$(grep "name=" "$fragmentsPath/labels/$label.sh" | sed 's/name=//' | sed 's/\"//g' | sed 's/^[ \t]*//')"
-            # currentDisplayName="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-            # # There are some weird \' shenanigans here because Installomator passes this through eval
-            # swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplayName}"\')
-            # sleep .5
-            # # Issue 144 Fix https://github.com/App-Auto-Patch/App-Auto-Patch/issues/144
-            # if [[ ! -e "/Applications/${currentDisplayName}.app" ]]; then
-            # swiftDialogUpdate "icon: ${logoImage}"
-            # else
-            # swiftDialogUpdate "icon: /Applications/${currentDisplayName}.app"
-            # fi
-            # swiftDialogUpdate "progresstext: ${display_string_patching_progress} ${currentDisplayName} …"
-            # swiftDialogUpdate "listitem: index: $i, icon: /Applications/${currentDisplayName}.app, status: wait, statustext: ${display_string_patching_checking} …"
-
             currentDisplay_appName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
             currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-
-
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplay_name}"\')
             sleep .5
 
@@ -4423,7 +4455,7 @@ webHookMessage() {
                     }
                 }
             ]
-        }'
+}'
         
         # Send the JSON payload using curl
         curlResult=$(curl -s -X POST -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_teams_option")
@@ -4435,7 +4467,7 @@ webHookMessage() {
 check_webhook(){
     case ${webhook_feature_option} in
         
-        "ALL" ) # Notify on sucess and failure 
+        "ALL" ) # Notify on success and failure 
             log_info "Webhook Enabled flag set to: ${webhook_feature_option}, continuing ..."
             appsUpToDate
             webHookMessage
@@ -4693,8 +4725,8 @@ main() {
         endlabel_re='^;;'
 
         targetDir="/"
-        versionKey="CFBundleShortVersionString"
-        versionKeyLong="CFBundleVersion"
+        defaultVersionKey="CFBundleShortVersionString"
+        versionKey="$defaultVersionKey"
 
         IFS=$'\n'
         in_label=0
@@ -4714,7 +4746,6 @@ main() {
         for labelFragment in "$fragmentsPath"/labels/*.sh; do 
             
             appCustomVersion=""
-            log_verbose "checking for appCustomVersion"
             if grep -q '^\s*appCustomVersion\s*()' "$labelFragment"
             then
                 appCustomVersion=$(grep -E -m1 '^\s*appCustomVersion' "$labelFragment" | sed -E 's/^.*\(\)[[:space:]]*\{[[:space:]]*(.*)[[:space:]]*\}/\1/')
@@ -4728,10 +4759,10 @@ main() {
                         print
                     }' "$labelFragment")
                 fi
-                        if [[ ! "$appCustomVersion" =~ ^[[:space:]]*strings ]]; then
-                                    appCustomVersion=$(eval "$appCustomVersion" 2>/dev/null)
-                        fi
+                if [[ ! "$appCustomVersion" =~ ^[[:space:]]*strings ]]; then
+                    appCustomVersion=$(eval "$appCustomVersion" 2>/dev/null)
                 fi
+            fi
             
             
             labelFile=$(basename -- "$labelFragment")
@@ -4778,6 +4809,8 @@ main() {
                         current_label=""
                         appNewVersion=""
                         targetDir="/"
+                        folderName=""
+                        versionKey="$defaultVersionKey"
                         
                         continue
                     fi
@@ -4787,7 +4820,7 @@ main() {
                         
                         case $scrubbedLine in
                             
-                            'name='*|'appName='*|'packageID'*|'expectedTeamID'*)
+                            'name='*|'appName='*|'packageID'*|'expectedTeamID'*|'targetDir'*|'folderName'*|'versionKey'*)
                                 eval "$scrubbedLine"
                             ;;
                             
@@ -4880,7 +4913,7 @@ main() {
     for label in $queuedLabelsArray; do
         countOfElementsArray+=($label)
     done
-    #If queued labels more than zero trigger workflows
+    # If queued labels more than zero trigger workflows
     if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         numberOfUpdates=$((${#countOfElementsArray[@]}))
         
@@ -4905,7 +4938,8 @@ main() {
                 disown
                 exit_clean
             else
-                if [[ ${monthly_patching_cadence_enabled} == "TRUE" ]]; then
+                if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
+                || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
                     log_aap "Monthly Patching Cadence Enabled: Calculating next launch date"
                     next_nth_weekday=$(next_nth_weekday_datetime ${monthly_patching_cadence_weekday_index} ${monthly_patching_cadence_ordinal_value} "${monthly_patching_cadence_start_time}")
                     log_notice "Will auto launch on ${next_nth_weekday}"
@@ -4946,7 +4980,8 @@ main() {
                     disown
                     exit_clean
                 else
-                    if [[ ${monthly_patching_cadence_enabled} == "TRUE" ]]; then
+                    if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
+                    || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
                         log_aap "Monthly Patching Cadence Enabled: Calculating next launch date"
                         next_nth_weekday=$(next_nth_weekday_datetime ${monthly_patching_cadence_weekday_index} ${monthly_patching_cadence_ordinal_value} "${monthly_patching_cadence_start_time}")
                         log_notice "Will auto launch on ${next_nth_weekday}"
@@ -4983,7 +5018,8 @@ main() {
                         disown
                         exit_clean
                     else
-                        if [[ ${monthly_patching_cadence_enabled} == "TRUE" ]]; then
+                        if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
+                        || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
                             log_aap "Monthly Patching Cadence Enabled: Calculating next launch date"
                             next_nth_weekday=$(next_nth_weekday_datetime ${monthly_patching_cadence_weekday_index} ${monthly_patching_cadence_ordinal_value} "${monthly_patching_cadence_start_time}")
                             log_notice "Will auto launch on ${next_nth_weekday}"
@@ -4994,6 +5030,7 @@ main() {
                             set_auto_launch_deferral
                         fi
                     fi
+
                 else # The user chose to defer. 
                     deferral_timer_minutes=${deferral_timer_minutes} 
                     log_notice "User chose to defer, trying again in ${deferral_timer_minutes} minutes."
@@ -5019,10 +5056,20 @@ main() {
             log_status "Inactive: Full AAP workflow complete! Automatic relaunch is disabled."
             /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
         else # Default AAP workflow automatically relaunches.
-            deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
-            #This should be set by configuration # # # deferral_timer_minutes="1440"
-            log_info "All apps are up to date, will check again in ${deferral_timer_minutes} minutes."
-            set_auto_launch_deferral
+            if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
+                || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
+                    log_aap "Monthly Patching Cadence Enabled: Calculating next launch date"
+                    next_nth_weekday=$(next_nth_weekday_datetime \
+                        "${monthly_patching_cadence_weekday_index}" \
+                        "${monthly_patching_cadence_ordinal_value}" \
+                        "${monthly_patching_cadence_start_time}")
+                    log_notice "Will auto launch on ${next_nth_weekday}"
+                    set_auto_launch_monthly_cadence
+            else
+                deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
+                log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
+                set_auto_launch_deferral
+            fi
         fi 
     fi
 }
