@@ -3,7 +3,7 @@
 # Version 3
 
 ## Version 3.5.0
-### 24-Nov-2025
+### 29-Nov-2025
 - New Version Comparison Method options
 	- New `versionComparisonMethod` key with the options `IS_AT_LEAST` and `EQUAL_TO`
  	- `IS_AT_LEAST`: Checks if the currently installed version is the same or greater than the new version available. Utilizes the "Is-At-Least" function.
