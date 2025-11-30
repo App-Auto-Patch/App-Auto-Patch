@@ -41,6 +41,7 @@
  - Added missing `display_string_deferral_selecttitle` key
  - Various spelling and case corrections throughout
  - Fixed an issue preventing the monthly patching cadence flow from being triggered if no apps were found that need updates (Thanks @dan-snelson)
+ - Added logic to skip pre-validation for Apple apps that are missing a TeamID
 
 ## Version 3.4.2
 ### 20-Oct-2025
