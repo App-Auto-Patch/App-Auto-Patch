@@ -3,7 +3,7 @@
 # Version 3
 
 ## Version 3.5.0
-### 29-Nov-2025
+### 12-Dec-2025
 - New Version Comparison Method options
 	- New `versionComparisonMethod` key with the options `IS_AT_LEAST` and `EQUAL_TO`
  	- `IS_AT_LEAST`: Checks if the currently installed version is the same or greater than the new version available. Utilizes the "Is-At-Least" function.
@@ -42,6 +42,8 @@
  - Various spelling and case corrections throughout
  - Fixed an issue preventing the monthly patching cadence flow from being triggered if no apps were found that need updates (Thanks @dan-snelson)
  - Added logic to skip pre-validation for Apple apps that are missing a TeamID
+ - Added build number to script
+ - Modified self update logic to use build number (This will allow beta versions to be updated to the final release)
 
 ## Version 3.4.2
 ### 20-Oct-2025
