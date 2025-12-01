@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.5.0"
-scriptDate="2025/11/29"
-scriptBuild="3.5.0.251129642"
+scriptDate="2025/12/01"
+scriptBuild="3.5.0.251201001"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -898,6 +898,7 @@ get_preferences() {
 
         defaults delete "${appAutoPatchLocalPLIST}"
         defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "${scriptVersion}"
+        defaults write "${appAutoPatchLocalPLIST}" AAPBuild -string "${scriptBuild}"
         defaults write "${appAutoPatchLocalPLIST}" MacLastStartup -string "${mac_last_startup}"
         defaults write "${appAutoPatchLocalPLIST}" InteractiveMode -integer "${InteractiveMode}"
         defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool "${self_update_enabled_option}"
@@ -1051,6 +1052,8 @@ get_preferences() {
         # This is where any preferences locally would be collected, example below
         local script_version_local
         script_version_local=$(defaults read "${appAutoPatchLocalPLIST}" AAPVersion 2> /dev/null)
+        local script_build_local
+        script_build_local=$(defaults read "${appAutoPatchLocalPLIST}" AAPBuild 2> /dev/null)
         local deferral_timer_default_local
         deferral_timer_default_local=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerDefault 2> /dev/null)
         local deferral_timer_menu_local
@@ -2579,6 +2582,7 @@ EOLD
 
     # Record installed version
     defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "${scriptVersion}"
+    defaults write "${appAutoPatchLocalPLIST}" AAPBuild -string "${scriptBuild}"
 
     # Validate installation
     if ! { [[ -f "${appAutoPatchFolder}/appautopatch" ]] || [[ -f "${appAutoPatchLink}" ]]; }; then
@@ -4535,7 +4539,7 @@ self_update() {
     log_info "Checking for newer App Auto Patch script..."
 
     # ---- local version (normalize X.Y[.Z[.W]]) ----
-    local local_version_raw="${script_version:-${scriptVersion:-0.0.0}}"
+    local local_version_raw="${script_build:-${scriptBuild:-${script_version:-${scriptVersion:-0.0.0}}}}"
     local local_version
     local_version="$(echo "$local_version_raw" | /usr/bin/awk 'match($0,/[0-9]+(\.[0-9]+){1,3}/){print substr($0,RSTART,RLENGTH)}')"
     [[ -z "$local_version" ]] && local_version="0.0.0"
@@ -4568,7 +4572,16 @@ self_update() {
 
     # ---- parse remote script_version and normalize ----
     local remote_version_raw remote_version
-    remote_version_raw="$(awk -F\" '/^(scriptVersion|script_version)=/{print $2; exit}' "$tmpfile")"
+    remote_version_raw="$(
+        awk -F\" '
+            /^(scriptBuild|script_build)=/     { build=$2 }
+            /^(scriptVersion|script_version)=/ { version=$2 }
+            END {
+                if (build != "")        { print build }
+                else if (version != "") { print version }
+            }
+        ' "$tmpfile"
+    )"
     remote_version="$(echo "$remote_version_raw" | awk 'match($0,/[0-9]+(\.[0-9]+){1,3}/){print substr($0,RSTART,RLENGTH)}')"
     if [[ -z "$remote_version" ]]; then
         rm -f "$tmpfile"
@@ -4632,8 +4645,8 @@ self_update() {
     chmod 755 "$entrypoint" 2>/dev/null || true
 
     # ---- stamp plist + schedule next ----
-    defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "$remote_version" || true
-    log_info "Wrote AAPVersion=$remote_version to ${appAutoPatchLocalPLIST}"
+    defaults write "${appAutoPatchLocalPLIST}" AAPBuild -string "$remote_version" || true
+    log_info "Wrote AAPBuild=$remote_version to ${appAutoPatchLocalPLIST}"
     local interval=$(( freq=="daily" ? 24*3600 : (freq=="weekly" ? 7*24*3600 : 30*24*3600) ))
     defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateCheckEpoch -int "$now"
     defaults write "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch -int $(( now + interval ))
@@ -4649,11 +4662,11 @@ self_update() {
 
 check_version_consistency() {
     local plistVer
-    plistVer=$(defaults read "${appAutoPatchLocalPLIST}" AAPVersion 2>/dev/null || echo "none")
-    log_info "AAP script version: ${scriptVersion}"
-    log_info "AAP plist version:  ${plistVer}"
-    if [[ "$plistVer" != "$scriptVersion" ]]; then
-        log_warning "Version mismatch detected (plist=$plistVer, script=$scriptVersion)"
+    plistVer=$(defaults read "${appAutoPatchLocalPLIST}" AAPBuild 2>/dev/null || echo "none")
+    log_info "AAP script build: ${scriptBuild}"
+    log_info "AAP plist build:  ${plistVer}"
+    if [[ "$plistVer" != "$scriptBuild" ]]; then
+        log_warning "Version mismatch detected (plist=$plistVer, script=$scriptBuild)"
     fi
 }
 
