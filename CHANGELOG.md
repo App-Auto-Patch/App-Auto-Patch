@@ -41,7 +41,7 @@
  - Added missing `display_string_deferral_selecttitle` key
  - Various spelling and case corrections throughout
  - Fixed an issue preventing the monthly patching cadence flow from being triggered if no apps were found that need updates (Thanks @dan-snelson)
- - Added logic to skip pre-validation for Apple apps that are missing a TeamID
+ - Added logic to skip pre-validation for Apple apps that are missing a TeamID (#198)
  - Added build number to script
  - Modified self update logic to use build number (This will allow beta versions to be updated to the final release)
  - Fixed a date format issue when using the monthly patching cadence that was causing AAP to immediately restart upon completion
