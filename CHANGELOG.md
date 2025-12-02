@@ -3,7 +3,7 @@
 # Version 3
 
 ## Version 3.5.0
-### 12-Dec-2025
+### 01-Dec-2025
 - New Version Comparison Method options
 	- New `versionComparisonMethod` key with the options `IS_AT_LEAST` and `EQUAL_TO`
  	- `IS_AT_LEAST`: Checks if the currently installed version is the same or greater than the new version available. Utilizes the "Is-At-Least" function.
@@ -44,6 +44,8 @@
  - Added logic to skip pre-validation for Apple apps that are missing a TeamID
  - Added build number to script
  - Modified self update logic to use build number (This will allow beta versions to be updated to the final release)
+ - Fixed a date format issue when using the monthly patching cadence that was causing AAP to immediately restart upon completion
+ - Modified Installomator Debug Fallback to check for packageID if type = pkg or pkgInDmg or pkgInZip and skip if packageID is blank and unable to complete version comparison
 
 ## Version 3.4.2
 ### 20-Oct-2025
