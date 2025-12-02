@@ -26,7 +26,7 @@
 
 scriptVersion="3.5.0"
 scriptDate="2025/12/01"
-scriptBuild="3.5.0.251201001"
+scriptBuild="3.5.0.251201502"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -3212,8 +3212,10 @@ set_auto_launch_deferral() {
 
 set_auto_launch_monthly_cadence() {
     log_verbose  "deferralNextLaunch is: ${next_nth_weekday}"
-    defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_nth_weekday}"
-    log_exit "AAP is scheduled to automatically relaunch at: ${next_nth_weekday}"
+    fixed_input="${next_nth_weekday/:/ }"
+    next_nth_weekday_for_defaults="$(date -j -f "%Y-%m-%d %H:%M:%S" "$fixed_input" +"$timestamp_format")"
+    defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_nth_weekday_for_defaults}"
+    log_exit "AAP is scheduled to automatically relaunch at: ${next_nth_weekday_for_defaults}"
     exit_clean
 }
 
@@ -3949,29 +3951,34 @@ function verifyApp() {
                             fi
                         else
                             log_notice "--- Unable to find newest version."
-
+                            log_verbose "type: $type"
+                            log_verbose "packageID: $packageID"
                             if [[ ${version_comparison_installomator_fallback_option} == "TRUE" ]]; then
-                                log_notice "--- Using Installomator Debug Fallback to compare version."
-                                # Lastly, verify with Installomator before queueing the label
-                                tmp=$(mktemp -t installomator.XXXXXX)
-                                
-                                "${installomatorScript}" "${label_name}" DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" \
-                                >"$tmp" 2>&1
-                                rc=$?                         # exit status of Installomator
-                                out=$(<"$tmp")                # full output as a single string
-                                rm -f "$tmp"
-                                
-                                if [[ "$out" == *"same as installed"* ]] 
-                                then
-                                    log_notice "--- Latest version installed."
-                                elif [[ "$out" == *"No previous app found"* ]]
-                                then
-                                    log_notice "--- Installomator failed to find previous version properly... Not adding to queue."
+                                if [[ ${type} == (pkg|pkgInDmg|pkgInZip) ]] && [[ ${packageID} == "" ]]; then
+                                    log_notice "--- Installomator Debug Fallback enabled and type in pkg|pkgInDmg|pkgInZip but packageID missing. Unable to check version. Skipping adding to queue."
                                 else
-                                    log_notice "--- Assuming new version available based on Installomator debug output. False positives may be possible. Add $label_name to ignore list to avoid in future runs"
-                                    /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
-                                    AAPVersionByLabel[$label_name]="$appNewVersion"
-                                    queueLabel
+                                    log_notice "--- Using Installomator Debug Fallback to compare version."
+                                    # Lastly, verify with Installomator before queueing the label
+                                    tmp=$(mktemp -t installomator.XXXXXX)
+                                    
+                                    "${installomatorScript}" "${label_name}" DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" \
+                                    >"$tmp" 2>&1
+                                    rc=$?                         # exit status of Installomator
+                                    out=$(<"$tmp")                # full output as a single string
+                                    rm -f "$tmp"
+                                    
+                                    if [[ "$out" == *"same as installed"* ]] 
+                                    then
+                                        log_notice "--- Latest version installed."
+                                    elif [[ "$out" == *"No previous app found"* ]]
+                                    then
+                                        log_notice "--- Installomator failed to find previous version properly... Not adding to queue."
+                                    else
+                                        log_notice "--- Assuming new version available based on Installomator debug output. False positives may be possible. Add $label_name to ignore list to avoid in future runs"
+                                        /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
+                                        AAPVersionByLabel[$label_name]="$appNewVersion"
+                                        queueLabel
+                                    fi
                                 fi
                             fi
                         fi
@@ -3981,30 +3988,36 @@ function verifyApp() {
                         elif [[ "$appCustomVersion" == "$appNewVersion" ]]; then
                             log_notice "--- Latest version installed."
                         else
-                            
-                            
-                            # Lastly, verify with Installomator before queueing the label
-                            tmp=$(mktemp -t installomator.XXXXXX)
-                            
-                            "${installomatorScript}" "${label_name}" DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" \
-                            >"$tmp" 2>&1
-                            rc=$?                         # exit status of Installomator
-                            out=$(<"$tmp")                # full output as a single string
-                            rm -f "$tmp"
-                            
-                            custom_version=""
-                            custom_version=$(sed -nE 's/.*Custom App Version detection is used, found[[:space:]]+([^[:space:]]+).*/\1/p' <<< "$out" | head -n1)
-                            log_verbose "custom_version: $custom_version"
-                            if [[ "$custom_version" == "$appNewVersion" ]]; then
-                                log_notice "--- Latest version installed."
-                            elif [[ "$out" == *"same as installed"* ]] 
-                            then
-                                log_notice "--- Latest version installed."
-                            else
-                                log_notice "--- New version: ${appNewVersion}"
-                                /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
-                                AAPVersionByLabel[$label_name]="$appNewVersion"
-                                queueLabel
+                           log_notice "--- Unable to find newest version."
+                            log_verbose "type: $type"
+                            log_verbose "packageID: $packageID"
+                            if [[ ${version_comparison_installomator_fallback_option} == "TRUE" ]]; then
+                                if [[ ${type} == (pkg|pkgInDmg|pkgInZip) ]] && [[ ${packageID} == "" ]]; then
+                                    log_notice "--- Installomator Debug Fallback enabled and type in pkg|pkgInDmg|pkgInZip but packageID missing. Unable to check version. Skipping adding to queue."
+                                else
+                                    log_notice "--- Using Installomator Debug Fallback to compare version."
+                                    # Lastly, verify with Installomator before queueing the label
+                                    tmp=$(mktemp -t installomator.XXXXXX)
+                                    
+                                    "${installomatorScript}" "${label_name}" DEBUG=2 NOTIFY="silent" BLOCKING_PROCESS_ACTION="ignore" \
+                                    >"$tmp" 2>&1
+                                    rc=$?                         # exit status of Installomator
+                                    out=$(<"$tmp")                # full output as a single string
+                                    rm -f "$tmp"
+                                    
+                                    if [[ "$out" == *"same as installed"* ]] 
+                                    then
+                                        log_notice "--- Latest version installed."
+                                    elif [[ "$out" == *"No previous app found"* ]]
+                                    then
+                                        log_notice "--- Installomator failed to find previous version properly... Not adding to queue."
+                                    else
+                                        log_notice "--- Assuming new version available based on Installomator debug output. False positives may be possible. Add $label_name to ignore list to avoid in future runs"
+                                        /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
+                                        AAPVersionByLabel[$label_name]="$appNewVersion"
+                                        queueLabel
+                                    fi
+                                fi
                             fi
                         fi
 
@@ -4827,6 +4840,7 @@ main() {
                         appNewVersion=""
                         targetDir="/"
                         folderName=""
+                        type=""
                         versionKey="$defaultVersionKey"
                         
                         continue
@@ -4837,7 +4851,7 @@ main() {
                         
                         case $scrubbedLine in
                             
-                            'name='*|'appName='*|'packageID'*|'expectedTeamID'*|'targetDir'*|'folderName'*|'versionKey'*)
+                            'name='*|'appName='*|'packageID='*|'expectedTeamID='*|'targetDir='*|'folderName='*|'versionKey='*|'type='*)
                                 eval "$scrubbedLine"
                             ;;
                             
