@@ -3,7 +3,7 @@
 # Version 3
 
 ## Version 3.5.0
-### 01-Dec-2025
+### 17-Dec-2025
 - New Version Comparison Method options
 	- New `versionComparisonMethod` key with the options `IS_AT_LEAST` and `EQUAL_TO`
  	- `IS_AT_LEAST`: Checks if the currently installed version is the same or greater than the new version available. Utilizes the "Is-At-Least" function.
@@ -46,6 +46,10 @@
  - Modified self update logic to use build number (This will allow beta versions to be updated to the final release)
  - Fixed a date format issue when using the monthly patching cadence that was causing AAP to immediately restart upon completion
  - Modified Installomator Debug Fallback to check for packageID if type = pkg or pkgInDmg or pkgInZip and skip if packageID is blank and unable to complete version comparison
+ - Moved get_installomator function to run prior to populating installomator app labels. This ensures the latest installomator data is retrieved prior to processing label variables so they are properly populated
+ - Added a check to make sure the Installomator download is successful. If the labels are missing, AAP will retry getting Installomator twice. On the third failure, AAP will quit and not move forward
+ - Added a warning in the log if the installomator label file count is less than the threshold (1000)
+ - Adjusted version comparison logic to only allow the installomator version comparison fallback to run if `appNewVersion` is not populated. This will speed up run time
 
 ## Version 3.4.2
 ### 20-Oct-2025
