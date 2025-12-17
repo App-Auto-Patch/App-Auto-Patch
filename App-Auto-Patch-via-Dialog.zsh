@@ -26,7 +26,7 @@
 
 scriptVersion="3.5.0"
 scriptDate="2025/12/17"
-scriptBuild="3.5.0.251217376"
+scriptBuild="3.5.0.251217391"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2411,7 +2411,12 @@ interactive_interrupt() {
 
 # Restart AAP via the LaunchDaemon after waiting for ${restart_aap_sleep_seconds} seconds.
 restart_aap() {
-	/usr/libexec/PlistBuddy -c "Delete :NextAutoLaunch" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+	if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+        log_aap "Automatic Relaunch is disabled... Setting NextAutoLaunch to FALSE"
+        /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+    else
+        /usr/libexec/PlistBuddy -c "Delete :NextAutoLaunch" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+    fi
 	{
 		sleep $restart_aap_sleep_seconds
 		launchctl bootout "system/${appAutoPatchLaunchDaemonLabel}" >/dev/null 2>&1
