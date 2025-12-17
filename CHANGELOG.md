@@ -50,6 +50,7 @@
  - Added a check to make sure the Installomator download is successful. If the labels are missing, AAP will retry getting Installomator twice. On the third failure, AAP will quit and not move forward
  - Added a warning in the log if the installomator label file count is less than the threshold (1000)
  - Adjusted version comparison logic to only allow the installomator version comparison fallback to run if `appNewVersion` is not populated. This will speed up run time
+ - Fixed a bug that allowed AAP to restart after install when `WorkflowDisableRelaunch` was set to TRUE (#199)
 
 ## Version 3.4.2
 ### 20-Oct-2025
