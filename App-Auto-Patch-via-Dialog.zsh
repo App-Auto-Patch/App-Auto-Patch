@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.5.0"
-scriptDate="2025/12/01"
-scriptBuild="3.5.0.251201502"
+scriptDate="2025/12/17"
+scriptBuild="3.5.0.251217376"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -1335,6 +1335,17 @@ get_preferences() {
     log_verbose "monthly_patching_cadence_start_time: $monthly_patching_cadence_start_time"
     log_verbose "version_comparison_method_option: $version_comparison_method_option"
     
+    #Validate Custom Installomator Options
+    if [[ "${installomatorVersion}" == "Custom" ]] || [[ "${installomatorVersion}" == "custom" ]]; then
+        if [[ -z "${installomatorVersionCustomRepoPath}" ]] || [[ -z "${installomatorVersionCustomBranchName}" ]]; then
+            log_status "Parameter Error: The Custom InstallomatorVersion option requires both the InstallomatorVersionCustomRepoPath and InstallomatorVersionCustomBranchName keys"; option_error="TRUE"
+        fi
+        fi
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${installomatorVersionCustomRepoPath}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: installomatorVersionCustomRepoPath is: ${installomatorVersionCustomRepoPath}"
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${installomatorVersionCustomBranchName}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: installomatorVersionCustomBranchName is: ${installomatorVersionCustomBranchName}"
+
+    # Check for Installomator
+    get_installomator
     
     # Write App Labels to PLIST
     ignoredLabelsArray=($(echo ${ignored_labels_option}))
@@ -1521,15 +1532,6 @@ manage_parameter_options() {
     elif [[ -n "${deadline_count_hard_option}" ]] && ! [[ "${deadline_count_hard_option}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
         log_error "The --deadline-count-hard=number value must only be a number."; option_error="TRUE"
     fi
-    
-    #Validate Custom Installomator Options
-    if [[ "${installomatorVersion}" == "Custom" ]] || [[ "${installomatorVersion}" == "custom" ]]; then
-        if [[ -z "${installomatorVersionCustomRepoPath}" ]] || [[ -z "${installomatorVersionCustomBranchName}" ]]; then
-            log_status "Parameter Error: The Custom InstallomatorVersion option requires both the InstallomatorVersionCustomRepoPath and InstallomatorVersionCustomBranchName keys"; option_error="TRUE"
-        fi
-        fi
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${installomatorVersionCustomRepoPath}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: installomatorVersionCustomRepoPath is: ${installomatorVersionCustomRepoPath}"
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${installomatorVersionCustomBranchName}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: installomatorVersionCustomBranchName is: ${installomatorVersionCustomBranchName}"
 
     # Validate ${deadline_days_focus_option} input and if valid set ${deadline_days_focus} and ${deadline_days_focus_seconds}.
     if [[ "${deadline_days_focus_option}" == "X" ]]; then
@@ -2084,9 +2086,6 @@ workflow_startup() {
 
     # Initial Parameter and helper validation, if any of these fail then it's unsafe for the workflow to continue.
 	get_preferences
-    
-    # Check for Installomator
-    get_installomator
 
     # Management parameter options
     manage_parameter_options
@@ -2753,6 +2752,30 @@ get_installomator() {
         else
             log_info "Installomator latest version ($appVersion) installed, continuing..."
         fi
+        fi
+    fi
+
+    # Check if Installomator Install was successful
+    labelsPath="${fragmentsPath}/labels"
+
+    if [[ -z $(ls -A "${labelsPath}") ]]; then
+	    log_error "Installomator labels directory is empty... Installomator failed to install correctly"
+	    installomatorAttemptCount=$((installomatorAttemptCount + 1))
+        if [[ $installomatorAttemptCount == 3 ]]; then
+            log_error "Installomator failed to install after 3 attempts... Cannot continue"
+            exit_error
+        else
+            log_error "Sleeping for 5 seconds before retrying Installomator download"
+            sleep 5
+            get_installomator
+        fi
+    else
+        labelThreshold=1000
+        shCount=$(find "$labelsPath" -maxdepth 1 -type f -name '*.sh' | wc -l | tr -d ' ')
+        if (( shCount < labelThreshold )); then
+            log_warning "Only $shCount .sh files found in $labelsPath (Installomator typically has over: $labelThreshold)"
+        else
+            log_notice "Installomator label count appears normal"
         fi
     fi
 
@@ -3939,15 +3962,15 @@ function verifyApp() {
                     # Compare version strings
                     if [[ ${version_comparison_method_option} == "IS_AT_LEAST" ]]; then
                         if [[ -n "$appNewVersion" ]]; then
-                            log_notice "--- Newest version: ${appNewVersion}"
+                            log_notice "--- Publicly available version: ${appNewVersion}"
                             if [[ -n "${previousVersion}" ]] &&  is-at-least "$appNewVersion" "$previousVersion"; then
-                                log_notice "--- Latest version installed."
+                                log_notice "--- ${previousVersion} is-at-least ${appNewVersion}."
                             elif [[ -n "${appCustomVersion}" ]] &&  is-at-least "$appNewVersion" "$appCustomVersion"; then
-                                log_notice "--- Latest version installed."
+                                log_notice "--- ${appCustomVersion} is-at-least ${appNewVersion}."
                             else
-                                    /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
-                                    AAPVersionByLabel[$label_name]="$appNewVersion"
-                                    queueLabel
+                                /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
+                                AAPVersionByLabel[$label_name]="$appNewVersion"
+                                queueLabel
                             fi
                         else
                             log_notice "--- Unable to find newest version."
@@ -3955,7 +3978,7 @@ function verifyApp() {
                             log_verbose "packageID: $packageID"
                             if [[ ${version_comparison_installomator_fallback_option} == "TRUE" ]]; then
                                 if [[ ${type} == (pkg|pkgInDmg|pkgInZip) ]] && [[ ${packageID} == "" ]]; then
-                                    log_notice "--- Installomator Debug Fallback enabled and type in pkg|pkgInDmg|pkgInZip but packageID missing. Unable to check version. Skipping adding to queue."
+                                    log_notice "--- Installomator Debug Fallback enabled and type in pkg|pkgInDmg|pkgInZip but packageID missing. Unable to check version. Not adding to queue."
                                 else
                                     log_notice "--- Using Installomator Debug Fallback to compare version."
                                     # Lastly, verify with Installomator before queueing the label
@@ -3983,17 +4006,24 @@ function verifyApp() {
                             fi
                         fi
                     else
-                        if [[ "$previousVersion" == "$appNewVersion" ]]; then
-                            log_notice "--- Latest version installed."
-                        elif [[ "$appCustomVersion" == "$appNewVersion" ]]; then
-                            log_notice "--- Latest version installed."
+                        if [[ -n "$appNewVersion" ]]; then
+                            log_notice "--- Publicly available version: ${appNewVersion}"
+                            if [[ "$previousVersion" == "$appNewVersion" ]]; then
+                                log_notice "--- ${previousVersion} = ${appNewVersion}."
+                            elif [[ "$appCustomVersion" == "$appNewVersion" ]]; then
+                                log_notice "--- ${appCustomVersion} = ${appNewVersion}."
+                            else
+                                /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
+                                AAPVersionByLabel[$label_name]="$appNewVersion"
+                                queueLabel
+                            fi
                         else
-                           log_notice "--- Unable to find newest version."
+                            log_notice "--- Unable to find newest version."
                             log_verbose "type: $type"
                             log_verbose "packageID: $packageID"
                             if [[ ${version_comparison_installomator_fallback_option} == "TRUE" ]]; then
                                 if [[ ${type} == (pkg|pkgInDmg|pkgInZip) ]] && [[ ${packageID} == "" ]]; then
-                                    log_notice "--- Installomator Debug Fallback enabled and type in pkg|pkgInDmg|pkgInZip but packageID missing. Unable to check version. Skipping adding to queue."
+                                    log_notice "--- Installomator Debug Fallback enabled and type in pkg|pkgInDmg|pkgInZip but packageID missing. Unable to check version. Not adding to queue."
                                 else
                                     log_notice "--- Using Installomator Debug Fallback to compare version."
                                     # Lastly, verify with Installomator before queueing the label
@@ -4007,10 +4037,10 @@ function verifyApp() {
                                     
                                     if [[ "$out" == *"same as installed"* ]] 
                                     then
-                                        log_notice "--- Latest version installed."
+                                        log_notice "--- Installomator indicates publicly available version is the same as installed. Not adding to queue."
                                     elif [[ "$out" == *"No previous app found"* ]]
                                     then
-                                        log_notice "--- Installomator failed to find previous version properly... Not adding to queue."
+                                        log_notice "--- Installomator indicates no previous app found to be installed. Not adding to queue."
                                     else
                                         log_notice "--- Assuming new version available based on Installomator debug output. False positives may be possible. Add $label_name to ignore list to avoid in future runs"
                                         /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
@@ -4020,7 +4050,6 @@ function verifyApp() {
                                 fi
                             fi
                         fi
-
                     fi
                 fi
             fi
