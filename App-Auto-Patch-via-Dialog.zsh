@@ -26,7 +26,7 @@
 
 scriptVersion="3.5.0"
 scriptDate="2025/12/18"
-scriptBuild="3.5.0.251218404"
+scriptBuild="3.5.0.251218448"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2269,8 +2269,8 @@ workflow_startup() {
         --moveable
         --button1text "${display_string_patching_button1}" # Done
         --button1disabled
-        --height 600
-        --width 650
+        --height 500
+        --width 600
         --position bottomright
         --progress
         --helpmessage "${helpMessage}"
@@ -3677,20 +3677,19 @@ dialog_install_or_defer() {
             --button2text "${display_string_deferral_button2}"
             --infobox "$infobox"
             --timer $DialogTimeoutDeferral
-            --button1text "${display_string_deferral_button1}" 
+            --button1text "${display_string_deferral_button1}"
         )
     fi
 			
 	deferralDialogOptions=(
 		--position bottomright
+        --height 500
+        --width 600
 		--quitoninfo
 		--moveable
-		--liststyle compact
-		--small
 		--quitkey k
 		--titlefont size=18
-		--messagefont size=11
-		--height $height
+		--messagefont size=14
         --alwaysreturninput
 		--commandfile "$dialogCommandFile"
 	)
@@ -3761,14 +3760,13 @@ dialog_install_hard_deadline() {
 	
 	deferralDialogOptions=(
 		--position bottomright
+        --height 500
+        --width 600
 		--quitoninfo
 		--moveable
-		--liststyle compact
-		--small
 		--quitkey k
 		--titlefont size=18
-		--messagefont size=11
-		--height $height
+		--messagefont size=14
 		--commandfile "$dialogCommandFile"
 	)
 	
@@ -4167,14 +4165,15 @@ workflow_do_Installations() {
             
         fi
 
-        if [[ ${zoom_call_active_check_option} == "TRUE" && ${label} == "zoom" ]] ; then
+        if [[ ${zoom_call_active_check_option} == "TRUE" && ${label} == "zoom"* ]] ; then
 
 	        CPTHOSTPID=$(pgrep CptHost)
 	        AOMHOSTPID=$(pgrep aomhost)
 
 	        if [[ -n "$CPTHOSTPID" || -n "$AOMHOSTPID" ]]; then
-		        log_warning "Zoom Meeting in progress. Skipping Update"
-                swiftDialogUpdate "listitem: index: $i, status: fail, statustext: Skipped…"
+		        log_error "Zoom Meeting in progress. Skipping Update"
+                let errorCount++
+                swiftDialogUpdate "listitem: index: $i, status: fail, statustext: Zoom Call Active… Skipped Update…"
             else
                 # Run Installomator
                 ${installomatorScript} ${label} ${installomatorOptions} ${swiftDialogOptions[@]}
