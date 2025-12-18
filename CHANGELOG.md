@@ -55,6 +55,7 @@
 	- Default is set to Enabled
    	- Managed Preference Key: `<key>ZoomCallActiveCheck</key>` `<true/>` | `<false/>`
   	- CLI Options: `--zoom-call-active-check-enabled` `--zoom-call-active-check-disabled`
+ - Adjusted deferral and patching dialog sizes to be consistent
 
 ## Version 3.4.2
 ### 20-Oct-2025
