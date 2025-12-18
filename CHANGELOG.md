@@ -51,6 +51,10 @@
  - Added a warning in the log if the installomator label file count is less than the threshold (1000)
  - Adjusted version comparison logic to only allow the installomator version comparison fallback to run if `appNewVersion` is not populated. This will speed up run time
  - Fixed a bug that allowed AAP to restart after install when `WorkflowDisableRelaunch` was set to TRUE (#199)
+ - Added Zoom Call Active Check option: When enabled, if a user starts the install process and then starts a Zoom call, App Auto-Patch will skip the Zoom update in order to prevent closing Zoom in the middle of the meeting
+	- Default is set to Enabled
+   	- Managed Preference Key: `<key>ZoomCallActiveCheck</key>` `<true/>` | `<false/>`
+  	- CLI Options: `--zoom-call-active-check-enabled` `--zoom-call-active-check-disabled`
 
 ## Version 3.4.2
 ### 20-Oct-2025
