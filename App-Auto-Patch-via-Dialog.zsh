@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.5.0"
-scriptDate="2025/12/17"
-scriptBuild="3.5.0.251217391"
+scriptDate="2025/12/18"
+scriptBuild="3.5.0.251218404"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -51,6 +51,7 @@ echo "
     [--reset-defaults]
     [--patch-week-start-day=number]
     [--days-until-reset=number]
+    [--zoom-call-active-check-enabled] [--zoom-call-active-check-disabled]
 
     App Auto-Patch Self Update Options
     [--force-self-update-check]
@@ -152,6 +153,7 @@ echo "
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
     <key>WorkflowDisableRelaunch</key> <true/> | <false/>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
+    <key>ZoomCallActiveCheck</key> <true/> | <false/>
 
     ** Detailed documentation can be found at: https://github.com/App-Auto-Patch/App-Auto-Patch/wiki
 "
@@ -854,6 +856,12 @@ get_options() {
             --vers)
                 show_version_short
             ;;
+            --zoom-call-active-check-enabled)
+                zoom_call_active_check_option="TRUE"
+            ;;
+            --zoom-call-active-check-disabled)
+                zoom_call_active_check_option="FALSE"
+            ;;
             *)
                 unrecognized_options_array+=("$1")
             ;;  
@@ -1042,6 +1050,8 @@ get_preferences() {
         version_comparison_method_managed=$(defaults read "${appAutoPatchManagedPLIST}" VersionComparisonMethod 2> /dev/null)
         local version_comparison_installomator_fallback_managed
         version_comparison_installomator_fallback_managed=$(defaults read "${appAutoPatchManagedPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
+        local zoom_call_active_check_managed
+        zoom_call_active_check_managed=$(defaults read "${appAutoPatchManagedPLIST}" ZoomCallActiveCheck 2> /dev/null)
         
     else
         log_verbose "No managed preference file found for App Auto-Patch"
@@ -1152,6 +1162,8 @@ get_preferences() {
         version_comparison_method_local=$(defaults read "${appAutoPatchLocalPLIST}" VersionComparisonMethod 2> /dev/null)
         local version_comparison_installomator_fallback_local
         version_comparison_installomator_fallback_local=$(defaults read "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
+        local zoom_call_active_check_local
+        zoom_call_active_check_local=$(defaults read "${appAutoPatchLocalPLIST}" ZoomCallActiveCheck 2> /dev/null)
     fi
     
     log_verbose  "Local preference file before startup validation: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
@@ -1202,6 +1214,9 @@ get_preferences() {
     { [[ -z "${required_labels_managed}" ]] && [[ -z "${required_labels_option}" ]] && [[ -n "${required_labels_local}" ]]; } && required_labels_option="${required_labels_local}"
     [[ -n "${optional_labels_managed}" ]] && optional_labels_option="${optional_labels_managed}"
     { [[ -z "${optional_labels_managed}" ]] && [[ -z "${optional_labels_option}" ]] && [[ -n "${optional_labels_local}" ]]; } && optional_labels_option="${optional_labels_local}"
+
+    [[ -n "${zoom_call_active_check_managed}" ]] && zoom_call_active_check_option="${zoom_call_active_check_managed}"
+    { [[ -z "${zoom_call_active_check_managed}" ]] && [[ -z "${zoom_call_active_check_option}" ]] && [[ -n "${zoom_call_active_check_local}" ]]; } && zoom_call_active_check_option="${zoom_call_active_check_local}"
 
     # Need logic to ensures the priority order of managed preference overrides the saved local preference which overrides the script embedded variables .
     [[ -n "${app_title_managed}" ]] && appTitle="${app_title_managed}"
@@ -1334,6 +1349,7 @@ get_preferences() {
     log_verbose "monthly_patching_cadence_weekday_index: $monthly_patching_cadence_weekday_index"
     log_verbose "monthly_patching_cadence_start_time: $monthly_patching_cadence_start_time"
     log_verbose "version_comparison_method_option: $version_comparison_method_option"
+    log_verbose "zoom_call_active_check_option: $zoom_call_active_check_option"
     
     #Validate Custom Installomator Options
     if [[ "${installomatorVersion}" == "Custom" ]] || [[ "${installomatorVersion}" == "custom" ]]; then
@@ -1616,6 +1632,19 @@ manage_parameter_options() {
     fi
     { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${workflow_disable_relaunch_option}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: workflow_disable_relaunch_option is: ${workflow_disable_relaunch_option}"
     
+    # Manage ${zoom_call_active_check_option} and save to ${appAutoPatchLocalPLIST}.
+    if [[ "${zoom_call_active_check_option}" -eq 1 ]] || [[ "${zoom_call_active_check_option}" == "TRUE" ]]; then
+        zoom_call_active_check_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" ZoomCallActiveCheck -bool true
+    elif [[ -z "${zoom_call_active_check_option}" ]]; then
+        zoom_call_active_check_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" ZoomCallActiveCheck -bool true
+    else
+        zoom_call_active_check_option="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" ZoomCallActiveCheck -bool false
+    fi
+    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${zoom_call_active_check_option}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: zoom_call_active_check_option is: ${zoom_call_active_check_option}"
+
     # Manage ${UnattendedExit} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${UnattendedExit}" -eq 1 ]] || [[ "${UnattendedExit}" == "TRUE" ]]; then
         UnattendedExit="TRUE"
@@ -2151,7 +2180,7 @@ workflow_startup() {
             icon="SF=desktopcomputer.and.arrow.down,weight=regular,palette=gray,red"
         fi
     else
-        log_info ":frame_with_picture:  App icon found at $dialog_icon_option, setting icon variable"
+        log_info "App icon found at $dialog_icon_option, setting icon variable"
         icon="$dialog_icon_option"
     fi
 
@@ -4138,34 +4167,74 @@ workflow_do_Installations() {
             
         fi
 
-        # Run Installomator
-        ${installomatorScript} ${label} ${installomatorOptions} ${swiftDialogOptions[@]}
-        installomatorExitCode=$?
-        if [ $installomatorExitCode != 0 ]; then
-            log_error "Error installing ${label}. Exit code $installomatorExitCode"
-            let errorCount++
-        fi
-        # Write the receipt
-        newVersion="${AAPVersionByLabel[$label]:-}"
+        if [[ ${zoom_call_active_check_option} == "TRUE" && ${label} == "zoom" ]] ; then
 
-        # Fallback: find the app path we associated to this label during discovery,
-        # then read the bundle version post-install (ground truth).
-        if [[ -z "$newVersion" ]]; then
-        appPath=""
-        for p in ${(k)configArray}; do
-            if [[ "${configArray[$p]}" == "$label" ]]; then
-            appPath="$p"
-            break
+	        CPTHOSTPID=$(pgrep CptHost)
+	        AOMHOSTPID=$(pgrep aomhost)
+
+	        if [[ -n "$CPTHOSTPID" || -n "$AOMHOSTPID" ]]; then
+		        log_warning "Zoom Meeting in progress. Skipping Update"
+                swiftDialogUpdate "listitem: index: $i, status: fail, statustext: Skipped…"
+            else
+                # Run Installomator
+                ${installomatorScript} ${label} ${installomatorOptions} ${swiftDialogOptions[@]}
+                installomatorExitCode=$?
+                if [ $installomatorExitCode != 0 ]; then
+                    log_error "Error installing ${label}. Exit code $installomatorExitCode"
+                    let errorCount++
+                fi
+                # Write the receipt
+                newVersion="${AAPVersionByLabel[$label]:-}"
+
+                # Fallback: find the app path we associated to this label during discovery,
+                # then read the bundle version post-install (ground truth).
+                if [[ -z "$newVersion" ]]; then
+                    appPath=""
+                    for p in ${(k)configArray}; do
+                        if [[ "${configArray[$p]}" == "$label" ]]; then
+                            appPath="$p"
+                            break
+                        fi
+                    done
+
+                    if [[ -n "$appPath" && -d "$appPath/Contents" ]]; then
+                        newVersion=$(/usr/bin/defaults read "$appPath/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null \
+                        || /usr/bin/defaults read "$appPath/Contents/Info.plist" CFBundleVersion 2>/dev/null \
+                        || echo "")
+                    fi
+                fi
+                write_aap_receipt "$label" "$newVersion" "$installomatorExitCode"
             fi
-        done
+        else
+            # Run Installomator
+            ${installomatorScript} ${label} ${installomatorOptions} ${swiftDialogOptions[@]}
+            installomatorExitCode=$?
+            if [ $installomatorExitCode != 0 ]; then
+                log_error "Error installing ${label}. Exit code $installomatorExitCode"
+                let errorCount++
+            fi
+            # Write the receipt
+            newVersion="${AAPVersionByLabel[$label]:-}"
 
-        if [[ -n "$appPath" && -d "$appPath/Contents" ]]; then
-            newVersion=$(/usr/bin/defaults read "$appPath/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null \
-            || /usr/bin/defaults read "$appPath/Contents/Info.plist" CFBundleVersion 2>/dev/null \
-            || echo "")
+            # Fallback: find the app path we associated to this label during discovery,
+            # then read the bundle version post-install (ground truth).
+            if [[ -z "$newVersion" ]]; then
+                appPath=""
+                for p in ${(k)configArray}; do
+                    if [[ "${configArray[$p]}" == "$label" ]]; then
+                        appPath="$p"
+                        break
+                    fi
+                done
+
+                if [[ -n "$appPath" && -d "$appPath/Contents" ]]; then
+                    newVersion=$(/usr/bin/defaults read "$appPath/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null \
+                    || /usr/bin/defaults read "$appPath/Contents/Info.plist" CFBundleVersion 2>/dev/null \
+                    || echo "")
+                fi
+            fi
+            write_aap_receipt "$label" "$newVersion" "$installomatorExitCode"
         fi
-        fi
-        write_aap_receipt "$label" "$newVersion" "$installomatorExitCode"
         let i++
         swiftDialogUpdate "progress: increment ${progressIncrementValue}"
     done
