@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.5.0"
-scriptDate="2025/12/18"
-scriptBuild="3.5.0.251218448"
+scriptDate="2025/12/19"
+scriptBuild="3.5.0.251219369"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2764,16 +2764,16 @@ get_installomator() {
             appNewVersion="$(curl -sL "https://raw.githubusercontent.com/$installomatorVersionCustomRepoPath/refs/heads/$installomatorVersionCustomBranchName/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
             appVersion="$(cat "${installomatorScript}" | grep VERSIONDATE= | cut -d'"' -f2)"
             # convert to epoch
-            appNewVersion=$(date -j -f "%Y-%m-%d" "${appNewVersion}" +%s)
-            appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
+            #appNewVersion=$(date -j -f "%Y-%m-%d" "${appNewVersion}" +%s)
+            #appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
         else
             log_notice "Pulling from Installomator Main Branch"
             latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "main" | tail -1 | cut -d'"' -f4)"
             appNewVersion="$(curl -sL "https://raw.githubusercontent.com/Installomator/Installomator/refs/heads/main/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
             appVersion="$(cat "${installomatorScript}" | grep VERSIONDATE= | cut -d'"' -f2)"
             # convert to epoch
-            appNewVersion=$(date -j -f "%Y-%m-%d" "${appNewVersion}" +%s)
-            appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
+            #appNewVersion=$(date -j -f "%Y-%m-%d" "${appNewVersion}" +%s)
+            #appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
         fi
 
         #if [[ ${appVersion} -lt ${appNewVersion} ]]; then
@@ -3995,10 +3995,18 @@ function verifyApp() {
                     if [[ ${version_comparison_method_option} == "IS_AT_LEAST" ]]; then
                         if [[ -n "$appNewVersion" ]]; then
                             log_notice "--- Publicly available version: ${appNewVersion}"
-                            if [[ -n "${previousVersion}" ]] &&  is-at-least "$appNewVersion" "$previousVersion"; then
+                            # Sanitize versions by replacing whitespace with dashes for is-at-least comparison
+                            sanitizedAppNewVersion="${appNewVersion//[[:space:]]/-}"
+                            sanitizedPreviousVersion="${previousVersion//[[:space:]]/-}"
+                            sanitizedAppCustomVersion="${appCustomVersion//[[:space:]]/-}"
+                            log_verbose "sanitizedAppNewVersion: $sanitizedAppNewVersion"
+                            log_verbose "sanitizedPreviousVersion: $sanitizedPreviousVersion"
+                            if [[ -n "${previousVersion}" ]] && is-at-least "$sanitizedAppNewVersion" "$sanitizedPreviousVersion"; then
                                 log_notice "--- ${previousVersion} is-at-least ${appNewVersion}."
-                            elif [[ -n "${appCustomVersion}" ]] &&  is-at-least "$appNewVersion" "$appCustomVersion"; then
+                                log_verbose "--- Sanitized Versions: ${sanitizedPreviousVersion} is-at-least ${sanitizedAppNewVersion}."
+                            elif [[ -n "${appCustomVersion}" ]] && is-at-least "$sanitizedAppNewVersion" "$sanitizedAppCustomVersion"; then
                                 log_notice "--- ${appCustomVersion} is-at-least ${appNewVersion}."
+                                log_verbose "--- Sanitized Version: ${sanitizedAppCustomVersion} is-at-least ${sanitizedAppNewVersion}."
                             else
                                 /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
                                 AAPVersionByLabel[$label_name]="$appNewVersion"
@@ -4173,13 +4181,14 @@ workflow_do_Installations() {
 	        if [[ -n "$CPTHOSTPID" || -n "$AOMHOSTPID" ]]; then
 		        log_error "Zoom Meeting in progress. Skipping Update"
                 let errorCount++
-                swiftDialogUpdate "listitem: index: $i, status: fail, statustext: Zoom Call Active… Skipped Update…"
+                swiftDialogUpdate "listitem: index: $i, status: fail, statustext: Zoom Active…"
             else
                 # Run Installomator
                 ${installomatorScript} ${label} ${installomatorOptions} ${swiftDialogOptions[@]}
                 installomatorExitCode=$?
                 if [ $installomatorExitCode != 0 ]; then
                     log_error "Error installing ${label}. Exit code $installomatorExitCode"
+                    swiftDialogUpdate "listitem: index: $i, status: fail"
                     let errorCount++
                 fi
                 # Write the receipt
@@ -4210,6 +4219,7 @@ workflow_do_Installations() {
             installomatorExitCode=$?
             if [ $installomatorExitCode != 0 ]; then
                 log_error "Error installing ${label}. Exit code $installomatorExitCode"
+                swiftDialogUpdate "listitem: index: $i, status: fail"
                 let errorCount++
             fi
             # Write the receipt
