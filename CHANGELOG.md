@@ -3,7 +3,7 @@
 # Version 3
 
 ## Version 3.5.0
-### 18-Dec-2025
+### 19-Dec-2025
 - New Version Comparison Method options
 	- New `versionComparisonMethod` key with the options `IS_AT_LEAST` and `EQUAL_TO`
  	- `IS_AT_LEAST`: Checks if the currently installed version is the same or greater than the new version available. Utilizes the "Is-At-Least" function.
@@ -56,6 +56,7 @@
    	- Managed Preference Key: `<key>ZoomCallActiveCheck</key>` `<true/>` | `<false/>`
   	- CLI Options: `--zoom-call-active-check-enabled` `--zoom-call-active-check-disabled`
  - Adjusted deferral and patching dialog sizes to be consistent
+ - Added logic to replace whitespace in version numbers with `-` to allow the `is-at-least` function to work properly with version numbers containing spaces (ex: sublimemerge)
 
 ## Version 3.4.2
 ### 20-Oct-2025
