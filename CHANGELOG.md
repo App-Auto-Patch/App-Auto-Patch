@@ -57,6 +57,7 @@
   	- CLI Options: `--zoom-call-active-check-enabled` `--zoom-call-active-check-disabled`
  - Adjusted deferral and patching dialog sizes to be consistent
  - Added logic to replace whitespace in version numbers with `-` to allow the `is-at-least` function to work properly with version numbers containing spaces (ex: sublimemerge)
+ - Created helper function to correctly identify the appPath and icon path for dialogs. Overhauled all dialog logic to utilize new helper function
 
 ## Version 3.4.2
 ### 20-Oct-2025
