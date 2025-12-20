@@ -26,7 +26,7 @@
 
 scriptVersion="3.5.0"
 scriptDate="2025/12/19"
-scriptBuild="3.5.0.251219369"
+scriptBuild="3.5.0.251219534"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -3434,6 +3434,65 @@ swiftDialogCommand(){
     
 }
 
+# Helper function to resolve the app icon path for dialog display
+# Usage: resolve_app_icon_path "label_name"
+# Returns: the full path to the app for icon display, or logoImage if not found
+# This function extracts targetDir from the label fragment to properly locate apps
+# in non-traditional paths (e.g., /Applications/Utilities/, /usr/local/, etc.)
+# Note: Variables are evaluated in dependency order since appName may reference folderName
+#       (e.g., appName="${folderName}/SketchUp.app")
+resolve_app_icon_path() {
+    local label="$1"
+    local icon_appName icon_targetDir icon_name icon_path
+    local name folderName targetDir appName  # Variables that may be referenced in label fragment
+    
+    # Extract raw values from label fragment (these may contain variable references like ${folderName})
+    local raw_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+    local raw_folderName="$(awk -F\" '/^[[:space:]]*folderName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+    local raw_targetDir="$(awk -F\" '/^[[:space:]]*targetDir=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+    local raw_appName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+    
+    # Evaluate variables in dependency order (folderName first, then appName which may reference it)
+    # Using eval to resolve any variable references like ${folderName} in appName
+    [[ -n "$raw_name" ]] && eval "name=\"$raw_name\""
+    [[ -n "$raw_folderName" ]] && eval "folderName=\"$raw_folderName\""
+    [[ -n "$raw_targetDir" ]] && eval "targetDir=\"$raw_targetDir\""
+    [[ -n "$raw_appName" ]] && eval "appName=\"$raw_appName\""
+    
+    # Set resolved values with defaults
+    icon_name="$name"
+    icon_targetDir="${targetDir:-/}"
+    
+    # Determine app name - use appName if available, otherwise use name
+    if [[ -z "$appName" ]]; then
+        icon_appName="${icon_name}.app"
+    else
+        # Ensure .app extension
+        icon_appName="${appName%.app}.app"
+    fi
+    
+    # Check paths in order of priority matching PgetAppVersion logic:
+    # 1. targetDir (custom path from label fragment)
+    # 2. /Applications/ (standard location)
+    # 3. /Applications/Utilities/ (utilities folder)
+    # 4. mdfind fallback (spotlight search)
+    # 5. logoImage fallback (default icon)
+    if [[ -e "${icon_targetDir}${icon_appName}" ]]; then
+        echo "${icon_targetDir}${icon_appName}"
+    elif [[ -e "/Applications/${icon_appName}" ]]; then
+        echo "/Applications/${icon_appName}"
+    elif [[ -e "/Applications/Utilities/${icon_appName}" ]]; then
+        echo "/Applications/Utilities/${icon_appName}"
+    else
+        icon_path=$(mdfind "kMDItemFSName == '${icon_appName}' && kMDItemContentType == 'com.apple.application-bundle'" -0 2>/dev/null)
+        if [[ -n "${icon_path}" && -e "${icon_path}" ]]; then
+            echo "${icon_path}"
+        else
+            echo "${logoImage}"
+        fi
+    fi
+}
+
 swiftDialogPatchingWindow(){
     
     # If we are using SwiftDialog
@@ -3446,29 +3505,14 @@ swiftDialogPatchingWindow(){
         
         # Build our list of Display Names for the SwiftDialog list
         for label in $queuedLabelsArray; do
-            # Check for App Name using the appName variable from the label fragment
-            currentDisplay_appName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            # Get display name from label fragment
             currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
             
-            # Check if appName is populated, otherwise re-pull using the name variable
-            if [ -z "$currentDisplay_appName" ]; then
-                appName=${currentDisplay_name}
-            else
-                # drop the .app portion
-                appName="${currentDisplay_appName%.app}"
-            fi
+            # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
+            iconPath=$(resolve_app_icon_path "$label")
             
             displayNames+=("--listitem")
-            if [[ ! -e "/Applications/${appName}.app" ]]; then
-                appPath=$(mdfind "kMDItemFSName == '${appName}.app' && kMDItemContentType == 'com.apple.application-bundle'" -0)
-                if [[ -e ${appPath} ]]; then
-                    displayNames+=(${currentDisplay_name},icon="${appPath}")
-                else
-                    displayNames+=(${currentDisplay_name},icon="${logoImage}")
-                fi
-            else
-                displayNames+=(${currentDisplay_name},icon="/Applications/${appName}.app")
-            fi
+            displayNames+=(${currentDisplay_name},icon="${iconPath}")
         done
         
         if [[ ! -f $dialogCommandFile ]]; then
@@ -4140,36 +4184,16 @@ workflow_do_Installations() {
         swiftDialogOptions=()
         if [ ${InteractiveModeOption} -ge 1 ]; then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
-            currentDisplay_appName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
             currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplay_name}"\')
             sleep .5
 
-            # Check if appName is populated, otherwise re-pull using the name variable
-            if [ -z "$currentDisplay_appName" ]; then
-                appName=${currentDisplay_name}
-            else
-                # drop the .app portion
-                appName="${currentDisplay_appName%.app}"
-            fi
-
-            if [[ ! -e "/Applications/${appName}.app" ]]; then
-                appPath=$(mdfind "kMDItemFSName == '${appName}.app' && kMDItemContentType == 'com.apple.application-bundle'" -0)
-                appPath=$(print -r -- "$appPath" | tr -d '\000')
-                if [[ -e ${appPath} ]]; then
-                    swiftDialogUpdate "icon: $appPath"
-                    swiftDialogUpdate "progresstext: ${display_string_patching_progress} ${currentDisplay_name} …"
-                    swiftDialogUpdate "listitem: index: $i, icon: $appPath, status: wait, statustext: ${display_string_patching_checking} …"
-                else
-                    swiftDialogUpdate "icon: $logoImage"
-                    swiftDialogUpdate "progresstext: ${display_string_patching_progress} ${currentDisplay_name} …"
-                    swiftDialogUpdate "listitem: index: $i, icon: $logoImage, status: wait, statustext: ${display_string_patching_checking} …"
-                fi
-            else
-                swiftDialogUpdate "icon: /Applications/$appName.app"
-                swiftDialogUpdate "progresstext: ${display_string_patching_progress} ${currentDisplay_name} …"
-                swiftDialogUpdate "listitem: index: $i, icon: /Applications/$appName.app, status: wait, statustext: ${display_string_patching_checking} …"
-            fi
+            # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
+            iconPath=$(resolve_app_icon_path "$label")
+            
+            swiftDialogUpdate "icon: $iconPath"
+            swiftDialogUpdate "progresstext: ${display_string_patching_progress} ${currentDisplay_name} …"
+            swiftDialogUpdate "listitem: index: $i, icon: $iconPath, status: wait, statustext: ${display_string_patching_checking} …"
             
         fi
 
@@ -5012,30 +5036,15 @@ main() {
     for label in $queuedLabelsForNames; do
         log_verbose "Obtaining proper name for $label"
         
-        # Check for App Name using the appName variable from the label fragment
-        currentDisplay_appName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        # Get display name from label fragment
         currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        
+        # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
+        iconPath=$(resolve_app_icon_path "$label")
+        log_verbose "Resolved icon path: $iconPath"
 
-        # Check if appName is populated, otherwise re-pull using the name variable
-        if [ -z "$currentDisplay_appName" ]; then
-            appName=${currentDisplay_name}
-        else
-            # drop the .app portion
-            appName="${currentDisplay_appName%.app}"
-        fi
-
-        log_verbose "appName: $appName"
         appNamesArray+=("--listitem")
-        if [[ ! -e "/Applications/${appName}.app" ]]; then
-            appPath=$(mdfind "kMDItemFSName == '${appName}.app' && kMDItemContentType == 'com.apple.application-bundle'" -0)
-            if [[ -e ${appPath} ]]; then
-                appNamesArray+=(${currentDisplay_name},icon="${appPath}")
-            else
-                appNamesArray+=(${currentDisplay_name},icon="${logoImage}")
-            fi
-        else
-            appNamesArray+=(${currentDisplay_name},icon="/Applications/${appName}.app")
-        fi
+        appNamesArray+=(${currentDisplay_name},icon="${iconPath}")
     done
 
     log_notice "Labels to install: $labelsArray"
