@@ -2522,7 +2522,7 @@ EOLD
 
     log_install "Setting permissions for installed items"
     chown -R root:wheel "${appAutoPatchFolder}"
-    chmod -R 777 "${appAutoPatchFolder}"
+    chmod -R 755 "${appAutoPatchFolder}"
     chmod -R a+r "${appAutoPatchFolder}"
     chmod -R go-w "${appAutoPatchFolder}"
     chmod a+x "${appAutoPatchFolder}/appautopatch"
@@ -4739,11 +4739,22 @@ main() {
                         [[ -z $current_label ]] && current_label=$line || current_label=$current_label$'\n'$line
                         
                         case $scrubbedLine in
-                            
-                            'name='*|'appName='*|'packageID'*|'expectedTeamID'*)
-                                eval "$scrubbedLine"
+                            'name='*)
+                                name="${scrubbedLine#name=}"
+                                name="${name//\"/}"
                             ;;
-                            
+                            'appName='*)
+                                appName="${scrubbedLine#appName=}"
+                                appName="${appName//\"/}"
+                            ;;
+                            'packageID='*)
+                                packageID="${scrubbedLine#packageID=}"
+                                packageID="${packageID//\"/}"
+                            ;;
+                            'expectedTeamID='*)
+                                expectedTeamID="${scrubbedLine#expectedTeamID=}"
+                                expectedTeamID="${expectedTeamID//\"/}"
+                            ;;
                         esac
                     fi
                 fi
