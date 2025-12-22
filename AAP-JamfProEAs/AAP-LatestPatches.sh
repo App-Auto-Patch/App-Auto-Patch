@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh --no-rcs
 
 # This script returns the latest patch results per app label. Example output: 
 
@@ -9,8 +9,7 @@
 # <label> | <version> | <timestamp> | <exitCode> | <status>
 
 # https://techitout.xyz/app-auto-patch
-# by Robert Schroeder
-# 08.21.2025
+# 12.22.2025
 
 set -euo pipefail
 
@@ -37,11 +36,11 @@ while IFS= read -r -d '' f; do
   version="$(jx "$f" version)";     [[ -z "$version" ]] && version="unknown"
   timestamp="$(jx "$f" timestamp)";    [[ -z "$timestamp"  ]] && timestamp="unknown"
   exitCode="$(jx "$f" exitCode)";     [[ "$exitCode" =~ ^[0-9]+$ ]] || exitCode=0
-  status="$(jx "$f" status)";       [[ -z "$status"  ]] && status=$([[ "$exitCode" -eq 0 ]] && echo success || echo failed)
+  patch_status="$(jx "$f" status)"; [[ -z "$patch_status" ]] && patch_status=$([[ "$exitCode" -eq 0 ]] && echo success || echo failed)
 
-  line="$label | $version | $timestamp | $exitCode | $status"
+  line="$label | $version | $timestamp | $exitCode | $patch_status"
 
-  if [[ "$status" == "failed" ]]; then
+  if [[ "$patch_status" == "failed" ]]; then
     failure_lines+=("$line")
   else
     success_lines+=("$line")
