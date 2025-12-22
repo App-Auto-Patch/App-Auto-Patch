@@ -5,6 +5,16 @@
 	<key>PayloadContent</key>
 	<array>
 		<dict>
+			<key>PayloadDisplayName</key>
+			<string>App Auto-Patch</string>
+			<key>PayloadIdentifier</key>
+			<string>xyz.techitout.appAutoPatch.48825131-4206-41FA-96F0-30A76CD64BF1</string>
+			<key>PayloadType</key>
+			<string>xyz.techitout.appAutoPatch</string>
+			<key>PayloadUUID</key>
+			<string>48825131-4206-41FA-96F0-30A76CD64BF1</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
 			<key>AppTitle</key>
 			<string>App Auto-Patch</string>
 			<key>ConvertAppsInHomeFolder</key>
@@ -43,6 +53,8 @@
 			<string>1password* androidstudio microsoft*</string>
 			<key>InstallomatorOptions</key>
 			<string>BLOCKING_PROCESS_ACTION=quit_kill NOTIFY=silent LOGO=appstore IGNORE_APP_STORE_APPS=yes</string>
+			<key>InstallomatorUpdateDisable</key>
+			<string>FALSE</string>
 			<key>InstallomatorVersion</key>
 			<string>Main</string>
 			<key>InstallomatorVersionCustomRepoPath</key>
@@ -63,16 +75,6 @@
 			<string>iTerm2  imazingprofileeditor</string>
 			<key>PatchWeekStartDay</key>
 			<string>2</string>
-			<key>PayloadDisplayName</key>
-			<string>App Auto-Patch</string>
-			<key>PayloadIdentifier</key>
-			<string>xyz.techitout.appAutoPatch.48825131-4206-41FA-96F0-30A76CD64BF1</string>
-			<key>PayloadType</key>
-			<string>xyz.techitout.appAutoPatch</string>
-			<key>PayloadUUID</key>
-			<string>48825131-4206-41FA-96F0-30A76CD64BF1</string>
-			<key>PayloadVersion</key>
-			<integer>1</integer>
 			<key>RemoveInstallomatorPath</key>
 			<string>FALSE</string>
 			<key>RequiredLabels</key>
@@ -95,6 +97,10 @@
 			<integer>60</integer>
 			<key>UseOverlayIcon</key>
 			<string>TRUE</string>
+			<key>VersionComparisonInstallomatorFallback</key>
+			<true/>
+			<key>VersionComparisonMethod</key>
+			<string>IS_AT_LEAST</string>
 			<key>WebhookFeature</key>
 			<string>FAILURES</string>
 			<key>WebhookURLSlack</key>
@@ -107,6 +113,8 @@
 			<string>FALSE</string>
 			<key>WorkflowInstallNowPatchingStatusAction</key>
 			<string>SUCCESS</string>
+			<key>ZoomCallActiveCheck</key>
+			<true/>
 		</dict>
 	</array>
 	<key>PayloadDescription</key>
