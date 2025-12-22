@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.5.0"
-scriptDate="2025/12/19"
-scriptBuild="3.5.0.251219534"
+scriptDate="2025/12/22"
+scriptBuild="3.5.0.251222009"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -223,6 +223,8 @@ set_defaults() {
     appAutoPatchReceiptsFolder="${appAutoPatchFolder}/receipts"
 
     appAutoPatchLog="${appAutoPatchLogFolder}/aap.log"
+
+    appAutoPatchVerboseLog="${appAutoPatchLogFolder}/aap_verbose.log"
 
     appAutoPatchLogArchiveSize=1000
 
@@ -1357,8 +1359,8 @@ get_preferences() {
             log_status "Parameter Error: The Custom InstallomatorVersion option requires both the InstallomatorVersionCustomRepoPath and InstallomatorVersionCustomBranchName keys"; option_error="TRUE"
         fi
         fi
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${installomatorVersionCustomRepoPath}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: installomatorVersionCustomRepoPath is: ${installomatorVersionCustomRepoPath}"
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${installomatorVersionCustomBranchName}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: installomatorVersionCustomBranchName is: ${installomatorVersionCustomBranchName}"
+    { [[ -n "${installomatorVersionCustomRepoPath}" ]]; } && log_verbose "installomatorVersionCustomRepoPath is: ${installomatorVersionCustomRepoPath}"
+    { [[ -n "${installomatorVersionCustomBranchName}" ]]; } && log_verbose "installomatorVersionCustomBranchName is: ${installomatorVersionCustomBranchName}"
 
     # Check for Installomator
     get_installomator
@@ -1524,7 +1526,7 @@ manage_parameter_options() {
         option_error="TRUE"
     fi
     [[ -z "${deferral_timer_minutes}" ]] && deferral_timer_minutes="${DEFERRAL_TIMER_DEFAULT_MINUTES}"
-    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_minutes is: ${deferral_timer_minutes}"
+    log_verbose "deferral_timer_minutes is: ${deferral_timer_minutes}"
 
 
     # Validate ${deadline_count_focus_option} input and if valid set ${deadline_count_focus} and save to ${appAutoPatchLocalPLIST}.
@@ -1580,8 +1582,8 @@ manage_parameter_options() {
         [[ -n "${deadline_days_focus}" ]] && defaults write "${appAutoPatchLocalPLIST}" DeadlineDaysFocus -string "${deadline_days_focus}"
         [[ -n "${deadline_days_hard}" ]] && defaults write "${appAutoPatchLocalPLIST}" DeadlineDaysHard -string "${deadline_days_hard}"
     fi
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_days_focus}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_focus is: ${deadline_days_focus}"
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_days_hard}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_hard is: ${deadline_days_hard}"
+    { [[ -n "${deadline_days_focus}" ]]; } && log_verbose "deadline_days_focus is: ${deadline_days_focus}"
+    { [[ -n "${deadline_days_hard}" ]]; } && log_verbose "deadline_days_hard is: ${deadline_days_hard}"
     
 
     # Validate ${patch_week_start_day_option} input and if valid set ${patch_week_start_day}.
@@ -1630,7 +1632,7 @@ manage_parameter_options() {
         defaults delete "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null
         defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
     fi
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${workflow_disable_relaunch_option}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: workflow_disable_relaunch_option is: ${workflow_disable_relaunch_option}"
+    { [[ -n "${workflow_disable_relaunch_option}" ]]; } && log_verbose "workflow_disable_relaunch_option is: ${workflow_disable_relaunch_option}"
     
     # Manage ${zoom_call_active_check_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${zoom_call_active_check_option}" -eq 1 ]] || [[ "${zoom_call_active_check_option}" == "TRUE" ]]; then
@@ -1643,7 +1645,7 @@ manage_parameter_options() {
         zoom_call_active_check_option="FALSE"
         defaults write "${appAutoPatchLocalPLIST}" ZoomCallActiveCheck -bool false
     fi
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${zoom_call_active_check_option}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: zoom_call_active_check_option is: ${zoom_call_active_check_option}"
+    { [[ -n "${zoom_call_active_check_option}" ]]; } && log_verbose "zoom_call_active_check_option is: ${zoom_call_active_check_option}"
 
     # Manage ${UnattendedExit} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${UnattendedExit}" -eq 1 ]] || [[ "${UnattendedExit}" == "TRUE" ]]; then
@@ -1653,7 +1655,7 @@ manage_parameter_options() {
         UnattendedExit="FALSE"
         defaults delete "${appAutoPatchLocalPLIST}" UnattendedExit 2>/dev/null
     fi
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${UnattendedExit}" ]]; } && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: UnattendedExit is: ${UnattendedExit}"
+    { [[ -n "${UnattendedExit}" ]]; } && log_verbose "UnattendedExit is: ${UnattendedExit}"
     
     if [[ -n "${UnattendedExitSeconds}" ]] && [[ "${UnattendedExitSeconds}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
         if [[ "${UnattendedExitSeconds}" -lt 2 ]]; then
@@ -1669,13 +1671,13 @@ manage_parameter_options() {
         option_error="TRUE"
     fi
     [[ -z "${UnattendedExitSeconds}" ]] && UnattendedExitSeconds=60
-    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: UnattendedExitSeconds is: ${UnattendedExitSeconds}"
+    log_verbose "UnattendedExitSeconds is: ${UnattendedExitSeconds}"
 
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_count_focus}" ]]; } && log_verbose "deadline_count_focus is: ${deadline_count_focus}"
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${deadline_count_hard}" ]]; } && log_verbose "deadline_count_hard is: ${deadline_count_hard}"
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${patch_week_start_day}" ]]; } && log_verbose "patch_week_start_day is: ${patch_week_start_day}"
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${days_until_reset}" ]]; } && log_verbose "days_until_reset is: ${days_until_reset}"
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${workflow_disable_app_discovery_option}" ]]; } && log_verbose "workflow_disable_app_discovery_option is: ${workflow_disable_app_discovery_option}"
+    { [[ -n "${deadline_count_focus}" ]]; } && log_verbose "deadline_count_focus is: ${deadline_count_focus}"
+    { [[ -n "${deadline_count_hard}" ]]; } && log_verbose "deadline_count_hard is: ${deadline_count_hard}"
+    { [[ -n "${patch_week_start_day}" ]]; } && log_verbose "patch_week_start_day is: ${patch_week_start_day}"
+    { [[ -n "${days_until_reset}" ]]; } && log_verbose "days_until_reset is: ${days_until_reset}"
+    { [[ -n "${workflow_disable_app_discovery_option}" ]]; } && log_verbose "workflow_disable_app_discovery_option is: ${workflow_disable_app_discovery_option}"
     
     # Validate ${deferral_timer_menu_option} input and if valid set ${deferral_timer_menu_minutes} and save to ${appAutoPatchLocalPLIST}.
     local previous_ifs
@@ -1776,7 +1778,7 @@ manage_parameter_options() {
         option_error="TRUE"
     fi
     [[ -z "${deferral_timer_workflow_relaunch_minutes}" ]] && deferral_timer_workflow_relaunch_minutes="${DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES}"
-    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: deferral_timer_workflow_relaunch_minutes is: ${deferral_timer_workflow_relaunch_minutes}"
+    log_verbose "deferral_timer_workflow_relaunch_minutes is: ${deferral_timer_workflow_relaunch_minutes}"
     
     # Some validation and logging for the focus deferral timer option.
     if [[ -n "${deferral_timer_focus_option}" ]] && { [[ -z "${deadline_count_focus}" ]] && [[ -z "${deadline_days_focus}" ]]; }; then
@@ -1830,9 +1832,9 @@ manage_parameter_options() {
         defaults delete "${appAutoPatchLocalPLIST}" WebhookURLTeams 2> /dev/null
     fi
     
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${webhook_feature_option}" ]]; } && log_verbose "webhook_feature_option is: ${webhook_feature_option}"
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${webhook_url_slack_option}" ]]; } && log_verbose "webhook_url_slack_option is: ${webhook_url_slack_option}"
-    { [[ "${verbose_mode_option}" == "TRUE" ]] && [[ -n "${webhook_url_teams_option}" ]]; } && log_verbose "webhook_url_teams_option is: ${webhook_url_teams_option}"
+    { [[ -n "${webhook_feature_option}" ]]; } && log_verbose "webhook_feature_option is: ${webhook_feature_option}"
+    { [[ -n "${webhook_url_slack_option}" ]]; } && log_verbose "webhook_url_slack_option is: ${webhook_url_slack_option}"
+    { [[ -n "${webhook_url_teams_option}" ]]; } && log_verbose "webhook_url_teams_option is: ${webhook_url_teams_option}"
 
     # Manage ${self_update_enabled_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${self_update_enabled_option}" -eq 1 ]] || [[ "${self_update_enabled_option}" == "TRUE" ]]; then
@@ -2017,6 +2019,17 @@ workflow_startup() {
 	aapCurrentFolder=$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")
 	! { [[ "${aapCurrentFolder}" == "${appAutoPatchFolder}" ]] || [[ "${aapCurrentFolder}" == $(dirname "${appAutoPatchLink}") ]]; } && install_app_auto_patch
 	
+    # One-shot override
+    if [[ "${force_self_update_check_option:-}" == "TRUE" ]]; then
+        forceSelfUpdateCheck="true"
+    fi
+
+    # Check for AAP Updates
+    self_update "$@"
+
+    # Check version consistency
+    check_version_consistency
+
     # Since swiftDialog and App Auto-Patch require at least macOS 12 Monterey, first confirm the major OS version
     if [[ "${osMajorVersion}" -ge 12 ]] ; then
         log_info "macOS ${osMajorVersion} installed; proceeding ..."
@@ -2112,6 +2125,9 @@ workflow_startup() {
 	
 	# Detailed system and user checks.
 	get_logged_in_user
+
+    # Get Language Options
+    set_display_strings_language
 
     # Initial Parameter and helper validation, if any of these fail then it's unsafe for the workflow to continue.
 	get_preferences
@@ -2452,7 +2468,7 @@ restart_aap() {
 		launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" >/dev/null 2>&1
 	} &
 	disown
-	[[ "${verbose_mode}" == "TRUE" ]] && log_aap "Verbose Mode: Function ${FUNCNAME[0]}: Line ${LINENO}: Local preference file at restart exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2>/dev/null)"
+	log_verbose "Local preference file at restart exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2>/dev/null)"
 	log_aap "**** App Auto-Patch ${scriptVersion} - EXIT AND RESTART WORKFLOW ****"
 	rm -f "${appAutoPatchPIDfile}" 2>/dev/null
 	exit 0
@@ -3031,7 +3047,7 @@ check_deadlines_days_date() {
     local current_epoch
     current_epoch=$(date +%s)
     workflow_zero_date_epoch=$(date -j -f "%Y-%m-%d" "${PatchingStartDate}" +"%s")
-    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: current_epoch is: ${current_epoch}"
+    log_verbose "current_epoch is: ${current_epoch}"
     
     # Evaluate days deadlines and set ${deadline_days_status}, ${deadline_days_epoch}, and ${display_string_deadline_days}.
     if [[ -n "${deadline_days_focus}" ]]; then
@@ -3039,14 +3055,14 @@ check_deadlines_days_date() {
         deadline_days_focus_epoch=$(( workflow_zero_date_epoch + deadline_days_focus_seconds ))
         local deadline_days_focus_date
         deadline_days_focus_date=$(date -r "${deadline_days_focus_epoch}" +%Y-%m-%d:%H:%M)
-        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_focus_epoch: ${deadline_days_focus_epoch}"
+        log_verbose "deadline_days_focus_epoch: ${deadline_days_focus_epoch}"
         if [[ "${deadline_days_focus_epoch}" -lt "${current_epoch}" ]]; then
             log_status "Status: Focus days deadline of ${deadline_days_focus_date} (${deadline_days_focus} day(s) after ${PatchingStartDate}) HAS passed."
             deadline_days_status="FOCUS"
         else
             local deadline_days_focus_difference
             deadline_days_focus_difference=$(( deadline_days_focus_epoch - current_epoch ))
-            [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_focus_difference is: ${deadline_days_focus_difference}"
+            log_verbose "deadline_days_focus_difference is: ${deadline_days_focus_difference}"
             if [[ "${deadline_days_focus_difference}" -le 120 ]]; then
                 log_status "Status: Focus days deadline of ${deadline_days_focus_date} (${deadline_days_focus} day(s) after ${PatchingStartDate}) is only ${deadline_days_focus_difference} seconds away, waiting for deadline to pass..."
                 sleep $(( deadline_days_focus_difference + 1 ))
@@ -3062,14 +3078,14 @@ check_deadlines_days_date() {
         deadline_days_hard_epoch=$(( workflow_zero_date_epoch + deadline_days_hard_seconds ))
         local deadline_days_hard_date
         deadline_days_hard_date=$(date -r "${deadline_days_hard_epoch}" +%Y-%m-%d:%H:%M)
-        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_hard_epoch: ${deadline_days_hard_epoch}"
+        log_verbose "deadline_days_hard_epoch: ${deadline_days_hard_epoch}"
         if [[ "${deadline_days_hard_epoch}" -lt "${current_epoch}" ]]; then
             log_status "Status: Hard days deadline of ${deadline_days_hard_date} (${deadline_days_hard} day(s) after ${PatchingStartDate}) HAS passed."
             deadline_days_status="HARD"
         else
             local deadline_days_hard_difference
             deadline_days_hard_difference=$(( deadline_days_hard_epoch - current_epoch ))
-            [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_hard_difference is: ${deadline_days_hard_difference}"
+            log_verbose "deadline_days_hard_difference is: ${deadline_days_hard_difference}"
             if [[ "${deadline_days_hard_difference}" -le 120 ]]; then
                 log_status "Status: Hard days deadline of ${deadline_days_hard_date} (${deadline_days_hard} day(s) after ${PatchingStartDate}) is only ${deadline_days_hard_difference} seconds away, waiting for deadline to pass..."
                 sleep $(( deadline_days_hard_difference + 1 ))
@@ -3080,9 +3096,9 @@ check_deadlines_days_date() {
             fi
         fi
     fi
-    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_status is: ${deadline_days_status}"
+    log_verbose "deadline_days_status is: ${deadline_days_status}"
     [[ -n ${deadline_days_hard} ]] && deadline_days_epoch="${deadline_days_hard_epoch}"
-    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_days_epoch is: ${deadline_days_epoch}"
+    log_verbose "deadline_days_epoch is: ${deadline_days_epoch}"
     if [[ -n "${deadline_days_epoch}" ]]; then
         local display_string_deadline_days_only_date
         display_string_deadline_days_only_date=$(date -r "${deadline_days_epoch}" "+${DISPLAY_STRING_FORMAT_DATE}")
@@ -3094,16 +3110,16 @@ check_deadlines_days_date() {
             #display_string_deadline_days="${display_string_deadline_days_only_date} - ${display_string_deadline_days_only_time}"
             display_string_deadline_days="${display_string_deadline_days_only_date}"
         fi
-        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: display_string_deadline_days_only_date is: ${display_string_deadline_days_only_date}"
-        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: display_string_deadline_days_only_time is: ${display_string_deadline_days_only_time}"
-        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: display_string_deadline_days is: ${display_string_deadline_days}"
+        log_verbose "display_string_deadline_days_only_date is: ${display_string_deadline_days_only_date}"
+        log_verbose "display_string_deadline_days_only_time is: ${display_string_deadline_days_only_time}"
+        log_verbose "display_string_deadline_days is: ${display_string_deadline_days}"
     fi
     
     # Set ${deadline_epoch} and ${display_string_deadline} to the soonest of either days or date deadlines.
     
     deadline_epoch="${deadline_days_epoch}"
     display_string_deadline="${display_string_deadline_days}"
-    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deadline_epoch is: ${deadline_epoch}"
+    log_verbose "deadline_epoch is: ${deadline_epoch}"
     
     # If there is a ${deadline_epoch}, then make sure no user deferral timer or display timeout exceeds the deadline.
     if [[ -n "${deadline_epoch}" ]]; then
@@ -3112,7 +3128,7 @@ check_deadlines_days_date() {
         local deferral_timer_deadline_active
         deferral_timer_deadline_active="FALSE"
         [[ $deferral_timer_deadline_minutes -lt 2 ]] && deferral_timer_deadline_minutes=2
-        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deferral_timer_deadline_minutes is: ${deferral_timer_deadline_minutes}"
+        log_verbose "deferral_timer_deadline_minutes is: ${deferral_timer_deadline_minutes}"
         if [[ -n "${deferral_timer_menu_minutes}" ]]; then
             local previous_ifs
             previous_ifs="${IFS}"; IFS=','
@@ -3134,8 +3150,8 @@ check_deadlines_days_date() {
                     deferral_timer_menu_reduced_array+=("${deferral_timer_menu_item}")
                 fi
             done
-            [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deferral_timer_menu_reduced is: ${deferral_timer_menu_reduced}"
-            [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deferral_timer_menu_reduced_array is: ${deferral_timer_menu_reduced_array[*]}"
+            log_verbose "deferral_timer_menu_reduced is: ${deferral_timer_menu_reduced}"
+            log_verbose "deferral_timer_menu_reduced_array is: ${deferral_timer_menu_reduced_array[*]}"
             if [[ "${deferral_timer_menu_reduced}" == "TRUE" ]]; then
                 if [[ ${#deferral_timer_menu_reduced_array[@]} -gt 1 ]]; then
                     deferral_timer_menu_minutes="${deferral_timer_menu_reduced_array[*]}"
@@ -3155,7 +3171,7 @@ check_deadlines_days_date() {
                 deferral_timer_deadline_active="TRUE"
             fi
         fi
-        [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: deferral_timer_deadline_active is: ${deferral_timer_deadline_active}"
+        log_verbose "deferral_timer_deadline_active is: ${deferral_timer_deadline_active}"
         if [[ "${deferral_timer_deadline_active}" == "TRUE" ]]; then
             if [[ -n "${dialog_timeout_default_seconds}" ]] && [[ $dialog_timeout_default_seconds -gt 120 ]]; then
                 dialog_timeout_default_seconds=120
@@ -3313,7 +3329,7 @@ exit_clean() {
 
 exit_error() {
 
-    [[ "${verbose_mode_option}" == "TRUE" ]] && log_verbose "Verbose Mode: Function ${FUNCNAME[0]}: Local preference file at error exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
+    log_verbose "Local preference file at error exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
     log_aap "**** App Auto-Patch ${scriptVersion} - ERROR EXIT ****"
     rm -f "${appAutoPatchPIDfile}" 2> /dev/null
     exit 1
@@ -3325,6 +3341,7 @@ exit_error() {
 
 function log_aap() {
     echo -e "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: $*" | tee -a "${appAutoPatchLog}"
+    echo -e "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: $*" >> "${appAutoPatchVerboseLog}"
 }
 
 function log_notice () {
@@ -3339,8 +3356,10 @@ function log_uninstall () {
     log_aap "[UNINSTALL] $1"
 }
 
-function log_verbose () {
-    [[ "${verbose_mode_option}" == "TRUE" ]] && log_aap "[VERBOSE] Function ${funcstack[2]}: $1"
+function log_verbose() {
+	local caller_line="${funcfiletrace[1]##*:}"
+	[[ "${verbose_mode_option}" == "TRUE" ]] && log_aap "[VERBOSE] Function ${funcstack[2]} (line ${caller_line}): $1"
+	echo -e "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: [VERBOSE] Function ${funcstack[2]} (line ${caller_line}): $1" >> "${appAutoPatchVerboseLog}"
 }
 
 function log_debug () {
@@ -4821,37 +4840,8 @@ check_version_consistency() {
 
 main() {
     set_defaults
-    set_display_strings_language
+    rm -rf "${appAutoPatchVerboseLog}"
     get_options "$@"
-
-    # # Persist self-update choices if passed via CLI
-    # if [[ -n "${self_update_enabled_option:-}" ]]; then
-    #     if [[ "${self_update_enabled_option}" == "TRUE" ]]; then
-    #         /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool true
-    #     else
-    #         /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool false
-    #     fi
-    # log_info "Self-update enabled set to: ${self_update_enabled_option}"
-    # fi
-
-    # if [[ -n "${self_update_frequency_option:-}" ]]; then
-    #     # normalize to lower-case daily|weekly|monthly
-    #     local _freq_norm="${${self_update_frequency_option:l}}"
-    #     case "$_freq_norm" in daily|weekly|monthly) ;; *) _freq_norm="daily" ;; esac
-    #     /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateFrequency -string "$_freq_norm"
-    #     log_info "Self-update frequency set to: ${_freq_norm}"
-    # fi
-
-    # One-shot override
-    if [[ "${force_self_update_check_option:-}" == "TRUE" ]]; then
-        forceSelfUpdateCheck="true"
-    fi
-
-    # Check for AAP Updates
-    self_update "$@"
-
-    # Check version consistency
-    check_version_consistency
 
     workflow_startup
     #Run the function to check if a user has already completed patching for the set cadence, ignore if using --workflow-install-now
