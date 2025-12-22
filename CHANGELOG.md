@@ -3,7 +3,7 @@
 # Version 3
 
 ## Version 3.5.0
-### 19-Dec-2025
+### 22-Dec-2025
 - New Version Comparison Method options
 	- New `versionComparisonMethod` key with the options `IS_AT_LEAST` and `EQUAL_TO`
  	- `IS_AT_LEAST`: Checks if the currently installed version is the same or greater than the new version available. Utilizes the "Is-At-Least" function.
@@ -58,6 +58,7 @@
  - Adjusted deferral and patching dialog sizes to be consistent
  - Added logic to replace whitespace in version numbers with `-` to allow the `is-at-least` function to work properly with version numbers containing spaces (ex: sublimemerge)
  - Created helper function to correctly identify the appPath and icon path for dialogs. Overhauled all dialog logic to utilize new helper function
+ - Created a persistent one-time verbose log that will contain the verbose log output from the most recent run. This log is cleared at the beginning of each run
 
 ## Version 3.4.2
 ### 20-Oct-2025
