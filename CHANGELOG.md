@@ -16,6 +16,10 @@
 	- Key: `VersionComparisonInstallomatorFallback` `<true/>` | `<false/>`
  	- TRUE (Default): If AAP is unable to do a version comparison due to a missing `appNewVersion` in Installomator, it falls back to using Installomator Debug mode which will usually indicate if there is a new version or not for an app. Setting this key to TRUE will keep this functionality enabled
   	- FALSE: Disables the Installomator Debug Fallback. If the `appNewVersion` is unavailable, AAP will ignore the app and not add it to the queue
+- Added Zoom Call Active Check option: When enabled, if a user starts the install process and then starts a Zoom call, App Auto-Patch will skip the Zoom update in order to prevent closing Zoom in the middle of the meeting
+	- Default is set to Enabled
+   	- Managed Preference Key: `<key>ZoomCallActiveCheck</key>` `<true/>` | `<false/>`
+  	- CLI Options: `--zoom-call-active-check-enabled` `--zoom-call-active-check-disabled`
 - Updated info dialog with more information and easier-to-read formatting (PR #184)
 	- Bolded labels and SupportTeamName
  	- Added a new section called "Software Information."
@@ -51,10 +55,6 @@
  - Added a warning in the log if the installomator label file count is less than the threshold (1000)
  - Adjusted version comparison logic to only allow the installomator version comparison fallback to run if `appNewVersion` is not populated. This will speed up run time
  - Fixed a bug that allowed AAP to restart after install when `WorkflowDisableRelaunch` was set to TRUE (#199)
- - Added Zoom Call Active Check option: When enabled, if a user starts the install process and then starts a Zoom call, App Auto-Patch will skip the Zoom update in order to prevent closing Zoom in the middle of the meeting
-	- Default is set to Enabled
-   	- Managed Preference Key: `<key>ZoomCallActiveCheck</key>` `<true/>` | `<false/>`
-  	- CLI Options: `--zoom-call-active-check-enabled` `--zoom-call-active-check-disabled`
  - Adjusted deferral and patching dialog sizes to be consistent
  - Added logic to replace whitespace in version numbers with `-` to allow the `is-at-least` function to work properly with version numbers containing spaces (ex: sublimemerge)
  - Created helper function to correctly identify the appPath and icon path for dialogs. Overhauled all dialog logic to utilize new helper function
