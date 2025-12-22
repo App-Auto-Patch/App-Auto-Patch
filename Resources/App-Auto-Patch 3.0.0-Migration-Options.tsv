@@ -1,54 +1,75 @@
-AAP 2.11.9	3.1.0 Configuration Profile	3.1.0 CLI	3.1.0 Script
-appTitle	<key>AppTitle</key> <string>App Auto-Patch</string> 		
-convertAppsInHomeFolder	"<key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</string>"		
-daysUntilReset	<key>DaysUntilReset</key> <string>number</string>	--days-until-reset=number	
+AAP 2.11.9	3.5.0 Configuration Profile	3.5.0 CLI
+appTitle	<key>AppTitle</key> <string>App Auto-Patch</string> 	
+convertAppsInHomeFolder	"<key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</string>"	
+daysUntilReset	<key>DaysUntilReset</key> <string>number</string>	--days-until-reset=number
+maxDisplayAssertionCount	<key>DeadlineCountFocus</key> <string>number</string>	--deadline-count-focus=number
+maxDeferrals	<key>DeadlineCountHard</key> <string>number</string>	--deadline-count-hard=number
+	<key>DeadlineDaysFocus</key> <string>number</string>	--deadline-days-focus=number
+	<key>DeadlineDaysHard</key> <string>number</string>	--deadline-days-hard=number
+	<key>DeferralTimerDefault</key> <string>minutes</string>	--deferral-timer-default=minutes
+	<key>DeferralTimerError</key> <string>minutes</string>	--deferral-timer-error=minutes
+	<key>DeferralTimerFocus</key> <string>minutes</string>	--deferral-timer-focus=minutes
+	"<key>DeferralTimerMenu</key> <string>minutes,minutes,minutes,etc...</string>"	"--deferral-timer-menu=minutes,minutes,etc..."
+	<key>DeferralTimerWorkflowRelaunch</key> <string>minutes</string>	--deferral-timer-workflow-relaunch=minutes
+	<key>DialogIcon</key> <string>Filepath|URL</string>	--dialog-icon-option=filepath|URL
+	"<key>DialogOnTop</key> <string>TRUE,FALSE</string>"	
+deferralTimer	<key>DialogTimeoutDeferral</key> <integer>seconds</integer>	
+deferralTimerAction	"<key>DialogTimeoutDeferralAction</key> <string>Defer,Continue</string>"	
+ignoreAppsInHomeFolder	"<key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>"	
+ignoredLabels	<key>IgnoredLabels</key> <string>label label label etc…</string>	"--ignored-labels=""label1 label2"""
+installomatorOptions	<key>InstallomatorOptions</key> <string>OPTION=option OPTION=option</string>	
+	"<key>InstallomatorUpdateDisable</key> <string>TRUE,FALSE</string>"	
+useLatestAvailableInstallomatorScriptVersion	"<key>InstallomatorVersion</key> <string>Main,Release</string>"	
+	<key>InstallomatorVersionCustomBranchName</key> <string>main</string>	
+	<key>InstallomatorVersionCustomRepoPath</key> <string>Installomator/Installomator</string>	
+interactiveMode	<key>InteractiveMode</key> <integer>number</integer>	--interactiveMode=number
+	<key>MonthlyPatchingCadenceEnabled</key> <true/> | <false/>	
+	<key>MonthlyPatchingCadenceOrdinalValue</key> <string>second</string>	
+	<key>MonthlyPatchingCadenceStartTime</key> <string>09:00:00</string>	
+	<key>MonthlyPatchingCadenceWeekdayIndex</key> <string>tuesday</string>	
+optionalLabels	<key>OptionalLabels</key> <string>label label label etc…</string>	"--optional-labels=""label1 label2"""
+patchWeekStartDay	<key>PatchWeekStartDay</key> <string>number</string>	--patch-week-start-day=number
+removeInstallomatorPath	"<key>RemoveInstallomatorPath</key> <string>TRUE,FALSE</string>"	
+requiredLabels	<key>RequiredLabels</key> <string>label label label etc…</string>	"--required-labels=""label1 label2"""
+	<key>SelfUpdateEnabled</key> <true/> | <false/>	--self-update-enabled --self-update-disabled
+	<key>SelfUpdateFrequency</key> <string>daily|weekly|monthly</string>	--self-update-frequency=daily|weekly|monthly
+supportTeamEmail	<key>SupportTeamEmail</key> <string>email</string>	
+supportTeamName	<key>SupportTeamName</key> <string>name</string>	
+supportTeamPhone	<key>SupportTeamPhone</key> <string>phoem</string>	
+supportTeamWebsite	<key>SupportTeamWebsite</key> <string>URL</string>	
+unattendedExit	"<key>UnattendedExit</key> <string>TRUE,FALSE</string>"	
+unattendedExitSeconds	<key>UnattendedExitSeconds</key> <integer>seconds</integer>	
+useOverlayIcon	"<key>UseOverlayIcon</key> <string>TRUE,FALSE</string>"	
+	<key>VersionComparisonInstallomatorFallback</key> <true/> | <false/>	
+	"<key>VersionComparisonMethod</key> <string>IS_AT_LEAST,EQUAL_TO</string>"	
+webhookEnabled	"<key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>"	"--webhook-feature-all
+--webhook-feature-failures
+--webhook-feature-off"
+slackURL	<key>WebhookURLSlack</key> <string>URL</string>	--webhook-url-slack=url
+teamsURL	<key>WebhookURLTeams</key> <string>URL</string>	--webhook-url-teams=url
+runDiscovery	<key>WorkflowDisableAppDiscovery</key> <true/> | <false/>	--workflow-disable-app-discovery | --workflow-disable-app-discovery-off
+	<key>WorkflowDisableRelaunch</key> <true/> | <false/>	--workflow-disable-relaunch | --workflow-disable-relaunch-off
+	<key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>	"--workflow-install-now-patching-status-action-never
+--workflow-install-now-patching-status-action-always
+--workflow-install-now-patching-status-action-success"
+	<key>ZoomCallActiveCheck</key> <true/> | <false/>	"--zoom-call-active-check-enabled
+--zoom-call-active-check-disabled"
+		--deadline-count-delete-all
+		--deadline-days-delete-all
 debugMode		"--debug-mode | --debug-mode-off
---verbose-mode | --verbose-mode-off"	
-deferralTimer	<key>DialogTimeoutDeferral</key> <integer>seconds</integer>		
-deferralTimerAction	"<key>DialogTimeoutDeferralAction</key> <string>Defer,Continue</string>"		
-ignoreAppsInHomeFolder	"<key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>"		
-ignoredLabels	<key>IgnoredLabels</key> <string>label label label etc…</string>	"--ignored-labels=""label1 label2"""	
-ignoreDNDApps			
-installomatorOptions	<key>InstallomatorOptions</key> <string>OPTION=option OPTION=option</string>		
-interactiveMode	<key>InteractiveMode</key> <integer>number</integer>	--interactiveMode=number	
-maxDeferrals	<key>DeadlineCountHard</key> <string>number</string>	--deadline-count-hard=number	
-maxDisplayAssertionCount	<key>DeadlineCountFocus</key> <string>number</string>	--deadline-count-focus=number	
-optionalLabels	<key>OptionalLabels</key> <string>label label label etc…</string>	"--optional-labels=""label1 label2""]"	
-outdatedOsAction			
-patchWeekStartDay	<key>PatchWeekStartDay</key> <string>number</string>	--patch-week-start-day=number	
-removeInstallomatorPath	"<key>RemoveInstallomatorPath</key> <string>TRUE,FALSE</string>"		
-requiredLabels	<key>RequiredLabels</key> <string>label label label etc…</string>	"--required-labels=""label1 label2"""	
-runDiscovery	<key>WorkflowDisableAppDiscovery</key> <true/> | <false/>	--workflow-disable-app-discovery | --workflow-disable-app-discovery-off	
-selfServicePatchingStatusModeReset			workflow_install_now_patching_status_action
-slackURL	<key>WebhookURLSlack</key> <string>URL</string>	--webhook-url-slack=URL	
-supportTeamEmail	<key>SupportTeamEmail</key> <string>email</string>		
-supportTeamName	<key>SupportTeamName</key> <string>name</string>		
-supportTeamPhone	<key>SupportTeamPhone</key> <string>phoem</string>		
-supportTeamWebsite	<key>SupportTeamWebsite</key> <string>URL</string>		
-swiftDialogMinimumRequiredVersion			
-teamsURL	<key>WebhookURLTeams</key> <string>URL</string>	--webhook-url-teams=URL	
-unattendedExit	"<key>UnattendedExit</key> <string>TRUE,FALSE</string>"		
-unattendedExitSeconds	<key>UnattendedExitSeconds</key> <integer>seconds</integer>		
-useLatestAvailableInstallomatorScriptVersion	"<key>InstallomatorVersion</key> <string>Main,Release</string>"		
-useOverlayIcon	"<key>UseOverlayIcon</key> <string>TRUE,FALSE</string>"		
-webhookEnabled	"<key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>"	--webhook-feature-all | --webhook-feature-failures | --webhook-feature-off	
-	<key>DeadlineDaysHard</key> <string>number</string>	--deadline-days-hard=number	
-	<key>DeadlineDaysFocus</key> <string>number</string>	--deadline-days-focus=number	
-	<key>DeferralTimerDefault</key> <string>minutes</string>	--deferral-timer-default=minutes	
-	<key>DeferralTimerError</key> <string>minutes</string>	--deferral-timer-error=minutes	
-	<key>DeferralTimerFocus</key> <string>minutes</string>	--deferral-timer-focus=minutes	
-	"<key>DeferralTimerMenu</key> <string>minutes,minutes,minutes,etc...</string>"	"--deferral-timer-menu=minutes,minutes,etc..."	
-	<key>DeferralTimerWorkflowRelaunch</key> <string>minutes</string>	--deferral-timer-workflow-relaunch=minutes	
-	"<key>DialogOnTop</key> <string>TRUE,FALSE</string>"		
-	<key>WorkflowDisableRelaunch</key> <true/> | <false/>	--workflow-disable-relaunch | --workflow-disable-relaunch-off	
-		--deadline-count-delete-all	
-		--deadline-days-delete-all	
-		--deferral-timer-reset-all	
-		--help	
-		--reset-defaults	
-		--reset-labels	
-		--uninstall	
-		--usage	
-		--vers	
-		--version	
-		--workflow-install-now	
+--verbose-mode | --verbose-mode-off"
+		--deferral-timer-reset-all
+		--force-self-update-check
+		--help
+		--reset-defaults
+		--reset-labels
+		--uninstall
+		--usage
+		--vers
+		--version
+		--workflow-install-now
+		--workflow-install-now-silent
+ignoreDNDApps		
+outdatedOsAction		
+selfServicePatchingStatusModeReset		
+swiftDialogMinimumRequiredVersion		
