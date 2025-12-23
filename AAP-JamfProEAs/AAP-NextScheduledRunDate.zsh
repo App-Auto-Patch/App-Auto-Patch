@@ -1,10 +1,10 @@
 #!/bin/zsh --no-rcs
 
-# This script returns the Next Scheduled Run of App Auto Patch 3.2.0 to Jamf inventory. 
+# This script returns the Next Scheduled Run of App Auto Patch 3.5.0 to Jamf inventory. 
 # If PatchingCompletionStatus is True, date is calculated based on PatchingStartDate + daysUntilReset.
-# If PatchingCompletionStatus if False, NextAutoLaunch date is used
+# If PatchingCompletionStatus if False or MonthlyPatchingCadenceEnabled is True, NextAutoLaunch date is used
 # Make sure to set the Extension Attribute Data Type to "Date".
-# 05.01.2025
+# 12.22.2025
 
 zmodload zsh/datetime
 AAP_folder="/Library/Management/AppAutoPatch"
@@ -17,9 +17,13 @@ if [[ -f "${AAP_plist}.plist" ]]; then
   NextAutoLaunch=$(defaults read "${AAP_plist}" NextAutoLaunch 2>/dev/null)
   daysUntilReset=$(defaults read "${AAP_plist}" DaysUntilReset 2>/dev/null | tr -d '[:space:]')
   PatchingCompletionStatus=$(defaults read "${AAP_plist}" AAPPatchingCompletionStatus 2>/dev/null)
+  MonthlyPatchingCadenceEnabled=$(defaults read "${AAP_plist}" MonthlyPatchingCadenceEnabled 2>/dev/null)
 
+if [[ ! -n $MonthlyPatchingCadenceEnabled ]]; then
+  MonthlyPatchingCadenceEnabled=0
+fi
 
-if [[ $PatchingCompletionStatus == 1 ]]; then
+if [[ $PatchingCompletionStatus == 1 ]] && [[ $MonthlyPatchingCadenceEnabled == 0 ]]; then
   # Validate both values
   if [[ -n "$patchingStartDate" && "$daysUntilReset" =~ ^[0-9]+$ ]]; then
     # Convert input date to epoch

@@ -40,6 +40,8 @@
 	<string>1password* androidstudio microsoft*</string>
 	<key>InstallomatorOptions</key>
 	<string>BLOCKING_PROCESS_ACTION=quit_kill NOTIFY=silent LOGO=appstore IGNORE_APP_STORE_APPS=yes</string>
+	<key>InstallomatorUpdateDisable</key>
+	<string>FALSE</string>
 	<key>InstallomatorVersion</key>
 	<string>Main</string>
 	<key>InstallomatorVersionCustomRepoPath</key>
@@ -82,6 +84,10 @@
 	<integer>60</integer>
 	<key>UseOverlayIcon</key>
 	<string>TRUE</string>
+	<key>VersionComparisonInstallomatorFallback</key>
+	<true/>
+	<key>VersionComparisonMethod</key>
+	<string>IS_AT_LEAST</string>
 	<key>WebhookFeature</key>
 	<string>FAILURES</string>
 	<key>WebhookURLSlack</key>
@@ -94,5 +100,7 @@
 	<string>FALSE</string>
 	<key>WorkflowInstallNowPatchingStatusAction</key>
 	<string>SUCCESS</string>
+	<key>ZoomCallActiveCheck</key>
+	<true/>
 </dict>
 </plist>

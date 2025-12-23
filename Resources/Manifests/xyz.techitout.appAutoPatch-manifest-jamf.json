@@ -209,7 +209,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Monthly-Patching-Cadence"
                 }
             ],
             "property_order": 56
@@ -239,7 +239,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Monthly-Patching-Cadence"
                 }
             ],
             "property_order": 57
@@ -271,7 +271,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Monthly-Patching-Cadence"
                 }
             ],
             "property_order": 58
@@ -288,10 +288,23 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Monthly-Patching-Cadence"
                 }
             ],
             "property_order": 59
+        },
+        "ZoomCallActiveCheck": {
+            "type": "boolean",
+            "title": "Zoom Call Active Check",
+            "default": "1",
+            "description": "When enabled, AAP will automatically skip updating Zoom if a call is active",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Zoom-Call-Active-Check"
+                }
+            ],
+            "property_order": 60
         },
         "DialogOnTop": {
             "type": "string",
@@ -313,7 +326,7 @@
                     "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#dialogontop"
                 }
             ],
-            "property_order": 60
+            "property_order": 61
         },
         "DialogTimeoutDeferral": {
             "type": "string",
@@ -441,7 +454,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#ignoredlabels"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Populating-App-Labels#ignored"
                 }
             ],
             "property_order": 90
@@ -458,7 +471,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#requiredlabels"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Populating-App-Labels#required"
                 }
             ],
             "property_order": 95
@@ -466,7 +479,7 @@
         "OptionalLabels": {
             "type": "string",
             "title": "Optional Labels",
-            "description": "A space-separated list of optional Installomator labels. Labels in this category are only included if the app exists on the end-users device and will force install even if its the latest version. **Does not** support wildcards!",
+            "description": "A space-separated list of optional Installomator labels. Labels in this category are only included if the app exists on the end-users device and the app is not up to date. **Does not** support wildcards!",
             "options": {
                 "inputAttributes": {
                     "placeholder": "1password8 adobereaderdc amazonchime apparency firefoxpkg vlc zoom"
@@ -475,7 +488,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#optionallabels"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Populating-App-Labels#optional"
                 }
             ],
             "property_order": 100
@@ -663,7 +676,7 @@
                 "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#interactivemode"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/End-User-Experience#interactive-mode"
                 }
             ],
             "property_order": 145
@@ -817,12 +830,6 @@
             "title": "Disable App Discovery Workflow",
             "default": "FALSE",
             "description": "Disables the discovery of applications that require patching. If a list of labels from a previous discovery exists, AAP will use that list for the workflow",
-            "links": [
-                {
-                    "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings"
-                }
-            ],
             "enum": [
                 "TRUE",
                 "FALSE"
@@ -836,7 +843,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#workflowdisableappdiscovery"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#disable-app-discovery"
                 }
             ],
             "property_order": 190
@@ -846,12 +853,6 @@
             "title": "Disable Relaunch Workflow",
             "default": "FALSE",
             "description": "Disable the automatic relaunch of AAP after the current workflow successfully completes",
-            "links": [
-                {
-                    "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings"
-                }
-            ],
             "enum": [
                 "TRUE",
                 "FALSE"
@@ -865,7 +866,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#disable-automatic-relaunch"
                 }
             ],
             "property_order": 195
@@ -887,12 +888,25 @@
                     "SUCCESS"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#workflow-install-now-patching-status-action"
+                }
+            ],
             "property_order": 200
         },
         "SelfUpdateEnabled": {
             "type": "boolean",
+            "default": "1",
             "title": "Self Update Enabled",
             "description": "Determines if the Self Update feature is enabled. this will automatically update App Auto-Patch if a new version is posted on github",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Self-Update-Function"
+                }
+            ],
             "property_order": 201
         },
         "SelfUpdateFrequency": {
@@ -912,7 +926,47 @@
                     "Monthly"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Self-Update-Function"
+                }
+            ],
             "property_order": 202
+        },
+        "versionComparisonMethod": {
+            "type": "string",
+            "title": "Version Comparison Method",
+            "description": "Determines the version comparison method used when checking for updates",
+            "enum": [
+                "IS_AT_LEAST",
+                "EQUAL_TO"
+            ],
+            "options": {
+                "enum_titles": [
+                    "Is At Least",
+                    "Equal To"
+                ]
+            },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Version-Comparison-Methods#version-comparison-method"
+                }
+            ],
+            "property_order": 203
+        },
+        "VersionComparisonInstallomatorFallback": {
+            "type": "boolean",
+            "title": "Version Comparison Installomator Fallback",
+            "description": "When enabled, if version comparison fails, AAP will fall back to using Installomator for version checking",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Version-Comparison-Methods#version-comparison-installomator-fallback"
+                }
+            ],
+            "property_order": 204
         },
         "userInterface": {
             "type": "object",
@@ -932,7 +986,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -943,7 +997,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -954,7 +1008,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -965,7 +1019,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -976,7 +1030,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -987,7 +1041,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -998,7 +1052,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1009,7 +1063,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1020,7 +1074,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1031,7 +1085,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1042,7 +1096,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1053,7 +1107,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1064,7 +1118,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1075,7 +1129,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1086,7 +1140,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1097,7 +1151,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1108,7 +1162,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1119,7 +1173,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1130,7 +1184,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1141,7 +1195,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1152,7 +1206,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1163,7 +1217,18 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_deferral_selecttitle": {
+                                "type": "string",
+                                "title": "Deferral Dialog Select Title",
+                                "description": "Language for deferral select title",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1174,7 +1239,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1185,7 +1250,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1196,7 +1261,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1207,7 +1272,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1218,7 +1283,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1229,7 +1294,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1240,7 +1305,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1251,7 +1316,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1262,7 +1327,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1273,7 +1338,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1284,7 +1349,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1295,7 +1360,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1306,7 +1371,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1317,7 +1382,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1328,7 +1393,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1339,7 +1404,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1350,7 +1415,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1361,7 +1426,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1372,7 +1437,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1383,7 +1448,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1394,7 +1459,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1405,7 +1470,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1416,7 +1481,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             },
@@ -1427,7 +1492,7 @@
                                 "links": [
                                     {
                                         "rel": "More information",
-                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                                     }
                                 ]
                             }
@@ -1438,7 +1503,7 @@
                     "links": [
                         {
                             "rel": "More information",
-                            "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/"
+                            "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
                         }
                     ]
                 }
