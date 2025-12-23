@@ -15,7 +15,7 @@ App Auto-Patch combines local application discovery, an Installomator integratio
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, eliminating the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.5.0
-- New Version Comparison Method options
+- [New Version Comparison Method options](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Version-Comparison-Methods)
 	- New `versionComparisonMethod` key with the options `IS_AT_LEAST` and `EQUAL_TO`
  	- `IS_AT_LEAST`: Checks if the currently installed version is the same or greater than the new version available. Utilizes the "Is-At-Least" function.
  	- `EQUAL_TO`: Checks if the currently installed version is equal to the new version available
@@ -23,11 +23,11 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 	- Optional Labels will now be checked for both Installed and Update Available
  	- **Breaking Change**: Optional labels will be checked during the discovery phase. If you use Optional labels and had previously disabled the discovery workflow, it must now be enabled for the labels to be checked
  	- You can use an asterisk `*` to ignore all labels, and any optional labels will be omitted from the ignore list to be checked if installed and update available
-- Option to disable Installomator Debug Fallback for version comparison
+- [Option to disable Installomator Debug Fallback for version comparison](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Version-Comparison-Methods#version-comparison-installomator-fallback)
 	- Key: `VersionComparisonInstallomatorFallback` `<true/>` | `<false/>`
  	- TRUE (Default): If AAP is unable to do a version comparison due to a missing `appNewVersion` in Installomator, it falls back to using Installomator Debug mode, which will usually indicate if there is a new version or not for an app. Setting this key to TRUE will keep this functionality enabled
   	- FALSE: Disables the Installomator Debug Fallback. If the `appNewVersion` is unavailable, AAP will ignore the app and not add it to the queue
-- Added Zoom Call Active Check option: When enabled, if a user starts the install process and then starts a Zoom call, App Auto-Patch will skip the Zoom update to prevent closing Zoom in the middle of the meeting
+- [Added Zoom Call Active Check option:](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Zoom-Call-Active-Check) When enabled, if a user starts the install process and then starts a Zoom call, App Auto-Patch will skip the Zoom update to prevent closing Zoom in the middle of the meeting
 	- Default is set to Enabled
    	- Managed Preference Key: `<key>ZoomCallActiveCheck</key>` `<true/>` | `<false/>`
   	- CLI Options: `--zoom-call-active-check-enabled` `--zoom-call-active-check-disabled`
@@ -77,10 +77,10 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 - Flipped buttons on the deferral dialog so that Defer is the primary button, preventing accidental installs. Renamed `Continue` to `Install Now`
 
 ## New features/Specific Changes in 3.4.0
-- Added App Auto-Patch Script Self Update functionality (Feature Request #128)
+- [Added App Auto-Patch Script Self Update functionality](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Self-Update-Function) (Feature Request #128)
 	- Managed Config: Configure using the SelfUpdateEnabled | SelfUpdateFrequency keys
  - CLI: Configure using the --self-update-enabled | --self-update-disabled | --self-update-frequency triggers. Force update using --force-self-update-check trigger
-- Monthly Patching Cadence Functionality: Added the ability to set a Monthly Patching Cadence (e.g., Patch Tuesday).
+- [Monthly Patching Cadence Functionality:](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Monthly-Patching-Cadence) Added the ability to set a Monthly Patching Cadence (e.g., Patch Tuesday).
 	- MonthlyPatchingCadenceEnabled (TRUE|FALSE)
 	- MonthlyPatchingCadenceOrdinalValue: Week of the month you want AAP to be scheduled (first|second|third|fourth|fifth|final)
 	- MonthlyPatchingCadenceWeekdayIndex: Day of the week you want AAP to be scheduled (sunday|monday|tuesday|wednesday|thursday|friday|saturday)
