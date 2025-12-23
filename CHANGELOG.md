@@ -10,13 +10,13 @@
  	- `EQUAL_TO`: Checks if the currently installed version is equal to the new version available
 - Optional Label logic updates
 	- Optional Labels will now be checked for both Installed and Update Available
- 	- **Breaking Change**: Optional labels will be checked during the discovery phase. If you use Optional labels and had previously disabled the discovery workflow, it must now be enabled in order for the labels to be checked
+ 	- **Breaking Change**: Optional labels will be checked during the discovery phase. If you use Optional labels and had previously disabled the discovery workflow, it must now be enabled for the labels to be checked
  	- You can use an asterisk `*` to ignore all labels, and any optional labels will be omitted from the ignore list to be checked if installed and update available
 - Option to disable Installomator Debug Fallback for version comparison
 	- Key: `VersionComparisonInstallomatorFallback` `<true/>` | `<false/>`
- 	- TRUE (Default): If AAP is unable to do a version comparison due to a missing `appNewVersion` in Installomator, it falls back to using Installomator Debug mode which will usually indicate if there is a new version or not for an app. Setting this key to TRUE will keep this functionality enabled
+ 	- TRUE (Default): If AAP is unable to do a version comparison due to a missing `appNewVersion` in Installomator, it falls back to using Installomator Debug mode, which will usually indicate if there is a new version or not for an app. Setting this key to TRUE will keep this functionality enabled
   	- FALSE: Disables the Installomator Debug Fallback. If the `appNewVersion` is unavailable, AAP will ignore the app and not add it to the queue
-- Added Zoom Call Active Check option: When enabled, if a user starts the install process and then starts a Zoom call, App Auto-Patch will skip the Zoom update in order to prevent closing Zoom in the middle of the meeting
+- Added Zoom Call Active Check option: When enabled, if a user starts the install process and then starts a Zoom call, App Auto-Patch will skip the Zoom update to prevent closing Zoom in the middle of the meeting
 	- Default is set to Enabled
    	- Managed Preference Key: `<key>ZoomCallActiveCheck</key>` `<true/>` | `<false/>`
   	- CLI Options: `--zoom-call-active-check-enabled` `--zoom-call-active-check-disabled`
@@ -24,7 +24,7 @@
 	- Bolded labels and SupportTeamName
  	- Added a new section called "Software Information."
 	- Added line for Installomator version (both version and versiondate)
-	- Added the option to hide Telephone, Email, and/or Help Website by setting their value to "hide"
+	- Added the option to hide Telephone, Email, and/or Help Website by setting their value to "hide."
 	- Renamed default label from "Started" to "AAP Started" to clarify timestamp intent
 	- Renamed default software-version labels for a unified look
 - Updated webhooks for both Slack and Teams (PR #185)
@@ -34,9 +34,9 @@
 	- Removed the computer record URL since the button serves the same purpose.
 	- Removed the hostname because it often matches the S/N, and the S/N is easier to search.
 	- Made the card more compact and information-dense.
- - Fixed label matching to ensure all labels are properly added to arrays without duplicates (#197)
+ - Fixed label matching to ensure all labels are correctly added to arrays without duplicates (#197)
  - Fixed NextAutoLaunch logic to prevent AAP from launching after install when WorkflowDisableRelaunch is set to TRUE
- - Added logic to pull and use the targetDir value from Installomator labels if present and the app is not in the /Applications folder
+ - Added logic to pull and use the targetDir value from Installomator labels if present, and the app is not in the /Applications folder
  - Added logic to pull folderName value from Installomator labels if present
  - Added logic to pull versionKey value from Installomator labels if present
  - Added various verbose logging
@@ -48,16 +48,16 @@
  - Added logic to skip pre-validation for Apple apps that are missing a TeamID (#198)
  - Added build number to script
  - Modified self update logic to use build number (This will allow beta versions to be updated to the final release)
- - Fixed a date format issue when using the monthly patching cadence that was causing AAP to immediately restart upon completion
- - Modified Installomator Debug Fallback to check for packageID if type = pkg or pkgInDmg or pkgInZip and skip if packageID is blank and unable to complete version comparison
- - Moved get_installomator function to run prior to populating installomator app labels. This ensures the latest installomator data is retrieved prior to processing label variables so they are properly populated
+ - Fixed a date format issue when using the monthly patching cadence that was causing AAP to restart upon completion immediately
+ - Modified Installomator Debug Fallback to check for packageID if type = pkg or pkgInDmg or pkgInZip, and skip if packageID is blank and unable to complete version comparison
+ - Moved get_installomator function to run before populating installomator app labels. This ensures the latest installomator data is retrieved before processing label variables, so they are correctly populated
  - Added a check to make sure the Installomator download is successful. If the labels are missing, AAP will retry getting Installomator twice. On the third failure, AAP will quit and not move forward
  - Added a warning in the log if the installomator label file count is less than the threshold (1000)
- - Adjusted version comparison logic to only allow the installomator version comparison fallback to run if `appNewVersion` is not populated. This will speed up run time
+ - Adjusted version comparison logic to only allow the installomator version comparison fallback to run if `appNewVersion` is not populated. This will speed up the run time
  - Fixed a bug that allowed AAP to restart after install when `WorkflowDisableRelaunch` was set to TRUE (#199)
  - Adjusted deferral and patching dialog sizes to be consistent
- - Added logic to replace whitespace in version numbers with `-` to allow the `is-at-least` function to work properly with version numbers containing spaces (ex: sublimemerge)
- - Created helper function to correctly identify the appPath and icon path for dialogs. Overhauled all dialog logic to utilize new helper function
+ - Added logic to replace whitespace in version numbers with `-` to allow the `is-at-least` function to work correctly with version numbers containing spaces (ex, sublimemerge)
+ - Created a helper function to identify the appPath and icon path for dialogs correctly. Overhauled all dialog logic to utilize the new helper function
  - Created a persistent one-time verbose log that will contain the verbose log output from the most recent run. This log is cleared at the beginning of each run
 
 ## Version 3.4.2
