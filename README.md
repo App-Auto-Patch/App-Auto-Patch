@@ -8,8 +8,7 @@
 ## Introduction
 App Auto-Patch combines local application discovery, an Installomator integration, and user-friendly swiftDialog prompts to automate application patch management across Mac computers.
 
-[<img alt="App Auto Patch" src="https://github.com/App-Auto-Patch/App-Auto-Patch/blob/6a7ace89d2f4fc6641b1829f04950bbf3401b6f1/Images/AAP-Demo.gif" />](https://techitout.xyz/app-auto-patch)
-
+<img alt="Dialog Example" src="https://github.com/App-Auto-Patch/App-Auto-Patch/blob/176f0c284d7b2312375a3a11ae8a8e4f2159ecdf/Images/Combined%20Dialogs.png" />
 
 ## Why Build This
 
