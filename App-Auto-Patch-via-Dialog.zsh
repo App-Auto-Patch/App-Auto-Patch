@@ -390,7 +390,7 @@ set_display_strings_language() {
     display_string_and="and"
     display_string_days="days"
     display_string_times="times"
-    display_string_there_are="There are"
+    display_string_there_are="The following"
     
     #### Language for the App Discovery dialog
     display_string_discovery_message="Analyzing installed apps"
@@ -403,8 +403,8 @@ set_display_strings_language() {
     display_string_deferral_infobox1="Deferral available until"
     display_string_deferral_infobox2="out of"
     display_string_deferral_infobox3="deferrals remaining\n"
-    display_string_deferral_message_01="You can **Defer** the updates or **Install Now** to close the applications and apply updates.  \n\n"
-    display_string_deferral_message_02="application(s) that require updates:"
+    display_string_deferral_message_01="You can **Install Now** to close the applications and apply the updates, or **Defer** to postpone them."
+    display_string_deferral_message_02="**application(s)** require updates.\n\n"
     display_string_deferral_unlimited="No deadline date and unlimited deferrals\n"
     display_string_deferral_selecttitle="Defer updates for:"
     
@@ -3712,7 +3712,7 @@ dialog_install_or_defer() {
         infobox="${display_string_deferral_unlimited}"
     fi
 	#infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $display_string_deadline_count"
-	message="${display_string_deferral_message_01} ${display_string_there_are} (${numberOfUpdates}) ${display_string_deferral_message_02}"
+	message="${display_string_there_are} **(${numberOfUpdates})** ${display_string_deferral_message_02} ${display_string_deferral_message_01}"
     height=480
 	
 	# Create the deferrals available dialog options and content
