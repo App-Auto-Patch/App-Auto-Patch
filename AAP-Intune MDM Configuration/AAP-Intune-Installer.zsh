@@ -5,7 +5,8 @@
 # 
 # https://github.com/App-Auto-Patch/App-Auto-Patch
 # by Andrew Spokes (@TechTrekkie)
-# 2025/03/09
+# 2026/01/29
+# Hash currently set to the 3.5.0 version
 
 # Path to the AAP working folder:
 AAP_FOLDER="/Library/Management/AppAutoPatch"
@@ -14,10 +15,11 @@ AAP_FOLDER="/Library/Management/AppAutoPatch"
 AAP_LOCAL_PLIST="${AAP_FOLDER}/xyz.techitout.appAutoPatch" # No trailing ".plist"
 
 # Version to install:
-INSTALL_VERSION="3.0.4"
+# Use main to pull from the main branch
+INSTALL_VERSION="main"
 
 # Hash of downloaded script for security reasons:
-HASH_CHECK=bad8e82bc47d84839c6ceb79f1517f2f2a372dfba7f0de9cae7a51ba4f5ae1c9
+HASH_CHECK=1dd0e3d8b1075deb22ee9ef91328885e92061331dd04f67aa217fc18af8d0d5a
 
 # Temporary download folder
 AAP_TEMP="/var/tmp/temp_aap"
@@ -73,5 +75,4 @@ disown
 rm -rf $AAP_TEMP
 
 exit 0
-
 
