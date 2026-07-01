@@ -4617,20 +4617,35 @@ workflow_do_Installations() {
         swiftDialogOptions=()
         if [ ${InteractiveModeOption} -ge 1 ]; then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
-            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+
+            if [[ "${label}" == brewcask__* || "${label}" == brewformula__* ]]; then
+                currentDisplay_name="${brewDisplayNames[$label]:-${label}}"
+                iconPath="${brewIconPaths[$label]:-SF=shippingbox.fill,colour1=#f5a623}"
+            else
+                currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+                iconPath=$(resolve_app_icon_path "$label")
+            fi
+
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplay_name}"\')
             sleep .5
 
-            # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
-            iconPath=$(resolve_app_icon_path "$label")
-            
             swiftDialogUpdate "icon: $iconPath"
             swiftDialogUpdate "progresstext: ${display_string_patching_progress} ${currentDisplay_name} …"
             swiftDialogUpdate "listitem: index: $i, icon: $iconPath, status: wait, statustext: ${display_string_patching_checking} …"
-            
+
         fi
 
-        if [[ ${zoom_call_active_check_option} == "TRUE" && ${label} == "zoom"* ]] ; then
+        if [[ "${label}" == brewcask__* || "${label}" == brewformula__* ]]; then
+            # Homebrew upgrade path
+            brew_install_package "${label}"
+            installomatorExitCode=$?
+            if [[ $installomatorExitCode -ne 0 ]]; then
+                log_error "Error upgrading Homebrew package ${label}. Exit code $installomatorExitCode"
+                swiftDialogUpdate "listitem: index: $i, status: fail"
+                let errorCount++
+            fi
+            write_aap_receipt "${label}" "${AAPVersionByLabel[$label]:-}" "$installomatorExitCode"
+        elif [[ ${zoom_call_active_check_option} == "TRUE" && ${label} == "zoom"* ]] ; then
 
 	        CPTHOSTPID=$(pgrep CptHost)
 	        AOMHOSTPID=$(pgrep aomhost)
