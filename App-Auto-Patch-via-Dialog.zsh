@@ -3680,12 +3680,14 @@ swiftDialogPatchingWindow(){
         
         # Build our list of Display Names for the SwiftDialog list
         for label in $queuedLabelsArray; do
-            # Get display name from label fragment
-            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-            
-            # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
-            iconPath=$(resolve_app_icon_path "$label")
-            
+            if [[ "${label}" == brewcask__* || "${label}" == brewformula__* ]]; then
+                currentDisplay_name="${brewDisplayNames[$label]:-${label}}"
+                iconPath="${brewIconPaths[$label]:-SF=shippingbox.fill,colour1=#f5a623}"
+            else
+                currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+                iconPath=$(resolve_app_icon_path "$label")
+            fi
+
             displayNames+=("--listitem")
             displayNames+=(${currentDisplay_name},icon="${iconPath}")
         done
@@ -5265,6 +5267,9 @@ main() {
 
     declare -A configArray=()
     typeset -gA AAPVersionByLabel=()
+    typeset -gA brewDisplayNames=()
+    typeset -gA brewIconPaths=()
+    brewSupersedingLabels=""
     # Start the appropriate main workflow based on user options.
     if [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then # Skip App Discovery Workflow
         log_notice "**** App Auto-Patch ${scriptVersion} - SKIP APP DISCOVERY WORKFLOW ****"
@@ -5399,6 +5404,9 @@ main() {
             done
         done
 
+        # Homebrew discovery — runs after Installomator so configArray/labelsArray are populated
+        homebrew_discovery
+
         # Close our bouncing progress swiftDialog window
         swiftDialogCompleteDialogDiscover
 
@@ -5432,17 +5440,29 @@ main() {
 
     labelsArray=${labelsArray:|ignoredLabelsArray}
 
+    # Remove Installomator labels that Homebrew won over (priority/conflict resolution)
+    if [[ -n "${brewSupersedingLabels}" ]]; then
+        local _superseded_arr
+        _superseded_arr=(${=brewSupersedingLabels})
+        for _sup in "${_superseded_arr[@]}"; do
+            labelsArray=(${labelsArray:#${_sup}})
+            log_notice "Homebrew supersedes Installomator label: ${_sup}"
+        done
+    fi
+
     appNamesArray=()
     # Get App Names for each label in labelsArray
     queuedLabelsForNames=("${(@s/ /)labelsArray}")
     for label in $queuedLabelsForNames; do
         log_verbose "Obtaining proper name for $label"
-        
-        # Get display name from label fragment
-        currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-        
-        # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
-        iconPath=$(resolve_app_icon_path "$label")
+
+        if [[ "${label}" == brewcask__* || "${label}" == brewformula__* ]]; then
+            currentDisplay_name="${brewDisplayNames[$label]:-${label}}"
+            iconPath="${brewIconPaths[$label]:-SF=shippingbox.fill,colour1=#f5a623}"
+        else
+            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            iconPath=$(resolve_app_icon_path "$label")
+        fi
         log_verbose "Resolved icon path: $iconPath"
 
         appNamesArray+=("--listitem")
