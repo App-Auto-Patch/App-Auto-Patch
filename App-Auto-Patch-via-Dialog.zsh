@@ -4417,6 +4417,172 @@ function brew_install_package() {
 	return ${pipestatus[1]}
 }
 
+function homebrew_discovery() {
+	if [[ "${homebrew_enabled_option}" != "TRUE" ]]; then
+		log_info "Homebrew management disabled"
+		return
+	fi
+
+	if [[ "${homebrew_cask_enabled_option}" != "TRUE" && "${homebrew_formula_enabled_option}" != "TRUE" ]]; then
+		log_info "Homebrew cask and formula both disabled"
+		return
+	fi
+
+	if [[ -z "${currentUserAccountName}" || "${currentUserAccountName}" == "FALSE" ]]; then
+		log_warning "Homebrew discovery skipped: no user logged in"
+		return
+	fi
+
+	if ! get_homebrew_binary; then
+		log_warning "Homebrew binary not found — skipping Homebrew discovery"
+		return
+	fi
+
+	log_notice "**** Homebrew Discovery ****"
+
+	local brew_outdated_json
+	brew_outdated_json=$(sudo -u "${currentUserAccountName}" "${brewBinary}" outdated --json=v2 2>/dev/null)
+	local brew_exit_code=$?
+
+	if [[ $brew_exit_code -ne 0 ]] || [[ -z "$brew_outdated_json" ]]; then
+		log_error "brew outdated failed (exit code: $brew_exit_code) — skipping Homebrew discovery"
+		return
+	fi
+
+	local queued_casks=0
+	local queued_formulae=0
+
+	# Process outdated casks
+	if [[ "${homebrew_cask_enabled_option}" == "TRUE" ]]; then
+		local cask_data
+		cask_data=$(echo "${brew_outdated_json}" | /usr/bin/python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for c in data.get('casks', []):
+    installed = c.get('installed_versions', [''])[0]
+    current = c.get('current_version', '')
+    print('{0}|{1}|{2}'.format(c['name'], installed, current))
+" 2>/dev/null)
+
+		while IFS='|' read -r cask_name installed_ver current_ver; do
+			[[ -z "${cask_name}" ]] && continue
+
+			if [[ " ${homebrew_ignored_casks_option} " == *" ${cask_name} "* ]]; then
+				log_verbose "Homebrew: ignoring cask ${cask_name}"
+				continue
+			fi
+
+			local brew_label="brewcask__${cask_name}"
+			local in_installomator="FALSE"
+			[[ " ${labelsArray} " == *" ${cask_name} "* ]] && in_installomator="TRUE"
+
+			local in_preferred="FALSE"
+			[[ " ${homebrew_preferred_packages_option} " == *" ${cask_name} "* ]] && in_preferred="TRUE"
+
+			local should_queue="FALSE"
+			if [[ "${homebrew_priority_option}" == "INSTALLOMATOR" ]]; then
+				if [[ "${in_preferred}" == "FALSE" ]]; then
+					if [[ "${in_installomator}" == "TRUE" ]]; then
+						log_notice "Homebrew: skipping cask ${cask_name} (Installomator has priority)"
+					else
+						should_queue="TRUE"
+					fi
+				else
+					brewSupersedingLabels+="${cask_name} "
+					should_queue="TRUE"
+				fi
+			else
+				if [[ "${in_preferred}" == "FALSE" ]]; then
+					[[ "${in_installomator}" == "TRUE" ]] && brewSupersedingLabels+="${cask_name} "
+					should_queue="TRUE"
+				else
+					if [[ "${in_installomator}" == "TRUE" ]]; then
+						log_notice "Homebrew: skipping cask ${cask_name} (Installomator preferred for this package)"
+					else
+						should_queue="TRUE"
+					fi
+				fi
+			fi
+
+			if [[ "${should_queue}" == "TRUE" ]]; then
+				log_notice "Homebrew: queuing cask ${cask_name} (${installed_ver} → ${current_ver})"
+				brewDisplayNames[$brew_label]="${cask_name} (Homebrew Cask)"
+				brewIconPaths[$brew_label]=$(resolve_brew_icon_path "cask" "${cask_name}")
+				AAPVersionByLabel[$brew_label]="${current_ver}"
+				/usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${brew_label}\"" "${appAutoPatchLocalPLIST}.plist"
+				labelsArray+="${brew_label} "
+				let queued_casks++
+			fi
+		done <<< "${cask_data}"
+	fi
+
+	# Process outdated formulae
+	if [[ "${homebrew_formula_enabled_option}" == "TRUE" ]]; then
+		local formula_data
+		formula_data=$(echo "${brew_outdated_json}" | /usr/bin/python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for f in data.get('formulae', []):
+    installed = f.get('installed_versions', [''])[0]
+    current = f.get('current_version', '')
+    print('{0}|{1}|{2}'.format(f['name'], installed, current))
+" 2>/dev/null)
+
+		while IFS='|' read -r formula_name installed_ver current_ver; do
+			[[ -z "${formula_name}" ]] && continue
+
+			if [[ " ${homebrew_ignored_formulae_option} " == *" ${formula_name} "* ]]; then
+				log_verbose "Homebrew: ignoring formula ${formula_name}"
+				continue
+			fi
+
+			local brew_label="brewformula__${formula_name}"
+			local in_installomator="FALSE"
+			[[ " ${labelsArray} " == *" ${formula_name} "* ]] && in_installomator="TRUE"
+
+			local in_preferred="FALSE"
+			[[ " ${homebrew_preferred_packages_option} " == *" ${formula_name} "* ]] && in_preferred="TRUE"
+
+			local should_queue="FALSE"
+			if [[ "${homebrew_priority_option}" == "INSTALLOMATOR" ]]; then
+				if [[ "${in_preferred}" == "FALSE" ]]; then
+					if [[ "${in_installomator}" == "TRUE" ]]; then
+						log_notice "Homebrew: skipping formula ${formula_name} (Installomator has priority)"
+					else
+						should_queue="TRUE"
+					fi
+				else
+					brewSupersedingLabels+="${formula_name} "
+					should_queue="TRUE"
+				fi
+			else
+				if [[ "${in_preferred}" == "FALSE" ]]; then
+					[[ "${in_installomator}" == "TRUE" ]] && brewSupersedingLabels+="${formula_name} "
+					should_queue="TRUE"
+				else
+					if [[ "${in_installomator}" == "TRUE" ]]; then
+						log_notice "Homebrew: skipping formula ${formula_name} (Installomator preferred for this package)"
+					else
+						should_queue="TRUE"
+					fi
+				fi
+			fi
+
+			if [[ "${should_queue}" == "TRUE" ]]; then
+				log_notice "Homebrew: queuing formula ${formula_name} (${installed_ver} → ${current_ver})"
+				brewDisplayNames[$brew_label]="${formula_name} (Homebrew Formula)"
+				brewIconPaths[$brew_label]=$(resolve_brew_icon_path "formula" "${formula_name}")
+				AAPVersionByLabel[$brew_label]="${current_ver}"
+				/usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${brew_label}\"" "${appAutoPatchLocalPLIST}.plist"
+				labelsArray+="${brew_label} "
+				let queued_formulae++
+			fi
+		done <<< "${formula_data}"
+	fi
+
+	log_notice "Homebrew discovery complete — queued ${queued_casks} cask(s), ${queued_formulae} formula(e)"
+}
+
 workflow_do_Installations() {
     
     # Check for blank installomatorOptions variable
