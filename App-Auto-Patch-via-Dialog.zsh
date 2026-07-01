@@ -4327,6 +4327,96 @@ function queueLabel() {
     log_verbose "$labelsArray"
 }
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Homebrew Related Functions
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+function get_homebrew_binary() {
+	if [[ -n "${homebrew_binary_path_option}" ]]; then
+		if [[ -x "${homebrew_binary_path_option}" ]]; then
+			brewBinary="${homebrew_binary_path_option}"
+			log_verbose "Homebrew binary (admin-specified): ${brewBinary}"
+			return 0
+		else
+			log_warning "Homebrew binary not found at specified path: ${homebrew_binary_path_option}"
+			return 1
+		fi
+	fi
+
+	local candidate
+	for candidate in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
+		if [[ -x "${candidate}" ]]; then
+			brewBinary="${candidate}"
+			log_verbose "Homebrew binary (auto-detected): ${brewBinary}"
+			return 0
+		fi
+	done
+
+	local user_brew
+	user_brew=$(sudo -u "${currentUserAccountName}" /usr/bin/which brew 2>/dev/null)
+	if [[ -n "${user_brew}" && -x "${user_brew}" ]]; then
+		brewBinary="${user_brew}"
+		log_verbose "Homebrew binary (user PATH): ${brewBinary}"
+		return 0
+	fi
+
+	return 1
+}
+
+function resolve_brew_icon_path() {
+	local pkg_type="$1"
+	local pkg_name="$2"
+
+	if [[ "${pkg_type}" == "formula" ]]; then
+		echo "SF=terminal,colour1=#f5a623"
+		return
+	fi
+
+	local cap_name
+	cap_name="$(echo "${pkg_name}" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
+
+	if [[ -d "/Applications/${cap_name}.app" ]]; then
+		echo "/Applications/${cap_name}.app"
+		return
+	fi
+
+	if [[ -d "/Applications/${pkg_name}.app" ]]; then
+		echo "/Applications/${pkg_name}.app"
+		return
+	fi
+
+	local mdfind_result
+	mdfind_result=$(mdfind "kMDItemFSName == '${cap_name}.app' && kMDItemContentType == 'com.apple.application-bundle'" -0 2>/dev/null | tr -d '\0' | head -c 4096)
+	if [[ -n "${mdfind_result}" && -d "${mdfind_result}" ]]; then
+		echo "${mdfind_result}"
+		return
+	fi
+
+	echo "SF=shippingbox.fill,colour1=#f5a623"
+}
+
+function brew_install_package() {
+	local brew_label="$1"
+	local is_cask="FALSE"
+	local package_name
+
+	if [[ "${brew_label}" == brewcask__* ]]; then
+		is_cask="TRUE"
+		package_name="${brew_label#brewcask__}"
+	else
+		package_name="${brew_label#brewformula__}"
+	fi
+
+	log_install "Homebrew upgrading ${package_name}${is_cask:+ (cask)}"
+
+	if [[ "${is_cask}" == "TRUE" ]]; then
+		sudo -u "${currentUserAccountName}" "${brewBinary}" upgrade --cask "${package_name}" 2>&1 | tee -a "${appAutoPatchLog}"
+	else
+		sudo -u "${currentUserAccountName}" "${brewBinary}" upgrade "${package_name}" 2>&1 | tee -a "${appAutoPatchLog}"
+	fi
+	return ${pipestatus[1]}
+}
+
 workflow_do_Installations() {
     
     # Check for blank installomatorOptions variable
