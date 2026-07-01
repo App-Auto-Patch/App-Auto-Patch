@@ -1769,6 +1769,9 @@ manage_parameter_options() {
     if [[ "${homebrew_enabled_option}" -eq 1 ]] || [[ "${homebrew_enabled_option}" == "TRUE" ]]; then
         homebrew_enabled_option="TRUE"
         defaults write "${appAutoPatchLocalPLIST}" HomebrewEnabled -bool true
+    elif [[ -z "${homebrew_enabled_option}" ]]; then
+        homebrew_enabled_option="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewEnabled -bool false
     else
         homebrew_enabled_option="FALSE"
         defaults write "${appAutoPatchLocalPLIST}" HomebrewEnabled -bool false
@@ -1777,11 +1780,17 @@ manage_parameter_options() {
     if [[ "${homebrew_cask_enabled_option}" -eq 1 ]] || [[ "${homebrew_cask_enabled_option}" == "TRUE" ]]; then
         homebrew_cask_enabled_option="TRUE"
         defaults write "${appAutoPatchLocalPLIST}" HomebrewCaskEnabled -bool true
+    elif [[ -z "${homebrew_cask_enabled_option}" ]]; then
+        homebrew_cask_enabled_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewCaskEnabled -bool true
     else
         homebrew_cask_enabled_option="FALSE"
         defaults write "${appAutoPatchLocalPLIST}" HomebrewCaskEnabled -bool false
     fi
     if [[ "${homebrew_formula_enabled_option}" -eq 1 ]] || [[ "${homebrew_formula_enabled_option}" == "TRUE" ]]; then
+        homebrew_formula_enabled_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewFormulaEnabled -bool true
+    elif [[ -z "${homebrew_formula_enabled_option}" ]]; then
         homebrew_formula_enabled_option="TRUE"
         defaults write "${appAutoPatchLocalPLIST}" HomebrewFormulaEnabled -bool true
     else
