@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.0"
 scriptDate="2026/07/06"
-scriptBuild="3.6.0.260706702"
+scriptBuild="3.6.0.260706739"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2033,7 +2033,20 @@ workflow_startup() {
 		log_echo "Exit: App Auto-Patch must run with root privileges."
 		exit 1
 	fi
-	
+
+	# Wait for the Dock to be active before proceeding. The Dock running indicates that a user
+	# session is fully established. Check every 5 seconds for up to 120 seconds total.
+	local dockWaitSeconds=0
+	until pgrep -x "Dock" &>/dev/null; do
+		if [[ $dockWaitSeconds -ge 120 ]]; then
+			log_exit "No user session detected (Dock not active) after waiting 120 seconds. Will retry later."
+			exit 1
+		fi
+		sleep 5
+		dockWaitSeconds=$((dockWaitSeconds + 5))
+	done
+	log_info "Dock is active; proceeding with startup..."
+
 	# Make sure macOS meets the minimum requirement of macOS 12.
 	macos_version_major=$(sw_vers -productVersion | cut -d'.' -f1) # Expected output: 10, 11, 12
 	if [[ "${macos_version_major}" -lt 12 ]]; then
@@ -2730,21 +2743,47 @@ install_dialog() {
     workDirectory=$( basename "$0" )
     tempDirectory=$( mktemp -d "/private/tmp/$workDirectory.XXXXXX" )
 
-    # Download the installer package
-    curl --location --silent "$dialogURL" -o "$tempDirectory/Dialog.pkg"
+    # Download the installer package and verify Team ID — retry up to 3 times on
+    # curl failure or Team ID mismatch before giving up.
+    local dialogInstallAttempt=0
+    local dialogInstallSuccess="FALSE"
+    while [[ $dialogInstallAttempt -lt 3 ]] && [[ "$dialogInstallSuccess" == "FALSE" ]]; do
+        dialogInstallAttempt=$((dialogInstallAttempt + 1))
+        log_install "Dialog download/verify attempt ${dialogInstallAttempt} of 3..."
 
-    # Verify the download
-    teamID=$(spctl -a -vv -t install "$tempDirectory/Dialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
+        # Download the installer package
+        if ! curl --location --silent --fail "$dialogURL" -o "$tempDirectory/Dialog.pkg"; then
+            log_error "Dialog download failed on attempt ${dialogInstallAttempt}"
+            rm -f "$tempDirectory/Dialog.pkg" 2>/dev/null
+            [[ $dialogInstallAttempt -lt 3 ]] && sleep 10
+            continue
+        fi
 
-    # Install the package if Team ID validates
-    if [[ "$expectedDialogTeamID" == "$teamID" ]]; then
+        # Verify the download via Team ID
+        teamID=$(spctl -a -vv -t install "$tempDirectory/Dialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
+
+        if [[ "$expectedDialogTeamID" == "$teamID" ]]; then
+            dialogInstallSuccess="TRUE"
+        else
+            log_error "Dialog Team ID verification failed on attempt ${dialogInstallAttempt}"
+            log_error "Team ID: ${teamID}"
+            log_error "Expected Team ID: ${expectedDialogTeamID}"
+            rm -f "$tempDirectory/Dialog.pkg" 2>/dev/null
+            [[ $dialogInstallAttempt -lt 3 ]] && sleep 10
+        fi
+    done
+
+    # Install the package if all validation passed, otherwise alert and quit
+    if [[ "$dialogInstallSuccess" == "TRUE" ]]; then
         /usr/sbin/installer -pkg "$tempDirectory/Dialog.pkg" -target /
         sleep 2
         dialogVersion=$( /usr/local/bin/dialog --version )
         log_install "swiftDialog version ${dialogVersion} installed; proceeding..."
     else
-        # Display a so-called "simple" dialog if Team ID fails to validate
-        osascript -e 'display dialog "Please advise your Support Representative of the following error:\r\r• Dialog Team ID verification failed\r\r" with title "'"${scriptFunctionalName}"': Error" buttons {"Close"} with icon caution'
+        log_error "Dialog download or Team ID verification failed after 3 attempts"
+        log_error "Dialog Team ID verification failed"
+        log_error "Team ID: ${teamID}"
+        log_error "Expected Team ID: ${expectedDialogTeamID}"
         exitCode="1"
         quitScript
     fi
