@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.5.0
+# App Auto-Patch 3.6.0
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch)
 
@@ -13,6 +13,30 @@ App Auto-Patch combines local application discovery, an Installomator integratio
 ## Why Build This
 
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, eliminating the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
+
+## New features/Specific Changes in 3.6.0
+- Added Background Patch Closed Apps for InteractiveMode 1
+	- When `InteractiveMode` is set to `1` (Silent Discovery, Interactive Patching), AAP now performs a silent pre-patch pass immediately after discovery and before any user dialog is displayed
+	- Apps that are **not currently open** are updated silently in the background using Installomator with `BLOCKING_PROCESS_ACTION=silent_fail`. A successful install (exit 0) removes the app from the update queue entirely
+	- Apps that **are currently open** (Installomator exit code 12 — blocking process found) remain in the queue and are presented to the user via the normal deferral or deadline dialog, so the user can choose when to close and update them
+	- If all pending updates are resolved silently, no user dialog is shown and AAP proceeds directly to the completion workflow
+	- Respects the existing Zoom Call Active Check: if a Zoom meeting is in progress, Zoom labels are skipped during the silent pre-patch and kept in the user dialog queue
+	- Patching receipts are written for all apps successfully updated during the silent pre-patch phase
+	- Configurable via new `WorkflowBackgroundPatchClosedApps` managed preference key (default: `true`)
+		- `true` (default): Silent pre-patch of closed apps is enabled for InteractiveMode 1
+		- `false`: Disables the silent pre-patch; all discovered updates are presented to the user in the dialog as before
+	- Managed Preference Key: `<key>WorkflowBackgroundPatchClosedApps</key>` `<true/>` | `<false/>`
+- Added Discovery Frequency control
+	- New `DiscoveryFrequency` managed preference key (integer, hours)
+	- When the workflow resets and re-runs (e.g. after a deferral), AAP will skip the discovery phase if the last successful discovery completed within the configured number of hours, saving script runtime, bandwidth, and system resources
+	- For example, setting `DiscoveryFrequency` to `24` means discovery only runs once per day regardless of how many times the user defers
+	- A value of `0` forces discovery to run on every workflow execution
+	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>`
+- Added helper function to safely parse and resolve variable assignments from Installomator label fragments
+	- New `_safe_parse_label_var` function replaces `eval`-based label parsing with explicit, safe string substitution
+	- Extracts variable name and raw value from label fragment lines, strips surrounding quotes, and resolves `${variable}` references (e.g. `${folderName}`, `${appName}`) without executing arbitrary code
+	- Handles the full set of label variables used during discovery: `name`, `appName`, `packageID`, `expectedTeamID`, `targetDir`, `folderName`, `versionKey`, and `type`
+	- Improves security and predictability of label fragment parsing across all app discovery logic
 
 ## New features/Specific Changes in 3.5.0
 - [New Version Comparison Method options](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Version-Comparison-Methods)
