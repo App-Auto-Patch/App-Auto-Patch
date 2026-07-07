@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.0"
 scriptDate="2026/07/06"
-scriptBuild="3.6.0.260706802"
+scriptBuild="3.6.0.260706942"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -1046,7 +1046,8 @@ get_preferences() {
         local remove_installomator_path_managed
         remove_installomator_path_managed=$(defaults read "${appAutoPatchManagedPLIST}" RemoveInstallomatorPath 2> /dev/null)
         local support_team_name_managed
-        support_team_name_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamName 2> /dev/null)
+        #support_team_name_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamName 2> /dev/null)
+        support_team_name_managed=$(/usr/libexec/PlistBuddy -c "Print :SupportTeamName" "${appAutoPatchManagedPLIST}.plist" 2> /dev/null)
         local support_team_phone_managed
         support_team_phone_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamPhone 2> /dev/null)
         local support_team_email_managed
@@ -2321,7 +2322,7 @@ workflow_startup() {
 
     [[ "${supportTeamPhone}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_telephone}:** ${supportTeamPhone}"
     [[ "${supportTeamEmail}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_email}:** ${supportTeamEmail}"
-    [[ "${supportTeamHyperlink}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_help_website}:** ${supportTeamHyperlink}"
+    [[ "${supportTeamWebsite}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_help_website}:** ${supportTeamHyperlink}"
 
     # Computer Information
     helpMessage+="\n\n**${display_string_help_message_computer_info}:**"
@@ -2858,7 +2859,9 @@ get_installomator() {
         rm -rf $installomatorPath/*.tar.gz
     else
         if [[ "${installomator_update_disable_option}" -eq 1 ]] || [[ "${installomator_update_disable_option}" == "TRUE" ]]; then
-            log_notice "Installomator was found at $installomatorPath, Installomator Update Disabled: Skipping Version Check"
+            installomatorVersionDate="$(grep '^VERSIONDATE=' "${installomatorScript}" | cut -d'"' -f2)"
+            installomatorVersion="$(grep '^VERSION=' "${installomatorScript}" | cut -d'"' -f2)"
+            log_notice "Installomator $installomatorVersion - $installomatorVersionDate was found at $installomatorPath, Installomator Update Disabled: Skipping Version Check"
         else
         log_notice "Installomator was found at $installomatorPath, checking version ..."
         if [[ "$installomatorVersion" == "Release" ]] || [[ "$installomatorVersion" == "release" ]]; then
@@ -2955,7 +2958,7 @@ remove_installomator_outdated() {
 }
 
 remove_installomator() {
-    if [[ "$removeInstallomatorPath" == "true" ]]; then
+    if [[ "$removeInstallomatorPath" == "TRUE" ]]; then
         log_info "Removing Installomator ..."
         rm -rf ${installomatorPath}
     else
@@ -3022,8 +3025,14 @@ get_mdm(){
 
     # Check MDM server enrollment
     if [[ -n "$(profiles list -output stdout-xml | awk '/com.apple.mdm/ {print $1}' | tail -1)" ]]; then
-        # If enrolled in an MDM server, get the MDM's server_url
+        # If enrolled in an MDM server, get the MDM's server_url or URL
         server_url=$(/usr/bin/profiles list -output stdout-xml | grep -a1 'ServerURL' | sed -n 's/.*<string>\(https:\/\/[^\/]*\).*/\1/p' )
+        
+        # If ServerURL is not found, check for URL key (used by Workspace One)
+        if [[ -z "$server_url" ]]; then
+            server_url=$(/usr/bin/profiles list -output stdout-xml | grep -A1 '<key>URL</key>' | grep '<string>' | sed -n 's/.*<string>\(https:\/\/[^\/]*\).*/\1/p' | head -1)
+        fi
+        
         if [[ -n "$server_url" ]]; then
             log_info "MDM server address: $server_url"
         else
@@ -3034,22 +3043,26 @@ get_mdm(){
     fi
 
     case "${server_url}" in
-		*jamf*|*jss*)
-			log_info "MDM is Jamf"
-			mdmName="Jamf Pro"
-		;;
-		*microsoft*)
-			log_info "MDM is Intune"
-			mdmName="Intune"
-		;;
+        *jamf*|*jss*)
+            log_info "MDM is Jamf"
+            mdmName="Jamf Pro"
+        ;;
+        *microsoft*)
+            log_info "MDM is Intune"
+            mdmName="Intune"
+        ;;
         *jumpcloud*)
             log_info "MDM is Jumpcloud"
             mdmName="Jumpcloud"
         ;;
-		*)
-			log_info "Unable to determine MDM from ServerURL"
-		;;
-	esac
+        *airwatchportals*|*awmdm*)
+            log_info "MDM is Workspace One"
+            mdmName="Workspace One"
+        ;;
+        *)
+            log_info "Unable to determine MDM from ServerURL"
+        ;;
+    esac
 
 
 }
@@ -3996,7 +4009,7 @@ function write_aap_receipt() {
     mkdir -p "${appAutoPatchReceiptsFolder}/${label}"
 
     local appDir="${appAutoPatchReceiptsFolder}/${label}"
-    local history="${appDir}/history.jsonl"
+    local history="${appDir}/history.json"
     local latest="${appDir}/latest.json"
 
     # Append to history
@@ -4048,6 +4061,15 @@ function PgetAppVersion() {
             applist=""
         elif ([[ "$applist" == *"/Library/Application Support/JAMF/Composer/"* ]]); then
             log_info "App found in the Jamf Composer folder: $applist, ignoring"
+            applist=""
+        elif ([[ "$applist" == *".Trash"* ]]); then
+            log_info "App found in a hidden trash folder: $applist, ignoring"
+            applist=""
+        elif ([[ "$applist" == *"/Applications (Parallels)/"* ]]); then
+            log_info "App found in the Parallels folder: $applist, ignoring"
+            applist=""
+        elif ([[ "$applist" == *"/Applications (Virtual Machines)/"* ]]); then
+            log_info "App found in the Parallels folder: $applist, ignoring"
             applist=""
         # 3.4.0 | 2025-10-17 | Adding Chrome & Edge PWA app filepaths to the exclusion to prevent being converted from PWA's to actual apps. Thanks @Cesar !
         elif ([[ "$applist" == *"/Applications/Chrome Apps.localized/"* ]]); then
@@ -4655,6 +4677,16 @@ webHookMessage() {
             # If Mac is managed by Jumpcloud, link to the Jumpcloud devices page
         elif [[  $mdmName == "Jumpcloud" ]]; then
             mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
+                # If Mac is managed by Workspace One, link to the devices page
+        elif [[ $mdmName == "Workspace One" ]]; then
+            # Extract base URL from server_url
+            if [[ -n "$server_url" ]]; then
+                base_url=$(echo "$server_url" | sed -n 's/\(https:\/\/[^\/]*\).*/\1/p')
+                mdmComputerURL="${base_url}/AirWatch/#/AirWatch/Devices/List/"
+            else
+                # Fallback to generic Workspace One console
+                mdmComputerURL="https://console.workspace.one"
+            fi
         else
             log_info "No MDM determined - webhook call will fail"
         fi
