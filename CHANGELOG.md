@@ -10,6 +10,11 @@
 	- For example, setting `DiscoveryFrequency` to `24` means discovery only runs once per day regardless of how many times the user defers
 	- A value of `0` forces discovery to run on every workflow execution
 	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>`
+- Added helper function to safely parse and resolve variable assignments from Installomator label fragments
+	- New `_safe_parse_label_var` function replaces `eval`-based label parsing with explicit, safe string substitution
+	- Extracts variable name and raw value from label fragment lines, strips surrounding quotes, and resolves `${variable}` references (e.g. `${folderName}`, `${appName}`) without executing arbitrary code
+	- Handles the full set of label variables used during discovery: `name`, `appName`, `packageID`, `expectedTeamID`, `targetDir`, `folderName`, `versionKey`, and `type`
+	- Improves security and predictability of label fragment parsing across all app discovery logic
 - Added Background Patch Closed Apps for InteractiveMode 1
 	- When `InteractiveMode` is set to `1` (Silent Discovery, Interactive Patching), AAP now performs a silent pre-patch pass immediately after discovery and before any user dialog is displayed
 	- Apps that are **not currently open** are updated silently in the background using Installomator with `BLOCKING_PROCESS_ACTION=silent_fail`. A successful install (exit 0) removes the app from the update queue entirely
