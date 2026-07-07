@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.5.0"
-scriptDate="2025/12/22"
-scriptBuild="3.5.0.251222009"
+scriptVersion="3.6.0"
+scriptDate="2026/07/06"
+scriptBuild="3.6.0.260706702"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -61,6 +61,7 @@ echo "
     Workflow Options:
     [--workflow-disable-relaunch] [--workflow-disable-relaunch-off]
     [--workflow-disable-app-discovery] [--workflow-disable-app-discovery-off]
+    [--discovery-frequency=hours]
     [--workflow-install-now] [--workflow-install-now-silent]
     [--workflow-install-now-patching-status-action-never]
     [--workflow-install-now-patching-status-action-always]
@@ -150,8 +151,10 @@ echo "
     <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
     <key>WebhookURLSlack</key> <string>URL</string>
     <key>WebhookURLTeams</key> <string>URL</string>
+    <key>WorkflowBackgroundPatchClosedApps</key> <true/> | <false/>
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
     <key>WorkflowDisableRelaunch</key> <true/> | <false/>
+    <key>DiscoveryFrequency</key> <integer>hours</integer>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
     <key>ZoomCallActiveCheck</key> <true/> | <false/>
 
@@ -310,6 +313,8 @@ set_defaults() {
 
     self_update_frequency_option="daily"
 
+    DiscoveryFrequency="24" # MDM Enabled - Number of hours between app discovery runs (0 = always run)
+
     supportTeamName="Add IT Support" # MDM Enabled
 
     supportTeamPhone="Add IT Phone Number" # MDM Enabled
@@ -368,6 +373,11 @@ set_defaults() {
     # TRUE (default): Allows Installomator Debug Fallback to run
     # FALSE: Does not allow Installomator Debug Fallback to run and will not add the app to the queue for updates
     VersionComparisonInstallomatorFallback="TRUE"
+
+    # InteractiveMode 1 only: When TRUE (default), apps that are NOT currently open are silently
+    # patched in the background before the user dialog is shown. Only apps with active blocking
+    # processes are presented to the user for deferred/manual patching.
+    WorkflowBackgroundPatchClosedAppsOption="TRUE" # MDM Enabled
 }
 
 # Set language strings for dialogs and notifications.
@@ -813,6 +823,9 @@ get_options() {
             --workflow-disable-app-discovery-off)
                 workflow_disable_app_discovery_option="FALSE"
             ;;
+            --discovery-frequency=*)
+                DiscoveryFrequency="${1##*=}"
+            ;;
             --workflow-install-now)
                 workflow_install_now_option="TRUE"
             ;;
@@ -978,6 +991,8 @@ get_preferences() {
         patch_week_start_day_managed=$(defaults read "${appAutoPatchManagedPLIST}" PatchWeekStartDay 2> /dev/null)
         local workflow_disable_app_discovery_managed
         workflow_disable_app_discovery_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableAppDiscovery 2> /dev/null)
+        local discovery_frequency_managed
+        discovery_frequency_managed=$(defaults read "${appAutoPatchManagedPLIST}" DiscoveryFrequency 2> /dev/null)
         local workflow_disable_relaunch_managed
         workflow_disable_relaunch_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
         local webhook_feature_managed
@@ -1054,6 +1069,8 @@ get_preferences() {
         version_comparison_installomator_fallback_managed=$(defaults read "${appAutoPatchManagedPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
         local zoom_call_active_check_managed
         zoom_call_active_check_managed=$(defaults read "${appAutoPatchManagedPLIST}" ZoomCallActiveCheck 2> /dev/null)
+        local workflow_background_patch_closed_apps_managed
+        workflow_background_patch_closed_apps_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowBackgroundPatchClosedApps 2> /dev/null)
         
     else
         log_verbose "No managed preference file found for App Auto-Patch"
@@ -1090,6 +1107,8 @@ get_preferences() {
         patch_week_start_day_local=$(defaults read "${appAutoPatchLocalPLIST}" PatchWeekStartDay 2> /dev/null)
         local workflow_disable_app_discovery_local
         workflow_disable_app_discovery_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableAppDiscovery 2> /dev/null)
+        local discovery_frequency_local
+        discovery_frequency_local=$(defaults read "${appAutoPatchLocalPLIST}" DiscoveryFrequency 2> /dev/null)
         local workflow_disable_relaunch_local
         workflow_disable_relaunch_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
         local webhook_feature_local
@@ -1166,6 +1185,8 @@ get_preferences() {
         version_comparison_installomator_fallback_local=$(defaults read "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
         local zoom_call_active_check_local
         zoom_call_active_check_local=$(defaults read "${appAutoPatchLocalPLIST}" ZoomCallActiveCheck 2> /dev/null)
+        local workflow_background_patch_closed_apps_local
+        workflow_background_patch_closed_apps_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowBackgroundPatchClosedApps 2> /dev/null)
     fi
     
     log_verbose  "Local preference file before startup validation: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
@@ -1202,6 +1223,8 @@ get_preferences() {
     { [[ -z "${patch_week_start_day_managed}" ]] && [[ -z "${patch_week_start_day_option}" ]] && [[ -n "${patch_week_start_day_local}" ]]; } && patch_week_start_day_option="${patch_week_start_day_local}"
     [[ -n "${workflow_disable_app_discovery_managed}" ]] && workflow_disable_app_discovery_option="${workflow_disable_app_discovery_managed}"
     { [[ -z "${workflow_disable_app_discovery_managed}" ]] && [[ -z "${workflow_disable_app_discovery_option}" ]] && [[ -n "${workflow_disable_app_discovery_local}" ]]; } && workflow_disable_app_discovery_option="${workflow_disable_app_discovery_local}"
+    [[ -n "${discovery_frequency_managed}" ]] && DiscoveryFrequency="${discovery_frequency_managed}"
+    { [[ -z "${discovery_frequency_managed}" ]] && [[ -n "${discovery_frequency_local}" ]]; } && DiscoveryFrequency="${discovery_frequency_local}"
     [[ -n "${workflow_disable_relaunch_managed}" ]] && workflow_disable_relaunch_option="${workflow_disable_relaunch_managed}"
     { [[ -z "${workflow_disable_relaunch_managed}" ]] && [[ -z "${workflow_disable_relaunch_option}" ]] && [[ -n "${workflow_disable_relaunch_local}" ]]; } && workflow_disable_relaunch_option="${workflow_disable_relaunch_local}"
     [[ -n "${webhook_feature_managed}" ]] && webhook_feature_option="${webhook_feature_managed}"
@@ -1219,6 +1242,9 @@ get_preferences() {
 
     [[ -n "${zoom_call_active_check_managed}" ]] && zoom_call_active_check_option="${zoom_call_active_check_managed}"
     { [[ -z "${zoom_call_active_check_managed}" ]] && [[ -z "${zoom_call_active_check_option}" ]] && [[ -n "${zoom_call_active_check_local}" ]]; } && zoom_call_active_check_option="${zoom_call_active_check_local}"
+
+    [[ -n "${workflow_background_patch_closed_apps_managed}" ]] && WorkflowBackgroundPatchClosedAppsOption="${workflow_background_patch_closed_apps_managed}"
+    { [[ -z "${workflow_background_patch_closed_apps_managed}" ]] && [[ -z "${WorkflowBackgroundPatchClosedAppsOption}" ]] && [[ -n "${workflow_background_patch_closed_apps_local}" ]]; } && WorkflowBackgroundPatchClosedAppsOption="${workflow_background_patch_closed_apps_local}"
 
     # Need logic to ensures the priority order of managed preference overrides the saved local preference which overrides the script embedded variables .
     [[ -n "${app_title_managed}" ]] && appTitle="${app_title_managed}"
@@ -1315,6 +1341,7 @@ get_preferences() {
     log_verbose "InteractiveMode: $InteractiveModeOption"
     log_verbose "PatchWeekStartDay: $patch_week_start_day_option"
     log_verbose "WorkflowDisableAppDiscovery: $workflow_disable_app_discovery_option"
+    log_verbose "DiscoveryFrequency: $DiscoveryFrequency"
     log_verbose "WorkflowDisableRelaunch: $workflow_disable_relaunch_option"
     log_verbose "WebhookFeature: $webhook_feature_option"
     log_verbose "WebhookURLSlack: $webhook_url_slack_option"
@@ -1352,6 +1379,7 @@ get_preferences() {
     log_verbose "monthly_patching_cadence_start_time: $monthly_patching_cadence_start_time"
     log_verbose "version_comparison_method_option: $version_comparison_method_option"
     log_verbose "zoom_call_active_check_option: $zoom_call_active_check_option"
+    log_verbose "WorkflowBackgroundPatchClosedAppsOption: $WorkflowBackgroundPatchClosedAppsOption"
     
     #Validate Custom Installomator Options
     if [[ "${installomatorVersion}" == "Custom" ]] || [[ "${installomatorVersion}" == "custom" ]]; then
@@ -1622,6 +1650,12 @@ manage_parameter_options() {
         defaults delete "${appAutoPatchLocalPLIST}" WorkflowDisableAppDiscovery 2> /dev/null
     fi
     
+    # Manage ${DiscoveryFrequency} and save to ${appAutoPatchLocalPLIST}.
+    if [[ -n "${DiscoveryFrequency}" ]] && [[ "${DiscoveryFrequency}" =~ ^[0-9]+$ ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" DiscoveryFrequency -int "${DiscoveryFrequency}"
+        log_info "Discovery frequency set to: ${DiscoveryFrequency} hours"
+    fi
+    
     # Manage ${workflow_disable_relaunch_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
         workflow_disable_relaunch_option="TRUE"
@@ -1646,6 +1680,19 @@ manage_parameter_options() {
         defaults write "${appAutoPatchLocalPLIST}" ZoomCallActiveCheck -bool false
     fi
     { [[ -n "${zoom_call_active_check_option}" ]]; } && log_verbose "zoom_call_active_check_option is: ${zoom_call_active_check_option}"
+
+    # Manage ${WorkflowBackgroundPatchClosedAppsOption} and save to ${appAutoPatchLocalPLIST}.
+    if [[ "${WorkflowBackgroundPatchClosedAppsOption}" -eq 1 ]] || [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]]; then
+        WorkflowBackgroundPatchClosedAppsOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowBackgroundPatchClosedApps -bool true
+    elif [[ -z "${WorkflowBackgroundPatchClosedAppsOption}" ]]; then
+        WorkflowBackgroundPatchClosedAppsOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowBackgroundPatchClosedApps -bool true
+    else
+        WorkflowBackgroundPatchClosedAppsOption="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowBackgroundPatchClosedApps -bool false
+    fi
+    { [[ -n "${WorkflowBackgroundPatchClosedAppsOption}" ]]; } && log_verbose "WorkflowBackgroundPatchClosedAppsOption is: ${WorkflowBackgroundPatchClosedAppsOption}"
 
     # Manage ${UnattendedExit} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${UnattendedExit}" -eq 1 ]] || [[ "${UnattendedExit}" == "TRUE" ]]; then
@@ -1678,6 +1725,7 @@ manage_parameter_options() {
     { [[ -n "${patch_week_start_day}" ]]; } && log_verbose "patch_week_start_day is: ${patch_week_start_day}"
     { [[ -n "${days_until_reset}" ]]; } && log_verbose "days_until_reset is: ${days_until_reset}"
     { [[ -n "${workflow_disable_app_discovery_option}" ]]; } && log_verbose "workflow_disable_app_discovery_option is: ${workflow_disable_app_discovery_option}"
+    { [[ -n "${DiscoveryFrequency}" ]]; } && log_verbose "DiscoveryFrequency is: ${DiscoveryFrequency} hours"
     
     # Validate ${deferral_timer_menu_option} input and if valid set ${deferral_timer_menu_minutes} and save to ${appAutoPatchLocalPLIST}.
     local previous_ifs
@@ -4171,6 +4219,108 @@ function queueLabel() {
     log_verbose "$labelsArray"
 }
 
+workflow_silent_patch_closed_apps() {
+    # InteractiveMode 1 only: Silently install updates for apps that are NOT currently running.
+    # Uses BLOCKING_PROCESS_ACTION=silent_fail so Installomator exits with code 12 when a
+    # blocking process is found, leaving those labels in the queue for the user dialog.
+    # Apps that update successfully (exit 0) are removed from the queue entirely.
+
+    log_info "InteractiveMode 1: Attempting silent background patch for apps that are not currently open..."
+
+    # Ensure installomatorOptions is populated before we manipulate it
+    local baseOptions="${installomatorOptions}"
+    if [[ -z "${baseOptions}" ]]; then
+        baseOptions="NOTIFY=silent LOGO=appstore"
+    fi
+
+    # Strip any existing BLOCKING_PROCESS_ACTION and NOTIFY entries from the options,
+    # then append the values we need for a truly silent, fail-fast run.
+    local silentPatchOptions
+    silentPatchOptions=$(echo "${baseOptions}" | /usr/bin/sed 's/BLOCKING_PROCESS_ACTION=[^ ]*//g; s/NOTIFY=[^ ]*//g' | /usr/bin/sed 's/  */ /g; s/^ //; s/ $//')
+    silentPatchOptions="${silentPatchOptions} BLOCKING_PROCESS_ACTION=silent_fail NOTIFY=silent"
+
+    log_verbose "Silent patch options: ${silentPatchOptions}"
+
+    local remainingLabels=()
+    local newAppNamesArray=()
+    local silentPatchCount=0
+    local silentPatchErrors=0
+
+    for label in $queuedLabelsArray; do
+
+        # Respect Zoom call active check for zoom labels
+        if [[ "${zoom_call_active_check_option}" == "TRUE" && "${label}" == "zoom"* ]]; then
+            local _cpthostpid _aomhostpid
+            _cpthostpid=$(pgrep CptHost 2>/dev/null)
+            _aomhostpid=$(pgrep aomhost 2>/dev/null)
+            if [[ -n "${_cpthostpid}" || -n "${_aomhostpid}" ]]; then
+                log_info "Zoom meeting in progress. Skipping silent patch of '${label}'; adding to user dialog queue."
+                remainingLabels+=("${label}")
+                local _dname _ipath
+                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _ipath=$(resolve_app_icon_path "${label}")
+                newAppNamesArray+=("--listitem")
+                newAppNamesArray+=(${_dname},icon="${_ipath}")
+                continue
+            fi
+        fi
+
+        log_info "Silent background patch attempt for: ${label}"
+        ${installomatorScript} "${label}" ${silentPatchOptions}
+        local silentExitCode=$?
+
+        case "${silentExitCode}" in
+            0)
+                # Successfully updated while the app was closed — remove from queue
+                log_notice "Silent background patch succeeded for: ${label} (exit 0)"
+                silentPatchCount=$((silentPatchCount + 1))
+                local _newVersion="${AAPVersionByLabel[$label]:-}"
+                write_aap_receipt "${label}" "${_newVersion}" "${silentExitCode}"
+                ;;
+            12)
+                # Installomator found a blocking process — app is open, needs user interaction
+                log_info "Blocking process detected for '${label}' (exit 12). Adding to user dialog queue."
+                remainingLabels+=("${label}")
+                local _dname _ipath
+                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _ipath=$(resolve_app_icon_path "${label}")
+                newAppNamesArray+=("--listitem")
+                newAppNamesArray+=(${_dname},icon="${_ipath}")
+                ;;
+            *)
+                # Unexpected error — keep in queue so the user is notified via dialog
+                log_error "Silent patch for '${label}' returned exit code ${silentExitCode}. Adding to user dialog queue."
+                silentPatchErrors=$((silentPatchErrors + 1))
+                remainingLabels+=("${label}")
+                local _dname _ipath
+                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _ipath=$(resolve_app_icon_path "${label}")
+                newAppNamesArray+=("--listitem")
+                newAppNamesArray+=(${_dname},icon="${_ipath}")
+                ;;
+        esac
+    done
+
+    if [[ $silentPatchCount -gt 0 ]]; then
+        log_notice "Silent background patching complete: ${silentPatchCount} app(s) updated without user interaction."
+    fi
+    if [[ $silentPatchErrors -gt 0 ]]; then
+        log_error "Silent background patching encountered ${silentPatchErrors} error(s). Those app(s) will appear in the user dialog."
+    fi
+
+    # Update global state so subsequent workflow steps see the trimmed queue
+    queuedLabelsArray=("${remainingLabels[@]}")
+    appNamesArray=("${newAppNamesArray[@]}")
+
+    # Rebuild countOfElementsArray to reflect remaining labels only
+    countOfElementsArray=()
+    for label in $queuedLabelsArray; do
+        countOfElementsArray+=("${label}")
+    done
+
+    log_notice "Apps remaining for user interaction after silent pre-patch: ${#countOfElementsArray[@]}"
+}
+
 workflow_do_Installations() {
     
     # Check for blank installomatorOptions variable
@@ -4853,9 +5003,50 @@ main() {
 
     declare -A configArray=()
     typeset -gA AAPVersionByLabel=()
+    
+    # Determine if discovery should run based on workflow_disable_app_discovery_option and DiscoveryFrequency
+    local run_discovery="FALSE"
+    local discovery_skip_reason=""
+    
+    if [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then
+        # Discovery explicitly disabled
+        discovery_skip_reason="disabled by workflow option"
+    elif [[ -n "${DiscoveryFrequency}" ]] && [[ "${DiscoveryFrequency}" =~ ^[0-9]+$ ]] && (( DiscoveryFrequency > 0 )); then
+        # Check if enough time has passed since last discovery
+        local now_epoch last_discovery_epoch next_discovery_due
+        now_epoch=$(date +%s)
+        last_discovery_epoch=$(defaults read "${appAutoPatchLocalPLIST}" LastDiscoveryEpoch 2>/dev/null || echo "0")
+        
+        if [[ ! "${last_discovery_epoch}" =~ ^[0-9]+$ ]]; then
+            last_discovery_epoch=0
+        fi
+        
+        # Calculate when next discovery is due (last discovery + DiscoveryFrequency hours in seconds)
+        next_discovery_due=$(( last_discovery_epoch + (DiscoveryFrequency * 3600) ))
+        
+        if (( now_epoch >= next_discovery_due )); then
+            run_discovery="TRUE"
+            if (( last_discovery_epoch == 0 )); then
+                log_info "Discovery has never been run. Running discovery now."
+            else
+                local last_discovery_readable
+                last_discovery_readable=$(/bin/date -r "$last_discovery_epoch" "+${timestamp_format}")
+                log_info "Discovery frequency (${DiscoveryFrequency} hours) exceeded. Last discovery: ${last_discovery_readable}"
+            fi
+        else
+            local next_discovery_readable
+            next_discovery_readable=$(/bin/date -r "$next_discovery_due" "+${timestamp_format}")
+            discovery_skip_reason="next discovery due at ${next_discovery_readable} (frequency: ${DiscoveryFrequency} hours)"
+        fi
+    else
+        # DiscoveryFrequency is 0 or not set - always run discovery
+        run_discovery="TRUE"
+    fi
+    
     # Start the appropriate main workflow based on user options.
-    if [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then # Skip App Discovery Workflow
+    if [[ "${run_discovery}" != "TRUE" ]]; then # Skip App Discovery Workflow
         log_notice "**** App Auto-Patch ${scriptVersion} - SKIP APP DISCOVERY WORKFLOW ****"
+        [[ -n "${discovery_skip_reason}" ]] && log_info "Discovery skipped: ${discovery_skip_reason}"
     else
         log_notice "**** App Auto-Patch ${scriptVersion} - RUN APP DISCOVERY WORKFLOW ****"
         
@@ -4887,6 +5078,53 @@ main() {
         IFS=$'\n'
         in_label=0
         current_label=""
+        
+        # Helper function to safely parse and resolve variable assignments from label fragments
+        # Usage: _safe_parse_label_var "line"
+        # This extracts varname="value" and resolves ${varname} references without using eval
+        # Sets the global variables: name, appName, packageID, expectedTeamID, targetDir, folderName, versionKey, type
+        _safe_parse_label_var() {
+            local line="$1"
+            local varname rawvalue resolvedvalue
+            
+            # Extract variable name (everything before the first =)
+            varname="${line%%=*}"
+            # Remove any leading/trailing whitespace from varname
+            varname="${varname//[[:space:]]/}"
+            
+            # Extract raw value (everything after the first =, removing surrounding quotes)
+            rawvalue="${line#*=}"
+            # Remove leading quote
+            rawvalue="${rawvalue#\"}"
+            rawvalue="${rawvalue#\'}"
+            # Remove trailing quote
+            rawvalue="${rawvalue%\"}"
+            rawvalue="${rawvalue%\'}"
+            
+            # Resolve variable references using safe string substitution
+            # Replace ${varname} patterns with their actual values
+            resolvedvalue="$rawvalue"
+            resolvedvalue="${resolvedvalue//\$\{name\}/$name}"
+            resolvedvalue="${resolvedvalue//\$\{folderName\}/$folderName}"
+            resolvedvalue="${resolvedvalue//\$\{targetDir\}/$targetDir}"
+            resolvedvalue="${resolvedvalue//\$\{appName\}/$appName}"
+            resolvedvalue="${resolvedvalue//\$\{packageID\}/$packageID}"
+            resolvedvalue="${resolvedvalue//\$\{expectedTeamID\}/$expectedTeamID}"
+            resolvedvalue="${resolvedvalue//\$\{versionKey\}/$versionKey}"
+            resolvedvalue="${resolvedvalue//\$\{type\}/$type}"
+            
+            # Assign to the correct variable based on varname (explicit assignment, no eval)
+            case "$varname" in
+                name) name="$resolvedvalue" ;;
+                appName) appName="$resolvedvalue" ;;
+                packageID) packageID="$resolvedvalue" ;;
+                expectedTeamID) expectedTeamID="$resolvedvalue" ;;
+                targetDir) targetDir="$resolvedvalue" ;;
+                folderName) folderName="$resolvedvalue" ;;
+                versionKey) versionKey="$resolvedvalue" ;;
+                type) type="$resolvedvalue" ;;
+            esac
+        }
 
         # for each .sh file in fragments/labels/ strip out the switch/case lines and any comments. 
         log_info "Running discovery of installed applications"
@@ -4978,7 +5216,8 @@ main() {
                         case $scrubbedLine in
                             
                             'name='*|'appName='*|'packageID='*|'expectedTeamID='*|'targetDir='*|'folderName='*|'versionKey='*|'type='*)
-                                eval "$scrubbedLine"
+                                # Use safe parsing function instead of eval to prevent command injection
+                                _safe_parse_label_var "$scrubbedLine"
                             ;;
                             
                         esac
@@ -4989,6 +5228,12 @@ main() {
 
         # Close our bouncing progress swiftDialog window
         swiftDialogCompleteDialogDiscover
+        
+        # Update the last discovery timestamp
+        local discovery_complete_epoch
+        discovery_complete_epoch=$(date +%s)
+        defaults write "${appAutoPatchLocalPLIST}" LastDiscoveryEpoch -int "$discovery_complete_epoch"
+        log_info "Discovery completed. Next discovery due in ${DiscoveryFrequency:-0} hours."
 
     fi
 
@@ -5055,6 +5300,15 @@ main() {
     for label in $queuedLabelsArray; do
         countOfElementsArray+=($label)
     done
+
+    # InteractiveMode 1: Before showing any dialog, silently patch apps that are NOT currently
+    # open. Apps whose blocking processes are running (Installomator exit 12) stay in the queue
+    # and will be presented to the user via the normal deferral/deadline dialog workflow.
+    # Controlled by WorkflowBackgroundPatchClosedAppsOption (managed key: WorkflowBackgroundPatchClosedApps).
+    if [[ ${InteractiveModeOption} == 1 ]] && [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+        workflow_silent_patch_closed_apps
+    fi
+
     # If queued labels more than zero trigger workflows
     if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         numberOfUpdates=$((${#countOfElementsArray[@]}))
