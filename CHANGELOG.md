@@ -2,6 +2,53 @@
 
 # Version 3
 
+## Version 3.6.0
+### 06-Jul-2026
+- Added Background Patch Closed Apps for InteractiveMode 1
+	- When `InteractiveMode` is set to `1` (Silent Discovery, Interactive Patching), AAP now performs a silent pre-patch pass immediately after discovery and before any user dialog is displayed
+	- Apps that are **not currently open** are updated silently in the background using Installomator with `BLOCKING_PROCESS_ACTION=silent_fail`. A successful install (exit 0) removes the app from the update queue entirely
+	- Apps that **are currently open** (Installomator exit code 12 — blocking process found) remain in the queue and are presented to the user via the normal deferral or deadline dialog, so the user can choose when to close and update them
+	- If all pending updates are resolved silently, no user dialog is shown and AAP proceeds directly to the completion workflow
+	- Respects the existing Zoom Call Active Check: if a Zoom meeting is in progress, Zoom labels are skipped during the silent pre-patch and kept in the user dialog queue
+	- Patching receipts are written for all apps successfully updated during the silent pre-patch phase
+	- Configurable via new `WorkflowBackgroundPatchClosedApps` managed preference key (default: `true`)
+		- `true` (default): Silent pre-patch of closed apps is enabled for InteractiveMode 1
+		- `false`: Disables the silent pre-patch; all discovered updates are presented to the user in the dialog as before
+	- Managed Preference Key: `<key>WorkflowBackgroundPatchClosedApps</key>` `<true/>` | `<false/>`
+- Added Discovery Frequency control
+	- New `DiscoveryFrequency` managed preference key (integer, hours)
+	- When the workflow resets and re-runs (e.g. after a deferral), AAP will skip the discovery phase if the last successful discovery completed within the configured number of hours, saving script runtime, bandwidth, and system resources
+	- For example, setting `DiscoveryFrequency` to `24` means discovery only runs once per day regardless of how many times the user defers
+	- A value of `0` forces discovery to run on every workflow execution
+	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>`
+- Updated verbose log lifecycle management (#222)
+	- Removed the unconditional deletion of `appAutoPatchVerboseLog` at the start of every run; the verbose log is now preserved across runs and accumulates entries like the main log
+	- Added dedicated `appAutoPatchVerboseLogArchiveSize` variable (default: 10000 KB) as a separate size threshold for the verbose log, independent of the main log archive size
+	- Added dedicated `appAutoPatchVerboseLogArchiveFolder` variable pointing to `${appAutoPatchFolder}/logs-verbose-archive`; this folder is created automatically on first install alongside the existing log archive folder
+	- The `archive_logs` function now archives the verbose log into `logs-verbose-archive` when it exceeds `appAutoPatchVerboseLogArchiveSize` KB, using the same timestamped zip approach as the main log
+	- Added a file-count cap for the verbose log archive: if `logs-verbose-archive` grows beyond 10 files, the oldest archive is automatically deleted to prevent unbounded disk usage
+- Added Dock active check to startup workflow (#223)
+	- After confirming AAP is running as root, the startup workflow now waits for the Dock process to be active before proceeding, ensuring a user session is fully established
+	- Polls every 5 seconds for up to 120 seconds; if the Dock is not active within that window, AAP logs an exit message and exits with code 1 so the LaunchDaemon can retry on the next scheduled run
+- Added retry logic to swiftDialog download and verification (#223)
+	- The `install_dialog` function now retries the curl download and `spctl` Team ID verification up to 3 times before giving up
+	- If the download fails (non-zero curl exit), the partial file is removed and the attempt is retried after a 10-second delay
+	- If the Team ID does not match after 3 attempts, AAP displays the existing error dialog and exits, same as before
+- Added helper function to safely parse and resolve variable assignments from Installomator label fragments
+	- New `_safe_parse_label_var` function replaces `eval`-based label parsing with explicit, safe string substitution
+	- Extracts variable name and raw value from label fragment lines, strips surrounding quotes, and resolves `${variable}` references (e.g. `${folderName}`, `${appName}`) without executing arbitrary code
+	- Handles the full set of label variables used during discovery: `name`, `appName`, `packageID`, `expectedTeamID`, `targetDir`, `folderName`, `versionKey`, and `type`
+	- Improves security and predictability of label fragment parsing across all app discovery logic
+- Added logic to ignore apps found in .Trash folders, `/Applications (Parallels)/` and `/Applications (Virtual Machines)/` (#221 #216)
+- Fixed an issue that was setting `RemoveInstallomatorPath` to FALSE even if the value in the managed config was set to TRUE (#214)
+- Fixed an issue that was preventing the Support Team Website field from being hidden when the managed config was set to `hide`
+- Added Installomator verison output for cases where the installomator updater is diabled (#206)
+- Fixed issue preventing Workspace One MDM URL from populating and being used for Slack Webhooks (#208)
+- Fixed a typo from the json file being saved properly in the `write_aap_receipt` function (#211)
+- Fixed an issue where umlaut values were populating incorrectly for Support Team Name (#204)
+	- Switched to plistbuddy for pulling this particular value, will consider switching all config profile pulls to plistbuddy in a future build
+
+
 ## Version 3.5.0
 ### 22-Dec-2025
 - New Version Comparison Method options
@@ -28,7 +75,7 @@
 	- Renamed default label from "Started" to "AAP Started" to clarify timestamp intent
 	- Renamed default software-version labels for a unified look
 - Updated webhooks for both Slack and Teams (PR #185)
-	- Renamed “Microsoft Intune” to “Intune” to prevent the button text from being truncated.
+	- Renamed "Microsoft Intune" to "Intune" to prevent the button text from being truncated.
 	- Shortened the title and added emojis for quick identification of success and failure.
 	- Added version information for OS, Installomator, and AAP.
 	- Removed the computer record URL since the button serves the same purpose.
@@ -109,7 +156,7 @@
 ### 29-Apr-2025
 - Added multi-language support: Entries can be added to the managed configuration profile for multiple languages, based on the setting for the user in macOS
 - Added --workflow-install-now-silent option which runs through the workflow without deferrals but does not display dialogs
-- Added option to disable Installomator Updates using <key>InstallomatorUpdateDisable</key> <string>TRUE,FALSE</string>
+- Added option to disable Installomator Updates using `<key>InstallomatorUpdateDisable</key>` `<string>TRUE,FALSE</string>`
 - Added dialogTargetVersion and set to version 2.5.5 as the minimum required due to issues with the deferral menu on older versions
 
 ## Version 3.1.2
@@ -219,7 +266,7 @@
 
 ## Version 3.0.0-beta2
 ### 08-Nov-2024
-- This is a minor update and does not include any new features. 
+- This is a minor update and does not include any new features.
 - This includes updates and bug fixes from 2.x made across 6 builds between versions 2.11.1 and 2.11.4
 
 ## Version 3.0.0-beta1

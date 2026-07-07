@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.5.0"
-scriptDate="2025/12/22"
-scriptBuild="3.5.0.251222009"
+scriptVersion="3.6.0"
+scriptDate="2026/07/06"
+scriptBuild="3.6.0.260706942"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -71,6 +71,7 @@ echo "
     Workflow Options:
     [--workflow-disable-relaunch] [--workflow-disable-relaunch-off]
     [--workflow-disable-app-discovery] [--workflow-disable-app-discovery-off]
+    [--discovery-frequency=hours]
     [--workflow-install-now] [--workflow-install-now-silent]
     [--workflow-install-now-patching-status-action-never]
     [--workflow-install-now-patching-status-action-always]
@@ -160,8 +161,10 @@ echo "
     <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
     <key>WebhookURLSlack</key> <string>URL</string>
     <key>WebhookURLTeams</key> <string>URL</string>
+    <key>WorkflowBackgroundPatchClosedApps</key> <true/> | <false/>
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
     <key>WorkflowDisableRelaunch</key> <true/> | <false/>
+    <key>DiscoveryFrequency</key> <integer>hours</integer>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
     <key>ZoomCallActiveCheck</key> <true/> | <false/>
     <key>HomebrewEnabled</key>             <true/> | <false/>
@@ -238,6 +241,8 @@ set_defaults() {
 
     appAutoPatchLogArchiveFolder="${appAutoPatchFolder}/logs-archive"
 
+    appAutoPatchVerboseLogArchiveFolder="${appAutoPatchFolder}/logs-verbose-archive"
+
     appAutoPatchReceiptsFolder="${appAutoPatchFolder}/receipts"
 
     appAutoPatchLog="${appAutoPatchLogFolder}/aap.log"
@@ -245,6 +250,8 @@ set_defaults() {
     appAutoPatchVerboseLog="${appAutoPatchLogFolder}/aap_verbose.log"
 
     appAutoPatchLogArchiveSize=1000
+
+    appAutoPatchVerboseLogArchiveSize=10000
 
     appAutoPatchGithubRepo="App-Auto-Patch/App-Auto-Patch"
     
@@ -328,6 +335,8 @@ set_defaults() {
 
     self_update_frequency_option="daily"
 
+    DiscoveryFrequency="24" # MDM Enabled - Number of hours between app discovery runs (0 = always run)
+
     supportTeamName="Add IT Support" # MDM Enabled
 
     supportTeamPhone="Add IT Phone Number" # MDM Enabled
@@ -396,6 +405,10 @@ set_defaults() {
     homebrew_ignored_casks_option=""         # MDM Enabled
     homebrew_ignored_formulae_option=""      # MDM Enabled
     brewBinary=""
+    # InteractiveMode 1 only: When TRUE (default), apps that are NOT currently open are silently
+    # patched in the background before the user dialog is shown. Only apps with active blocking
+    # processes are presented to the user for deferred/manual patching.
+    WorkflowBackgroundPatchClosedAppsOption="TRUE" # MDM Enabled
 }
 
 # Set language strings for dialogs and notifications.
@@ -418,7 +431,7 @@ set_display_strings_language() {
     display_string_and="and"
     display_string_days="days"
     display_string_times="times"
-    display_string_there_are="There are"
+    display_string_there_are="The following"
     
     #### Language for the App Discovery dialog
     display_string_discovery_message="Analyzing installed apps"
@@ -431,8 +444,8 @@ set_display_strings_language() {
     display_string_deferral_infobox1="Deferral available until"
     display_string_deferral_infobox2="out of"
     display_string_deferral_infobox3="deferrals remaining\n"
-    display_string_deferral_message_01="You can **Defer** the updates or **Install Now** to close the applications and apply updates.  \n\n"
-    display_string_deferral_message_02="application(s) that require updates:"
+    display_string_deferral_message_01="You can **Install Now** to close the applications and apply the updates, or **Defer** to postpone them."
+    display_string_deferral_message_02="**application(s)** require updates.\n\n"
     display_string_deferral_unlimited="No deadline date and unlimited deferrals\n"
     display_string_deferral_selecttitle="Defer updates for:"
     
@@ -841,6 +854,9 @@ get_options() {
             --workflow-disable-app-discovery-off)
                 workflow_disable_app_discovery_option="FALSE"
             ;;
+            --discovery-frequency=*)
+                DiscoveryFrequency="${1##*=}"
+            ;;
             --workflow-install-now)
                 workflow_install_now_option="TRUE"
             ;;
@@ -1039,6 +1055,8 @@ get_preferences() {
         patch_week_start_day_managed=$(defaults read "${appAutoPatchManagedPLIST}" PatchWeekStartDay 2> /dev/null)
         local workflow_disable_app_discovery_managed
         workflow_disable_app_discovery_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableAppDiscovery 2> /dev/null)
+        local discovery_frequency_managed
+        discovery_frequency_managed=$(defaults read "${appAutoPatchManagedPLIST}" DiscoveryFrequency 2> /dev/null)
         local workflow_disable_relaunch_managed
         workflow_disable_relaunch_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
         local webhook_feature_managed
@@ -1088,7 +1106,8 @@ get_preferences() {
         local remove_installomator_path_managed
         remove_installomator_path_managed=$(defaults read "${appAutoPatchManagedPLIST}" RemoveInstallomatorPath 2> /dev/null)
         local support_team_name_managed
-        support_team_name_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamName 2> /dev/null)
+        #support_team_name_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamName 2> /dev/null)
+        support_team_name_managed=$(/usr/libexec/PlistBuddy -c "Print :SupportTeamName" "${appAutoPatchManagedPLIST}.plist" 2> /dev/null)
         local support_team_phone_managed
         support_team_phone_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamPhone 2> /dev/null)
         local support_team_email_managed
@@ -1132,6 +1151,9 @@ get_preferences() {
         local homebrew_ignored_formulae_managed
         homebrew_ignored_formulae_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewIgnoredFormulae 2> /dev/null)
 
+        local workflow_background_patch_closed_apps_managed
+        workflow_background_patch_closed_apps_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowBackgroundPatchClosedApps 2> /dev/null)
+        
     else
         log_verbose "No managed preference file found for App Auto-Patch"
     fi
@@ -1167,6 +1189,8 @@ get_preferences() {
         patch_week_start_day_local=$(defaults read "${appAutoPatchLocalPLIST}" PatchWeekStartDay 2> /dev/null)
         local workflow_disable_app_discovery_local
         workflow_disable_app_discovery_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableAppDiscovery 2> /dev/null)
+        local discovery_frequency_local
+        discovery_frequency_local=$(defaults read "${appAutoPatchLocalPLIST}" DiscoveryFrequency 2> /dev/null)
         local workflow_disable_relaunch_local
         workflow_disable_relaunch_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
         local webhook_feature_local
@@ -1259,6 +1283,8 @@ get_preferences() {
         homebrew_ignored_casks_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewIgnoredCasks 2> /dev/null)
         local homebrew_ignored_formulae_local
         homebrew_ignored_formulae_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewIgnoredFormulae 2> /dev/null)
+        local workflow_background_patch_closed_apps_local
+        workflow_background_patch_closed_apps_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowBackgroundPatchClosedApps 2> /dev/null)
     fi
 
     log_verbose  "Local preference file before startup validation: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
@@ -1295,6 +1321,8 @@ get_preferences() {
     { [[ -z "${patch_week_start_day_managed}" ]] && [[ -z "${patch_week_start_day_option}" ]] && [[ -n "${patch_week_start_day_local}" ]]; } && patch_week_start_day_option="${patch_week_start_day_local}"
     [[ -n "${workflow_disable_app_discovery_managed}" ]] && workflow_disable_app_discovery_option="${workflow_disable_app_discovery_managed}"
     { [[ -z "${workflow_disable_app_discovery_managed}" ]] && [[ -z "${workflow_disable_app_discovery_option}" ]] && [[ -n "${workflow_disable_app_discovery_local}" ]]; } && workflow_disable_app_discovery_option="${workflow_disable_app_discovery_local}"
+    [[ -n "${discovery_frequency_managed}" ]] && DiscoveryFrequency="${discovery_frequency_managed}"
+    { [[ -z "${discovery_frequency_managed}" ]] && [[ -n "${discovery_frequency_local}" ]]; } && DiscoveryFrequency="${discovery_frequency_local}"
     [[ -n "${workflow_disable_relaunch_managed}" ]] && workflow_disable_relaunch_option="${workflow_disable_relaunch_managed}"
     { [[ -z "${workflow_disable_relaunch_managed}" ]] && [[ -z "${workflow_disable_relaunch_option}" ]] && [[ -n "${workflow_disable_relaunch_local}" ]]; } && workflow_disable_relaunch_option="${workflow_disable_relaunch_local}"
     [[ -n "${webhook_feature_managed}" ]] && webhook_feature_option="${webhook_feature_managed}"
@@ -1329,6 +1357,8 @@ get_preferences() {
     { [[ -z "${homebrew_ignored_casks_managed}" ]] && [[ -z "${homebrew_ignored_casks_option}" ]] && [[ -n "${homebrew_ignored_casks_local}" ]]; } && homebrew_ignored_casks_option="${homebrew_ignored_casks_local}"
     [[ -n "${homebrew_ignored_formulae_managed}" ]] && homebrew_ignored_formulae_option="${homebrew_ignored_formulae_managed}"
     { [[ -z "${homebrew_ignored_formulae_managed}" ]] && [[ -z "${homebrew_ignored_formulae_option}" ]] && [[ -n "${homebrew_ignored_formulae_local}" ]]; } && homebrew_ignored_formulae_option="${homebrew_ignored_formulae_local}"
+    [[ -n "${workflow_background_patch_closed_apps_managed}" ]] && WorkflowBackgroundPatchClosedAppsOption="${workflow_background_patch_closed_apps_managed}"
+    { [[ -z "${workflow_background_patch_closed_apps_managed}" ]] && [[ -z "${WorkflowBackgroundPatchClosedAppsOption}" ]] && [[ -n "${workflow_background_patch_closed_apps_local}" ]]; } && WorkflowBackgroundPatchClosedAppsOption="${workflow_background_patch_closed_apps_local}"
 
     # Need logic to ensures the priority order of managed preference overrides the saved local preference which overrides the script embedded variables .
     [[ -n "${app_title_managed}" ]] && appTitle="${app_title_managed}"
@@ -1425,6 +1455,7 @@ get_preferences() {
     log_verbose "InteractiveMode: $InteractiveModeOption"
     log_verbose "PatchWeekStartDay: $patch_week_start_day_option"
     log_verbose "WorkflowDisableAppDiscovery: $workflow_disable_app_discovery_option"
+    log_verbose "DiscoveryFrequency: $DiscoveryFrequency"
     log_verbose "WorkflowDisableRelaunch: $workflow_disable_relaunch_option"
     log_verbose "WebhookFeature: $webhook_feature_option"
     log_verbose "WebhookURLSlack: $webhook_url_slack_option"
@@ -1471,6 +1502,8 @@ get_preferences() {
     log_verbose "homebrew_ignored_casks_option: $homebrew_ignored_casks_option"
     log_verbose "homebrew_ignored_formulae_option: $homebrew_ignored_formulae_option"
 
+    log_verbose "WorkflowBackgroundPatchClosedAppsOption: $WorkflowBackgroundPatchClosedAppsOption"
+    
     #Validate Custom Installomator Options
     if [[ "${installomatorVersion}" == "Custom" ]] || [[ "${installomatorVersion}" == "custom" ]]; then
         if [[ -z "${installomatorVersionCustomRepoPath}" ]] || [[ -z "${installomatorVersionCustomBranchName}" ]]; then
@@ -1740,6 +1773,12 @@ manage_parameter_options() {
         defaults delete "${appAutoPatchLocalPLIST}" WorkflowDisableAppDiscovery 2> /dev/null
     fi
     
+    # Manage ${DiscoveryFrequency} and save to ${appAutoPatchLocalPLIST}.
+    if [[ -n "${DiscoveryFrequency}" ]] && [[ "${DiscoveryFrequency}" =~ ^[0-9]+$ ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" DiscoveryFrequency -int "${DiscoveryFrequency}"
+        log_info "Discovery frequency set to: ${DiscoveryFrequency} hours"
+    fi
+    
     # Manage ${workflow_disable_relaunch_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
         workflow_disable_relaunch_option="TRUE"
@@ -1802,6 +1841,18 @@ manage_parameter_options() {
     [[ -n "${homebrew_binary_path_option}" ]] && defaults write "${appAutoPatchLocalPLIST}" HomebrewBinaryPath -string "${homebrew_binary_path_option}"
     [[ -n "${homebrew_ignored_casks_option}" ]] && defaults write "${appAutoPatchLocalPLIST}" HomebrewIgnoredCasks -string "${homebrew_ignored_casks_option}"
     [[ -n "${homebrew_ignored_formulae_option}" ]] && defaults write "${appAutoPatchLocalPLIST}" HomebrewIgnoredFormulae -string "${homebrew_ignored_formulae_option}"
+    # Manage ${WorkflowBackgroundPatchClosedAppsOption} and save to ${appAutoPatchLocalPLIST}.
+    if [[ "${WorkflowBackgroundPatchClosedAppsOption}" -eq 1 ]] || [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]]; then
+        WorkflowBackgroundPatchClosedAppsOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowBackgroundPatchClosedApps -bool true
+    elif [[ -z "${WorkflowBackgroundPatchClosedAppsOption}" ]]; then
+        WorkflowBackgroundPatchClosedAppsOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowBackgroundPatchClosedApps -bool true
+    else
+        WorkflowBackgroundPatchClosedAppsOption="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowBackgroundPatchClosedApps -bool false
+    fi
+    { [[ -n "${WorkflowBackgroundPatchClosedAppsOption}" ]]; } && log_verbose "WorkflowBackgroundPatchClosedAppsOption is: ${WorkflowBackgroundPatchClosedAppsOption}"
 
     # Manage ${UnattendedExit} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${UnattendedExit}" -eq 1 ]] || [[ "${UnattendedExit}" == "TRUE" ]]; then
@@ -1834,6 +1885,7 @@ manage_parameter_options() {
     { [[ -n "${patch_week_start_day}" ]]; } && log_verbose "patch_week_start_day is: ${patch_week_start_day}"
     { [[ -n "${days_until_reset}" ]]; } && log_verbose "days_until_reset is: ${days_until_reset}"
     { [[ -n "${workflow_disable_app_discovery_option}" ]]; } && log_verbose "workflow_disable_app_discovery_option is: ${workflow_disable_app_discovery_option}"
+    { [[ -n "${DiscoveryFrequency}" ]]; } && log_verbose "DiscoveryFrequency is: ${DiscoveryFrequency} hours"
     
     # Validate ${deferral_timer_menu_option} input and if valid set ${deferral_timer_menu_minutes} and save to ${appAutoPatchLocalPLIST}.
     local previous_ifs
@@ -2141,7 +2193,20 @@ workflow_startup() {
 		log_echo "Exit: App Auto-Patch must run with root privileges."
 		exit 1
 	fi
-	
+
+	# Wait for the Dock to be active before proceeding. The Dock running indicates that a user
+	# session is fully established. Check every 5 seconds for up to 120 seconds total.
+	local dockWaitSeconds=0
+	until pgrep -x "Dock" &>/dev/null; do
+		if [[ $dockWaitSeconds -ge 120 ]]; then
+			log_exit "No user session detected (Dock not active) after waiting 120 seconds. Will retry later."
+			exit 1
+		fi
+		sleep 5
+		dockWaitSeconds=$((dockWaitSeconds + 5))
+	done
+	log_info "Dock is active; proceeding with startup..."
+
 	# Make sure macOS meets the minimum requirement of macOS 12.
 	macos_version_major=$(sw_vers -productVersion | cut -d'.' -f1) # Expected output: 10, 11, 12
 	if [[ "${macos_version_major}" -lt 12 ]]; then
@@ -2412,7 +2477,7 @@ workflow_startup() {
 
     [[ "${supportTeamPhone}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_telephone}:** ${supportTeamPhone}"
     [[ "${supportTeamEmail}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_email}:** ${supportTeamEmail}"
-    [[ "${supportTeamHyperlink}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_help_website}:** ${supportTeamHyperlink}"
+    [[ "${supportTeamWebsite}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_help_website}:** ${supportTeamHyperlink}"
 
     # Computer Information
     helpMessage+="\n\n**${display_string_help_message_computer_info}:**"
@@ -2635,6 +2700,7 @@ install_app_auto_patch() {
     [[ ! -d "${appAutoPatchFolder}" ]] && mkdir -p "${appAutoPatchFolder}"
     [[ ! -d "${appAutoPatchLogFolder}" ]] && mkdir -p "${appAutoPatchLogFolder}"
     [[ ! -d "${appAutoPatchLogArchiveFolder}" ]] && mkdir -p "${appAutoPatchLogArchiveFolder}"
+    [[ ! -d "${appAutoPatchVerboseLogArchiveFolder}" ]] && mkdir -p "${appAutoPatchVerboseLogArchiveFolder}"
     [[ ! -d "${appAutoPatchReceiptsFolder}" ]] && mkdir -p "${appAutoPatchReceiptsFolder}"
 
     log_notice "###### App Auto-Patch ${scriptVersion} - Installing ... ######"
@@ -2838,21 +2904,47 @@ install_dialog() {
     workDirectory=$( basename "$0" )
     tempDirectory=$( mktemp -d "/private/tmp/$workDirectory.XXXXXX" )
 
-    # Download the installer package
-    curl --location --silent "$dialogURL" -o "$tempDirectory/Dialog.pkg"
+    # Download the installer package and verify Team ID — retry up to 3 times on
+    # curl failure or Team ID mismatch before giving up.
+    local dialogInstallAttempt=0
+    local dialogInstallSuccess="FALSE"
+    while [[ $dialogInstallAttempt -lt 3 ]] && [[ "$dialogInstallSuccess" == "FALSE" ]]; do
+        dialogInstallAttempt=$((dialogInstallAttempt + 1))
+        log_install "Dialog download/verify attempt ${dialogInstallAttempt} of 3..."
 
-    # Verify the download
-    teamID=$(spctl -a -vv -t install "$tempDirectory/Dialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
+        # Download the installer package
+        if ! curl --location --silent --fail "$dialogURL" -o "$tempDirectory/Dialog.pkg"; then
+            log_error "Dialog download failed on attempt ${dialogInstallAttempt}"
+            rm -f "$tempDirectory/Dialog.pkg" 2>/dev/null
+            [[ $dialogInstallAttempt -lt 3 ]] && sleep 10
+            continue
+        fi
 
-    # Install the package if Team ID validates
-    if [[ "$expectedDialogTeamID" == "$teamID" ]]; then
+        # Verify the download via Team ID
+        teamID=$(spctl -a -vv -t install "$tempDirectory/Dialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
+
+        if [[ "$expectedDialogTeamID" == "$teamID" ]]; then
+            dialogInstallSuccess="TRUE"
+        else
+            log_error "Dialog Team ID verification failed on attempt ${dialogInstallAttempt}"
+            log_error "Team ID: ${teamID}"
+            log_error "Expected Team ID: ${expectedDialogTeamID}"
+            rm -f "$tempDirectory/Dialog.pkg" 2>/dev/null
+            [[ $dialogInstallAttempt -lt 3 ]] && sleep 10
+        fi
+    done
+
+    # Install the package if all validation passed, otherwise alert and quit
+    if [[ "$dialogInstallSuccess" == "TRUE" ]]; then
         /usr/sbin/installer -pkg "$tempDirectory/Dialog.pkg" -target /
         sleep 2
         dialogVersion=$( /usr/local/bin/dialog --version )
         log_install "swiftDialog version ${dialogVersion} installed; proceeding..."
     else
-        # Display a so-called "simple" dialog if Team ID fails to validate
-        osascript -e 'display dialog "Please advise your Support Representative of the following error:\r\r• Dialog Team ID verification failed\r\r" with title "'"${scriptFunctionalName}"': Error" buttons {"Close"} with icon caution'
+        log_error "Dialog download or Team ID verification failed after 3 attempts"
+        log_error "Dialog Team ID verification failed"
+        log_error "Team ID: ${teamID}"
+        log_error "Expected Team ID: ${expectedDialogTeamID}"
         exitCode="1"
         quitScript
     fi
@@ -2922,7 +3014,9 @@ get_installomator() {
         rm -rf $installomatorPath/*.tar.gz
     else
         if [[ "${installomator_update_disable_option}" -eq 1 ]] || [[ "${installomator_update_disable_option}" == "TRUE" ]]; then
-            log_notice "Installomator was found at $installomatorPath, Installomator Update Disabled: Skipping Version Check"
+            installomatorVersionDate="$(grep '^VERSIONDATE=' "${installomatorScript}" | cut -d'"' -f2)"
+            installomatorVersion="$(grep '^VERSION=' "${installomatorScript}" | cut -d'"' -f2)"
+            log_notice "Installomator $installomatorVersion - $installomatorVersionDate was found at $installomatorPath, Installomator Update Disabled: Skipping Version Check"
         else
         log_notice "Installomator was found at $installomatorPath, checking version ..."
         if [[ "$installomatorVersion" == "Release" ]] || [[ "$installomatorVersion" == "release" ]]; then
@@ -3019,7 +3113,7 @@ remove_installomator_outdated() {
 }
 
 remove_installomator() {
-    if [[ "$removeInstallomatorPath" == "true" ]]; then
+    if [[ "$removeInstallomatorPath" == "TRUE" ]]; then
         log_info "Removing Installomator ..."
         rm -rf ${installomatorPath}
     else
@@ -3086,8 +3180,14 @@ get_mdm(){
 
     # Check MDM server enrollment
     if [[ -n "$(profiles list -output stdout-xml | awk '/com.apple.mdm/ {print $1}' | tail -1)" ]]; then
-        # If enrolled in an MDM server, get the MDM's server_url
+        # If enrolled in an MDM server, get the MDM's server_url or URL
         server_url=$(/usr/bin/profiles list -output stdout-xml | grep -a1 'ServerURL' | sed -n 's/.*<string>\(https:\/\/[^\/]*\).*/\1/p' )
+        
+        # If ServerURL is not found, check for URL key (used by Workspace One)
+        if [[ -z "$server_url" ]]; then
+            server_url=$(/usr/bin/profiles list -output stdout-xml | grep -A1 '<key>URL</key>' | grep '<string>' | sed -n 's/.*<string>\(https:\/\/[^\/]*\).*/\1/p' | head -1)
+        fi
+        
         if [[ -n "$server_url" ]]; then
             log_info "MDM server address: $server_url"
         else
@@ -3098,22 +3198,26 @@ get_mdm(){
     fi
 
     case "${server_url}" in
-		*jamf*|*jss*)
-			log_info "MDM is Jamf"
-			mdmName="Jamf Pro"
-		;;
-		*microsoft*)
-			log_info "MDM is Intune"
-			mdmName="Intune"
-		;;
+        *jamf*|*jss*)
+            log_info "MDM is Jamf"
+            mdmName="Jamf Pro"
+        ;;
+        *microsoft*)
+            log_info "MDM is Intune"
+            mdmName="Intune"
+        ;;
         *jumpcloud*)
             log_info "MDM is Jumpcloud"
             mdmName="Jumpcloud"
         ;;
-		*)
-			log_info "Unable to determine MDM from ServerURL"
-		;;
-	esac
+        *airwatchportals*|*awmdm*)
+            log_info "MDM is Workspace One"
+            mdmName="Workspace One"
+        ;;
+        *)
+            log_info "Unable to determine MDM from ServerURL"
+        ;;
+    esac
 
 
 }
@@ -3586,7 +3690,24 @@ archive_logs() {
         chown -R root:wheel "${appAutoPatchLogArchiveFolder}"
         chmod -R a+r "${appAutoPatchLogArchiveFolder}"
     fi
-    
+
+    # If the verbose log has grown larger than ${appAutoPatchVerboseLogArchiveSize} KB, archive it
+    # into ${appAutoPatchVerboseLogArchiveFolder} the same way the main log is archived.
+    if [[ $(ls -l "${appAutoPatchVerboseLog}" 2>/dev/null | awk '{print int($5/1000)}') -gt $appAutoPatchVerboseLogArchiveSize ]]; then
+        local verbose_archive_name
+        verbose_archive_name=$(date +"%Y-%m-%d.%H-%M-%S")
+        log_status "Verbose log is larger than ${appAutoPatchVerboseLogArchiveSize} KB, archiving to: ${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}.zip"
+        log_notice "**** App Auto-Patch ${scriptVersion} - VERBOSE LOGS ARCHIVAL ****"
+        mkdir -p "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}"
+        mv "${appAutoPatchVerboseLog}" "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}/$(basename ${appAutoPatchVerboseLog})"
+        log_notice "**** App Auto-Patch ${scriptVersion} - VERBOSE LOGS ARCHIVAL ****"
+        log_status "Verbose log was larger than ${appAutoPatchVerboseLogArchiveSize} KB, previous log archived to: ${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}.zip"
+        zip -r -j "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}.zip" "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}" > /dev/null 2>&1
+        rm -rf "${appAutoPatchVerboseLogArchiveFolder:?}/${verbose_archive_name}" 2>/dev/null
+        chown -R root:wheel "${appAutoPatchVerboseLogArchiveFolder}"
+        chmod -R a+r "${appAutoPatchVerboseLogArchiveFolder}"
+    fi
+
     # This is a fail-safe to remove any excessively large files from the ${appAutoPatchLogArchiveFolder}.
     if find "${appAutoPatchLogArchiveFolder}" -mindepth 1 -maxdepth 1 | read; then
         for log_archive_file in "${appAutoPatchLogArchiveFolder}"/*; do
@@ -3597,6 +3718,21 @@ archive_logs() {
         done
     else
         log_info "$appAutoPatchLogArchiveFolder is empty"
+    fi
+
+    # If the verbose log archive folder contains more than 10 files, delete the oldest one to
+    # keep the archive from growing unbounded.
+    if find "${appAutoPatchVerboseLogArchiveFolder}" -mindepth 1 -maxdepth 1 | read; then
+        local verbose_archive_count
+        verbose_archive_count=$(find "${appAutoPatchVerboseLogArchiveFolder}" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')
+        if [[ $verbose_archive_count -gt 10 ]]; then
+            local oldest_verbose_archive
+            oldest_verbose_archive=$(ls -t "${appAutoPatchVerboseLogArchiveFolder}" | tail -1)
+            log_warning "Verbose log archive contains ${verbose_archive_count} files (limit 10); deleting oldest: ${oldest_verbose_archive}"
+            rm -rf "${appAutoPatchVerboseLogArchiveFolder:?}/${oldest_verbose_archive}" 2>/dev/null
+        fi
+    else
+        log_info "$appAutoPatchVerboseLogArchiveFolder is empty"
     fi
 }
 
@@ -3870,7 +4006,7 @@ dialog_install_or_defer() {
         infobox="${display_string_deferral_unlimited}"
     fi
 	#infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $display_string_deadline_count"
-	message="${display_string_deferral_message_01} ${display_string_there_are} (${numberOfUpdates}) ${display_string_deferral_message_02}"
+	message="${display_string_there_are} **(${numberOfUpdates})** ${display_string_deferral_message_02} ${display_string_deferral_message_01}"
     height=480
 	
 	# Create the deferrals available dialog options and content
@@ -4030,7 +4166,7 @@ function write_aap_receipt() {
     mkdir -p "${appAutoPatchReceiptsFolder}/${label}"
 
     local appDir="${appAutoPatchReceiptsFolder}/${label}"
-    local history="${appDir}/history.jsonl"
+    local history="${appDir}/history.json"
     local latest="${appDir}/latest.json"
 
     # Append to history
@@ -4082,6 +4218,15 @@ function PgetAppVersion() {
             applist=""
         elif ([[ "$applist" == *"/Library/Application Support/JAMF/Composer/"* ]]); then
             log_info "App found in the Jamf Composer folder: $applist, ignoring"
+            applist=""
+        elif ([[ "$applist" == *".Trash"* ]]); then
+            log_info "App found in a hidden trash folder: $applist, ignoring"
+            applist=""
+        elif ([[ "$applist" == *"/Applications (Parallels)/"* ]]); then
+            log_info "App found in the Parallels folder: $applist, ignoring"
+            applist=""
+        elif ([[ "$applist" == *"/Applications (Virtual Machines)/"* ]]); then
+            log_info "App found in the Parallels folder: $applist, ignoring"
             applist=""
         # 3.4.0 | 2025-10-17 | Adding Chrome & Edge PWA app filepaths to the exclusion to prevent being converted from PWA's to actual apps. Thanks @Cesar !
         elif ([[ "$applist" == *"/Applications/Chrome Apps.localized/"* ]]); then
@@ -4583,6 +4728,106 @@ for f in data.get('formulae', []):
 	fi
 
 	log_notice "Homebrew discovery complete — queued ${queued_casks} cask(s), ${queued_formulae} formula(e)"
+workflow_silent_patch_closed_apps() {
+    # InteractiveMode 1 only: Silently install updates for apps that are NOT currently running.
+    # Uses BLOCKING_PROCESS_ACTION=silent_fail so Installomator exits with code 12 when a
+    # blocking process is found, leaving those labels in the queue for the user dialog.
+    # Apps that update successfully (exit 0) are removed from the queue entirely.
+
+    log_info "InteractiveMode 1: Attempting silent background patch for apps that are not currently open..."
+
+    # Ensure installomatorOptions is populated before we manipulate it
+    local baseOptions="${installomatorOptions}"
+    if [[ -z "${baseOptions}" ]]; then
+        baseOptions="NOTIFY=silent LOGO=appstore"
+    fi
+
+    # Strip any existing BLOCKING_PROCESS_ACTION and NOTIFY entries from the options,
+    # then append the values we need for a truly silent, fail-fast run.
+    local silentPatchOptions
+    silentPatchOptions=$(echo "${baseOptions}" | /usr/bin/sed 's/BLOCKING_PROCESS_ACTION=[^ ]*//g; s/NOTIFY=[^ ]*//g' | /usr/bin/sed 's/  */ /g; s/^ //; s/ $//')
+    silentPatchOptions="${silentPatchOptions} BLOCKING_PROCESS_ACTION=silent_fail NOTIFY=silent"
+
+    log_verbose "Silent patch options: ${silentPatchOptions}"
+
+    local remainingLabels=()
+    local newAppNamesArray=()
+    local silentPatchCount=0
+    local silentPatchErrors=0
+
+    for label in $queuedLabelsArray; do
+
+        # Respect Zoom call active check for zoom labels
+        if [[ "${zoom_call_active_check_option}" == "TRUE" && "${label}" == "zoom"* ]]; then
+            local _cpthostpid _aomhostpid
+            _cpthostpid=$(pgrep CptHost 2>/dev/null)
+            _aomhostpid=$(pgrep aomhost 2>/dev/null)
+            if [[ -n "${_cpthostpid}" || -n "${_aomhostpid}" ]]; then
+                log_info "Zoom meeting in progress. Skipping silent patch of '${label}'; adding to user dialog queue."
+                remainingLabels+=("${label}")
+                local _dname _ipath
+                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _ipath=$(resolve_app_icon_path "${label}")
+                newAppNamesArray+=("--listitem")
+                newAppNamesArray+=(${_dname},icon="${_ipath}")
+                continue
+            fi
+        fi
+
+        log_info "Silent background patch attempt for: ${label}"
+        ${installomatorScript} "${label}" ${silentPatchOptions}
+        local silentExitCode=$?
+
+        case "${silentExitCode}" in
+            0)
+                # Successfully updated while the app was closed — remove from queue
+                log_notice "Silent background patch succeeded for: ${label} (exit 0)"
+                silentPatchCount=$((silentPatchCount + 1))
+                local _newVersion="${AAPVersionByLabel[$label]:-}"
+                write_aap_receipt "${label}" "${_newVersion}" "${silentExitCode}"
+                ;;
+            12)
+                # Installomator found a blocking process — app is open, needs user interaction
+                log_info "Blocking process detected for '${label}' (exit 12). Adding to user dialog queue."
+                remainingLabels+=("${label}")
+                local _dname _ipath
+                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _ipath=$(resolve_app_icon_path "${label}")
+                newAppNamesArray+=("--listitem")
+                newAppNamesArray+=(${_dname},icon="${_ipath}")
+                ;;
+            *)
+                # Unexpected error — keep in queue so the user is notified via dialog
+                log_error "Silent patch for '${label}' returned exit code ${silentExitCode}. Adding to user dialog queue."
+                silentPatchErrors=$((silentPatchErrors + 1))
+                remainingLabels+=("${label}")
+                local _dname _ipath
+                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _ipath=$(resolve_app_icon_path "${label}")
+                newAppNamesArray+=("--listitem")
+                newAppNamesArray+=(${_dname},icon="${_ipath}")
+                ;;
+        esac
+    done
+
+    if [[ $silentPatchCount -gt 0 ]]; then
+        log_notice "Silent background patching complete: ${silentPatchCount} app(s) updated without user interaction."
+    fi
+    if [[ $silentPatchErrors -gt 0 ]]; then
+        log_error "Silent background patching encountered ${silentPatchErrors} error(s). Those app(s) will appear in the user dialog."
+    fi
+
+    # Update global state so subsequent workflow steps see the trimmed queue
+    queuedLabelsArray=("${remainingLabels[@]}")
+    appNamesArray=("${newAppNamesArray[@]}")
+
+    # Rebuild countOfElementsArray to reflect remaining labels only
+    countOfElementsArray=()
+    for label in $queuedLabelsArray; do
+        countOfElementsArray+=("${label}")
+    done
+
+    log_notice "Apps remaining for user interaction after silent pre-patch: ${#countOfElementsArray[@]}"
 }
 
 workflow_do_Installations() {
@@ -4858,6 +5103,16 @@ webHookMessage() {
             # If Mac is managed by Jumpcloud, link to the Jumpcloud devices page
         elif [[  $mdmName == "Jumpcloud" ]]; then
             mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
+                # If Mac is managed by Workspace One, link to the devices page
+        elif [[ $mdmName == "Workspace One" ]]; then
+            # Extract base URL from server_url
+            if [[ -n "$server_url" ]]; then
+                base_url=$(echo "$server_url" | sed -n 's/\(https:\/\/[^\/]*\).*/\1/p')
+                mdmComputerURL="${base_url}/AirWatch/#/AirWatch/Devices/List/"
+            else
+                # Fallback to generic Workspace One console
+                mdmComputerURL="https://console.workspace.one"
+            fi
         else
             log_info "No MDM determined - webhook call will fail"
         fi
@@ -5269,7 +5524,6 @@ check_version_consistency() {
 
 main() {
     set_defaults
-    rm -rf "${appAutoPatchVerboseLog}"
     get_options "$@"
 
     workflow_startup
@@ -5285,9 +5539,50 @@ main() {
     typeset -gA brewDisplayNames=()
     typeset -gA brewIconPaths=()
     brewSupersedingLabels=""
+    
+    # Determine if discovery should run based on workflow_disable_app_discovery_option and DiscoveryFrequency
+    local run_discovery="FALSE"
+    local discovery_skip_reason=""
+    
+    if [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then
+        # Discovery explicitly disabled
+        discovery_skip_reason="disabled by workflow option"
+    elif [[ -n "${DiscoveryFrequency}" ]] && [[ "${DiscoveryFrequency}" =~ ^[0-9]+$ ]] && (( DiscoveryFrequency > 0 )); then
+        # Check if enough time has passed since last discovery
+        local now_epoch last_discovery_epoch next_discovery_due
+        now_epoch=$(date +%s)
+        last_discovery_epoch=$(defaults read "${appAutoPatchLocalPLIST}" LastDiscoveryEpoch 2>/dev/null || echo "0")
+        
+        if [[ ! "${last_discovery_epoch}" =~ ^[0-9]+$ ]]; then
+            last_discovery_epoch=0
+        fi
+        
+        # Calculate when next discovery is due (last discovery + DiscoveryFrequency hours in seconds)
+        next_discovery_due=$(( last_discovery_epoch + (DiscoveryFrequency * 3600) ))
+        
+        if (( now_epoch >= next_discovery_due )); then
+            run_discovery="TRUE"
+            if (( last_discovery_epoch == 0 )); then
+                log_info "Discovery has never been run. Running discovery now."
+            else
+                local last_discovery_readable
+                last_discovery_readable=$(/bin/date -r "$last_discovery_epoch" "+${timestamp_format}")
+                log_info "Discovery frequency (${DiscoveryFrequency} hours) exceeded. Last discovery: ${last_discovery_readable}"
+            fi
+        else
+            local next_discovery_readable
+            next_discovery_readable=$(/bin/date -r "$next_discovery_due" "+${timestamp_format}")
+            discovery_skip_reason="next discovery due at ${next_discovery_readable} (frequency: ${DiscoveryFrequency} hours)"
+        fi
+    else
+        # DiscoveryFrequency is 0 or not set - always run discovery
+        run_discovery="TRUE"
+    fi
+    
     # Start the appropriate main workflow based on user options.
-    if [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then # Skip App Discovery Workflow
+    if [[ "${run_discovery}" != "TRUE" ]]; then # Skip App Discovery Workflow
         log_notice "**** App Auto-Patch ${scriptVersion} - SKIP APP DISCOVERY WORKFLOW ****"
+        [[ -n "${discovery_skip_reason}" ]] && log_info "Discovery skipped: ${discovery_skip_reason}"
     else
         log_notice "**** App Auto-Patch ${scriptVersion} - RUN APP DISCOVERY WORKFLOW ****"
         
@@ -5319,6 +5614,53 @@ main() {
         IFS=$'\n'
         in_label=0
         current_label=""
+        
+        # Helper function to safely parse and resolve variable assignments from label fragments
+        # Usage: _safe_parse_label_var "line"
+        # This extracts varname="value" and resolves ${varname} references without using eval
+        # Sets the global variables: name, appName, packageID, expectedTeamID, targetDir, folderName, versionKey, type
+        _safe_parse_label_var() {
+            local line="$1"
+            local varname rawvalue resolvedvalue
+            
+            # Extract variable name (everything before the first =)
+            varname="${line%%=*}"
+            # Remove any leading/trailing whitespace from varname
+            varname="${varname//[[:space:]]/}"
+            
+            # Extract raw value (everything after the first =, removing surrounding quotes)
+            rawvalue="${line#*=}"
+            # Remove leading quote
+            rawvalue="${rawvalue#\"}"
+            rawvalue="${rawvalue#\'}"
+            # Remove trailing quote
+            rawvalue="${rawvalue%\"}"
+            rawvalue="${rawvalue%\'}"
+            
+            # Resolve variable references using safe string substitution
+            # Replace ${varname} patterns with their actual values
+            resolvedvalue="$rawvalue"
+            resolvedvalue="${resolvedvalue//\$\{name\}/$name}"
+            resolvedvalue="${resolvedvalue//\$\{folderName\}/$folderName}"
+            resolvedvalue="${resolvedvalue//\$\{targetDir\}/$targetDir}"
+            resolvedvalue="${resolvedvalue//\$\{appName\}/$appName}"
+            resolvedvalue="${resolvedvalue//\$\{packageID\}/$packageID}"
+            resolvedvalue="${resolvedvalue//\$\{expectedTeamID\}/$expectedTeamID}"
+            resolvedvalue="${resolvedvalue//\$\{versionKey\}/$versionKey}"
+            resolvedvalue="${resolvedvalue//\$\{type\}/$type}"
+            
+            # Assign to the correct variable based on varname (explicit assignment, no eval)
+            case "$varname" in
+                name) name="$resolvedvalue" ;;
+                appName) appName="$resolvedvalue" ;;
+                packageID) packageID="$resolvedvalue" ;;
+                expectedTeamID) expectedTeamID="$resolvedvalue" ;;
+                targetDir) targetDir="$resolvedvalue" ;;
+                folderName) folderName="$resolvedvalue" ;;
+                versionKey) versionKey="$resolvedvalue" ;;
+                type) type="$resolvedvalue" ;;
+            esac
+        }
 
         # for each .sh file in fragments/labels/ strip out the switch/case lines and any comments. 
         log_info "Running discovery of installed applications"
@@ -5410,7 +5752,8 @@ main() {
                         case $scrubbedLine in
                             
                             'name='*|'appName='*|'packageID='*|'expectedTeamID='*|'targetDir='*|'folderName='*|'versionKey='*|'type='*)
-                                eval "$scrubbedLine"
+                                # Use safe parsing function instead of eval to prevent command injection
+                                _safe_parse_label_var "$scrubbedLine"
                             ;;
                             
                         esac
@@ -5424,6 +5767,12 @@ main() {
 
         # Close our bouncing progress swiftDialog window
         swiftDialogCompleteDialogDiscover
+        
+        # Update the last discovery timestamp
+        local discovery_complete_epoch
+        discovery_complete_epoch=$(date +%s)
+        defaults write "${appAutoPatchLocalPLIST}" LastDiscoveryEpoch -int "$discovery_complete_epoch"
+        log_info "Discovery completed. Next discovery due in ${DiscoveryFrequency:-0} hours."
 
     fi
 
@@ -5502,6 +5851,15 @@ main() {
     for label in $queuedLabelsArray; do
         countOfElementsArray+=($label)
     done
+
+    # InteractiveMode 1: Before showing any dialog, silently patch apps that are NOT currently
+    # open. Apps whose blocking processes are running (Installomator exit 12) stay in the queue
+    # and will be presented to the user via the normal deferral/deadline dialog workflow.
+    # Controlled by WorkflowBackgroundPatchClosedAppsOption (managed key: WorkflowBackgroundPatchClosedApps).
+    if [[ ${InteractiveModeOption} == 1 ]] && [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+        workflow_silent_patch_closed_apps
+    fi
+
     # If queued labels more than zero trigger workflows
     if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         numberOfUpdates=$((${#countOfElementsArray[@]}))
