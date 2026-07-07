@@ -32,6 +32,13 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 	- For example, setting `DiscoveryFrequency` to `24` means discovery only runs once per day regardless of how many times the user defers
 	- A value of `0` forces discovery to run on every workflow execution
 	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>`
+- Added Dock active check to startup workflow
+	- After confirming AAP is running as root, the startup workflow now waits for the Dock process to be active before proceeding, ensuring a user session is fully established
+	- Polls every 5 seconds for up to 120 seconds; if the Dock is not active within that window, AAP logs an exit message and exits with code 1 so the LaunchDaemon can retry on the next scheduled run
+- Added retry logic to swiftDialog download and verification
+	- The `install_dialog` function now retries the curl download and `spctl` Team ID verification up to 3 times before giving up
+	- If the download fails (non-zero curl exit), the partial file is removed and the attempt is retried after a 10-second delay
+	- If the Team ID does not match after 3 attempts, AAP displays the existing error dialog and exits, same as before
 - Added helper function to safely parse and resolve variable assignments from Installomator label fragments
 	- New `_safe_parse_label_var` function replaces `eval`-based label parsing with explicit, safe string substitution
 	- Extracts variable name and raw value from label fragment lines, strips surrounding quotes, and resolves `${variable}` references (e.g. `${folderName}`, `${appName}`) without executing arbitrary code
