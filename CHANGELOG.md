@@ -21,6 +21,12 @@
 	- For example, setting `DiscoveryFrequency` to `24` means discovery only runs once per day regardless of how many times the user defers
 	- A value of `0` forces discovery to run on every workflow execution
 	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>`
+- Updated verbose log lifecycle management
+	- Removed the unconditional deletion of `appAutoPatchVerboseLog` at the start of every run; the verbose log is now preserved across runs and accumulates entries like the main log
+	- Added dedicated `appAutoPatchVerboseLogArchiveSize` variable (default: 10000 KB) as a separate size threshold for the verbose log, independent of the main log archive size
+	- Added dedicated `appAutoPatchVerboseLogArchiveFolder` variable pointing to `${appAutoPatchFolder}/logs-verbose-archive`; this folder is created automatically on first install alongside the existing log archive folder
+	- The `archive_logs` function now archives the verbose log into `logs-verbose-archive` when it exceeds `appAutoPatchVerboseLogArchiveSize` KB, using the same timestamped zip approach as the main log
+	- Added a file-count cap for the verbose log archive: if `logs-verbose-archive` grows beyond 10 files, the oldest archive is automatically deleted to prevent unbounded disk usage
 - Added Dock active check to startup workflow
 	- After confirming AAP is running as root, the startup workflow now waits for the Dock process to be active before proceeding, ensuring a user session is fully established
 	- Polls every 5 seconds for up to 120 seconds; if the Dock is not active within that window, AAP logs an exit message and exits with code 1 so the LaunchDaemon can retry on the next scheduled run
