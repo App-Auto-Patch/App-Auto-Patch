@@ -42,7 +42,7 @@
 - Added logic to ignore apps found in .Trash folders, `/Applications (Parallels)/` and `/Applications (Virtual Machines)/` (#221 #216)
 - Fixed an issue that was setting `RemoveInstallomatorPath` to FALSE even if the value in the managed config was set to TRUE (#214)
 - Fixed an issue that was preventing the Support Team Website field from being hidden when the managed config was set to `hide`
-- Added Installomator verison output for cases where the installomator updater is diabled (#206)
+- Added Installomator version output for cases where the installomator updater is disabled (#206)
 - Fixed issue preventing Workspace One MDM URL from populating and being used for Slack Webhooks (#208)
 - Fixed a typo from the json file being saved properly in the `write_aap_receipt` function (#211)
 - Fixed an issue where umlaut values were populating incorrectly for Support Team Name (#204)
