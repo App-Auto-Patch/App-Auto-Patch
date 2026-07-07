@@ -4,17 +4,6 @@
 
 ## Version 3.6.0
 ### 06-Jul-2026
-- Added Discovery Frequency control
-	- New `DiscoveryFrequency` managed preference key (integer, hours)
-	- When the workflow resets and re-runs (e.g. after a deferral), AAP will skip the discovery phase if the last successful discovery completed within the configured number of hours, saving script runtime, bandwidth, and system resources
-	- For example, setting `DiscoveryFrequency` to `24` means discovery only runs once per day regardless of how many times the user defers
-	- A value of `0` forces discovery to run on every workflow execution
-	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>`
-- Added helper function to safely parse and resolve variable assignments from Installomator label fragments
-	- New `_safe_parse_label_var` function replaces `eval`-based label parsing with explicit, safe string substitution
-	- Extracts variable name and raw value from label fragment lines, strips surrounding quotes, and resolves `${variable}` references (e.g. `${folderName}`, `${appName}`) without executing arbitrary code
-	- Handles the full set of label variables used during discovery: `name`, `appName`, `packageID`, `expectedTeamID`, `targetDir`, `folderName`, `versionKey`, and `type`
-	- Improves security and predictability of label fragment parsing across all app discovery logic
 - Added Background Patch Closed Apps for InteractiveMode 1
 	- When `InteractiveMode` is set to `1` (Silent Discovery, Interactive Patching), AAP now performs a silent pre-patch pass immediately after discovery and before any user dialog is displayed
 	- Apps that are **not currently open** are updated silently in the background using Installomator with `BLOCKING_PROCESS_ACTION=silent_fail`. A successful install (exit 0) removes the app from the update queue entirely
@@ -26,6 +15,24 @@
 		- `true` (default): Silent pre-patch of closed apps is enabled for InteractiveMode 1
 		- `false`: Disables the silent pre-patch; all discovered updates are presented to the user in the dialog as before
 	- Managed Preference Key: `<key>WorkflowBackgroundPatchClosedApps</key>` `<true/>` | `<false/>`
+- Added Discovery Frequency control
+	- New `DiscoveryFrequency` managed preference key (integer, hours)
+	- When the workflow resets and re-runs (e.g. after a deferral), AAP will skip the discovery phase if the last successful discovery completed within the configured number of hours, saving script runtime, bandwidth, and system resources
+	- For example, setting `DiscoveryFrequency` to `24` means discovery only runs once per day regardless of how many times the user defers
+	- A value of `0` forces discovery to run on every workflow execution
+	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>`
+- Added Dock active check to startup workflow
+	- After confirming AAP is running as root, the startup workflow now waits for the Dock process to be active before proceeding, ensuring a user session is fully established
+	- Polls every 5 seconds for up to 120 seconds; if the Dock is not active within that window, AAP logs an exit message and exits with code 1 so the LaunchDaemon can retry on the next scheduled run
+- Added retry logic to swiftDialog download and verification
+	- The `install_dialog` function now retries the curl download and `spctl` Team ID verification up to 3 times before giving up
+	- If the download fails (non-zero curl exit), the partial file is removed and the attempt is retried after a 10-second delay
+	- If the Team ID does not match after 3 attempts, AAP displays the existing error dialog and exits, same as before
+- Added helper function to safely parse and resolve variable assignments from Installomator label fragments
+	- New `_safe_parse_label_var` function replaces `eval`-based label parsing with explicit, safe string substitution
+	- Extracts variable name and raw value from label fragment lines, strips surrounding quotes, and resolves `${variable}` references (e.g. `${folderName}`, `${appName}`) without executing arbitrary code
+	- Handles the full set of label variables used during discovery: `name`, `appName`, `packageID`, `expectedTeamID`, `targetDir`, `folderName`, `versionKey`, and `type`
+	- Improves security and predictability of label fragment parsing across all app discovery logic
 
 ## Version 3.5.0
 ### 22-Dec-2025
