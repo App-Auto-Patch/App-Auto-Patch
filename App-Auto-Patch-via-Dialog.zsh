@@ -53,6 +53,16 @@ echo "
     [--days-until-reset=number]
     [--zoom-call-active-check-enabled] [--zoom-call-active-check-disabled]
 
+    Homebrew Options:
+    [--homebrew-enabled] [--homebrew-disabled]
+    [--homebrew-cask-enabled] [--homebrew-cask-disabled]
+    [--homebrew-formula-enabled] [--homebrew-formula-disabled]
+    [--homebrew-priority=INSTALLOMATOR|HOMEBREW]
+    [--homebrew-preferred-packages="pkg1 pkg2"]
+    [--homebrew-binary-path=/path/to/brew]
+    [--homebrew-ignored-casks="cask1 cask2"]
+    [--homebrew-ignored-formulae="formula1 formula2"]
+
     App Auto-Patch Self Update Options
     [--force-self-update-check]
     [--self-update-enabled] [--self-update-disabled]
@@ -157,6 +167,14 @@ echo "
     <key>DiscoveryFrequency</key> <integer>hours</integer>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
     <key>ZoomCallActiveCheck</key> <true/> | <false/>
+    <key>HomebrewEnabled</key>             <true/> | <false/>
+    <key>HomebrewCaskEnabled</key>         <true/> | <false/>
+    <key>HomebrewFormulaEnabled</key>      <true/> | <false/>
+    <key>HomebrewPriority</key>            <string>INSTALLOMATOR | HOMEBREW</string>
+    <key>HomebrewPreferredPackages</key>   <string>token1 token2 ...</string>
+    <key>HomebrewBinaryPath</key>          <string>/opt/homebrew/bin/brew</string>
+    <key>HomebrewIgnoredCasks</key>        <string>cask1 cask2 ...</string>
+    <key>HomebrewIgnoredFormulae</key>     <string>formula1 formula2 ...</string>
 
     ** Detailed documentation can be found at: https://github.com/App-Auto-Patch/App-Auto-Patch/wiki
 "
@@ -378,6 +396,15 @@ set_defaults() {
     # FALSE: Does not allow Installomator Debug Fallback to run and will not add the app to the queue for updates
     VersionComparisonInstallomatorFallback="TRUE"
 
+    homebrew_enabled_option="FALSE"          # MDM Enabled
+    homebrew_cask_enabled_option="TRUE"      # MDM Enabled
+    homebrew_formula_enabled_option="TRUE"   # MDM Enabled
+    homebrew_priority_option="INSTALLOMATOR" # MDM Enabled
+    homebrew_preferred_packages_option=""    # MDM Enabled
+    homebrew_binary_path_option=""           # MDM Enabled
+    homebrew_ignored_casks_option=""         # MDM Enabled
+    homebrew_ignored_formulae_option=""      # MDM Enabled
+    brewBinary=""
     # InteractiveMode 1 only: When TRUE (default), apps that are NOT currently open are silently
     # patched in the background before the user dialog is shown. Only apps with active blocking
     # processes are presented to the user for deferred/manual patching.
@@ -881,9 +908,42 @@ get_options() {
             --zoom-call-active-check-disabled)
                 zoom_call_active_check_option="FALSE"
             ;;
+            --homebrew-enabled)
+                homebrew_enabled_option="TRUE"
+            ;;
+            --homebrew-disabled)
+                homebrew_enabled_option="FALSE"
+            ;;
+            --homebrew-cask-enabled)
+                homebrew_cask_enabled_option="TRUE"
+            ;;
+            --homebrew-cask-disabled)
+                homebrew_cask_enabled_option="FALSE"
+            ;;
+            --homebrew-formula-enabled)
+                homebrew_formula_enabled_option="TRUE"
+            ;;
+            --homebrew-formula-disabled)
+                homebrew_formula_enabled_option="FALSE"
+            ;;
+            --homebrew-priority=*)
+                homebrew_priority_option="${1#*=}"
+            ;;
+            --homebrew-preferred-packages=*)
+                homebrew_preferred_packages_option="${1#*=}"
+            ;;
+            --homebrew-binary-path=*)
+                homebrew_binary_path_option="${1#*=}"
+            ;;
+            --homebrew-ignored-casks=*)
+                homebrew_ignored_casks_option="${1#*=}"
+            ;;
+            --homebrew-ignored-formulae=*)
+                homebrew_ignored_formulae_option="${1#*=}"
+            ;;
             *)
                 unrecognized_options_array+=("$1")
-            ;;  
+            ;;
         esac
         shift
     done
@@ -1074,6 +1134,23 @@ get_preferences() {
         version_comparison_installomator_fallback_managed=$(defaults read "${appAutoPatchManagedPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
         local zoom_call_active_check_managed
         zoom_call_active_check_managed=$(defaults read "${appAutoPatchManagedPLIST}" ZoomCallActiveCheck 2> /dev/null)
+        local homebrew_enabled_managed
+        homebrew_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewEnabled 2> /dev/null)
+        local homebrew_cask_enabled_managed
+        homebrew_cask_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewCaskEnabled 2> /dev/null)
+        local homebrew_formula_enabled_managed
+        homebrew_formula_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewFormulaEnabled 2> /dev/null)
+        local homebrew_priority_managed
+        homebrew_priority_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewPriority 2> /dev/null)
+        local homebrew_preferred_packages_managed
+        homebrew_preferred_packages_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewPreferredPackages 2> /dev/null)
+        local homebrew_binary_path_managed
+        homebrew_binary_path_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewBinaryPath 2> /dev/null)
+        local homebrew_ignored_casks_managed
+        homebrew_ignored_casks_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewIgnoredCasks 2> /dev/null)
+        local homebrew_ignored_formulae_managed
+        homebrew_ignored_formulae_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewIgnoredFormulae 2> /dev/null)
+
         local workflow_background_patch_closed_apps_managed
         workflow_background_patch_closed_apps_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowBackgroundPatchClosedApps 2> /dev/null)
         
@@ -1190,10 +1267,26 @@ get_preferences() {
         version_comparison_installomator_fallback_local=$(defaults read "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
         local zoom_call_active_check_local
         zoom_call_active_check_local=$(defaults read "${appAutoPatchLocalPLIST}" ZoomCallActiveCheck 2> /dev/null)
+        local homebrew_enabled_local
+        homebrew_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewEnabled 2> /dev/null)
+        local homebrew_cask_enabled_local
+        homebrew_cask_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewCaskEnabled 2> /dev/null)
+        local homebrew_formula_enabled_local
+        homebrew_formula_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewFormulaEnabled 2> /dev/null)
+        local homebrew_priority_local
+        homebrew_priority_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewPriority 2> /dev/null)
+        local homebrew_preferred_packages_local
+        homebrew_preferred_packages_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewPreferredPackages 2> /dev/null)
+        local homebrew_binary_path_local
+        homebrew_binary_path_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewBinaryPath 2> /dev/null)
+        local homebrew_ignored_casks_local
+        homebrew_ignored_casks_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewIgnoredCasks 2> /dev/null)
+        local homebrew_ignored_formulae_local
+        homebrew_ignored_formulae_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewIgnoredFormulae 2> /dev/null)
         local workflow_background_patch_closed_apps_local
         workflow_background_patch_closed_apps_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowBackgroundPatchClosedApps 2> /dev/null)
     fi
-    
+
     log_verbose  "Local preference file before startup validation: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
 
     # Need logic to ensures the priority order of managed preference overrides the new input option which overrides the saved local preference.
@@ -1248,6 +1341,22 @@ get_preferences() {
     [[ -n "${zoom_call_active_check_managed}" ]] && zoom_call_active_check_option="${zoom_call_active_check_managed}"
     { [[ -z "${zoom_call_active_check_managed}" ]] && [[ -z "${zoom_call_active_check_option}" ]] && [[ -n "${zoom_call_active_check_local}" ]]; } && zoom_call_active_check_option="${zoom_call_active_check_local}"
 
+    [[ -n "${homebrew_enabled_managed}" ]] && homebrew_enabled_option="${homebrew_enabled_managed}"
+    { [[ -z "${homebrew_enabled_managed}" ]] && [[ -n "${homebrew_enabled_option}" ]] && [[ -n "${homebrew_enabled_local}" ]]; } && homebrew_enabled_option="${homebrew_enabled_local}"
+    [[ -n "${homebrew_cask_enabled_managed}" ]] && homebrew_cask_enabled_option="${homebrew_cask_enabled_managed}"
+    { [[ -z "${homebrew_cask_enabled_managed}" ]] && [[ -n "${homebrew_cask_enabled_option}" ]] && [[ -n "${homebrew_cask_enabled_local}" ]]; } && homebrew_cask_enabled_option="${homebrew_cask_enabled_local}"
+    [[ -n "${homebrew_formula_enabled_managed}" ]] && homebrew_formula_enabled_option="${homebrew_formula_enabled_managed}"
+    { [[ -z "${homebrew_formula_enabled_managed}" ]] && [[ -n "${homebrew_formula_enabled_option}" ]] && [[ -n "${homebrew_formula_enabled_local}" ]]; } && homebrew_formula_enabled_option="${homebrew_formula_enabled_local}"
+    [[ -n "${homebrew_priority_managed}" ]] && homebrew_priority_option="${homebrew_priority_managed}"
+    { [[ -z "${homebrew_priority_managed}" ]] && [[ -n "${homebrew_priority_option}" ]] && [[ -n "${homebrew_priority_local}" ]]; } && homebrew_priority_option="${homebrew_priority_local}"
+    [[ -n "${homebrew_preferred_packages_managed}" ]] && homebrew_preferred_packages_option="${homebrew_preferred_packages_managed}"
+    { [[ -z "${homebrew_preferred_packages_managed}" ]] && [[ -z "${homebrew_preferred_packages_option}" ]] && [[ -n "${homebrew_preferred_packages_local}" ]]; } && homebrew_preferred_packages_option="${homebrew_preferred_packages_local}"
+    [[ -n "${homebrew_binary_path_managed}" ]] && homebrew_binary_path_option="${homebrew_binary_path_managed}"
+    { [[ -z "${homebrew_binary_path_managed}" ]] && [[ -z "${homebrew_binary_path_option}" ]] && [[ -n "${homebrew_binary_path_local}" ]]; } && homebrew_binary_path_option="${homebrew_binary_path_local}"
+    [[ -n "${homebrew_ignored_casks_managed}" ]] && homebrew_ignored_casks_option="${homebrew_ignored_casks_managed}"
+    { [[ -z "${homebrew_ignored_casks_managed}" ]] && [[ -z "${homebrew_ignored_casks_option}" ]] && [[ -n "${homebrew_ignored_casks_local}" ]]; } && homebrew_ignored_casks_option="${homebrew_ignored_casks_local}"
+    [[ -n "${homebrew_ignored_formulae_managed}" ]] && homebrew_ignored_formulae_option="${homebrew_ignored_formulae_managed}"
+    { [[ -z "${homebrew_ignored_formulae_managed}" ]] && [[ -z "${homebrew_ignored_formulae_option}" ]] && [[ -n "${homebrew_ignored_formulae_local}" ]]; } && homebrew_ignored_formulae_option="${homebrew_ignored_formulae_local}"
     [[ -n "${workflow_background_patch_closed_apps_managed}" ]] && WorkflowBackgroundPatchClosedAppsOption="${workflow_background_patch_closed_apps_managed}"
     { [[ -z "${workflow_background_patch_closed_apps_managed}" ]] && [[ -z "${WorkflowBackgroundPatchClosedAppsOption}" ]] && [[ -n "${workflow_background_patch_closed_apps_local}" ]]; } && WorkflowBackgroundPatchClosedAppsOption="${workflow_background_patch_closed_apps_local}"
 
@@ -1384,6 +1493,15 @@ get_preferences() {
     log_verbose "monthly_patching_cadence_start_time: $monthly_patching_cadence_start_time"
     log_verbose "version_comparison_method_option: $version_comparison_method_option"
     log_verbose "zoom_call_active_check_option: $zoom_call_active_check_option"
+    log_verbose "homebrew_enabled_option: $homebrew_enabled_option"
+    log_verbose "homebrew_cask_enabled_option: $homebrew_cask_enabled_option"
+    log_verbose "homebrew_formula_enabled_option: $homebrew_formula_enabled_option"
+    log_verbose "homebrew_priority_option: $homebrew_priority_option"
+    log_verbose "homebrew_preferred_packages_option: $homebrew_preferred_packages_option"
+    log_verbose "homebrew_binary_path_option: $homebrew_binary_path_option"
+    log_verbose "homebrew_ignored_casks_option: $homebrew_ignored_casks_option"
+    log_verbose "homebrew_ignored_formulae_option: $homebrew_ignored_formulae_option"
+
     log_verbose "WorkflowBackgroundPatchClosedAppsOption: $WorkflowBackgroundPatchClosedAppsOption"
     
     #Validate Custom Installomator Options
@@ -1686,6 +1804,43 @@ manage_parameter_options() {
     fi
     { [[ -n "${zoom_call_active_check_option}" ]]; } && log_verbose "zoom_call_active_check_option is: ${zoom_call_active_check_option}"
 
+    # Manage homebrew settings and save to ${appAutoPatchLocalPLIST}.
+    if [[ "${homebrew_enabled_option}" -eq 1 ]] || [[ "${homebrew_enabled_option}" == "TRUE" ]]; then
+        homebrew_enabled_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewEnabled -bool true
+    elif [[ -z "${homebrew_enabled_option}" ]]; then
+        homebrew_enabled_option="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewEnabled -bool false
+    else
+        homebrew_enabled_option="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewEnabled -bool false
+    fi
+    log_verbose "homebrew_enabled_option is: ${homebrew_enabled_option}"
+    if [[ "${homebrew_cask_enabled_option}" -eq 1 ]] || [[ "${homebrew_cask_enabled_option}" == "TRUE" ]]; then
+        homebrew_cask_enabled_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewCaskEnabled -bool true
+    elif [[ -z "${homebrew_cask_enabled_option}" ]]; then
+        homebrew_cask_enabled_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewCaskEnabled -bool true
+    else
+        homebrew_cask_enabled_option="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewCaskEnabled -bool false
+    fi
+    if [[ "${homebrew_formula_enabled_option}" -eq 1 ]] || [[ "${homebrew_formula_enabled_option}" == "TRUE" ]]; then
+        homebrew_formula_enabled_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewFormulaEnabled -bool true
+    elif [[ -z "${homebrew_formula_enabled_option}" ]]; then
+        homebrew_formula_enabled_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewFormulaEnabled -bool true
+    else
+        homebrew_formula_enabled_option="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewFormulaEnabled -bool false
+    fi
+    [[ -n "${homebrew_priority_option}" ]] && defaults write "${appAutoPatchLocalPLIST}" HomebrewPriority -string "${homebrew_priority_option}"
+    [[ -n "${homebrew_preferred_packages_option}" ]] && defaults write "${appAutoPatchLocalPLIST}" HomebrewPreferredPackages -string "${homebrew_preferred_packages_option}"
+    [[ -n "${homebrew_binary_path_option}" ]] && defaults write "${appAutoPatchLocalPLIST}" HomebrewBinaryPath -string "${homebrew_binary_path_option}"
+    [[ -n "${homebrew_ignored_casks_option}" ]] && defaults write "${appAutoPatchLocalPLIST}" HomebrewIgnoredCasks -string "${homebrew_ignored_casks_option}"
+    [[ -n "${homebrew_ignored_formulae_option}" ]] && defaults write "${appAutoPatchLocalPLIST}" HomebrewIgnoredFormulae -string "${homebrew_ignored_formulae_option}"
     # Manage ${WorkflowBackgroundPatchClosedAppsOption} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${WorkflowBackgroundPatchClosedAppsOption}" -eq 1 ]] || [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]]; then
         WorkflowBackgroundPatchClosedAppsOption="TRUE"
@@ -3661,12 +3816,14 @@ swiftDialogPatchingWindow(){
         
         # Build our list of Display Names for the SwiftDialog list
         for label in $queuedLabelsArray; do
-            # Get display name from label fragment
-            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-            
-            # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
-            iconPath=$(resolve_app_icon_path "$label")
-            
+            if [[ "${label}" == brewcask__* || "${label}" == brewformula__* ]]; then
+                currentDisplay_name="${brewDisplayNames[$label]:-${label}}"
+                iconPath="${brewIconPaths[$label]:-SF=shippingbox.fill,colour1=#f5a623}"
+            else
+                currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+                iconPath=$(resolve_app_icon_path "$label")
+            fi
+
             displayNames+=("--listitem")
             displayNames+=(${currentDisplay_name},icon="${iconPath}")
         done
@@ -4317,6 +4474,260 @@ function queueLabel() {
     log_verbose "$labelsArray"
 }
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Homebrew Related Functions
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+function get_homebrew_binary() {
+	if [[ -n "${homebrew_binary_path_option}" ]]; then
+		if [[ -x "${homebrew_binary_path_option}" ]]; then
+			brewBinary="${homebrew_binary_path_option}"
+			log_verbose "Homebrew binary (admin-specified): ${brewBinary}"
+			return 0
+		else
+			log_warning "Homebrew binary not found at specified path: ${homebrew_binary_path_option}"
+			return 1
+		fi
+	fi
+
+	local candidate
+	for candidate in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
+		if [[ -x "${candidate}" ]]; then
+			brewBinary="${candidate}"
+			log_verbose "Homebrew binary (auto-detected): ${brewBinary}"
+			return 0
+		fi
+	done
+
+	local user_brew
+	user_brew=$(sudo -u "${currentUserAccountName}" /usr/bin/which brew 2>/dev/null)
+	if [[ -n "${user_brew}" && -x "${user_brew}" ]]; then
+		brewBinary="${user_brew}"
+		log_verbose "Homebrew binary (user PATH): ${brewBinary}"
+		return 0
+	fi
+
+	return 1
+}
+
+function resolve_brew_icon_path() {
+	local pkg_type="$1"
+	local pkg_name="$2"
+
+	if [[ "${pkg_type}" == "formula" ]]; then
+		echo "SF=terminal,colour1=#f5a623"
+		return
+	fi
+
+	local cap_name
+	cap_name="$(echo "${pkg_name}" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
+
+	if [[ -d "/Applications/${cap_name}.app" ]]; then
+		echo "/Applications/${cap_name}.app"
+		return
+	fi
+
+	if [[ -d "/Applications/${pkg_name}.app" ]]; then
+		echo "/Applications/${pkg_name}.app"
+		return
+	fi
+
+	local mdfind_result
+	mdfind_result=$(mdfind "kMDItemFSName == '${cap_name}.app' && kMDItemContentType == 'com.apple.application-bundle'" -0 2>/dev/null | tr -d '\0' | head -c 4096)
+	if [[ -n "${mdfind_result}" && -d "${mdfind_result}" ]]; then
+		echo "${mdfind_result}"
+		return
+	fi
+
+	echo "SF=shippingbox.fill,colour1=#f5a623"
+}
+
+function brew_install_package() {
+	local brew_label="$1"
+	local is_cask="FALSE"
+	local package_name
+
+	if [[ "${brew_label}" == brewcask__* ]]; then
+		is_cask="TRUE"
+		package_name="${brew_label#brewcask__}"
+	else
+		package_name="${brew_label#brewformula__}"
+	fi
+
+	log_install "Homebrew upgrading ${package_name}${is_cask:+ (cask)}"
+
+	if [[ "${is_cask}" == "TRUE" ]]; then
+		sudo -u "${currentUserAccountName}" "${brewBinary}" upgrade --cask "${package_name}" 2>&1 | tee -a "${appAutoPatchLog}"
+	else
+		sudo -u "${currentUserAccountName}" "${brewBinary}" upgrade "${package_name}" 2>&1 | tee -a "${appAutoPatchLog}"
+	fi
+	return ${pipestatus[1]}
+}
+
+function homebrew_discovery() {
+	if [[ "${homebrew_enabled_option}" != "TRUE" ]]; then
+		log_info "Homebrew management disabled"
+		return
+	fi
+
+	if [[ "${homebrew_cask_enabled_option}" != "TRUE" && "${homebrew_formula_enabled_option}" != "TRUE" ]]; then
+		log_info "Homebrew cask and formula both disabled"
+		return
+	fi
+
+	if [[ -z "${currentUserAccountName}" || "${currentUserAccountName}" == "FALSE" ]]; then
+		log_warning "Homebrew discovery skipped: no user logged in"
+		return
+	fi
+
+	if ! get_homebrew_binary; then
+		log_warning "Homebrew binary not found — skipping Homebrew discovery"
+		return
+	fi
+
+	log_notice "**** Homebrew Discovery ****"
+
+	local brew_outdated_json
+	brew_outdated_json=$(sudo -u "${currentUserAccountName}" "${brewBinary}" outdated --json=v2 2>/dev/null)
+	local brew_exit_code=$?
+
+	if [[ $brew_exit_code -ne 0 ]] || [[ -z "$brew_outdated_json" ]]; then
+		log_error "brew outdated failed (exit code: $brew_exit_code) — skipping Homebrew discovery"
+		return
+	fi
+
+	local queued_casks=0
+	local queued_formulae=0
+
+	# Process outdated casks
+	if [[ "${homebrew_cask_enabled_option}" == "TRUE" ]]; then
+		local cask_data
+		cask_data=$(echo "${brew_outdated_json}" | /usr/bin/python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for c in data.get('casks', []):
+    installed = c.get('installed_versions', [''])[0]
+    current = c.get('current_version', '')
+    print('{0}|{1}|{2}'.format(c['name'], installed, current))
+" 2>/dev/null)
+
+		while IFS='|' read -r cask_name installed_ver current_ver; do
+			[[ -z "${cask_name}" ]] && continue
+
+			if [[ " ${homebrew_ignored_casks_option} " == *" ${cask_name} "* ]]; then
+				log_verbose "Homebrew: ignoring cask ${cask_name}"
+				continue
+			fi
+
+			local brew_label="brewcask__${cask_name}"
+			local in_installomator="FALSE"
+			[[ " ${labelsArray} " == *" ${cask_name} "* ]] && in_installomator="TRUE"
+
+			local in_preferred="FALSE"
+			[[ " ${homebrew_preferred_packages_option} " == *" ${cask_name} "* ]] && in_preferred="TRUE"
+
+			local should_queue="FALSE"
+			if [[ "${homebrew_priority_option}" == "INSTALLOMATOR" ]]; then
+				if [[ "${in_preferred}" == "FALSE" ]]; then
+					if [[ "${in_installomator}" == "TRUE" ]]; then
+						log_notice "Homebrew: skipping cask ${cask_name} (Installomator has priority)"
+					else
+						should_queue="TRUE"
+					fi
+				else
+					brewSupersedingLabels+="${cask_name} "
+					should_queue="TRUE"
+				fi
+			else
+				if [[ "${in_preferred}" == "FALSE" ]]; then
+					[[ "${in_installomator}" == "TRUE" ]] && brewSupersedingLabels+="${cask_name} "
+					should_queue="TRUE"
+				else
+					if [[ "${in_installomator}" == "TRUE" ]]; then
+						log_notice "Homebrew: skipping cask ${cask_name} (Installomator preferred for this package)"
+					else
+						should_queue="TRUE"
+					fi
+				fi
+			fi
+
+			if [[ "${should_queue}" == "TRUE" ]]; then
+				log_notice "Homebrew: queuing cask ${cask_name} (${installed_ver} → ${current_ver})"
+				brewDisplayNames[$brew_label]="${cask_name} (Homebrew Cask)"
+				brewIconPaths[$brew_label]=$(resolve_brew_icon_path "cask" "${cask_name}")
+				AAPVersionByLabel[$brew_label]="${current_ver}"
+				/usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${brew_label}\"" "${appAutoPatchLocalPLIST}.plist"
+				labelsArray+="${brew_label} "
+				let queued_casks++
+			fi
+		done <<< "${cask_data}"
+	fi
+
+	# Process outdated formulae
+	if [[ "${homebrew_formula_enabled_option}" == "TRUE" ]]; then
+		local formula_data
+		formula_data=$(echo "${brew_outdated_json}" | /usr/bin/python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for f in data.get('formulae', []):
+    installed = f.get('installed_versions', [''])[0]
+    current = f.get('current_version', '')
+    print('{0}|{1}|{2}'.format(f['name'], installed, current))
+" 2>/dev/null)
+
+		while IFS='|' read -r formula_name installed_ver current_ver; do
+			[[ -z "${formula_name}" ]] && continue
+
+			if [[ " ${homebrew_ignored_formulae_option} " == *" ${formula_name} "* ]]; then
+				log_verbose "Homebrew: ignoring formula ${formula_name}"
+				continue
+			fi
+
+			local brew_label="brewformula__${formula_name}"
+			local in_installomator="FALSE"
+			[[ " ${labelsArray} " == *" ${formula_name} "* ]] && in_installomator="TRUE"
+
+			local in_preferred="FALSE"
+			[[ " ${homebrew_preferred_packages_option} " == *" ${formula_name} "* ]] && in_preferred="TRUE"
+
+			local should_queue="FALSE"
+			if [[ "${homebrew_priority_option}" == "INSTALLOMATOR" ]]; then
+				if [[ "${in_preferred}" == "FALSE" ]]; then
+					if [[ "${in_installomator}" == "TRUE" ]]; then
+						log_notice "Homebrew: skipping formula ${formula_name} (Installomator has priority)"
+					else
+						should_queue="TRUE"
+					fi
+				else
+					brewSupersedingLabels+="${formula_name} "
+					should_queue="TRUE"
+				fi
+			else
+				if [[ "${in_preferred}" == "FALSE" ]]; then
+					[[ "${in_installomator}" == "TRUE" ]] && brewSupersedingLabels+="${formula_name} "
+					should_queue="TRUE"
+				else
+					if [[ "${in_installomator}" == "TRUE" ]]; then
+						log_notice "Homebrew: skipping formula ${formula_name} (Installomator preferred for this package)"
+					else
+						should_queue="TRUE"
+					fi
+				fi
+			fi
+
+			if [[ "${should_queue}" == "TRUE" ]]; then
+				log_notice "Homebrew: queuing formula ${formula_name} (${installed_ver} → ${current_ver})"
+				brewDisplayNames[$brew_label]="${formula_name} (Homebrew Formula)"
+				brewIconPaths[$brew_label]=$(resolve_brew_icon_path "formula" "${formula_name}")
+				AAPVersionByLabel[$brew_label]="${current_ver}"
+				/usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${brew_label}\"" "${appAutoPatchLocalPLIST}.plist"
+				labelsArray+="${brew_label} "
+				let queued_formulae++
+			fi
+		done <<< "${formula_data}"
+	fi
+
+	log_notice "Homebrew discovery complete — queued ${queued_casks} cask(s), ${queued_formulae} formula(e)"
 workflow_silent_patch_closed_apps() {
     # InteractiveMode 1 only: Silently install updates for apps that are NOT currently running.
     # Uses BLOCKING_PROCESS_ACTION=silent_fail so Installomator exits with code 12 when a
@@ -4451,20 +4862,35 @@ workflow_do_Installations() {
         swiftDialogOptions=()
         if [ ${InteractiveModeOption} -ge 1 ]; then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
-            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+
+            if [[ "${label}" == brewcask__* || "${label}" == brewformula__* ]]; then
+                currentDisplay_name="${brewDisplayNames[$label]:-${label}}"
+                iconPath="${brewIconPaths[$label]:-SF=shippingbox.fill,colour1=#f5a623}"
+            else
+                currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+                iconPath=$(resolve_app_icon_path "$label")
+            fi
+
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplay_name}"\')
             sleep .5
 
-            # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
-            iconPath=$(resolve_app_icon_path "$label")
-            
             swiftDialogUpdate "icon: $iconPath"
             swiftDialogUpdate "progresstext: ${display_string_patching_progress} ${currentDisplay_name} …"
             swiftDialogUpdate "listitem: index: $i, icon: $iconPath, status: wait, statustext: ${display_string_patching_checking} …"
-            
+
         fi
 
-        if [[ ${zoom_call_active_check_option} == "TRUE" && ${label} == "zoom"* ]] ; then
+        if [[ "${label}" == brewcask__* || "${label}" == brewformula__* ]]; then
+            # Homebrew upgrade path
+            brew_install_package "${label}"
+            installomatorExitCode=$?
+            if [[ $installomatorExitCode -ne 0 ]]; then
+                log_error "Error upgrading Homebrew package ${label}. Exit code $installomatorExitCode"
+                swiftDialogUpdate "listitem: index: $i, status: fail"
+                let errorCount++
+            fi
+            write_aap_receipt "${label}" "${AAPVersionByLabel[$label]:-}" "$installomatorExitCode"
+        elif [[ ${zoom_call_active_check_option} == "TRUE" && ${label} == "zoom"* ]] ; then
 
 	        CPTHOSTPID=$(pgrep CptHost)
 	        AOMHOSTPID=$(pgrep aomhost)
@@ -5110,6 +5536,9 @@ main() {
 
     declare -A configArray=()
     typeset -gA AAPVersionByLabel=()
+    typeset -gA brewDisplayNames=()
+    typeset -gA brewIconPaths=()
+    brewSupersedingLabels=""
     
     # Determine if discovery should run based on workflow_disable_app_discovery_option and DiscoveryFrequency
     local run_discovery="FALSE"
@@ -5333,6 +5762,9 @@ main() {
             done
         done
 
+        # Homebrew discovery — runs after Installomator so configArray/labelsArray are populated
+        homebrew_discovery
+
         # Close our bouncing progress swiftDialog window
         swiftDialogCompleteDialogDiscover
         
@@ -5372,17 +5804,29 @@ main() {
 
     labelsArray=${labelsArray:|ignoredLabelsArray}
 
+    # Remove Installomator labels that Homebrew won over (priority/conflict resolution)
+    if [[ -n "${brewSupersedingLabels}" ]]; then
+        local _superseded_arr
+        _superseded_arr=(${=brewSupersedingLabels})
+        for _sup in "${_superseded_arr[@]}"; do
+            labelsArray=(${labelsArray:#${_sup}})
+            log_notice "Homebrew supersedes Installomator label: ${_sup}"
+        done
+    fi
+
     appNamesArray=()
     # Get App Names for each label in labelsArray
     queuedLabelsForNames=("${(@s/ /)labelsArray}")
     for label in $queuedLabelsForNames; do
         log_verbose "Obtaining proper name for $label"
-        
-        # Get display name from label fragment
-        currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-        
-        # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
-        iconPath=$(resolve_app_icon_path "$label")
+
+        if [[ "${label}" == brewcask__* || "${label}" == brewformula__* ]]; then
+            currentDisplay_name="${brewDisplayNames[$label]:-${label}}"
+            iconPath="${brewIconPaths[$label]:-SF=shippingbox.fill,colour1=#f5a623}"
+        else
+            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            iconPath=$(resolve_app_icon_path "$label")
+        fi
         log_verbose "Resolved icon path: $iconPath"
 
         appNamesArray+=("--listitem")
