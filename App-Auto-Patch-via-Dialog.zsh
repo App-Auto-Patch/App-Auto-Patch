@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.0"
 scriptDate="2026/07/06"
-scriptBuild="3.6.0.260706739"
+scriptBuild="3.6.0.260706802"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -223,6 +223,8 @@ set_defaults() {
 
     appAutoPatchLogArchiveFolder="${appAutoPatchFolder}/logs-archive"
 
+    appAutoPatchVerboseLogArchiveFolder="${appAutoPatchFolder}/logs-verbose-archive"
+
     appAutoPatchReceiptsFolder="${appAutoPatchFolder}/receipts"
 
     appAutoPatchLog="${appAutoPatchLogFolder}/aap.log"
@@ -230,6 +232,8 @@ set_defaults() {
     appAutoPatchVerboseLog="${appAutoPatchLogFolder}/aap_verbose.log"
 
     appAutoPatchLogArchiveSize=1000
+
+    appAutoPatchVerboseLogArchiveSize=10000
 
     appAutoPatchGithubRepo="App-Auto-Patch/App-Auto-Patch"
     
@@ -2540,6 +2544,7 @@ install_app_auto_patch() {
     [[ ! -d "${appAutoPatchFolder}" ]] && mkdir -p "${appAutoPatchFolder}"
     [[ ! -d "${appAutoPatchLogFolder}" ]] && mkdir -p "${appAutoPatchLogFolder}"
     [[ ! -d "${appAutoPatchLogArchiveFolder}" ]] && mkdir -p "${appAutoPatchLogArchiveFolder}"
+    [[ ! -d "${appAutoPatchVerboseLogArchiveFolder}" ]] && mkdir -p "${appAutoPatchVerboseLogArchiveFolder}"
     [[ ! -d "${appAutoPatchReceiptsFolder}" ]] && mkdir -p "${appAutoPatchReceiptsFolder}"
 
     log_notice "###### App Auto-Patch ${scriptVersion} - Installing ... ######"
@@ -3517,7 +3522,24 @@ archive_logs() {
         chown -R root:wheel "${appAutoPatchLogArchiveFolder}"
         chmod -R a+r "${appAutoPatchLogArchiveFolder}"
     fi
-    
+
+    # If the verbose log has grown larger than ${appAutoPatchVerboseLogArchiveSize} KB, archive it
+    # into ${appAutoPatchVerboseLogArchiveFolder} the same way the main log is archived.
+    if [[ $(ls -l "${appAutoPatchVerboseLog}" 2>/dev/null | awk '{print int($5/1000)}') -gt $appAutoPatchVerboseLogArchiveSize ]]; then
+        local verbose_archive_name
+        verbose_archive_name=$(date +"%Y-%m-%d.%H-%M-%S")
+        log_status "Verbose log is larger than ${appAutoPatchVerboseLogArchiveSize} KB, archiving to: ${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}.zip"
+        log_notice "**** App Auto-Patch ${scriptVersion} - VERBOSE LOGS ARCHIVAL ****"
+        mkdir -p "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}"
+        mv "${appAutoPatchVerboseLog}" "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}/$(basename ${appAutoPatchVerboseLog})"
+        log_notice "**** App Auto-Patch ${scriptVersion} - VERBOSE LOGS ARCHIVAL ****"
+        log_status "Verbose log was larger than ${appAutoPatchVerboseLogArchiveSize} KB, previous log archived to: ${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}.zip"
+        zip -r -j "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}.zip" "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}" > /dev/null 2>&1
+        rm -rf "${appAutoPatchVerboseLogArchiveFolder:?}/${verbose_archive_name}" 2>/dev/null
+        chown -R root:wheel "${appAutoPatchVerboseLogArchiveFolder}"
+        chmod -R a+r "${appAutoPatchVerboseLogArchiveFolder}"
+    fi
+
     # This is a fail-safe to remove any excessively large files from the ${appAutoPatchLogArchiveFolder}.
     if find "${appAutoPatchLogArchiveFolder}" -mindepth 1 -maxdepth 1 | read; then
         for log_archive_file in "${appAutoPatchLogArchiveFolder}"/*; do
@@ -3528,6 +3550,21 @@ archive_logs() {
         done
     else
         log_info "$appAutoPatchLogArchiveFolder is empty"
+    fi
+
+    # If the verbose log archive folder contains more than 10 files, delete the oldest one to
+    # keep the archive from growing unbounded.
+    if find "${appAutoPatchVerboseLogArchiveFolder}" -mindepth 1 -maxdepth 1 | read; then
+        local verbose_archive_count
+        verbose_archive_count=$(find "${appAutoPatchVerboseLogArchiveFolder}" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')
+        if [[ $verbose_archive_count -gt 10 ]]; then
+            local oldest_verbose_archive
+            oldest_verbose_archive=$(ls -t "${appAutoPatchVerboseLogArchiveFolder}" | tail -1)
+            log_warning "Verbose log archive contains ${verbose_archive_count} files (limit 10); deleting oldest: ${oldest_verbose_archive}"
+            rm -rf "${appAutoPatchVerboseLogArchiveFolder:?}/${oldest_verbose_archive}" 2>/dev/null
+        fi
+    else
+        log_info "$appAutoPatchVerboseLogArchiveFolder is empty"
     fi
 }
 
@@ -5029,7 +5066,6 @@ check_version_consistency() {
 
 main() {
     set_defaults
-    rm -rf "${appAutoPatchVerboseLog}"
     get_options "$@"
 
     workflow_startup
