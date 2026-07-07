@@ -2,6 +2,26 @@
 
 # Version 3
 
+## Version 3.6.0
+### 06-Jul-2026
+- Added Discovery Frequency control
+	- New `DiscoveryFrequency` managed preference key (integer, hours)
+	- When the workflow resets and re-runs (e.g. after a deferral), AAP will skip the discovery phase if the last successful discovery completed within the configured number of hours, saving script runtime, bandwidth, and system resources
+	- For example, setting `DiscoveryFrequency` to `24` means discovery only runs once per day regardless of how many times the user defers
+	- A value of `0` forces discovery to run on every workflow execution
+	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>`
+- Added Background Patch Closed Apps for InteractiveMode 1
+	- When `InteractiveMode` is set to `1` (Silent Discovery, Interactive Patching), AAP now performs a silent pre-patch pass immediately after discovery and before any user dialog is displayed
+	- Apps that are **not currently open** are updated silently in the background using Installomator with `BLOCKING_PROCESS_ACTION=silent_fail`. A successful install (exit 0) removes the app from the update queue entirely
+	- Apps that **are currently open** (Installomator exit code 12 — blocking process found) remain in the queue and are presented to the user via the normal deferral or deadline dialog, so the user can choose when to close and update them
+	- If all pending updates are resolved silently, no user dialog is shown and AAP proceeds directly to the completion workflow
+	- Respects the existing Zoom Call Active Check: if a Zoom meeting is in progress, Zoom labels are skipped during the silent pre-patch and kept in the user dialog queue
+	- Patching receipts are written for all apps successfully updated during the silent pre-patch phase
+	- Configurable via new `WorkflowBackgroundPatchClosedApps` managed preference key (default: `true`)
+		- `true` (default): Silent pre-patch of closed apps is enabled for InteractiveMode 1
+		- `false`: Disables the silent pre-patch; all discovered updates are presented to the user in the dialog as before
+	- Managed Preference Key: `<key>WorkflowBackgroundPatchClosedApps</key>` `<true/>` | `<false/>`
+
 ## Version 3.5.0
 ### 22-Dec-2025
 - New Version Comparison Method options
@@ -28,7 +48,7 @@
 	- Renamed default label from "Started" to "AAP Started" to clarify timestamp intent
 	- Renamed default software-version labels for a unified look
 - Updated webhooks for both Slack and Teams (PR #185)
-	- Renamed “Microsoft Intune” to “Intune” to prevent the button text from being truncated.
+	- Renamed "Microsoft Intune" to "Intune" to prevent the button text from being truncated.
 	- Shortened the title and added emojis for quick identification of success and failure.
 	- Added version information for OS, Installomator, and AAP.
 	- Removed the computer record URL since the button serves the same purpose.
@@ -109,7 +129,7 @@
 ### 29-Apr-2025
 - Added multi-language support: Entries can be added to the managed configuration profile for multiple languages, based on the setting for the user in macOS
 - Added --workflow-install-now-silent option which runs through the workflow without deferrals but does not display dialogs
-- Added option to disable Installomator Updates using <key>InstallomatorUpdateDisable</key> <string>TRUE,FALSE</string>
+- Added option to disable Installomator Updates using `<key>InstallomatorUpdateDisable</key>` `<string>TRUE,FALSE</string>`
 - Added dialogTargetVersion and set to version 2.5.5 as the minimum required due to issues with the deferral menu on older versions
 
 ## Version 3.1.2
@@ -219,7 +239,7 @@
 
 ## Version 3.0.0-beta2
 ### 08-Nov-2024
-- This is a minor update and does not include any new features. 
+- This is a minor update and does not include any new features.
 - This includes updates and bug fixes from 2.x made across 6 builds between versions 2.11.1 and 2.11.4
 
 ## Version 3.0.0-beta1
