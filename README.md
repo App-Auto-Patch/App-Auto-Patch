@@ -32,16 +32,16 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 	- For example, setting `DiscoveryFrequency` to `24` means discovery only runs once per day regardless of how many times the user defers
 	- A value of `0` forces discovery to run on every workflow execution
 	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>`
-- Updated verbose log lifecycle management
+- Updated verbose log lifecycle management (#222)
 	- Removed the unconditional deletion of `appAutoPatchVerboseLog` at the start of every run; the verbose log is now preserved across runs and accumulates entries like the main log
 	- Added dedicated `appAutoPatchVerboseLogArchiveSize` variable (default: 10000 KB) as a separate size threshold for the verbose log, independent of the main log archive size
 	- Added dedicated `appAutoPatchVerboseLogArchiveFolder` variable pointing to `${appAutoPatchFolder}/logs-verbose-archive`; this folder is created automatically on first install alongside the existing log archive folder
 	- The `archive_logs` function now archives the verbose log into `logs-verbose-archive` when it exceeds `appAutoPatchVerboseLogArchiveSize` KB, using the same timestamped zip approach as the main log
 	- Added a file-count cap for the verbose log archive: if `logs-verbose-archive` grows beyond 10 files, the oldest archive is automatically deleted to prevent unbounded disk usage
-- Added Dock active check to startup workflow
+- Added Dock active check to startup workflow (#223)
 	- After confirming AAP is running as root, the startup workflow now waits for the Dock process to be active before proceeding, ensuring a user session is fully established
 	- Polls every 5 seconds for up to 120 seconds; if the Dock is not active within that window, AAP logs an exit message and exits with code 1 so the LaunchDaemon can retry on the next scheduled run
-- Added retry logic to swiftDialog download and verification
+- Added retry logic to swiftDialog download and verification (#223)
 	- The `install_dialog` function now retries the curl download and `spctl` Team ID verification up to 3 times before giving up
 	- If the download fails (non-zero curl exit), the partial file is removed and the attempt is retried after a 10-second delay
 	- If the Team ID does not match after 3 attempts, AAP displays the existing error dialog and exits, same as before
@@ -50,6 +50,14 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 	- Extracts variable name and raw value from label fragment lines, strips surrounding quotes, and resolves `${variable}` references (e.g. `${folderName}`, `${appName}`) without executing arbitrary code
 	- Handles the full set of label variables used during discovery: `name`, `appName`, `packageID`, `expectedTeamID`, `targetDir`, `folderName`, `versionKey`, and `type`
 	- Improves security and predictability of label fragment parsing across all app discovery logic
+- Added logic to ignore apps found in .Trash folders, `/Applications (Parallels)/` and `/Applications (Virtual Machines)/` (#221 #216)
+- Fixed an issue that was setting `RemoveInstallomatorPath` to FALSE even if the value in the managed config was set to TRUE (#214)
+- Fixed an issue that was preventing the Support Team Website field from being hidden when the managed config was set to `hide`
+- Added Installomator verison output for cases where the installomator updater is diabled (#206)
+- Fixed issue preventing Workspace One MDM URL from populating and being used for Slack Webhooks (#208)
+- Fixed a typo from the json file being saved properly in the `write_aap_receipt` function (#211)
+- Fixed an issue where umlaut values were populating incorrectly for Support Team Name (#204)
+	- Switched to plistbuddy for pulling this particular value, will consider switching all config profile pulls to plistbuddy in a future build
 
 ## New features/Specific Changes in 3.5.0
 - [New Version Comparison Method options](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Version-Comparison-Methods)
