@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.0"
 scriptDate="2026/07/06"
-scriptBuild="3.6.0.260706942"
+scriptBuild="3.6.0.2607081309"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -106,6 +106,9 @@ echo "
     ** Managed preferences override local options via domain: xyz.techitout.appAutoPatch
 
     <key>AppTitle</key> <string>App Auto-Patch</string>
+    <key>BannerImage</key> <string>Filepath|URL|colour=#hex|gradient=colour,colour</string>
+    <key>BannerTitle</key> <string>Text to display within the banner (defaults to AppTitle)</string>
+    <key>BannerHeight</key> <integer>points</integer>
     <key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</string>
     <key>DaysUntilReset</key> <integer>number</integer>
     <key>DeadlineCountFocus</key> <integer>number</integer>
@@ -152,11 +155,13 @@ echo "
     <key>WebhookURLSlack</key> <string>URL</string>
     <key>WebhookURLTeams</key> <string>URL</string>
     <key>WorkflowBackgroundPatchClosedApps</key> <true/> | <false/>
+    <key>WorkflowStageUpdates</key> <true/> | <false/>
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
     <key>WorkflowDisableRelaunch</key> <true/> | <false/>
     <key>DiscoveryFrequency</key> <integer>hours</integer>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
     <key>ZoomCallActiveCheck</key> <true/> | <false/>
+    <key>IgnoreDNDApps</key> <string>App1,App2,App3</string>
 
     ** Detailed documentation can be found at: https://github.com/App-Auto-Patch/App-Auto-Patch/wiki
 "
@@ -283,6 +288,11 @@ set_defaults() {
 
     appAutoPatchManagedPLIST="/Library/Managed Preferences/xyz.techitout.appAutoPatch"
 
+    # Dedicated report PLIST holding the currently queued/pending updates (persisted across runs).
+    # Format mirrors Munki's ManagedInstallReport.plist ("ItemsToInstall" array of dicts) so the
+    # same file can be ingested by third-party reporting/inventory tooling.
+    appAutoPatchReportPLIST="${appAutoPatchFolder}/xyz.techitout.appAutoPatchReport"
+
     appAutoPatchLaunchDaemonLabel="xyz.techitout.aap"
 
     WORKFLOW_INSTALL_NOW_FILE="${appAutoPatchFolder}/.WorkflowInstallNow"
@@ -378,15 +388,42 @@ set_defaults() {
     # FALSE: Does not allow Installomator Debug Fallback to run and will not add the app to the queue for updates
     VersionComparisonInstallomatorFallback="TRUE"
 
-    # InteractiveMode 1 only: When TRUE (default), apps that are NOT currently open are silently
-    # patched in the background before the user dialog is shown. Only apps with active blocking
-    # processes are presented to the user for deferred/manual patching.
+    # InteractiveMode 1 or 2 only (not 0): When TRUE (default), apps that are NOT currently open
+    # are silently patched in the background before the user dialog is shown. Only apps with
+    # active blocking processes are presented to the user for deferred/manual patching.
     WorkflowBackgroundPatchClosedAppsOption="TRUE" # MDM Enabled
+    # Comma-separated list of process names (as reported by pmset) to exclude from the display
+    # sleep assertion check that triggers user focus / Do Not Disturb deferral. Useful for
+    # background services (e.g. "Logi Options+" or "Amphetamine") that hold display assertions
+    # permanently and would otherwise block all interactive patching indefinitely.
+    # Example: "Logi Options+,Amphetamine,YourApp"
+    ignoreDNDAppsOption="" # MDM Enabled
+
+    
+
+    # When TRUE (default FALSE), AAP will pre-download pending update installers to a local
+    # staging folder before presenting the user dialog. When the user approves installation,
+    # Installomator uses the already-downloaded file instead of re-downloading, making the
+    # install phase nearly instantaneous for staged updates.
+    WorkflowStageUpdatesOption="FALSE" # MDM Enabled
+
+    # Local directory used to store staged installer files. Defaults to /private/tmp/AAPStage.
+    AAPStagingFolder="/private/tmp/AAPStage"
+
+    # Optional swiftDialog banner image support. When bannerImageOption is set (via managed
+    # preference), it replaces the standard --title text banner on every AAP dialog with a
+    # --bannerimage (accepts a filepath, URL, or colour=/gradient= value). bannerTitleOption
+    # sets the text rendered inside the banner (falls back to appTitle if left blank so the
+    # banner is never empty); bannerHeightOption overrides the default banner height in points.
+    # See: https://github.com/swiftDialog/swiftDialog/wiki/Displaying-Banner-Images
+    bannerImageOption="" # MDM Enabled
+    bannerTitleOption="" # MDM Enabled
+    bannerHeightOption="" # MDM Enabled
 }
 
 # Set language strings for dialogs and notifications.
 set_display_strings_language() {
-
+    
     #### Language for the defer button in dialogs when the deferral time is sometime today.
     display_string_defer_today_button="Defer"
     display_string_defer_today_button_test="Defer"
@@ -1074,8 +1111,18 @@ get_preferences() {
         version_comparison_installomator_fallback_managed=$(defaults read "${appAutoPatchManagedPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
         local zoom_call_active_check_managed
         zoom_call_active_check_managed=$(defaults read "${appAutoPatchManagedPLIST}" ZoomCallActiveCheck 2> /dev/null)
+        local ignore_dnd_apps_managed
+        ignore_dnd_apps_managed=$(defaults read "${appAutoPatchManagedPLIST}" IgnoreDNDApps 2> /dev/null)
         local workflow_background_patch_closed_apps_managed
         workflow_background_patch_closed_apps_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowBackgroundPatchClosedApps 2> /dev/null)
+        local workflow_stage_updates_managed
+        workflow_stage_updates_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowStageUpdates 2> /dev/null)
+        local banner_image_managed
+        banner_image_managed=$(defaults read "${appAutoPatchManagedPLIST}" BannerImage 2> /dev/null)
+        local banner_title_managed
+        banner_title_managed=$(defaults read "${appAutoPatchManagedPLIST}" BannerTitle 2> /dev/null)
+        local banner_height_managed
+        banner_height_managed=$(defaults read "${appAutoPatchManagedPLIST}" BannerHeight 2> /dev/null)
         
     else
         log_verbose "No managed preference file found for App Auto-Patch"
@@ -1190,8 +1237,18 @@ get_preferences() {
         version_comparison_installomator_fallback_local=$(defaults read "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
         local zoom_call_active_check_local
         zoom_call_active_check_local=$(defaults read "${appAutoPatchLocalPLIST}" ZoomCallActiveCheck 2> /dev/null)
+        local ignore_dnd_apps_local
+        ignore_dnd_apps_local=$(defaults read "${appAutoPatchLocalPLIST}" IgnoreDNDApps 2> /dev/null)
         local workflow_background_patch_closed_apps_local
         workflow_background_patch_closed_apps_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowBackgroundPatchClosedApps 2> /dev/null)
+        local workflow_stage_updates_local
+        workflow_stage_updates_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowStageUpdates 2> /dev/null)
+        local banner_image_local
+        banner_image_local=$(defaults read "${appAutoPatchLocalPLIST}" BannerImage 2> /dev/null)
+        local banner_title_local
+        banner_title_local=$(defaults read "${appAutoPatchLocalPLIST}" BannerTitle 2> /dev/null)
+        local banner_height_local
+        banner_height_local=$(defaults read "${appAutoPatchLocalPLIST}" BannerHeight 2> /dev/null)
     fi
     
     log_verbose  "Local preference file before startup validation: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
@@ -1248,8 +1305,23 @@ get_preferences() {
     [[ -n "${zoom_call_active_check_managed}" ]] && zoom_call_active_check_option="${zoom_call_active_check_managed}"
     { [[ -z "${zoom_call_active_check_managed}" ]] && [[ -z "${zoom_call_active_check_option}" ]] && [[ -n "${zoom_call_active_check_local}" ]]; } && zoom_call_active_check_option="${zoom_call_active_check_local}"
 
+    [[ -n "${ignore_dnd_apps_managed}" ]] && ignoreDNDAppsOption="${ignore_dnd_apps_managed}"
+    { [[ -z "${ignore_dnd_apps_managed}" ]] && [[ -z "${ignoreDNDAppsOption}" ]] && [[ -n "${ignore_dnd_apps_local}" ]]; } && ignoreDNDAppsOption="${ignore_dnd_apps_local}"
+
     [[ -n "${workflow_background_patch_closed_apps_managed}" ]] && WorkflowBackgroundPatchClosedAppsOption="${workflow_background_patch_closed_apps_managed}"
     { [[ -z "${workflow_background_patch_closed_apps_managed}" ]] && [[ -z "${WorkflowBackgroundPatchClosedAppsOption}" ]] && [[ -n "${workflow_background_patch_closed_apps_local}" ]]; } && WorkflowBackgroundPatchClosedAppsOption="${workflow_background_patch_closed_apps_local}"
+
+    [[ -n "${workflow_stage_updates_managed}" ]] && WorkflowStageUpdatesOption="${workflow_stage_updates_managed}"
+    { [[ -z "${workflow_stage_updates_managed}" ]] && [[ -z "${WorkflowStageUpdatesOption}" ]] && [[ -n "${workflow_stage_updates_local}" ]]; } && WorkflowStageUpdatesOption="${workflow_stage_updates_local}"
+
+    [[ -n "${banner_image_managed}" ]] && bannerImageOption="${banner_image_managed}"
+    { [[ -z "${banner_image_managed}" ]] && [[ -z "${bannerImageOption}" ]] && [[ -n "${banner_image_local}" ]]; } && bannerImageOption="${banner_image_local}"
+
+    [[ -n "${banner_title_managed}" ]] && bannerTitleOption="${banner_title_managed}"
+    { [[ -z "${banner_title_managed}" ]] && [[ -z "${bannerTitleOption}" ]] && [[ -n "${banner_title_local}" ]]; } && bannerTitleOption="${banner_title_local}"
+
+    [[ -n "${banner_height_managed}" ]] && bannerHeightOption="${banner_height_managed}"
+    { [[ -z "${banner_height_managed}" ]] && [[ -z "${bannerHeightOption}" ]] && [[ -n "${banner_height_local}" ]]; } && bannerHeightOption="${banner_height_local}"
 
     # Need logic to ensures the priority order of managed preference overrides the saved local preference which overrides the script embedded variables .
     [[ -n "${app_title_managed}" ]] && appTitle="${app_title_managed}"
@@ -1384,7 +1456,12 @@ get_preferences() {
     log_verbose "monthly_patching_cadence_start_time: $monthly_patching_cadence_start_time"
     log_verbose "version_comparison_method_option: $version_comparison_method_option"
     log_verbose "zoom_call_active_check_option: $zoom_call_active_check_option"
+    log_verbose "ignoreDNDAppsOption: $ignoreDNDAppsOption"
     log_verbose "WorkflowBackgroundPatchClosedAppsOption: $WorkflowBackgroundPatchClosedAppsOption"
+    log_verbose "WorkflowStageUpdatesOption: $WorkflowStageUpdatesOption"
+    log_verbose "bannerImageOption: $bannerImageOption"
+    log_verbose "bannerTitleOption: $bannerTitleOption"
+    log_verbose "bannerHeightOption: $bannerHeightOption"
     
     #Validate Custom Installomator Options
     if [[ "${installomatorVersion}" == "Custom" ]] || [[ "${installomatorVersion}" == "custom" ]]; then
@@ -1409,7 +1486,10 @@ get_preferences() {
     defaults delete "${appAutoPatchLocalPLIST}" IgnoredLabels 2> /dev/null
     defaults delete "${appAutoPatchLocalPLIST}" RequiredLabels 2> /dev/null
     defaults delete "${appAutoPatchLocalPLIST}" OptionalLabels 2> /dev/null
-    defaults delete "${appAutoPatchLocalPLIST}" DiscoveredLabels 2> /dev/null
+    # NOTE: DiscoveredLabels is intentionally NOT cleared here. It holds the results of the last
+    # completed discovery pass and must survive across runs so that DiscoveryFrequency-skipped runs
+    # (i.e. discovery did not re-run) still know which labels are queued for patching. It is only
+    # cleared immediately before discovery actually re-runs (see the run_discovery block in main()).
 
     /usr/libexec/PlistBuddy -c 'add ":DiscoveredLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
     /usr/libexec/PlistBuddy -c 'add ":IgnoredLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
@@ -1686,6 +1766,15 @@ manage_parameter_options() {
     fi
     { [[ -n "${zoom_call_active_check_option}" ]]; } && log_verbose "zoom_call_active_check_option is: ${zoom_call_active_check_option}"
 
+    # Manage ${ignoreDNDAppsOption} — store the raw comma-separated string to the local plist
+    # so it persists for reporting; no boolean coercion needed.
+    if [[ -n "${ignoreDNDAppsOption}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" IgnoreDNDApps -string "${ignoreDNDAppsOption}"
+        log_verbose "ignoreDNDAppsOption is: ${ignoreDNDAppsOption}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" IgnoreDNDApps 2>/dev/null
+    fi
+
     # Manage ${WorkflowBackgroundPatchClosedAppsOption} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${WorkflowBackgroundPatchClosedAppsOption}" -eq 1 ]] || [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]]; then
         WorkflowBackgroundPatchClosedAppsOption="TRUE"
@@ -1698,6 +1787,38 @@ manage_parameter_options() {
         defaults write "${appAutoPatchLocalPLIST}" WorkflowBackgroundPatchClosedApps -bool false
     fi
     { [[ -n "${WorkflowBackgroundPatchClosedAppsOption}" ]]; } && log_verbose "WorkflowBackgroundPatchClosedAppsOption is: ${WorkflowBackgroundPatchClosedAppsOption}"
+
+    # Manage ${WorkflowStageUpdatesOption} and save to ${appAutoPatchLocalPLIST}.
+    if [[ "${WorkflowStageUpdatesOption}" -eq 1 ]] || [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]]; then
+        WorkflowStageUpdatesOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowStageUpdates -bool true
+    elif [[ -z "${WorkflowStageUpdatesOption}" ]]; then
+        WorkflowStageUpdatesOption="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowStageUpdates -bool false
+    else
+        WorkflowStageUpdatesOption="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowStageUpdates -bool false
+    fi
+    { [[ -n "${WorkflowStageUpdatesOption}" ]]; } && log_verbose "WorkflowStageUpdatesOption is: ${WorkflowStageUpdatesOption}"
+
+    # Manage ${bannerImageOption}, ${bannerTitleOption}, and ${bannerHeightOption} — store the raw
+    # values to the local plist so they persist for reporting; no boolean coercion needed.
+    if [[ -n "${bannerImageOption}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" BannerImage -string "${bannerImageOption}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" BannerImage 2>/dev/null
+    fi
+    if [[ -n "${bannerTitleOption}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" BannerTitle -string "${bannerTitleOption}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" BannerTitle 2>/dev/null
+    fi
+    if [[ -n "${bannerHeightOption}" ]] && [[ "${bannerHeightOption}" =~ ^[0-9]+$ ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" BannerHeight -int "${bannerHeightOption}"
+    else
+        bannerHeightOption=""
+        defaults delete "${appAutoPatchLocalPLIST}" BannerHeight 2>/dev/null
+    fi
 
     # Manage ${UnattendedExit} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${UnattendedExit}" -eq 1 ]] || [[ "${UnattendedExit}" == "TRUE" ]]; then
@@ -2192,9 +2313,6 @@ workflow_startup() {
 	# Detailed system and user checks.
 	get_logged_in_user
 
-    # Get Language Options
-    set_display_strings_language
-
     # Initial Parameter and helper validation, if any of these fail then it's unsafe for the workflow to continue.
 	get_preferences
 
@@ -2266,6 +2384,31 @@ workflow_startup() {
         icon="$dialog_icon_option"
     fi
 
+    # Build the dialog title options once for the whole run. When BannerImage is configured,
+    # the larger dialogs (Patching, Deferral, Hard Deadline) use a --bannerimage (accepts a
+    # filepath, URL, or colour=/gradient= value) with --bannertitle for the text rendered inside
+    # the banner (falling back to $appTitle so the banner is never left blank) and an optional
+    # --bannerheight override, in place of a plain --title "$appTitle". Note that swiftDialog
+    # hides the standard icon area whenever a banner image is active. See:
+    # https://github.com/swiftDialog/swiftDialog/wiki/Displaying-Banner-Images
+    #
+    # The Discover mini-progress dialog and the standalone "all apps up to date" mini dialog are
+    # intentionally excluded (they always use --title "$appTitle" directly) — both use swiftDialog's
+    # --mini/--style "mini" compact layouts, which are too small to appropriately display a banner.
+    dialogTitleOptions=()
+    if [[ -n "${bannerImageOption}" ]]; then
+        log_info "Banner image configured (${bannerImageOption}); using banner in place of the standard title."
+        dialogTitleOptions=(--bannerimage "${bannerImageOption}")
+        if [[ -n "${bannerTitleOption}" ]]; then
+            dialogTitleOptions+=(--bannertitle "${bannerTitleOption}")
+        else
+            dialogTitleOptions+=(--bannertitle "${appTitle}")
+        fi
+        [[ -n "${bannerHeightOption}" ]] && dialogTitleOptions+=(--bannerheight "${bannerHeightOption}")
+    else
+        dialogTitleOptions=(--title "${appTitle}")
+    fi
+
     # Create `overlayicon` from Self Service's custom icon (thanks, @meschwartz!)
     if [[ "$useOverlayIcon" == "TRUE" ]]; then
         if [[ -n "$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_app_path)" ]]; then
@@ -2316,6 +2459,9 @@ workflow_startup() {
         infoTextScriptVersion="${scriptVersion}"
     fi
     
+    # Get Language Options. This is the single point where display strings are resolved for the
+    # entire run: it must happen after get_preferences (which populates langUser) and only needs
+    # to run once per execution, since langUser and the managed profile do not change mid-run.
     set_display_strings_language
     supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
     helpMessage="${display_string_help_message_intro} **${supportTeamName}:**"
@@ -2345,7 +2491,7 @@ workflow_startup() {
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
     dialogPatchingConfigurationOptions=(
-        --title "${appTitle}"
+        ${dialogTitleOptions[@]}
         --message "${display_string_patching_message} ..." # Updating the following apps …
         --commandfile "$dialogCommandFile"
         --moveable
@@ -2547,6 +2693,7 @@ install_app_auto_patch() {
     [[ ! -d "${appAutoPatchLogArchiveFolder}" ]] && mkdir -p "${appAutoPatchLogArchiveFolder}"
     [[ ! -d "${appAutoPatchVerboseLogArchiveFolder}" ]] && mkdir -p "${appAutoPatchVerboseLogArchiveFolder}"
     [[ ! -d "${appAutoPatchReceiptsFolder}" ]] && mkdir -p "${appAutoPatchReceiptsFolder}"
+    [[ ! -f "${appAutoPatchReportPLIST}.plist" ]] && clear_aap_report
 
     log_notice "###### App Auto-Patch ${scriptVersion} - Installing ... ######"
     write_status "Running: Installation workflow"
@@ -3308,14 +3455,45 @@ check_user_focus() {
 		fi
 		local previous_ifs
 		previous_ifs="${IFS}"; IFS=$'\n'
-		local display_assertions_array
-		display_assertions_array=($(pmset -g assertions | awk '/NoDisplaySleepAssertion | PreventUserIdleDisplaySleep/ && match($0,/\(.+\)/) && ! /coreaudiod/ {gsub(/^\ +/,"",$0); print};'))
-		log_verbose  "display_assertions_array is:\n${display_assertions_array[*]}"
-		if [[ -n "${display_assertions_array[*]}" ]]; then
-			for display_assertion in "${display_assertions_array[@]}"; do
-				log_status "The following Display Sleep Assertion was found: $(echo "${display_assertion}" | awk -F ':' '{print $1;}')"
+		# pmset lines look like:  pid 12345(AppName): NoDisplaySleepAssertion named "…"
+		# The awk below (adapted from the reference implementation) strips everything up to and
+		# including the opening '(' and everything from the closing ')' onwards, leaving just the
+		# raw process name — which may contain spaces (e.g. "Logi Options+").
+		local display_assertions_raw
+		display_assertions_raw=$(/usr/bin/pmset -g assertions | /usr/bin/awk \
+			'/NoDisplaySleepAssertion | PreventUserIdleDisplaySleep/ && match($0,/\(.+\)/) && ! /coreaudiod/ {
+				gsub(/^.*\(/,"",$0); gsub(/\).*$/,"",$0); print
+			}')
+		log_verbose "display_assertions_raw:\n${display_assertions_raw}"
+
+		# Build the ignore list by splitting the comma-separated value and trimming only
+		# leading/trailing whitespace from each entry (internal spaces in app names are preserved).
+		local ignore_dnd_array=()
+		if [[ -n "${ignoreDNDAppsOption}" ]]; then
+			local _raw_entry
+			for _raw_entry in "${(@s/,/)ignoreDNDAppsOption}"; do
+				_raw_entry=$(echo "${_raw_entry}" | /usr/bin/sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+				[[ -n "${_raw_entry}" ]] && ignore_dnd_array+=("${_raw_entry}")
 			done
-			user_focus_active="TRUE"
+		fi
+		log_verbose "ignoreDNDAppsOption ignore list: ${ignore_dnd_array[*]}"
+
+		if [[ -n "${display_assertions_raw}" ]]; then
+			local assertion_app
+			while IFS= read -r assertion_app; do
+				[[ -z "${assertion_app}" ]] && continue
+				log_verbose "Display sleep assertion held by: '${assertion_app}'"
+
+				# Skip this assertion if its process name is in the ignore list
+				if (( ${#ignore_dnd_array[@]} > 0 )) && (( ${ignore_dnd_array[(Ie)${assertion_app}]} )); then
+					log_status "Ignoring display sleep assertion from '${assertion_app}' (in IgnoreDNDApps list)."
+					continue
+				fi
+
+				# Not ignored — treat as an active focus assertion
+				log_status "Display sleep assertion detected by '${assertion_app}'. Treating as active focus."
+				user_focus_active="TRUE"
+			done <<< "${display_assertions_raw}"
 		fi
 		IFS="${previous_ifs}"
 	fi
@@ -3649,6 +3827,33 @@ resolve_app_icon_path() {
     fi
 }
 
+_compute_version_subtitle() {
+    # Builds a "Current Version: x  →  New Version: y" string for a label's swiftDialog
+    # --listitem subtitle, using the version data collected during discovery (or restored from
+    # the report PLIST on DiscoveryFrequency-skipped runs). Sets the global ${versionSubtitle}.
+    #
+    # swiftDialog's non-JSON --listitem syntax treats commas as property separators, so any
+    # commas present in a version string are stripped to avoid breaking the subtitle.
+    #
+    # Usage: _compute_version_subtitle "labelname"
+    local _label="$1"
+    local _cur _new
+    _cur="${AAPInstalledVersionByLabel[$_label]:-}"
+    _new="${AAPVersionByLabel[$_label]:-}"
+    _cur="${_cur//,/}"
+    _new="${_new//,/}"
+
+    if [[ -n "$_cur" ]] && [[ -n "$_new" ]]; then
+        versionSubtitle="Current Version: ${_cur}  →  New Version: ${_new}"
+    elif [[ -n "$_new" ]]; then
+        versionSubtitle="New Version: ${_new}"
+    elif [[ -n "$_cur" ]]; then
+        versionSubtitle="Current Version: ${_cur}"
+    else
+        versionSubtitle=""
+    fi
+}
+
 swiftDialogPatchingWindow(){
     
     # If we are using SwiftDialog
@@ -3671,10 +3876,7 @@ swiftDialogPatchingWindow(){
             displayNames+=(${currentDisplay_name},icon="${iconPath}")
         done
         
-        if [[ ! -f $dialogCommandFile ]]; then
-            touch "$dialogCommandFile"
-            chmod -vv 644 $dialogCommandFile
-        fi
+        _prepare_dialog_command_file
         
         # Create our running swiftDialog window
         $dialogBinary \
@@ -3688,8 +3890,7 @@ swiftDialogPatchingWindow(){
 swiftDialogDiscoverWindow(){
     
     # If we are using SwiftDialog
-    touch "$dialogCommandFile"
-    chmod -vv 644 $dialogCommandFile
+    _prepare_dialog_command_file
     if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ ${InteractiveModeOption} -gt 1 ]]; then
         $dialogBinary \
         ${dialogDiscoverConfigurationOptions[@]} \
@@ -3730,6 +3931,18 @@ swiftDialogCompleteDialogDiscover(){
         rm "$dialogCommandFile"
     fi
     
+}
+
+_prepare_dialog_command_file() {
+    # Ensure the swiftDialog command file exists and is world-readable.
+    # mktemp creates it with mode 600 (root-only). swiftDialogDiscoverWindow normally
+    # runs chmod 644 as a side-effect, but when discovery is skipped that function is
+    # never called, leaving the file at 600. SwiftDialog runs in the console user's GUI
+    # context and cannot read a root-owned 600 file — it exits immediately with code 1,
+    # which hits the '*' catch-all in the dialog case statements and falsely signals
+    # "Install Now" without ever displaying the dialog.
+    [[ ! -f "$dialogCommandFile" ]] && touch "$dialogCommandFile"
+    chmod 644 "$dialogCommandFile" 2>/dev/null
 }
 
 swiftDialogUpdate(){
@@ -3832,8 +4045,9 @@ set_deferral_menu() {
 }
 
 dialog_install_or_defer() {
+
+    _prepare_dialog_command_file
     
-    set_display_strings_language
     [[ -n "${deferral_timer_menu_minutes}" ]] && set_deferral_menu
     
 	action=$( echo $DialogTimeoutDeferralAction | tr '[:upper:]' '[:lower:]' )
@@ -3849,14 +4063,14 @@ dialog_install_or_defer() {
         infobox="${display_string_deferral_unlimited}"
     fi
 	#infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $display_string_deadline_count"
-	message="${display_string_there_are} **(${numberOfUpdates})** ${display_string_deferral_message_02} ${display_string_deferral_message_01}"
+	message="${display_string_deferral_message_01} ${display_string_there_are} (${numberOfUpdates}) ${display_string_deferral_message_02}"
     height=480
 	
 	# Create the deferrals available dialog options and content
     if [[ -n "${deferral_timer_menu_minutes}" ]]; then
         selectDefault=${deferral_timer_menu_display_array[1]}
         deferralDialogContent=(
-            --title "$appTitle"
+            ${dialogTitleOptions[@]}
             --message "$message"
             --helpmessage "$helpMessage"
             --icon "$icon"
@@ -3869,7 +4083,7 @@ dialog_install_or_defer() {
         )
     else
         deferralDialogContent=(
-            --title "$appTitle"
+            ${dialogTitleOptions[@]}
             --message "$message"
             --helpmessage "$helpMessage"
             --icon "$icon"
@@ -3900,7 +4114,7 @@ dialog_install_or_defer() {
 
 	SELECTION=$("$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}")
 	dialogOutput=$?
-	
+	log_aap "dialogOutput: $dialogOutput"
 	case "${dialogOutput}" in
 		0)
 			dialog_user_choice_install="FALSE"
@@ -3936,7 +4150,7 @@ dialog_install_or_defer() {
 }
 
 dialog_install_hard_deadline() {
-    set_display_strings_language
+    _prepare_dialog_command_file
     if [[ "${deadline_days_status}" == "HARD" ]]; then
         message="${display_string_there_are} ${numberOfUpdates} ${display_string_deferraldeadline_message_deadline} ${deadline_days_hard} ${display_string_days}."
     elif [[ "${deadline_count_status}" == "HARD" ]]; then
@@ -3946,7 +4160,7 @@ dialog_install_hard_deadline() {
 	height=480
 	
 	deferralDialogContent=(
-		--title "$appTitle"
+		${dialogTitleOptions[@]}
 		--message "$message"
 		--helpmessage "$helpMessage"
 		--icon "$icon"
@@ -3976,7 +4190,7 @@ dialog_install_hard_deadline() {
 
 	"$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}"
 	dialogOutput=$?
-	
+	log_aap "dialogOutput: $dialogOutput"
 	case "${dialogOutput}" in
 		4)
 			log_status "Display timeout, proceed with installation"
@@ -4219,6 +4433,7 @@ function verifyApp() {
                             else
                                 /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
                                 AAPVersionByLabel[$label_name]="$appNewVersion"
+                                AAPInstalledVersionByLabel[$label_name]="$previousVersion"
                                 queueLabel
                             fi
                         else
@@ -4249,6 +4464,7 @@ function verifyApp() {
                                         log_notice "--- Assuming new version available based on Installomator debug output. False positives may be possible. Add $label_name to ignore list to avoid in future runs"
                                         /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
                                         AAPVersionByLabel[$label_name]="$appNewVersion"
+                                        AAPInstalledVersionByLabel[$label_name]="$previousVersion"
                                         queueLabel
                                     fi
                                 fi
@@ -4264,6 +4480,7 @@ function verifyApp() {
                             else
                                 /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
                                 AAPVersionByLabel[$label_name]="$appNewVersion"
+                                AAPInstalledVersionByLabel[$label_name]="$previousVersion"
                                 queueLabel
                             fi
                         else
@@ -4294,6 +4511,7 @@ function verifyApp() {
                                         log_notice "--- Assuming new version available based on Installomator debug output. False positives may be possible. Add $label_name to ignore list to avoid in future runs"
                                         /usr/libexec/PlistBuddy -c "add \":DiscoveredLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
                                         AAPVersionByLabel[$label_name]="$appNewVersion"
+                                        AAPInstalledVersionByLabel[$label_name]="$previousVersion"
                                         queueLabel
                                     fi
                                 fi
@@ -4311,19 +4529,338 @@ function verifyApp() {
     fi
 }
 
+function clear_aap_report() {
+    # Resets the ItemsToInstall array in the report PLIST. Called immediately before discovery
+    # actually re-runs, so the report always reflects the results of the most recent scan.
+    local plistFile="${appAutoPatchReportPLIST}.plist"
+    rm -f "$plistFile" 2> /dev/null
+    defaults write "${appAutoPatchReportPLIST}" LastUpdated -string "$(date +$timestamp_format)" 2> /dev/null
+    /usr/libexec/PlistBuddy -c "Add :ItemsToInstall array" "$plistFile" 2> /dev/null
+}
+
+function write_aap_report_item() {
+    # Persists (or updates) a single queued item in the report PLIST's ItemsToInstall array.
+    # This is the durable, external-reporting-friendly counterpart to the in-memory
+    # AAPVersionByLabel associative array, and is what allows a DiscoveryFrequency-skipped run
+    # to know both WHICH apps are queued and WHAT versions are involved.
+    #
+    # Usage: write_aap_report_item "label" "displayName" "installedVersion" "newVersion"
+    local label="$1"
+    local displayName="${2:-$1}"
+    local installedVersion="${3:-}"
+    local newVersion="${4:-}"
+    local plistFile="${appAutoPatchReportPLIST}.plist"
+
+    if [[ ! -f "$plistFile" ]]; then
+        defaults write "${appAutoPatchReportPLIST}" LastUpdated -string "$(date +$timestamp_format)" 2> /dev/null
+    fi
+    /usr/libexec/PlistBuddy -c "Print :ItemsToInstall" "$plistFile" &> /dev/null \
+        || /usr/libexec/PlistBuddy -c "Add :ItemsToInstall array" "$plistFile" 2> /dev/null
+
+    # Remove any existing entry for this label first to avoid duplicates on re-queue
+    remove_aap_report_item "$label"
+
+    local nextIndex
+    nextIndex=$(/usr/libexec/PlistBuddy -c "Print :ItemsToInstall" "$plistFile" 2> /dev/null | grep -cE '^    Dict \{')
+
+    /usr/libexec/PlistBuddy -c "Add :ItemsToInstall:${nextIndex} dict" "$plistFile" 2> /dev/null
+    /usr/libexec/PlistBuddy -c "Add :ItemsToInstall:${nextIndex}:name string \"${label}\"" "$plistFile" 2> /dev/null
+    /usr/libexec/PlistBuddy -c "Add :ItemsToInstall:${nextIndex}:display_name string \"${displayName}\"" "$plistFile" 2> /dev/null
+    /usr/libexec/PlistBuddy -c "Add :ItemsToInstall:${nextIndex}:installed_version string \"${installedVersion}\"" "$plistFile" 2> /dev/null
+    /usr/libexec/PlistBuddy -c "Add :ItemsToInstall:${nextIndex}:version_to_install string \"${newVersion}\"" "$plistFile" 2> /dev/null
+    /usr/libexec/PlistBuddy -c "Add :ItemsToInstall:${nextIndex}:date_discovered string \"$(date +$timestamp_format)\"" "$plistFile" 2> /dev/null
+
+    defaults write "${appAutoPatchReportPLIST}" LastUpdated -string "$(date +$timestamp_format)" 2> /dev/null
+}
+
+function remove_aap_report_item() {
+    # Removes a single label's entry from the report PLIST's ItemsToInstall array.
+    # Called whenever a label leaves the update queue (successful silent patch or successful
+    # user-approved install) so the persisted report never shows an already-patched app as pending.
+    local label="$1"
+    local plistFile="${appAutoPatchReportPLIST}.plist"
+    [[ -f "$plistFile" ]] || return 0
+
+    local idx
+    idx=$(/usr/libexec/PlistBuddy -c "Print :ItemsToInstall" "$plistFile" 2> /dev/null | awk -v target="$label" '
+        BEGIN { idx = -1; found = -1 }
+        /^    Dict \{/ { idx++; namematch = 0 }
+        /^        name = / {
+            val = $0
+            sub(/^        name = /, "", val)
+            if (val == target) namematch = 1
+        }
+        /^    \}/ { if (namematch == 1 && found == -1) found = idx }
+        END { print found }
+    ')
+
+    if [[ -n "$idx" ]] && [[ "$idx" -ge 0 ]]; then
+        /usr/libexec/PlistBuddy -c "Delete :ItemsToInstall:${idx}" "$plistFile" 2> /dev/null
+        defaults write "${appAutoPatchReportPLIST}" LastUpdated -string "$(date +$timestamp_format)" 2> /dev/null
+    fi
+}
+
+function remove_discovered_label() {
+    # Removes a single label from the DiscoveredLabels array in the local PLIST.
+    # Called after any successful install (silent background patch or user-approved install)
+    # so that DiscoveryFrequency-skipped subsequent runs never re-queue an already-patched app.
+    #
+    # Usage: remove_discovered_label "labelname"
+    local label="$1"
+    local plistFile="${appAutoPatchLocalPLIST}.plist"
+    [[ -f "$plistFile" ]] || return 0
+
+    # Find the 0-based index of this label in the DiscoveredLabels string array.
+    # PlistBuddy "Print :DiscoveredLabels" output looks like:
+    #   Array {
+    #       googlechrome
+    #       firefox
+    #   }
+    local idx
+    idx=$(/usr/libexec/PlistBuddy -c "Print :DiscoveredLabels" "$plistFile" 2>/dev/null | awk -v target="$label" '
+        BEGIN { i = -1; found = -1 }
+        /^Array \{/ { next }
+        /^\}/ { next }
+        {
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
+            if (length($0) > 0) {
+                i++
+                if ($0 == target && found == -1) found = i
+            }
+        }
+        END { print found }
+    ')
+
+    if [[ -n "$idx" ]] && (( idx >= 0 )); then
+        /usr/libexec/PlistBuddy -c "Delete :DiscoveredLabels:${idx}" "$plistFile" 2>/dev/null
+        log_verbose "Removed '${label}' from DiscoveredLabels (successful install)"
+    fi
+}
+
+function get_aap_report_entries() {
+    # Emits one tab-delimited line per queued item: label<TAB>displayName<TAB>installedVersion<TAB>newVersion
+    # Used to restore AAPVersionByLabel (and other queue metadata) when discovery is skipped due to
+    # DiscoveryFrequency, since that in-memory associative array is otherwise empty on such runs.
+    local plistFile="${appAutoPatchReportPLIST}.plist"
+    [[ -f "$plistFile" ]] || return 0
+
+    /usr/libexec/PlistBuddy -c "Print :ItemsToInstall" "$plistFile" 2> /dev/null | awk '
+        /^    Dict \{/ { name = ""; disp = ""; inst = ""; nver = "" }
+        /^        name = / { name = $0; sub(/^        name = /, "", name) }
+        /^        display_name = / { disp = $0; sub(/^        display_name = /, "", disp) }
+        /^        installed_version = / { inst = $0; sub(/^        installed_version = /, "", inst) }
+        /^        version_to_install = / { nver = $0; sub(/^        version_to_install = /, "", nver) }
+        /^    \}/ { if (name != "") printf "%s\t%s\t%s\t%s\n", name, disp, inst, nver }
+    '
+}
+
 function queueLabel() {
     log_notice "Queueing $label_name"
     labelsArray+="$label_name "
     log_verbose "$labelsArray"
+
+    # Persist this queued item to the report PLIST (name, display name, installed & available
+    # versions) so it survives across DiscoveryFrequency-skipped runs and can be consumed
+    # externally for reporting (see: write_aap_report_item).
+    write_aap_report_item "$label_name" "$name" "$previousVersion" "$appNewVersion"
+}
+
+_resolve_label_staging_info() {
+    # Executes a label fragment in an isolated subshell to resolve the downloadURL and related
+    # variables that may be computed dynamically (API calls, GitHub release lookups, etc.).
+    # Outputs KEY=VALUE pairs that the caller parses.
+    #
+    # Usage: _resolve_label_staging_info "labelname"
+    # Output keys: TYPE  DOWNLOAD_URL  APP_NEW_VERSION  EXPECTED_TEAM_ID  ARCHIVE_NAME  CURL_OPTIONS
+
+    local label="$1"
+    local fragmentFile="${fragmentsPath}/labels/${label}.sh"
+    [[ ! -f "$fragmentFile" ]] && return 1
+
+    # Build a self-contained wrapper script so the label runs in a clean zsh subprocess.
+    # The subprocess sources the Installomator helper-functions fragment (which provides
+    # downloadURLFromGit, downloadURLFromSparkle, versionFromGit, etc.) before wrapping
+    # the label in a case statement and executing it.
+    local tmpScript
+    tmpScript=$(mktemp /private/tmp/aap_lbl_XXXXXX.sh) || return 1
+
+    {
+        echo '#!/bin/zsh --no-rcs'
+        echo 'export PATH=/usr/bin:/bin:/usr/sbin:/sbin'
+        # Architecture variable used by multi-arch labels
+        echo 'if [[ $(uname -m) == "arm64" ]]; then arch="arm64"; else arch="x86_64"; fi'
+        # OS version used by some labels
+        echo 'osVersion=$(sw_vers -productVersion 2>/dev/null)'
+        # Source Installomator helper functions if present
+        printf '[[ -f %q ]] && source %q 2>/dev/null\n' \
+            "${fragmentsPath}/functions.sh" "${fragmentsPath}/functions.sh"
+        # Initialize all variables the label may set
+        echo 'type=""; downloadURL=""; appNewVersion=""; expectedTeamID=""; archiveName=""; curlOptions=()'
+        # Wrap the label fragment in a case statement so it executes its body
+        echo "case '${label}' in"
+        cat "$fragmentFile"
+        echo 'esac'
+        # Emit results as KEY=VALUE — use printf to avoid issues with special characters in URLs
+        echo 'printf "TYPE=%s\n"            "${type}"'
+        echo 'printf "DOWNLOAD_URL=%s\n"    "${downloadURL}"'
+        echo 'printf "APP_NEW_VERSION=%s\n" "${appNewVersion}"'
+        echo 'printf "EXPECTED_TEAM_ID=%s\n" "${expectedTeamID}"'
+        echo 'printf "ARCHIVE_NAME=%s\n"    "${archiveName}"'
+        echo 'printf "CURL_OPTIONS=%s\n"    "${(j: :)curlOptions}"'
+    } > "$tmpScript"
+    chmod +x "$tmpScript"
+
+    local output
+    output=$(zsh --no-rcs "$tmpScript" 2>/dev/null)
+    local rc=$?
+    rm -f "$tmpScript"
+    echo "$output"
+    return $rc
+}
+
+workflow_stage_updates() {
+    # Pre-download pending update installers to a local staging folder before displaying the
+    # user dialog. When workflow_do_Installations later runs, it detects the staged file and
+    # overrides downloadURL to a file:// path, making the install phase nearly instantaneous.
+    #
+    # Version consistency: a sidecar .version file records the appNewVersion at staging time.
+    # If a new discovery detects a different version, the staged file is discarded and
+    # re-downloaded so the user always installs the correct build.
+    #
+    # Type-to-extension mapping keeps the staged filename predictable:
+    #   dmg / pkgInDmg                 → .dmg
+    #   pkg                            → .pkg
+    #   zip / pkgInZip / appInDmgInZip → .zip
+    #   tbz                            → .tbz
+    # updateronly labels are skipped (no installer to stage).
+
+    log_info "Staging pending updates before displaying user dialog..."
+
+    mkdir -p "${AAPStagingFolder}" 2>/dev/null
+
+    # Remove staged files that are no longer in the active queue to avoid stale installers
+    # accumulating on disk across multiple runs.
+    if [[ -d "${AAPStagingFolder}" ]]; then
+        for stagedEntry in "${AAPStagingFolder}"/*.{dmg,pkg,zip,tbz,bin}(N); do
+            local stagedLabel
+            stagedLabel="${stagedEntry:t:r}"   # filename without extension
+            local stillQueued="FALSE"
+            for ql in $queuedLabelsArray; do
+                [[ "$ql" == "$stagedLabel" ]] && stillQueued="TRUE" && break
+            done
+            if [[ "$stillQueued" == "FALSE" ]]; then
+                log_verbose "Removing stale staged file for '${stagedLabel}' (no longer in queue)"
+                rm -f "${AAPStagingFolder}/${stagedLabel}".{dmg,pkg,zip,tbz,bin} \
+                      "${AAPStagingFolder}/${stagedLabel}.version" \
+                      "${AAPStagingFolder}/${stagedLabel}.type" 2>/dev/null
+            fi
+        done
+    fi
+
+    local stagedCount=0
+    local stageSkipCount=0
+    local stageErrorCount=0
+
+    for label in $queuedLabelsArray; do
+        log_info "Resolving download info for staging: ${label}"
+
+        # Resolve the label's downloadURL and related vars in an isolated subprocess
+        local labelInfo
+        labelInfo=$(_resolve_label_staging_info "$label")
+        if [[ $? -ne 0 ]] || [[ -z "$labelInfo" ]]; then
+            log_error "Could not resolve download info for '${label}'. Skipping staging."
+            stageErrorCount=$((stageErrorCount + 1))
+            continue
+        fi
+
+        # Parse KEY=VALUE output — use cut -d= -f2- to preserve URLs that contain '='
+        local stagingType stagingURL stagingVersion stagingTeamID stagingArchive stagingCurlOpts
+        stagingType=$(echo "$labelInfo"    | grep '^TYPE='            | cut -d= -f2-)
+        stagingURL=$(echo "$labelInfo"     | grep '^DOWNLOAD_URL='    | cut -d= -f2-)
+        stagingVersion=$(echo "$labelInfo" | grep '^APP_NEW_VERSION=' | cut -d= -f2-)
+        stagingTeamID=$(echo "$labelInfo"  | grep '^EXPECTED_TEAM_ID='| cut -d= -f2-)
+        stagingCurlOpts=$(echo "$labelInfo"| grep '^CURL_OPTIONS='    | cut -d= -f2-)
+
+        # updateronly labels have no installer to download
+        if [[ "$stagingType" == "updateronly" ]]; then
+            log_info "'${label}' uses an in-app updater (updateronly). Skipping staging."
+            stageSkipCount=$((stageSkipCount + 1))
+            continue
+        fi
+
+        if [[ -z "$stagingURL" ]]; then
+            log_error "Empty downloadURL for '${label}'. Skipping staging."
+            stageErrorCount=$((stageErrorCount + 1))
+            continue
+        fi
+
+        # Map install type to the correct file extension for the staged file
+        local fileExt
+        case "$stagingType" in
+            dmg|pkgInDmg)                   fileExt="dmg" ;;
+            pkg)                             fileExt="pkg" ;;
+            zip|pkgInZip|appInDmgInZip)     fileExt="zip" ;;
+            tbz)                             fileExt="tbz" ;;
+            *)                               fileExt="bin" ;;
+        esac
+
+        local stagedFile="${AAPStagingFolder}/${label}.${fileExt}"
+        local stagedVersionFile="${AAPStagingFolder}/${label}.version"
+        local stagedTypeFile="${AAPStagingFolder}/${label}.type"
+
+        # Check whether a valid staged file already exists for this version
+        if [[ -f "$stagedFile" && -f "$stagedVersionFile" ]]; then
+            local existingVersion
+            existingVersion=$(< "$stagedVersionFile")
+            if [[ -n "$stagingVersion" && "$existingVersion" == "$stagingVersion" ]]; then
+                log_notice "Already staged: '${label}' at version ${stagingVersion}. Skipping download."
+                stageSkipCount=$((stageSkipCount + 1))
+                continue
+            else
+                log_info "Version mismatch for staged '${label}' (cached=${existingVersion}, available=${stagingVersion:-unknown}). Re-staging."
+                rm -f "$stagedFile" "$stagedVersionFile" "$stagedTypeFile"
+            fi
+        elif [[ -f "$stagedFile" && -z "$stagingVersion" ]]; then
+            # Staged file exists but label has no version string — assume it is still current
+            log_notice "Staged file for '${label}' exists with no version info. Using existing staged file."
+            stageSkipCount=$((stageSkipCount + 1))
+            continue
+        elif [[ -f "$stagedFile" ]]; then
+            # File without version sidecar — remove and re-stage
+            log_info "Staged file for '${label}' is missing version sidecar. Re-staging."
+            rm -f "$stagedFile" "$stagedTypeFile"
+        fi
+
+        # Build curl arguments, honouring any curlOptions the label declares
+        local curlArgs=("--location" "--silent" "--fail" "--show-error")
+        [[ -n "$stagingCurlOpts" ]] && curlArgs+=($=stagingCurlOpts)
+        curlArgs+=("-o" "$stagedFile" "$stagingURL")
+
+        log_notice "Staging '${label}' (${stagingType}) …"
+        log_verbose "  URL: ${stagingURL}"
+
+        if curl "${curlArgs[@]}" 2>/dev/null; then
+            printf '%s' "$stagingVersion" > "$stagedVersionFile"
+            printf '%s' "$stagingType"    > "$stagedTypeFile"
+            stagedCount=$((stagedCount + 1))
+            log_notice "Staged '${label}' successfully${stagingVersion:+ — version ${stagingVersion}}"
+        else
+            log_error "Download failed for '${label}'. It will be downloaded normally during install."
+            rm -f "$stagedFile" "$stagedVersionFile" "$stagedTypeFile"
+            stageErrorCount=$((stageErrorCount + 1))
+        fi
+    done
+
+    log_notice "Staging complete: ${stagedCount} downloaded, ${stageSkipCount} already current/skipped, ${stageErrorCount} error(s)"
 }
 
 workflow_silent_patch_closed_apps() {
-    # InteractiveMode 1 only: Silently install updates for apps that are NOT currently running.
-    # Uses BLOCKING_PROCESS_ACTION=silent_fail so Installomator exits with code 12 when a
-    # blocking process is found, leaving those labels in the queue for the user dialog.
-    # Apps that update successfully (exit 0) are removed from the queue entirely.
+    # InteractiveMode 1 or 2 only (not 0): Silently install updates for apps that are NOT
+    # currently running. Uses BLOCKING_PROCESS_ACTION=silent_fail so Installomator exits with
+    # code 12 when a blocking process is found, leaving those labels in the queue for the user
+    # dialog. Apps that update successfully (exit 0) are removed from the queue entirely.
 
-    log_info "InteractiveMode 1: Attempting silent background patch for apps that are not currently open..."
+    log_info "InteractiveMode ${InteractiveModeOption}: Attempting silent background patch for apps that are not currently open..."
 
     # Ensure installomatorOptions is populated before we manipulate it
     local baseOptions="${installomatorOptions}"
@@ -4357,23 +4894,54 @@ workflow_silent_patch_closed_apps() {
                 local _dname _ipath
                 _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
                 _ipath=$(resolve_app_icon_path "${label}")
+                _compute_version_subtitle "${label}"
                 newAppNamesArray+=("--listitem")
-                newAppNamesArray+=(${_dname},icon="${_ipath}")
+                if [[ -n "$versionSubtitle" ]]; then
+                    newAppNamesArray+=(${_dname},icon="${_ipath}",subtitle="${versionSubtitle}")
+                else
+                    newAppNamesArray+=(${_dname},icon="${_ipath}")
+                fi
                 continue
             fi
         fi
 
+        # Reuse a pre-staged installer if workflow_stage_updates already downloaded one for this
+        # label, avoiding a second download for apps that turn out to be closed (and a wasted
+        # download for apps that turn out to be open/blocked, since the staged file is kept for
+        # the later user-approved install).
+        local silentStagedArg=""
+        local silentStagedFilePath=""
+        for _ext in dmg pkg zip tbz bin; do
+            local _candidate="${AAPStagingFolder}/${label}.${_ext}"
+            if [[ -f "$_candidate" ]]; then
+                silentStagedFilePath="$_candidate"
+                silentStagedArg="downloadURL=file://${_candidate}"
+                log_info "Using staged installer for '${label}': ${_candidate}"
+                break
+            fi
+        done
+
         log_info "Silent background patch attempt for: ${label}"
-        ${installomatorScript} "${label}" ${silentPatchOptions}
+        ${installomatorScript} "${label}" ${silentPatchOptions} ${silentStagedArg}
         local silentExitCode=$?
 
         case "${silentExitCode}" in
             0)
-                # Successfully updated while the app was closed — remove from queue
+                # Successfully updated while the app was closed — remove from queue entirely.
+                # Pruning both DiscoveredLabels and the report PLIST ensures that a subsequent
+                # DiscoveryFrequency-skipped run never re-queues this now-patched app.
                 log_notice "Silent background patch succeeded for: ${label} (exit 0)"
                 silentPatchCount=$((silentPatchCount + 1))
                 local _newVersion="${AAPVersionByLabel[$label]:-}"
                 write_aap_receipt "${label}" "${_newVersion}" "${silentExitCode}"
+                remove_aap_report_item "${label}"
+                remove_discovered_label "${label}"
+                if [[ -n "$silentStagedFilePath" ]]; then
+                    rm -f "$silentStagedFilePath" \
+                          "${silentStagedFilePath:r}.version" \
+                          "${silentStagedFilePath:r}.type" 2>/dev/null
+                    log_verbose "Removed staged installer for '${label}' after successful silent patch"
+                fi
                 ;;
             12)
                 # Installomator found a blocking process — app is open, needs user interaction
@@ -4382,8 +4950,13 @@ workflow_silent_patch_closed_apps() {
                 local _dname _ipath
                 _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
                 _ipath=$(resolve_app_icon_path "${label}")
+                _compute_version_subtitle "${label}"
                 newAppNamesArray+=("--listitem")
-                newAppNamesArray+=(${_dname},icon="${_ipath}")
+                if [[ -n "$versionSubtitle" ]]; then
+                    newAppNamesArray+=(${_dname},icon="${_ipath}",subtitle="${versionSubtitle}")
+                else
+                    newAppNamesArray+=(${_dname},icon="${_ipath}")
+                fi
                 ;;
             *)
                 # Unexpected error — keep in queue so the user is notified via dialog
@@ -4393,8 +4966,13 @@ workflow_silent_patch_closed_apps() {
                 local _dname _ipath
                 _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
                 _ipath=$(resolve_app_icon_path "${label}")
+                _compute_version_subtitle "${label}"
                 newAppNamesArray+=("--listitem")
-                newAppNamesArray+=(${_dname},icon="${_ipath}")
+                if [[ -n "$versionSubtitle" ]]; then
+                    newAppNamesArray+=(${_dname},icon="${_ipath}",subtitle="${versionSubtitle}")
+                else
+                    newAppNamesArray+=(${_dname},icon="${_ipath}")
+                fi
                 ;;
         esac
     done
@@ -4464,6 +5042,22 @@ workflow_do_Installations() {
             
         fi
 
+        # Check whether a pre-staged installer exists for this label.
+        # If found, override downloadURL to a file:// path so Installomator "downloads"
+        # the already-staged file locally (a fast file-copy via curl), skipping the
+        # remote download entirely.  After the install attempt the staged file is removed.
+        local stagedDownloadArg=""
+        local stagedFilePath=""
+        for _ext in dmg pkg zip tbz bin; do
+            local _candidate="${AAPStagingFolder}/${label}.${_ext}"
+            if [[ -f "$_candidate" ]]; then
+                stagedFilePath="$_candidate"
+                stagedDownloadArg="downloadURL=file://${_candidate}"
+                log_info "Using staged installer for '${label}': ${_candidate}"
+                break
+            fi
+        done
+
         if [[ ${zoom_call_active_check_option} == "TRUE" && ${label} == "zoom"* ]] ; then
 
 	        CPTHOSTPID=$(pgrep CptHost)
@@ -4474,13 +5068,26 @@ workflow_do_Installations() {
                 let errorCount++
                 swiftDialogUpdate "listitem: index: $i, status: fail, statustext: Zoom Active…"
             else
-                # Run Installomator
-                ${installomatorScript} ${label} ${installomatorOptions} ${swiftDialogOptions[@]}
+                # Run Installomator (use staged installer if available)
+                ${installomatorScript} ${label} ${installomatorOptions} ${stagedDownloadArg} ${swiftDialogOptions[@]}
                 installomatorExitCode=$?
                 if [ $installomatorExitCode != 0 ]; then
                     log_error "Error installing ${label}. Exit code $installomatorExitCode"
                     swiftDialogUpdate "listitem: index: $i, status: fail"
                     let errorCount++
+                fi
+                # Clean up staged file on success; leave it in place on failure so it can be reused
+                if [[ $installomatorExitCode -eq 0 && -n "$stagedFilePath" ]]; then
+                    rm -f "$stagedFilePath" \
+                          "${stagedFilePath:r}.version" \
+                          "${stagedFilePath:r}.type" 2>/dev/null
+                    log_verbose "Removed staged installer for '${label}' after successful install"
+                fi
+                # Remove from both the report PLIST and DiscoveredLabels on success so a future
+                # DiscoveryFrequency-skipped run never re-queues this now-patched app.
+                if [[ $installomatorExitCode -eq 0 ]]; then
+                    remove_aap_report_item "$label"
+                    remove_discovered_label "$label"
                 fi
                 # Write the receipt
                 newVersion="${AAPVersionByLabel[$label]:-}"
@@ -4505,13 +5112,26 @@ workflow_do_Installations() {
                 write_aap_receipt "$label" "$newVersion" "$installomatorExitCode"
             fi
         else
-            # Run Installomator
-            ${installomatorScript} ${label} ${installomatorOptions} ${swiftDialogOptions[@]}
+            # Run Installomator (use staged installer if available)
+            ${installomatorScript} ${label} ${installomatorOptions} ${stagedDownloadArg} ${swiftDialogOptions[@]}
             installomatorExitCode=$?
             if [ $installomatorExitCode != 0 ]; then
                 log_error "Error installing ${label}. Exit code $installomatorExitCode"
                 swiftDialogUpdate "listitem: index: $i, status: fail"
                 let errorCount++
+            fi
+            # Clean up staged file on success; leave it in place on failure so it can be reused
+            if [[ $installomatorExitCode -eq 0 && -n "$stagedFilePath" ]]; then
+                rm -f "$stagedFilePath" \
+                      "${stagedFilePath:r}.version" \
+                      "${stagedFilePath:r}.type" 2>/dev/null
+                log_verbose "Removed staged installer for '${label}' after successful install"
+            fi
+            # Remove from both the report PLIST and DiscoveredLabels on success so a future
+            # DiscoveryFrequency-skipped run never re-queues this now-patched app.
+            if [[ $installomatorExitCode -eq 0 ]]; then
+                remove_aap_report_item "$label"
+                remove_discovered_label "$label"
             fi
             # Write the receipt
             newVersion="${AAPVersionByLabel[$label]:-}"
@@ -5110,6 +5730,10 @@ main() {
 
     declare -A configArray=()
     typeset -gA AAPVersionByLabel=()
+    # Tracks the currently-installed version for each queued label, alongside AAPVersionByLabel
+    # (which tracks the new/available version). Used to populate listitem subtitles in the
+    # deferral/hard-deadline dialogs with "Current Version" / "New Version" text.
+    typeset -gA AAPInstalledVersionByLabel=()
     
     # Determine if discovery should run based on workflow_disable_app_discovery_option and DiscoveryFrequency
     local run_discovery="FALSE"
@@ -5154,6 +5778,16 @@ main() {
     if [[ "${run_discovery}" != "TRUE" ]]; then # Skip App Discovery Workflow
         log_notice "**** App Auto-Patch ${scriptVersion} - SKIP APP DISCOVERY WORKFLOW ****"
         [[ -n "${discovery_skip_reason}" ]] && log_info "Discovery skipped: ${discovery_skip_reason}"
+
+        # Discovery did not run, so AAPVersionByLabel (built only while parsing labels during
+        # discovery) is empty this run. Restore it from the persisted report PLIST so downstream
+        # steps (receipts, staging) still have accurate version data for queued labels.
+        local _qLabel _qDisplay _qInstalled _qNew
+        while IFS=$'\t' read -r _qLabel _qDisplay _qInstalled _qNew; do
+            [[ -z "${_qLabel}" ]] && continue
+            AAPVersionByLabel[$_qLabel]="${_qNew}"
+            AAPInstalledVersionByLabel[$_qLabel]="${_qInstalled}"
+        done < <(get_aap_report_entries)
     else
         log_notice "**** App Auto-Patch ${scriptVersion} - RUN APP DISCOVERY WORKFLOW ****"
         
@@ -5165,6 +5799,9 @@ main() {
         else
             /usr/libexec/PlistBuddy -c 'add ":DiscoveredLabels" array' "${appAutoPatchLocalPLIST}.plist"
         fi
+
+        # Reset the persisted report (ItemsToInstall) so it reflects only this run's findings
+        clear_aap_report
         
         # Call the bouncing progress SwiftDialog window
         swiftDialogDiscoverWindow
@@ -5385,8 +6022,15 @@ main() {
         iconPath=$(resolve_app_icon_path "$label")
         log_verbose "Resolved icon path: $iconPath"
 
+        _compute_version_subtitle "$label"
+        log_verbose "Version subtitle for $label: ${versionSubtitle:-<none>}"
+
         appNamesArray+=("--listitem")
-        appNamesArray+=(${currentDisplay_name},icon="${iconPath}")
+        if [[ -n "$versionSubtitle" ]]; then
+            appNamesArray+=(${currentDisplay_name},icon="${iconPath}",subtitle="${versionSubtitle}")
+        else
+            appNamesArray+=(${currentDisplay_name},icon="${iconPath}")
+        fi
     done
 
     log_notice "Labels to install: $labelsArray"
@@ -5408,11 +6052,28 @@ main() {
         countOfElementsArray+=($label)
     done
 
-    # InteractiveMode 1: Before showing any dialog, silently patch apps that are NOT currently
-    # open. Apps whose blocking processes are running (Installomator exit 12) stay in the queue
-    # and will be presented to the user via the normal deferral/deadline dialog workflow.
+    # Stage installers before any other Installomator activity (including the silent background
+    # patch pass below) so every queued app is downloaded at most once per run. Without this
+    # ordering, workflow_silent_patch_closed_apps would trigger a full download for each label
+    # (even ones that turn out to be open/blocked), and then workflow_stage_updates would download
+    # the same file again later — wasting time and bandwidth. Staging first means closed apps
+    # install directly from the staged copy, and open/blocked apps keep their staged copy ready
+    # for the later user-approved install.
+    # Controlled by WorkflowStageUpdatesOption (managed key: WorkflowStageUpdates).
+    if [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+        workflow_stage_updates
+    fi
+
+    # InteractiveMode 1 or 2 only (i.e. not 0): Before showing any dialog, silently patch apps
+    # that are NOT currently open. Apps whose blocking processes are running (Installomator exit
+    # 12) stay in the queue and will be presented to the user via the normal deferral/deadline
+    # dialog workflow. Both modes 1 (Silent Discovery, Interactive Patching) and 2 (Full
+    # Interactive) show the same interactive patching dialog for any remaining open apps, so both
+    # benefit equally from pre-patching closed apps silently. Mode 0 (Completely Silent) is
+    # excluded because it never shows a dialog and already installs every queued app directly via
+    # workflow_do_Installations, regardless of whether the app is open.
     # Controlled by WorkflowBackgroundPatchClosedAppsOption (managed key: WorkflowBackgroundPatchClosedApps).
-    if [[ ${InteractiveModeOption} == 1 ]] && [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+    if [[ ${InteractiveModeOption} -ge 1 ]] && [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         workflow_silent_patch_closed_apps
     fi
 
@@ -5455,6 +6116,8 @@ main() {
             fi
 
         else
+            # Note: staging (workflow_stage_updates) already ran earlier, before the silent
+            # background patch pass, so queued apps are already downloaded at this point.
             check_deadlines_days_date
             # User Focus only needs to be checked if there are no date or day deadlines.
             if [[ "${deadline_days_status}" == "FALSE" ]]; then
