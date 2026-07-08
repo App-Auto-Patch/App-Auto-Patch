@@ -3,6 +3,88 @@
 # Version 3
 
 ## Version 3.6.0
+### 08-Jul-2026 (4)
+- Added swiftDialog banner image support (`--bannerimage`/`--bannertitle`/`--bannerheight`) as an alternative to the standard `--title` text banner (#205)
+	- New `bannerImageOption`, `bannerTitleOption`, and `bannerHeightOption` variables, populated via the standard managed > local > default preference pipeline
+	- New `dialogTitleOptions` array is built once in `workflow_startup`, immediately after the existing icon-resolution logic (`icon`/`dialog_icon_option`), and replaces every hardcoded `--title "$appTitle"` array element across the codebase: `dialogPatchingConfigurationOptions`, both branches of `dialog_install_or_defer`'s `deferralDialogContent`, `dialog_install_hard_deadline`'s `deferralDialogContent`
+	- When `bannerImageOption` is set (non-empty), `dialogTitleOptions` resolves to `(--bannerimage "$bannerImageOption" --bannertitle "..." [--bannerheight "$bannerHeightOption"])`; when unset, it resolves to the original `(--title "$appTitle")`, so existing deployments see no change in behavior
+	- `--bannertitle` falls back to `${appTitle}` when `bannerTitleOption` is blank, so the banner is never left without title text
+	- `--bannerheight` is only appended when `bannerHeightOption` is a non-empty integer string; invalid values are dropped (and cleared from the local plist) rather than passed through to swiftDialog
+	- Per swiftDialog's behavior, activating a banner image hides the standard `--icon` area — this is expected and matches swiftDialog's own `--hideicon`-equivalent behavior for banners
+	- `BannerImage` accepts everything swiftDialog's `--bannerimage` supports: a filepath, a URL, `colour=#hex`, or `gradient=colour,colour`
+	- Managed Preference Keys: `<key>BannerImage</key>` `<string>Filepath|URL|colour=#hex|gradient=colour,colour</string>`, `<key>BannerTitle</key>` `<string>Text</string>`, `<key>BannerHeight</key>` `<integer>points</integer>`
+
+### 08-Jul-2026 (3)
+- Added current/new version subtitles to app listitems in the deferral and hard-deadline dialogs (#146)
+	- `dialog_install_or_defer` and `dialog_install_hard_deadline` now display a subtitle under each app name, e.g. `Current Version: 128.0.6613.138  →  New Version: 129.0.6668.59`, using swiftDialog's `--listitem` `subtitle` option
+	- New `AAPInstalledVersionByLabel` associative array tracks each queued label's currently-installed version, populated alongside the existing `AAPVersionByLabel` (new/available version) both during discovery and when restoring queue state from the report PLIST on DiscoveryFrequency-skipped runs
+	- New `_compute_version_subtitle` helper builds the subtitle text and gracefully degrades: shows both versions when known, falls back to just "New Version" or just "Current Version" if only one is known, and omits the subtitle entirely if neither is available (e.g. very first discovery of an app via the Installomator debug fallback path)
+	- Commas are stripped from version strings before use, since swiftDialog's non-JSON `--listitem` syntax treats commas as property separators and would otherwise truncate or corrupt the subtitle
+	- Applied consistently everywhere the dialog's app list is built or rebuilt: the initial discovery-time `appNamesArray` population, and all three code paths in `workflow_silent_patch_closed_apps` that re-add a label to the trimmed post-silent-patch `appNamesArray` (Zoom-call-in-progress skip, blocking-process detected, and unexpected-error fallback)
+
+### 08-Jul-2026 (2)
+- Cleaned up redundant/incorrect `set_display_strings_language` calls
+	- Removed the call in `workflow_startup` that ran *before* `get_preferences`: `langUser` is only populated inside `get_preferences`, so that earlier call always evaluated the managed-language match against an empty `langUser`, meaning it could never apply a managed-profile language override — it only produced the hardcoded English defaults, which were then fully recomputed and overwritten by the correct call later in the same function (after `get_preferences`/`manage_parameter_options` run)
+	- Removed the duplicate calls inside `dialog_install_or_defer` and `dialog_install_hard_deadline`: `workflow_startup` runs exactly once, at the very start of `main()`, before either dialog function can be invoked in the same execution, and neither `langUser` nor the managed configuration profile change mid-run, so re-running the string resolution (and its per-string `PlistBuddy` subprocess calls) inside these dialog functions was pure repeated overhead with no behavioral effect
+	- `set_display_strings_language` is now called exactly once per run, in `workflow_startup`, immediately after `get_preferences` populates `langUser`
+
+### 08-Jul-2026 (1)
+- Fixed: deferral dialog auto-triggering "Install Now" on DiscoveryFrequency-skipped runs
+	- `mktemp` creates the swiftDialog command file with mode **600** (root read/write only); `swiftDialogDiscoverWindow` normally runs `chmod 644` as a side-effect before any dialog is shown
+	- When discovery is skipped (`DiscoveryFrequency` threshold not yet elapsed), `swiftDialogDiscoverWindow` is never called, so the command file remains mode 600
+	- SwiftDialog is launched as root from the LaunchDaemon but switches to the console user's GUI context for display; the console user cannot read a root-owned 600 file, causing swiftDialog to exit immediately with code 1
+	- Exit code 1 hits the `*` catch-all in `dialog_install_or_defer`'s `case` statement, setting `dialog_user_choice_install="TRUE"` and triggering `workflow_do_Installations` without the dialog ever appearing
+	- Introduced `_prepare_dialog_command_file` helper that unconditionally runs `touch` + `chmod 644` on the command file; called at the entry point of `dialog_install_or_defer`, `dialog_install_hard_deadline`, and `swiftDialogPatchingWindow` so every swiftDialog invocation that uses `--commandfile` is guaranteed a world-readable command file regardless of whether the discovery window ran
+
+### 07-Jul-2026 (4)
+- Fixed: successfully-patched apps could re-appear in the update queue on DiscoveryFrequency-skipped runs
+	- When `workflow_silent_patch_closed_apps` or `workflow_do_Installations` completed a successful install (Installomator exit 0), the label was correctly removed from the in-memory `queuedLabelsArray` and from the report PLIST — but was never removed from the `DiscoveredLabels` array in the local PLIST
+	- On any subsequent run where discovery was skipped (within the `DiscoveryFrequency` window), `labelsArray` is rebuilt entirely from `DiscoveredLabels`, which caused already-patched apps to re-enter the queue and prompt the user unnecessarily
+	- New `remove_discovered_label` helper function removes a label from the `DiscoveredLabels` PLIST array by locating its 0-based index via `PlistBuddy` and deleting it; handles first, last, middle, and absent entries safely
+	- `remove_discovered_label` is now called alongside `remove_aap_report_item` at every successful-install exit point: the silent background patch pass (`workflow_silent_patch_closed_apps`) and both branches of the user-approved install path (`workflow_do_Installations`)
+
+### 07-Jul-2026 (3)
+- Added `IgnoreDNDApps` managed preference — exclude specific apps from display-sleep assertion detection (#149)
+	- When `check_user_focus` evaluates display sleep assertions (via `pmset -g assertions`), any process that appears in the `IgnoreDNDApps` list is now skipped rather than triggering a `user_focus_active=TRUE` deferral
+	- Useful for background utilities that permanently hold display assertions (e.g. `Logi Options+`, `Amphetamine`, `Lungo`) that should not block interactive patching
+	- Process names are matched exactly as `pmset` reports them — including any spaces in the name (e.g. `"Logi Options+"`) — so the ignore list must use the same spelling
+	- Accepts a comma-separated string; leading and trailing whitespace around each entry is trimmed automatically
+	- An empty or absent `IgnoreDNDApps` value preserves the original behavior: any non-`coreaudiod` display sleep assertion triggers a deferral
+	- Managed Preference Key: `<key>IgnoreDNDApps</key>` `<string>App1,App2,App3</string>`
+
+### 07-Jul-2026 (2)
+- Fixed: DiscoveryFrequency-skipped runs incorrectly found zero apps to patch
+	- `set_defaults` was unconditionally clearing the `DiscoveredLabels` PLIST array on every run, including runs where discovery was intentionally skipped because `DiscoveryFrequency` had not yet elapsed
+	- Since the update queue (`labelsArray`/`queuedLabelsArray`) is rebuilt from `DiscoveredLabels` on every run (not just runs where discovery executes), this caused AAP to believe there were no pending updates and skip patching entirely until the next full discovery
+	- `DiscoveredLabels` is now only cleared immediately before discovery actually re-runs; it is left untouched on skipped runs so the previously-discovered queue persists correctly
+- Added a dedicated report PLIST for persisting the pending-update queue and external reporting (#194)
+	- New `xyz.techitout.appAutoPatchReport.plist` file tracks every currently queued app under an `ItemsToInstall` array, formatted to be compatible with third-party reporting/inventory tooling that already knows how to ingest Munki's `ManagedInstallReport.plist` (e.g. `display_name` and `version_to_install` keys), such as the pattern used by [SupportCompanion's `MunkiApps.swift`](https://github.com/macadmins/SupportCompanion/blob/main/SupportCompanion/Helpers/MunkiApps.swift)
+	- Each entry records: `name` (label), `display_name`, `installed_version`, `version_to_install`, and `date_discovered`
+	- New `queueLabel` behavior: every time a label is queued during discovery, its entry is written (or updated, replacing any prior entry for the same label) via the new `write_aap_report_item` function
+	- New `remove_aap_report_item` function removes a label's entry as soon as it is successfully patched — called from both `workflow_silent_patch_closed_apps` (silent background patch success) and `workflow_do_Installations` (user-approved install success) — so the report never shows an already-updated app as still pending
+	- New `clear_aap_report` function resets the `ItemsToInstall` array immediately before discovery actually re-runs, keeping the report in sync with the latest scan
+	- New `get_aap_report_entries` function restores the in-memory `AAPVersionByLabel` map from the persisted report on DiscoveryFrequency-skipped runs, since that associative array is only otherwise populated while parsing labels during an active discovery pass
+- Fixed: apps could be downloaded twice when both Background Patch Closed Apps and Update Staging were enabled together
+	- `workflow_stage_updates` previously ran *after* `workflow_silent_patch_closed_apps`, so every closed app was fully downloaded once during the silent-patch attempt and then downloaded again during staging
+	- `workflow_stage_updates` now runs first, before any other Installomator activity for the run. Both `workflow_silent_patch_closed_apps` and `workflow_do_Installations` now detect and reuse a staged installer (via a `downloadURL=file://…` override) instead of re-downloading, so every queued app is downloaded at most once per run regardless of which combination of these features is enabled
+	- Staged files are only deleted after a successful install; if a closed app turns out to have a blocking process (Installomator exit 12), its staged installer is preserved and reused later once the user approves the update
+
+### 07-Jul-2026
+- Added Update Staging — pre-download installers before the user dialog is displayed
+	- New `workflow_stage_updates` function runs after discovery (and after the silent background-patch pass if enabled) but before the deferral or deadline dialog is shown to the user
+	- For each label in the update queue, AAP resolves the `downloadURL` from the Installomator label fragment (including dynamically-computed URLs such as GitHub release lookups and Sparkle feed checks) and downloads the installer to a local staging folder (`/private/tmp/AAPStage` by default)
+	- Supports all Installomator installer types: `dmg`, `pkg`, `zip`, `tbz`, `pkgInDmg`, `pkgInZip`, `appInDmgInZip`; `updateronly` labels (in-app updaters with no installer to download) are automatically skipped
+	- When `workflow_do_Installations` later runs, it detects the staged file and overrides `downloadURL` to a `file://` path so Installomator uses the pre-downloaded installer, making the install phase nearly instantaneous for staged updates
+	- A `.version` sidecar file records the `appNewVersion` at staging time; on the next discovery cycle, if a newer version is detected the stale staged file is automatically removed and the updated installer is re-downloaded
+	- Stale staged files for labels that are no longer in the active update queue are cleaned up at the start of each staging run to prevent unbounded disk usage in `/private/tmp/AAPStage`
+	- Staged files are removed after a successful installation (Installomator exit 0); files are retained on non-zero exits so they can be reused on the next install attempt
+	- New `_resolve_label_staging_info` helper function executes each label fragment in an isolated `zsh` subprocess (with Installomator helper functions such as `downloadURLFromGit` and `downloadURLFromSparkle` available), capturing `type`, `downloadURL`, `appNewVersion`, `expectedTeamID`, `archiveName`, and `curlOptions` without exposing the parent script environment
+	- Labels that declare custom `curlOptions` (e.g. extra HTTP headers required by the download server) are honoured during staging
+	- Configurable via new `WorkflowStageUpdates` managed preference key (default: `false`)
+		- `true`: Update staging is enabled; installers are pre-downloaded before the user dialog
+		- `false` (default): Staging is disabled; AAP downloads and installs on demand as before
+	- Managed Preference Key: `<key>WorkflowStageUpdates</key>` `<true/>` | `<false/>`
+
 ### 06-Jul-2026
 - Added Background Patch Closed Apps for InteractiveMode 1
 	- When `InteractiveMode` is set to `1` (Silent Discovery, Interactive Patching), AAP now performs a silent pre-patch pass immediately after discovery and before any user dialog is displayed
@@ -41,8 +123,8 @@
 	- Improves security and predictability of label fragment parsing across all app discovery logic
 - Added logic to ignore apps found in .Trash folders, `/Applications (Parallels)/` and `/Applications (Virtual Machines)/` (#221 #216)
 - Fixed an issue that was setting `RemoveInstallomatorPath` to FALSE even if the value in the managed config was set to TRUE (#214)
-- Fixed an issue that was preventing the Support Team Website field from being hidden when the managed config was set to `hide`
-- Added Installomator version output for cases where the installomator updater is disabled (#206)
+- Fixed an issue that was preventing the Support Team Website field from being hidden when the managed config was set to `hide` (#213)
+- Added Installomator verison output for cases where the installomator updater is diabled (#206)
 - Fixed issue preventing Workspace One MDM URL from populating and being used for Slack Webhooks (#208)
 - Fixed a typo from the json file being saved properly in the `write_aap_receipt` function (#211)
 - Fixed an issue where umlaut values were populating incorrectly for Support Team Name (#204)
