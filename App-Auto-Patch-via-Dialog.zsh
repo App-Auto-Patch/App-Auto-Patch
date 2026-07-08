@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.0"
 scriptDate="2026/07/06"
-scriptBuild="3.6.0.2607081309"
+scriptBuild="3.6.0.2607081400"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -62,6 +62,7 @@ echo "
     [--workflow-disable-relaunch] [--workflow-disable-relaunch-off]
     [--workflow-disable-app-discovery] [--workflow-disable-app-discovery-off]
     [--discovery-frequency=hours]
+    [--force-discovery]
     [--workflow-install-now] [--workflow-install-now-silent]
     [--workflow-install-now-patching-status-action-never]
     [--workflow-install-now-patching-status-action-always]
@@ -299,6 +300,8 @@ set_defaults() {
     
     WORKFLOW_INSTALL_NOW_SILENT_FILE="${appAutoPatchFolder}/.WorkflowInstallNowSilent"
 
+    FORCE_DISCOVERY_FILE="${appAutoPatchFolder}/.ForceDiscovery"
+
     jamfBinary="/usr/local/bin/jamf"
 
     dialogBinary="/usr/local/bin/dialog"
@@ -455,7 +458,7 @@ set_display_strings_language() {
     display_string_deferral_infobox2="out of"
     display_string_deferral_infobox3="deferrals remaining\n"
     display_string_deferral_message_01="You can **Install Now** to close the applications and apply the updates, or **Defer** to postpone them."
-    display_string_deferral_message_02="**application(s)** require updates.\n\n"
+    display_string_deferral_message_02="**application(s)** require updates. \n\n"
     display_string_deferral_unlimited="No deadline date and unlimited deferrals\n"
     display_string_deferral_selecttitle="Defer updates for:"
     
@@ -867,6 +870,9 @@ get_options() {
             --discovery-frequency=*)
                 DiscoveryFrequency="${1##*=}"
             ;;
+            --force-discovery)
+                force_discovery_option="TRUE"
+            ;;
             --workflow-install-now)
                 workflow_install_now_option="TRUE"
             ;;
@@ -971,6 +977,7 @@ get_preferences() {
         [[ "${debug_mode_option}" == "TRUE" ]] && defaults write "${appAutoPatchLocalPLIST}" DebugMode -bool true
         rm -f "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
         rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
+        rm -f "${FORCE_DISCOVERY_FILE}" 2> /dev/null
         
     else
         if [[ "${reset_labels_option}" == "TRUE" ]]; then
@@ -2333,6 +2340,17 @@ workflow_startup() {
         workflow_install_now_silent_option="TRUE" # This is re-set in case the script restarts.
         InteractiveModeOption=0 # This is to make sure all dialogs are displayed for the install now workflow
         touch "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" # This is created in case the script restarts.
+    fi
+
+    # Check if a forced discovery (--force-discovery) was triggered. This is a one-shot trigger
+    # that bypasses the DiscoveryFrequency window for this run only. The flag file lets the
+    # request survive a restart_aap relaunch (e.g. when triggered via Jamf, which bootstraps the
+    # LaunchDaemon fresh without the original CLI arguments). It is consumed/removed as soon as
+    # the discovery decision is evaluated later in main(), regardless of outcome.
+    if [[ "${force_discovery_option}" == "TRUE" ]] || [[ -f "${FORCE_DISCOVERY_FILE}" ]]; then
+        log_status "Forced discovery alternate workflow enabled; DiscoveryFrequency window will be bypassed for this run."
+        force_discovery_option="TRUE" # This is re-set in case the script restarts.
+        touch "${FORCE_DISCOVERY_FILE}" # This is created in case the script restarts.
     fi
 
     
@@ -4063,7 +4081,7 @@ dialog_install_or_defer() {
         infobox="${display_string_deferral_unlimited}"
     fi
 	#infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $display_string_deadline_count"
-	message="${display_string_deferral_message_01} ${display_string_there_are} (${numberOfUpdates}) ${display_string_deferral_message_02}"
+	message="${display_string_there_are} **(${numberOfUpdates})** ${display_string_deferral_message_02} ${display_string_deferral_message_01}"
     height=480
 	
 	# Create the deferrals available dialog options and content
@@ -5738,10 +5756,22 @@ main() {
     # Determine if discovery should run based on workflow_disable_app_discovery_option and DiscoveryFrequency
     local run_discovery="FALSE"
     local discovery_skip_reason=""
+
+    # --force-discovery is a one-shot trigger, so consume/remove its flag file as soon as it's
+    # evaluated here, regardless of what the discovery decision below ends up being. This
+    # guarantees it never fires more than once, even if discovery remains disabled outright.
+    if [[ "${force_discovery_option}" == "TRUE" ]]; then
+        rm -f "${FORCE_DISCOVERY_FILE}" 2> /dev/null
+    fi
     
     if [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then
         # Discovery explicitly disabled
         discovery_skip_reason="disabled by workflow option"
+    elif [[ "${force_discovery_option}" == "TRUE" ]]; then
+        # Forced discovery requested via --force-discovery (or a pending flag file from a prior
+        # relaunch) - bypass the DiscoveryFrequency window for this run only.
+        run_discovery="TRUE"
+        log_info "Forced discovery triggered; ignoring DiscoveryFrequency window for this run."
     elif [[ -n "${DiscoveryFrequency}" ]] && [[ "${DiscoveryFrequency}" =~ ^[0-9]+$ ]] && (( DiscoveryFrequency > 0 )); then
         # Check if enough time has passed since last discovery
         local now_epoch last_discovery_epoch next_discovery_due
