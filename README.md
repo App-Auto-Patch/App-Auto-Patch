@@ -15,49 +15,48 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.6.0
-- Added Background Patch Closed Apps for InteractiveMode 1
-	- When `InteractiveMode` is set to `1` (Silent Discovery, Interactive Patching), AAP now performs a silent pre-patch pass immediately after discovery and before any user dialog is displayed
-	- Apps that are **not currently open** are updated silently in the background using Installomator with `BLOCKING_PROCESS_ACTION=silent_fail`. A successful install (exit 0) removes the app from the update queue entirely
-	- Apps that **are currently open** (Installomator exit code 12 — blocking process found) remain in the queue and are presented to the user via the normal deferral or deadline dialog, so the user can choose when to close and update them
-	- If all pending updates are resolved silently, no user dialog is shown and AAP proceeds directly to the completion workflow
-	- Respects the existing Zoom Call Active Check: if a Zoom meeting is in progress, Zoom labels are skipped during the silent pre-patch and kept in the user dialog queue
-	- Patching receipts are written for all apps successfully updated during the silent pre-patch phase
-	- Configurable via new `WorkflowBackgroundPatchClosedApps` managed preference key (default: `true`)
-		- `true` (default): Silent pre-patch of closed apps is enabled for InteractiveMode 1
-		- `false`: Disables the silent pre-patch; all discovered updates are presented to the user in the dialog as before
-	- Managed Preference Key: `<key>WorkflowBackgroundPatchClosedApps</key>` `<true/>` | `<false/>`
-- Added Discovery Frequency control
-	- New `DiscoveryFrequency` managed preference key (integer, hours)
-	- When the workflow resets and re-runs (e.g. after a deferral), AAP will skip the discovery phase if the last successful discovery completed within the configured number of hours, saving script runtime, bandwidth, and system resources
-	- For example, setting `DiscoveryFrequency` to `24` means discovery only runs once per day regardless of how many times the user defers
-	- A value of `0` forces discovery to run on every workflow execution
-	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>`
-- Updated verbose log lifecycle management (#222)
-	- Removed the unconditional deletion of `appAutoPatchVerboseLog` at the start of every run; the verbose log is now preserved across runs and accumulates entries like the main log
-	- Added dedicated `appAutoPatchVerboseLogArchiveSize` variable (default: 10000 KB) as a separate size threshold for the verbose log, independent of the main log archive size
-	- Added dedicated `appAutoPatchVerboseLogArchiveFolder` variable pointing to `${appAutoPatchFolder}/logs-verbose-archive`; this folder is created automatically on first install alongside the existing log archive folder
-	- The `archive_logs` function now archives the verbose log into `logs-verbose-archive` when it exceeds `appAutoPatchVerboseLogArchiveSize` KB, using the same timestamped zip approach as the main log
-	- Added a file-count cap for the verbose log archive: if `logs-verbose-archive` grows beyond 10 files, the oldest archive is automatically deleted to prevent unbounded disk usage
-- Added Dock active check to startup workflow (#223)
-	- After confirming AAP is running as root, the startup workflow now waits for the Dock process to be active before proceeding, ensuring a user session is fully established
-	- Polls every 5 seconds for up to 120 seconds; if the Dock is not active within that window, AAP logs an exit message and exits with code 1 so the LaunchDaemon can retry on the next scheduled run
-- Added retry logic to swiftDialog download and verification (#223)
-	- The `install_dialog` function now retries the curl download and `spctl` Team ID verification up to 3 times before giving up
-	- If the download fails (non-zero curl exit), the partial file is removed and the attempt is retried after a 10-second delay
-	- If the Team ID does not match after 3 attempts, AAP displays the existing error dialog and exits, same as before
-- Added helper function to safely parse and resolve variable assignments from Installomator label fragments
-	- New `_safe_parse_label_var` function replaces `eval`-based label parsing with explicit, safe string substitution
-	- Extracts variable name and raw value from label fragment lines, strips surrounding quotes, and resolves `${variable}` references (e.g. `${folderName}`, `${appName}`) without executing arbitrary code
-	- Handles the full set of label variables used during discovery: `name`, `appName`, `packageID`, `expectedTeamID`, `targetDir`, `folderName`, `versionKey`, and `type`
-	- Improves security and predictability of label fragment parsing across all app discovery logic
-- Added logic to ignore apps found in .Trash folders, `/Applications (Parallels)/` and `/Applications (Virtual Machines)/` (#221 #216)
-- Fixed an issue that was setting `RemoveInstallomatorPath` to FALSE even if the value in the managed config was set to TRUE (#214)
-- Fixed an issue that was preventing the Support Team Website field from being hidden when the managed config was set to `hide`
-- Added Installomator verison output for cases where the installomator updater is diabled (#206)
-- Fixed issue preventing Workspace One MDM URL from populating and being used for Slack Webhooks (#208)
-- Fixed a typo from the json file being saved properly in the `write_aap_receipt` function (#211)
-- Fixed an issue where umlaut values were populating incorrectly for Support Team Name (#204)
-	- Switched to plistbuddy for pulling this particular value, will consider switching all config profile pulls to plistbuddy in a future build
+**⚠️ Before you upgrade:** Background Patch Closed Apps (below) is **enabled by default** and applies under both `InteractiveMode 1` and `InteractiveMode 2`. If you are not ready for AAP to silently patch closed apps, set `WorkflowBackgroundPatchClosedApps` to `false` in your managed configuration before deploying this version. There are no other breaking changes in this release, and no CLI triggers were added.
+
+**New Features**
+
+- **Background Patch Closed Apps** — Under `InteractiveMode 1` or `2`, AAP now silently installs updates for any app that isn't currently open, immediately after discovery and before any dialog is shown to the user. Apps that are open are left in the queue and presented to the user as before, so they can choose when to close them. If every pending update is resolved silently, no dialog appears at all. (`InteractiveMode 0` is unaffected — it already installs everything silently regardless of whether an app is open.)
+	- Managed Preference Key: `<key>WorkflowBackgroundPatchClosedApps</key>` `<true/>` | `<false/>` — **default: `true`**
+
+- **Update Staging** — Pending updates can now be pre-downloaded to a local staging folder before the user is ever prompted, making the actual install nearly instantaneous once approved. Staging always runs first (ahead of Background Patch Closed Apps and the user dialog), and later steps reuse the staged installer instead of downloading it a second time. Outdated or stale staged files are cleaned up automatically.
+	- Managed Preference Key: `<key>WorkflowStageUpdates</key>` `<true/>` | `<false/>` — default: `false`
+
+- **Discovery Frequency** — Skip the app-discovery (scanning) phase on subsequent runs within a configurable time window. Useful when a user defers multiple times in a day — AAP won't re-scan every app each time, saving runtime, bandwidth, and system resources.
+	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>` — default: `0` (always run discovery)
+
+- **Ignore DND Apps** — Exclude specific apps from Focus/Do-Not-Disturb display-sleep-assertion detection, so background utilities that permanently hold a display assertion (e.g. Logi Options+, Amphetamine) don't indefinitely block interactive patching from proceeding. (#149)
+	- Managed Preference Key: `<key>IgnoreDNDApps</key>` `<string>App1,App2,App3</string>` — comma-separated app names, matched exactly as reported by macOS (including spaces)
+
+- **Update queue reporting** — A new report file (`xyz.techitout.appAutoPatchReport.plist`) tracks every currently-queued app (name, installed version, available version) in a Munki-style `ItemsToInstall` array, making it easy for third-party reporting or inventory tools to surface pending updates for a Mac. (#194)
+
+- **Version details in patch dialogs** — The deferral and hard-deadline dialogs now show each app's current and new version underneath its name, e.g. "Current Version: 128.0.6613.138 → New Version: 129.0.6668.59", so users know exactly what's changing before they install. (#146)
+
+- **Startup & download reliability improvements** (#223)
+	- AAP now waits for the Dock to become active (up to 2 minutes) before proceeding at startup, ensuring a full user session is established first.
+	- The swiftDialog download and code-signing verification now automatically retry up to 3 times before failing, reducing false failures on flaky networks.
+
+- **Verbose log retention** — The verbose log is now archived (instead of being deleted every run) once it grows past a size threshold, matching the existing rotation behavior of the main log, with a capped number of archives to prevent unbounded disk usage. (#222)
+
+- **Banner image support** — The Patching, Deferral, and Hard Deadline dialogs can now display a custom banner (image, URL, solid colour, or gradient) across the top in place of the plain text title, using swiftDialog's `--bannerimage`/`--bannertitle`/`--bannerheight` options. If no banner image is configured, dialogs look exactly as before. (#205)
+	- Managed Preference Key: `<key>BannerImage</key>` `<string>Filepath|URL|colour=#hex|gradient=colour,colour</string>` — leave unset to keep the standard text title
+	- Managed Preference Key: `<key>BannerTitle</key>` `<string>Text</string>` — text shown inside the banner; falls back to the app title if left blank
+	- Managed Preference Key: `<key>BannerHeight</key>` `<integer>points</integer>` — optional, overrides swiftDialog's default banner height
+	- Note: activating a banner image hides the standard dialog icon, per swiftDialog's own behavior
+	- Not available on the compact discovery-scan and "all apps up to date" mini dialogs — they're too small to display a banner and always show the standard text title
+
+- Apps found in `.Trash`, `/Applications (Parallels)/`, and `/Applications (Virtual Machines)/` are now automatically ignored during discovery. (#221 #216)
+
+**Fixes**
+
+- Fixed: the `RemoveInstallomatorPath` managed preference could be forced to `FALSE` even when explicitly set to `TRUE` (#214)
+- Fixed: the Support Team Website field wasn't hidden when its managed value was set to `hide` (#213)
+- Fixed: the Workspace One MDM URL wasn't populating correctly for Slack webhook notifications (#208)
+- Fixed: Support Team Name values containing umlaut characters populated incorrectly (#204)
+- Fixed: Installomator version/date now displays correctly in logs when the Installomator self-updater is disabled (#206)
 
 ## New features/Specific Changes in 3.5.0
 - [New Version Comparison Method options](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Version-Comparison-Methods)
