@@ -3,6 +3,22 @@
 # Version 3
 
 ## Version 3.6.0
+### 08-Jul-2026 (6) - Build 3.6.0.2607081400
+- Added `--force-discovery` CLI trigger to force the App Discovery workflow to run once, bypassing the `DiscoveryFrequency` window
+	- New `force_discovery_option` variable, set by the `--force-discovery` CLI flag, and a new one-shot flag file (`FORCE_DISCOVERY_FILE`, `${appAutoPatchFolder}/.ForceDiscovery`) following the same pattern already used for `--workflow-install-now`
+	- `workflow_startup` checks for either the CLI flag or the flag file and (re-)touches the flag file, so the request survives a `restart_aap` relaunch — this matters because Jamf-triggered runs are relaunched via `launchctl bootstrap` on the LaunchDaemon, which re-executes the script without the original CLI arguments
+	- In `main()`'s discovery-decision logic, `force_discovery_option` is evaluated ahead of the normal `DiscoveryFrequency` window check and forces `run_discovery="TRUE"` for that run only
+	- The flag file is deleted the moment `force_discovery_option` is evaluated in `main()` (regardless of whether `workflow_disable_app_discovery_option` ultimately still blocks discovery), guaranteeing the trigger fires at most once and never loops indefinitely
+	- Explicit administrative disabling of discovery (`WorkflowDisableAppDiscovery` / `workflow_disable_app_discovery_option`) still takes precedence over a forced-discovery request — `--force-discovery` only bypasses the frequency window, not a hard admin disable
+	- `reset_defaults` clears the `FORCE_DISCOVERY_FILE` flag file alongside the existing `WORKFLOW_INSTALL_NOW_FILE`/`WORKFLOW_INSTALL_NOW_SILENT_FILE` cleanup
+
+### 08-Jul-2026 (5)
+- Fixed: Background Patch Closed Apps was gated to `InteractiveMode 1` only, excluding `InteractiveMode 2`
+	- Per AAP's documented mode definitions, `InteractiveMode 0` is Completely Silent, `1` is Silent Discovery/Interactive Patching, and `2` is Full Interactive — both `1` and `2` display the same interactive patching dialog (deferral or hard-deadline) for any remaining open apps, so both benefit equally from silently pre-patching closed apps first
+	- `InteractiveMode 0` is correctly excluded: it never shows a dialog and already installs every queued app directly via `workflow_do_Installations` regardless of whether the app is open, so a pre-patch pass would add no value there
+	- Changed the gating condition in `main()` from `[[ ${InteractiveModeOption} == 1 ]]` to `[[ ${InteractiveModeOption} -ge 1 ]]`, matching the same `-ge 1` pattern already used elsewhere in the script for other "any interactive mode" checks
+	- Updated related log messages and comments in `workflow_silent_patch_closed_apps` accordingly
+
 ### 08-Jul-2026 (4)
 - Added swiftDialog banner image support (`--bannerimage`/`--bannertitle`/`--bannerheight`) as an alternative to the standard `--title` text banner (#205)
 	- New `bannerImageOption`, `bannerTitleOption`, and `bannerHeightOption` variables, populated via the standard managed > local > default preference pipeline
