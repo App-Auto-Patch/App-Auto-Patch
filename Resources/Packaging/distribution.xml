@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="1">
+    <title>App Auto-Patch</title>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <options customize="never" require-scripts="false" rootVolumeOnly="true"/>
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+    <choices-outline>
+        <line choice="default">
+            <line choice="xyz.techitout.appAutoPatch.installer"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="xyz.techitout.appAutoPatch.installer" visible="false">
+        <pkg-ref id="xyz.techitout.appAutoPatch.installer"/>
+    </choice>
+    <pkg-ref id="xyz.techitout.appAutoPatch.installer" version="0" onConclusion="none">AppAutoPatchComponent.pkg</pkg-ref>
+</installer-gui-script>

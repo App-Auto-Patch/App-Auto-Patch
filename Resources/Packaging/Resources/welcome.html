@@ -1,0 +1,34 @@
+<!--
+    Welcome pane shown by Installer.app before the pkg installs.
+    The icon placeholder token below (double-underscore prefixed, near the top of
+    <body>) is substituted at build time (Resources/Packaging/build-pkg.sh) with a
+    base64 data URI for Images/AAP - Hexagon Sticker.png. productbuild only bundles
+    files declared as XML elements in distribution.xml (welcome/license/etc.), not
+    loose files merely referenced by relative path from within HTML, so the icon
+    must be inlined rather than shipped as a sibling file.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+</head>
+<body style="font-family: -apple-system, Helvetica, Arial, sans-serif; text-align: center; margin: 0 24px;">
+    <p><img src="data:image/png;base64,__AAP_ICON_BASE64__" width="128" height="128" alt="App Auto-Patch"></p>
+    <h2 style="margin-bottom: 0;">App Auto-Patch</h2>
+    <p style="text-align: left;">
+        App Auto-Patch is an MDM-agnostic third-party patching tool that combines local
+        application discovery, an <b>Installomator</b> integration, and user-friendly
+        <b>swiftDialog</b> prompts to automate application patch management across your
+        Mac fleet.
+    </p>
+    <p style="text-align: left;">
+        Clicking <b>Install</b> installs App Auto-Patch in the background &mdash; no further
+        action is required here. Once installation completes, App Auto-Patch registers
+        itself as a LaunchDaemon and, depending on your managed configuration, may
+        immediately run its first application discovery and patching workflow.
+    </p>
+    <p style="text-align: left;">
+        For configuration options and documentation, visit the
+        <a href="https://github.com/App-Auto-Patch/App-Auto-Patch/wiki">App Auto-Patch Wiki</a>.
+    </p>
+</body>
+</html>

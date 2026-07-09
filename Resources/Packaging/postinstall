@@ -1,0 +1,36 @@
+#!/bin/zsh --no-rcs
+#
+# postinstall
+#
+# Bundled into the App Auto-Patch installer pkg's Scripts payload and executed
+# as root by installer(8)/MDM once the package's scripts archive is expanded.
+#
+# App Auto-Patch already knows how to self-install: when the script detects
+# it's running from anywhere other than its canonical install folder
+# (/Library/Management/AppAutoPatch) or the /usr/local/bin CLI symlink, it
+# copies itself into place, (re)creates the LaunchDaemon, and hands off the
+# actual discovery/patch run to that LaunchDaemon via restart_aap().
+#
+# This script simply stages the bundled copy of the script to a temporary
+# location and runs it once, so that existing self-install logic takes over.
+# No changes to the App Auto-Patch script itself are required.
+#
+# The staged script is launched in the background and disowned (the same
+# pattern the script itself uses in restart_aap()), so this postinstall
+# script - and therefore the installer/MDM transaction - returns immediately
+# instead of waiting for the self-install + LaunchDaemon hand-off to finish.
+# Cleanup of the temp folder happens inside that same backgrounded subshell,
+# after the staged script has finished running.
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TMP_DIR=$(mktemp -d /private/tmp/AppAutoPatchInstaller.XXXXXX)
+
+cp "${SCRIPT_DIR}/App-Auto-Patch-via-Dialog.zsh" "${TMP_DIR}/App-Auto-Patch-via-Dialog.zsh"
+chmod 755 "${TMP_DIR}/App-Auto-Patch-via-Dialog.zsh"
+
+( "${TMP_DIR}/App-Auto-Patch-via-Dialog.zsh"; rm -rf "${TMP_DIR}" ) &
+disown
+
+exit 0
