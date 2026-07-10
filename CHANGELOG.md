@@ -27,32 +27,37 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 - **Ignore DND Apps** — Exclude specific apps from Focus/Do-Not-Disturb display-sleep-assertion detection, so background utilities that permanently hold a display assertion (e.g. Logi Options+, Amphetamine) don't indefinitely block interactive patching from proceeding. (#149)
 	- Managed Preference Key: `<key>IgnoreDNDApps</key>` `<string>App1,App2,App3</string>` — comma-separated app names, matched exactly as reported by macOS (including spaces)
 
-- **Update queue reporting** — A new report file (`xyz.techitout.appAutoPatchReport.plist`) tracks every currently-queued app (name, installed version, available version) in a Munki-style `ItemsToInstall` array, making it easy for third-party reporting or inventory tools to surface pending updates for a Mac. (#194)
+- **Update queue reporting** — A new report file (`xyz.techitout.appAutoPatchReport.plist`) tracks every currently-queued app (name, installed version, available version) in a Munki-style `ItemsToInstall` array, making it easy for third-party reporting or inventory tools to surface pending updates for a Mac.
 
-- **Version details in patch dialogs** — The deferral and hard-deadline dialogs now show each app's current and new version underneath its name, e.g. "Current Version: 128.0.6613.138 → New Version: 129.0.6668.59", so users know exactly what's changing before they install. (#146)
+- **Version details in patch dialogs** — The deferral and hard-deadline dialogs now show each app's current and new version underneath its name, e.g. "Current Version: 128.0.6613.138 → New Version: 129.0.6668.59", so users know exactly what's changing before they install.
 
-- **Startup & download reliability improvements** (#223)
+- **Startup & download reliability improvements**
 	- AAP now waits for the Dock to become active (up to 2 minutes) before proceeding at startup, ensuring a full user session is established first.
 	- The swiftDialog download and code-signing verification now automatically retry up to 3 times before failing, reducing false failures on flaky networks.
 
-- **Verbose log retention** — The verbose log is now archived (instead of being deleted every run) once it grows past a size threshold, matching the existing rotation behavior of the main log, with a capped number of archives to prevent unbounded disk usage. (#222)
+- **Verbose log retention** — The verbose log is now archived (instead of being deleted every run) once it grows past a size threshold, matching the existing rotation behavior of the main log, with a capped number of archives to prevent unbounded disk usage.
 
-- **Banner image support** — The Patching, Deferral, and Hard Deadline dialogs can now display a custom banner (image, URL, solid colour, or gradient) across the top in place of the plain text title, using swiftDialog's `--bannerimage`/`--bannertitle`/`--bannerheight` options. If no banner image is configured, dialogs look exactly as before. (#205)
+- **Banner image support** — The Patching, Deferral, and Hard Deadline dialogs can now display a custom banner (image, URL, solid colour, or gradient) across the top in place of the plain text title, using swiftDialog's `--bannerimage`/`--bannertitle`/`--bannerheight` options. If no banner image is configured, dialogs look exactly as before.
 	- Managed Preference Key: `<key>BannerImage</key>` `<string>Filepath|URL|colour=#hex|gradient=colour,colour</string>` — leave unset to keep the standard text title
 	- Managed Preference Key: `<key>BannerTitle</key>` `<string>Text</string>` — text shown inside the banner; falls back to the app title if left blank
 	- Managed Preference Key: `<key>BannerHeight</key>` `<integer>points</integer>` — optional, overrides swiftDialog's default banner height
 	- Note: activating a banner image hides the standard dialog icon, per swiftDialog's own behavior
 	- Not available on the compact discovery-scan and "all apps up to date" mini dialogs — they're too small to display a banner and always show the standard text title
 
-- Apps found in `.Trash`, `/Applications (Parallels)/`, and `/Applications (Virtual Machines)/` are now automatically ignored during discovery. (#221 #216)
+- Apps found in `.Trash`, `/Applications (Parallels)/`, and `/Applications (Virtual Machines)/` are now automatically ignored during discovery.
+
+- **Staging / background-patch progress dialog for Full Interactive mode** — Under `InteractiveMode 2`, a small progress window now stays visible while updates are staged and closed apps are silently patched, instead of leaving users looking at an empty screen between the discovery dialog closing and the deferral/hard-deadline dialog appearing.
+
+- **"Install Now" confirmation prompt** — Clicking `Install Now` on the deferral dialog now shows a small confirmation prompt before proceeding, so users don't accidentally close their apps and trigger installs with a single click. The confirmation shows a small countdown (default 15 seconds) so users know how long they have to respond — the buttons are clickable immediately (no brief delay before they respond), and if the countdown runs out without a response, AAP proceeds with the install by default (the user already asked to install, so no response is treated as confirmation rather than a change of mind). Choosing "No" returns to the deferral dialog, and that dialog's own countdown timer picks up right where it left off (it does not reset). This confirmation only applies to the deferral dialog — the hard-deadline dialog is unaffected, since it offers no choice to begin with.
+	- Managed Preference Key: `<key>DialogTimeoutConfirmInstall</key>` `<integer>seconds</integer>` — default: `15`
 
 **Fixes**
 
-- Fixed: the `RemoveInstallomatorPath` managed preference could be forced to `FALSE` even when explicitly set to `TRUE` (#214)
-- Fixed: the Support Team Website field wasn't hidden when its managed value was set to `hide` (#213)
-- Fixed: the Workspace One MDM URL wasn't populating correctly for Slack webhook notifications (#208)
-- Fixed: Support Team Name values containing umlaut characters populated incorrectly (#204)
-- Fixed: Installomator version/date now displays correctly in logs when the Installomator self-updater is disabled (#206)
+- Fixed: the `RemoveInstallomatorPath` managed preference could be forced to `FALSE` even when explicitly set to `TRUE`
+- Fixed: the Support Team Website field wasn't hidden when its managed value was set to `hide`
+- Fixed: the Workspace One MDM URL wasn't populating correctly for Slack webhook notifications
+- Fixed: Support Team Name values containing umlaut characters populated incorrectly
+- Fixed: Installomator version/date now displays correctly in logs when the Installomator self-updater is disabled
 
 ## Version 3.5.0
 ### 22-Dec-2025
