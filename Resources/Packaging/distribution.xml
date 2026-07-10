@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="1">
     <title>App Auto-Patch</title>
-    <background file="AAP-icon.png" alignment="top" scaling="none" mime-type="image/png"/>
-    <background-darkAqua file="AAP-icon.png" alignment="top" scaling="none" mime-type="image/png"/>
-    <welcome file="welcome.html" mime-type="text/html"/>
+    <background file="AAPLogo.png" alignment="bottomleft" scaling="none" mime-type="image/png"/>
+    <background-darkAqua file="AAPLogo.png" alignment="bottomleft" scaling="none" mime-type="image/png"/>
+    <welcome file="welcome.txt" mime-type="text/plain"/>
+    <readme file="readme.txt" mime-type="text/plain"/>
     <options customize="never" require-scripts="false" rootVolumeOnly="true"/>
     <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
     <choices-outline>
