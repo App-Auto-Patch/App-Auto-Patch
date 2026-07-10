@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.0"
 scriptDate="2026/07/06"
-scriptBuild="3.6.0.2607081400"
+scriptBuild="3.6.0.2607091824"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -125,6 +125,7 @@ echo "
     <key>DialogOnTop</key> <string>TRUE,FALSE</string>
     <key>DialogTimeoutDeferral</key> <integer>seconds</integer>
     <key>DialogTimeoutDeferralAction</key> <string>Defer,Continue</string>
+    <key>DialogTimeoutConfirmInstall</key> <integer>seconds</integer>
     <key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>
     <key>IgnoredLabels</key> <string>label label label etc</string>
     <key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc</string>
@@ -270,6 +271,8 @@ set_defaults() {
     DialogTimeoutDeferral="300" # MDM Enabled
     
     DialogTimeoutDeferralAction="Defer" # MDM Enabled
+
+    DialogTimeoutConfirmInstall="15" # MDM Enabled
     
     deferral_timer_minutes=1440
 
@@ -450,6 +453,11 @@ set_display_strings_language() {
     display_string_discovery_message="Analyzing installed apps"
     display_string_discovery_action_message="Analyzing"
     display_string_discovery_progress="Scanning"
+
+    #### Language for the Staging / Background Patch Closed Apps dialog (InteractiveMode 2 only)
+    display_string_staging_message="Preparing updates"
+    display_string_staging_progress="Staging"
+    display_string_silent_patch_progress="Installing updates for closed apps"
     
     #### Language for the Deferral Dialog with Deferrals
     display_string_deferral_button1="Defer"
@@ -461,6 +469,13 @@ set_display_strings_language() {
     display_string_deferral_message_02="**application(s)** require updates. \n\n"
     display_string_deferral_unlimited="No deadline date and unlimited deferrals\n"
     display_string_deferral_selecttitle="Defer updates for:"
+
+    #### Language for the Install Now confirmation mini dialog
+    display_string_confirminstall_message="Are you sure you want to install updates now? This will close the applications listed."
+    display_string_confirminstall_button1="Yes, Install Now"
+    display_string_confirminstall_button2="No, Go Back"
+    display_string_confirminstall_countdown="Continuing automatically in"
+    display_string_confirminstall_countdown_suffix="seconds…"
     
     #### Language for the Deferral Dialog with NO deferrals remaining
     display_string_deferraldeadline_button1="Install Now"
@@ -544,6 +559,12 @@ set_display_strings_language() {
             display_string_discovery_action_message_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_discovery_action_message" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_discovery_progress_managed
             display_string_discovery_progress_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_discovery_progress" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            # local display_string_staging_message_managed
+            display_string_staging_message_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_staging_message" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            # local display_string_staging_progress_managed
+            display_string_staging_progress_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_staging_progress" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            # local display_string_silent_patch_progress_managed
+            display_string_silent_patch_progress_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_silent_patch_progress" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferral_button1_managed
             display_string_deferral_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferral_button2_managed
@@ -562,6 +583,16 @@ set_display_strings_language() {
             display_string_deferral_unlimited_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_unlimited" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferral_selecttitle_managed
             display_string_deferral_selecttitle_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_selecttitle" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            # local display_string_confirminstall_message_managed
+            display_string_confirminstall_message_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_confirminstall_message" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            # local display_string_confirminstall_button1_managed
+            display_string_confirminstall_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_confirminstall_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            # local display_string_confirminstall_button2_managed
+            display_string_confirminstall_button2_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_confirminstall_button2" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            # local display_string_confirminstall_countdown_managed
+            display_string_confirminstall_countdown_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_confirminstall_countdown" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            # local display_string_confirminstall_countdown_suffix_managed
+            display_string_confirminstall_countdown_suffix_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_confirminstall_countdown_suffix" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferraldeadline_button1_managed
             display_string_deferraldeadline_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferraldeadline_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferraldeadline_button2_managed
@@ -633,6 +664,9 @@ set_display_strings_language() {
     [[ -n "${display_string_discovery_message_managed}" ]] && display_string_discovery_message="${display_string_discovery_message_managed}"
     [[ -n "${display_string_discovery_action_message_managed}" ]] && display_string_discovery_action_message="${display_string_discovery_action_message_managed}"
     [[ -n "${display_string_discovery_progress_managed}" ]] && display_string_discovery_progress="${display_string_discovery_progress_managed}"
+    [[ -n "${display_string_staging_message_managed}" ]] && display_string_staging_message="${display_string_staging_message_managed}"
+    [[ -n "${display_string_staging_progress_managed}" ]] && display_string_staging_progress="${display_string_staging_progress_managed}"
+    [[ -n "${display_string_silent_patch_progress_managed}" ]] && display_string_silent_patch_progress="${display_string_silent_patch_progress_managed}"
     [[ -n "${display_string_deferral_button1_managed}" ]] && display_string_deferral_button1="${display_string_deferral_button1_managed}"
     [[ -n "${display_string_deferral_button2_managed}" ]] && display_string_deferral_button2="${display_string_deferral_button2_managed}"
     [[ -n "${display_string_deferral_infobox1_managed}" ]] && display_string_deferral_infobox1="${display_string_deferral_infobox1_managed}"
@@ -642,6 +676,11 @@ set_display_strings_language() {
     [[ -n "${display_string_deferral_message_02_managed}" ]] && display_string_deferral_message_02="${display_string_deferral_message_02_managed}"
     [[ -n "${display_string_deferral_unlimited_managed}" ]] && display_string_deferral_unlimited="${display_string_deferral_unlimited_managed}"
     [[ -n "${display_string_deferral_selecttitle_managed}" ]] && display_string_deferral_selecttitle="${display_string_deferral_selecttitle_managed}"
+    [[ -n "${display_string_confirminstall_message_managed}" ]] && display_string_confirminstall_message="${display_string_confirminstall_message_managed}"
+    [[ -n "${display_string_confirminstall_button1_managed}" ]] && display_string_confirminstall_button1="${display_string_confirminstall_button1_managed}"
+    [[ -n "${display_string_confirminstall_button2_managed}" ]] && display_string_confirminstall_button2="${display_string_confirminstall_button2_managed}"
+    [[ -n "${display_string_confirminstall_countdown_managed}" ]] && display_string_confirminstall_countdown="${display_string_confirminstall_countdown_managed}"
+    [[ -n "${display_string_confirminstall_countdown_suffix_managed}" ]] && display_string_confirminstall_countdown_suffix="${display_string_confirminstall_countdown_suffix_managed}"
     [[ -n "${display_string_deferraldeadline_button1_managed}" ]] && display_string_deferraldeadline_button1="${display_string_deferraldeadline_button1_managed}"
     [[ -n "${display_string_deferraldeadline_button2_managed}" ]] && display_string_deferraldeadline_button2="${display_string_deferraldeadline_button2_managed}"
     [[ -n "${display_string_deferraldeadline_infobox_managed}" ]] && display_string_deferraldeadline_infobox="${display_string_deferraldeadline_infobox_managed}"
@@ -682,6 +721,9 @@ set_display_strings_language() {
     log_verbose "display_string_discovery_message: $display_string_discovery_message"
     log_verbose "display_string_discovery_action_message: $display_string_discovery_action_message"
     log_verbose "display_string_discovery_progress: $display_string_discovery_progress"
+    log_verbose "display_string_staging_message: $display_string_staging_message"
+    log_verbose "display_string_staging_progress: $display_string_staging_progress"
+    log_verbose "display_string_silent_patch_progress: $display_string_silent_patch_progress"
     log_verbose "display_string_deferral_button1: $display_string_deferral_button1"
     log_verbose "display_string_deferral_button2: $display_string_deferral_button2"
     log_verbose "display_string_deferral_infobox1: $display_string_deferral_infobox1"
@@ -691,6 +733,11 @@ set_display_strings_language() {
     log_verbose "display_string_deferral_message_02: $display_string_deferral_message_02"
     log_verbose "display_string_deferral_unlimited: $display_string_deferral_unlimited"
     log_verbose "display_string_deferral_selecttitle: $display_string_deferral_selecttitle"
+    log_verbose "display_string_confirminstall_message: $display_string_confirminstall_message"
+    log_verbose "display_string_confirminstall_button1: $display_string_confirminstall_button1"
+    log_verbose "display_string_confirminstall_button2: $display_string_confirminstall_button2"
+    log_verbose "display_string_confirminstall_countdown: $display_string_confirminstall_countdown"
+    log_verbose "display_string_confirminstall_countdown_suffix: $display_string_confirminstall_countdown_suffix"
     log_verbose "display_string_deferraldeadline_button1: $display_string_deferraldeadline_button1"
     log_verbose "display_string_deferraldeadline_button2: $display_string_deferraldeadline_button2"
     log_verbose "display_string_deferraldeadline_infobox: $display_string_deferraldeadline_infobox"
@@ -1075,6 +1122,8 @@ get_preferences() {
         dialog_timeout_deferral_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogTimeoutDeferral 2> /dev/null)
         local dialog_timeout_deferral_action_managed
         dialog_timeout_deferral_action_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogTimeoutDeferralAction 2> /dev/null)
+        local dialog_timeout_confirm_install_managed
+        dialog_timeout_confirm_install_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogTimeoutConfirmInstall 2> /dev/null)
         local days_until_reset_managed
         days_until_reset_managed=$(defaults read "${appAutoPatchManagedPLIST}" DaysUntilReset 2> /dev/null)
         local Unattended_exit_managed
@@ -1202,6 +1251,8 @@ get_preferences() {
         dialog_timeout_deferral_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogTimeoutDeferral 2> /dev/null)
         local dialog_timeout_deferral_action_local
         dialog_timeout_deferral_action_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogTimeoutDeferralAction 2> /dev/null)
+        local dialog_timeout_confirm_install_local
+        dialog_timeout_confirm_install_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogTimeoutConfirmInstall 2> /dev/null)
         local days_until_reset_local
         days_until_reset_local=$(defaults read "${appAutoPatchLocalPLIST}" DaysUntilReset 2> /dev/null)
         local Unattended_exit_local
@@ -1356,6 +1407,8 @@ get_preferences() {
     { [[ -z "${dialog_timeout_deferral_managed}" ]] && [[ -n "${DialogTimeoutDeferral}" ]] && [[ -n "${dialog_timeout_deferral_local}" ]]; } && DialogTimeoutDeferral="${dialog_timeout_deferral_local}"
     [[ -n "${dialog_timeout_deferral_action_managed}" ]] && DialogTimeoutDeferralAction="${dialog_timeout_deferral_action_managed}"
     { [[ -z "${dialog_timeout_deferral_action_managed}" ]] && [[ -n "${DialogTimeoutDeferralAction}" ]] && [[ -n "${dialog_timeout_deferral_action_local}" ]]; } && DialogTimeoutDeferralAction="${dialog_timeout_deferral_action_local}"
+    [[ -n "${dialog_timeout_confirm_install_managed}" ]] && DialogTimeoutConfirmInstall="${dialog_timeout_confirm_install_managed}"
+    { [[ -z "${dialog_timeout_confirm_install_managed}" ]] && [[ -n "${DialogTimeoutConfirmInstall}" ]] && [[ -n "${dialog_timeout_confirm_install_local}" ]]; } && DialogTimeoutConfirmInstall="${dialog_timeout_confirm_install_local}"
     [[ -n "${days_until_reset_managed}" ]] && days_until_reset_option="${days_until_reset_managed}"
     { [[ -z "${days_until_reset_managed}" ]] && [[ -z "${days_until_reset_option}" ]] && [[ -n "${days_until_reset_local}" ]]; } && days_until_reset_option="${days_until_reset_local}"
     [[ -n "${Unattended_exit_managed}" ]] && UnattendedExit="${Unattended_exit_managed}"
@@ -1443,6 +1496,7 @@ get_preferences() {
     log_verbose "InstallomatorVersionCustomBranchName: $installomatorVersionCustomBranchName"
     log_verbose "DialogTimeoutDeferral: $DialogTimeoutDeferral"
     log_verbose "DialogTimeoutDeferralAction: $DialogTimeoutDeferralAction"
+    log_verbose "DialogTimeoutConfirmInstall: $DialogTimeoutConfirmInstall"
     log_verbose "DaysUntilReset: $days_until_reset_option"
     log_verbose "UnattendedExit: $UnattendedExit"
     log_verbose "UnattendedExitSeconds: $UnattendedExitSeconds"
@@ -2556,6 +2610,29 @@ workflow_startup() {
 	if [[ "$dialogOnTop" == "TRUE" ]]; then
 		dialogDiscoverConfigurationOptions+=(--ontop)
 	fi
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    # "Staging / Background Patch Closed Apps" dialog Title, Message and Icon (InteractiveMode 2 only)
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    dialogStagingConfigurationOptions=(
+        --title "${appTitle}"
+        --message "${display_string_staging_message} ..." # "Preparing updates …"
+        --icon "$icon"
+        --overlayicon "$overlayicon"
+        --commandfile "$dialogCommandFile"
+        --moveable
+        --windowbuttons min
+        --mini
+        --position bottomright
+        --progress
+        --progresstext "${display_string_staging_progress} ..." # Staging …
+        --quitkey k
+    )
+
+    if [[ "$dialogOnTop" == "TRUE" ]]; then
+        dialogStagingConfigurationOptions+=(--ontop)
+    fi
 
     #Running this function for something webhook related
     gather_error_log
@@ -3951,6 +4028,34 @@ swiftDialogCompleteDialogDiscover(){
     
 }
 
+# Bouncing progress window shown while updates are staged (workflow_stage_updates) and closed
+# apps are patched silently (workflow_silent_patch_closed_apps). Without this, InteractiveMode 2
+# users see the discovery dialog close and then see nothing at all until the deferral/hard
+# deadline dialog appears - which can be a noticeably long, unexplained gap if there are many
+# apps to stage/patch. Mirrors swiftDialogDiscoverWindow/swiftDialogCompleteDialogDiscover.
+# Only shown for InteractiveMode 2 (Full Interactive) - Mode 1 (Silent Discovery, Interactive
+# Patching) intentionally keeps this phase silent/dialog-free, matching its existing behavior
+# for the discovery phase.
+swiftDialogStagingWindow(){
+
+    _prepare_dialog_command_file
+    if [[ ${InteractiveModeOption} == 2 ]]; then
+        $dialogBinary \
+        ${dialogStagingConfigurationOptions[@]} \
+        &
+    fi
+
+}
+
+swiftDialogCompleteDialogStaging(){
+
+    if [[ ${InteractiveModeOption} == 2 ]]; then
+        swiftDialogCommand "quit:"
+        rm -f "$dialogCommandFile"
+    fi
+
+}
+
 _prepare_dialog_command_file() {
     # Ensure the swiftDialog command file exists and is world-readable.
     # mktemp creates it with mode 600 (root-only). swiftDialogDiscoverWindow normally
@@ -4083,36 +4188,7 @@ dialog_install_or_defer() {
 	#infobox="Updates will automatically $action after the timer expires. \n\n #### Deferrals Remaining: #### \n\n $display_string_deadline_count"
 	message="${display_string_there_are} **(${numberOfUpdates})** ${display_string_deferral_message_02} ${display_string_deferral_message_01}"
     height=480
-	
-	# Create the deferrals available dialog options and content
-    if [[ -n "${deferral_timer_menu_minutes}" ]]; then
-        selectDefault=${deferral_timer_menu_display_array[1]}
-        deferralDialogContent=(
-            ${dialogTitleOptions[@]}
-            --message "$message"
-            --helpmessage "$helpMessage"
-            --icon "$icon"
-            --overlayicon "$overlayicon"
-            --button2text "${display_string_deferral_button2}"
-            --infobox "$infobox"
-            --timer $DialogTimeoutDeferral
-            --button1text "${display_string_deferral_button1}"
-            --selecttitle "${display_string_deferral_selecttitle}" --selectvalues $display_string_deferral_menu --selectdefault $selectDefault
-        )
-    else
-        deferralDialogContent=(
-            ${dialogTitleOptions[@]}
-            --message "$message"
-            --helpmessage "$helpMessage"
-            --icon "$icon"
-            --overlayicon "$overlayicon"
-            --button2text "${display_string_deferral_button2}"
-            --infobox "$infobox"
-            --timer $DialogTimeoutDeferral
-            --button1text "${display_string_deferral_button1}"
-        )
-    fi
-			
+
 	deferralDialogOptions=(
 		--position bottomright
         --height 500
@@ -4130,41 +4206,172 @@ dialog_install_or_defer() {
 		deferralDialogOptions+=(--ontop)
 	fi
 
-	SELECTION=$("$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}")
-	dialogOutput=$?
-	log_aap "dialogOutput: $dialogOutput"
-	case "${dialogOutput}" in
-		0)
-			dialog_user_choice_install="FALSE"
-			if [[ -n "${deferral_timer_menu_minutes}" ]]; then
-                INDEX_CHOICE=$(echo "$SELECTION" | grep "SelectedIndex" | awk -F ": " '{print $NF}')
-                INDEX_CHOICE=$((INDEX_CHOICE+1))
-				deferral_timer_minutes="${deferral_timer_menu_minutes_array[${INDEX_CHOICE}]}"
-				log_status "User chose to defer update for ${deferral_timer_minutes} minutes."
-				write_status "Pending: User chose to defer update for ${deferral_timer_minutes} minutes."
-			else
-				log_status "Status: User chose to defer update, using the default defer of ${deferral_timer_minutes} minutes."
-				write_status "Pending: User chose to defer update, using the default defer of ${deferral_timer_minutes} minutes."
-			fi
-		;;
-		4)
-			dialog_user_choice_install="FALSE"
-			if [[ -n "${deferral_timer_menu_minutes}" ]]; then
-                INDEX_CHOICE=$(echo "$SELECTION" | grep "SelectedIndex" | awk -F ": " '{print $NF}')
-                INDEX_CHOICE=$((INDEX_CHOICE+1))
-                deferral_timer_minutes="${deferral_timer_menu_minutes_array[${INDEX_CHOICE}]}"
-				log_status "Display timeout automatically chose to defer update for ${deferral_timer_minutes} minutes."
-				write_status "Pending: Display timeout automatically chose to defer update for ${deferral_timer_minutes} minutes."
-			else
-				log_status "Display timeout automatically chose to defer update, using the default defer of ${deferral_timer_minutes} minutes."
-				write_status "Pending: Display timeout automatically chose to defer update, using the default defer of ${deferral_timer_minutes} minutes."
-			fi
-		;;
-		*)
-			log_status "User chose to install now."
-			dialog_user_choice_install="TRUE"
-		;;
-	esac
+    # Tracks wall-clock time across the loop below so the on-dialog countdown timer stays
+    # consistent even when the user clicks "Install Now" and then backs out of the
+    # confirmation prompt: time spent on the confirmation dialog still counts against the
+    # original ${DialogTimeoutDeferral} budget, so the deferral dialog resumes with however
+    # much time was actually left, rather than resetting to the full duration.
+    local deferral_dialog_start_epoch deferral_timer_total_seconds remaining_seconds
+    deferral_dialog_start_epoch=$(date +%s)
+    deferral_timer_total_seconds="$DialogTimeoutDeferral"
+
+    while true; do
+        remaining_seconds=$(( deferral_timer_total_seconds - ( $(date +%s) - deferral_dialog_start_epoch ) ))
+        (( remaining_seconds < 1 )) && remaining_seconds=1
+
+        # Create the deferrals available dialog options and content
+        if [[ -n "${deferral_timer_menu_minutes}" ]]; then
+            selectDefault=${deferral_timer_menu_display_array[1]}
+            deferralDialogContent=(
+                ${dialogTitleOptions[@]}
+                --message "$message"
+                --helpmessage "$helpMessage"
+                --icon "$icon"
+                --overlayicon "$overlayicon"
+                --button2text "${display_string_deferral_button2}"
+                --infobox "$infobox"
+                --timer $remaining_seconds
+                --button1text "${display_string_deferral_button1}"
+                --selecttitle "${display_string_deferral_selecttitle}" --selectvalues $display_string_deferral_menu --selectdefault $selectDefault
+            )
+        else
+            deferralDialogContent=(
+                ${dialogTitleOptions[@]}
+                --message "$message"
+                --helpmessage "$helpMessage"
+                --icon "$icon"
+                --overlayicon "$overlayicon"
+                --button2text "${display_string_deferral_button2}"
+                --infobox "$infobox"
+                --timer $remaining_seconds
+                --button1text "${display_string_deferral_button1}"
+            )
+        fi
+
+        SELECTION=$("$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}")
+        dialogOutput=$?
+        log_aap "dialogOutput: $dialogOutput"
+        case "${dialogOutput}" in
+            0)
+                dialog_user_choice_install="FALSE"
+                if [[ -n "${deferral_timer_menu_minutes}" ]]; then
+                    INDEX_CHOICE=$(echo "$SELECTION" | grep "SelectedIndex" | awk -F ": " '{print $NF}')
+                    INDEX_CHOICE=$((INDEX_CHOICE+1))
+                    deferral_timer_minutes="${deferral_timer_menu_minutes_array[${INDEX_CHOICE}]}"
+                    log_status "User chose to defer update for ${deferral_timer_minutes} minutes."
+                    write_status "Pending: User chose to defer update for ${deferral_timer_minutes} minutes."
+                else
+                    log_status "Status: User chose to defer update, using the default defer of ${deferral_timer_minutes} minutes."
+                    write_status "Pending: User chose to defer update, using the default defer of ${deferral_timer_minutes} minutes."
+                fi
+                break
+            ;;
+            4)
+                dialog_user_choice_install="FALSE"
+                if [[ -n "${deferral_timer_menu_minutes}" ]]; then
+                    INDEX_CHOICE=$(echo "$SELECTION" | grep "SelectedIndex" | awk -F ": " '{print $NF}')
+                    INDEX_CHOICE=$((INDEX_CHOICE+1))
+                    deferral_timer_minutes="${deferral_timer_menu_minutes_array[${INDEX_CHOICE}]}"
+                    log_status "Display timeout automatically chose to defer update for ${deferral_timer_minutes} minutes."
+                    write_status "Pending: Display timeout automatically chose to defer update for ${deferral_timer_minutes} minutes."
+                else
+                    log_status "Display timeout automatically chose to defer update, using the default defer of ${deferral_timer_minutes} minutes."
+                    write_status "Pending: Display timeout automatically chose to defer update, using the default defer of ${deferral_timer_minutes} minutes."
+                fi
+                break
+            ;;
+            *)
+                log_status "User selected install now, presenting confirmation dialog."
+                _dialog_confirm_install_now
+                if [[ "${dialog_user_choice_install}" == "TRUE" ]]; then
+                    break
+                fi
+                log_status "User declined install now confirmation, returning to deferral dialog."
+                # Loop back and redisplay the deferral dialog above, with ${remaining_seconds}
+                # recalculated from ${deferral_dialog_start_epoch} so the countdown reflects the
+                # real elapsed time (including the time just spent on the confirmation dialog).
+            ;;
+        esac
+    done
+}
+
+# Small confirmation prompt shown when the user clicks "Install Now" on the deferral dialog
+# (dialog_install_or_defer only - dialog_install_hard_deadline offers no choice, so no
+# confirmation is needed there). Sets ${dialog_user_choice_install} to "TRUE" if the user
+# confirms (or the confirmation times out - see below), or "FALSE" if they explicitly back
+# out (caller then redisplays the deferral dialog).
+#
+# The confirmation carries its own short countdown (${DialogTimeoutConfirmInstall}, default
+# 15 seconds) so the user can see they only have a moment to respond. Unlike the deferral
+# dialog's timeout (which defaults to deferring), letting this one expire defaults to
+# *continuing* with the install - the user already asked to install now, so a silent,
+# un-acknowledged timeout should not be interpreted as a change of mind.
+#
+# swiftDialog's own --timer disables both buttons for the first ~4 seconds it's displayed
+# (to prevent accidental dismissal), which is undesirable here since a user who already
+# intended to install now would have to wait to click through. Instead, this function
+# manages the countdown itself: the dialog is launched with no --timer (buttons are
+# immediately clickable), run in the background, and polled once per second while its
+# small countdown text is updated in place via the swiftDialog command file.
+_dialog_confirm_install_now() {
+    _prepare_dialog_command_file
+
+    local confirmDialogContent confirmDialogPID confirmDialogOutput remaining_seconds
+    confirmDialogContent=(
+        --title "$appTitle"
+        --message "${display_string_confirminstall_message}<br><br>*${display_string_confirminstall_countdown} ${DialogTimeoutConfirmInstall} ${display_string_confirminstall_countdown_suffix}*"
+        --messagefont size=12
+        --icon "$icon"
+        --button1text "${display_string_confirminstall_button1}"
+        --button2text "${display_string_confirminstall_button2}"
+        --style "mini"
+        --moveable
+        --position center
+        --quitkey k
+        --commandfile "$dialogCommandFile"
+    )
+
+    if [[ "$dialogOnTop" == "TRUE" ]]; then
+        confirmDialogContent+=(--ontop)
+    fi
+
+    "$dialogBinary" "${confirmDialogContent[@]}" &
+    confirmDialogPID=$!
+
+    remaining_seconds="${DialogTimeoutConfirmInstall}"
+    while (( remaining_seconds > 0 )); do
+        kill -0 "${confirmDialogPID}" 2>/dev/null || break
+        sleep 1
+        remaining_seconds=$(( remaining_seconds - 1 ))
+        kill -0 "${confirmDialogPID}" 2>/dev/null || break
+        # NOTE: swiftDialog's runtime command-file "message:" update does not honor literal
+        # "\n" line breaks the way the initial --message CLI argument does - text after the
+        # break simply fails to render on update. "<br>" is required instead, the same
+        # convention already used elsewhere in this script for live "infobox:" updates, so
+        # "<br>" is used consistently above for the initial launch too.
+        swiftDialogUpdate "message: ${display_string_confirminstall_message}<br><br>*${display_string_confirminstall_countdown} ${remaining_seconds} ${display_string_confirminstall_countdown_suffix}*"
+    done
+
+    if kill -0 "${confirmDialogPID}" 2>/dev/null; then
+        log_status "Install now confirmation timed out, proceeding with installation by default."
+        swiftDialogUpdate "quit:"
+        wait "${confirmDialogPID}" 2>/dev/null
+        dialog_user_choice_install="TRUE"
+    else
+        wait "${confirmDialogPID}"
+        confirmDialogOutput=$?
+        log_aap "confirmDialogOutput: $confirmDialogOutput"
+        case "${confirmDialogOutput}" in
+            2)
+                log_status "User declined the install now confirmation."
+                dialog_user_choice_install="FALSE"
+            ;;
+            *)
+                log_status "User confirmed install now."
+                dialog_user_choice_install="TRUE"
+            ;;
+        esac
+    fi
 }
 
 dialog_install_hard_deadline() {
@@ -6089,8 +6296,16 @@ main() {
     # the same file again later — wasting time and bandwidth. Staging first means closed apps
     # install directly from the staged copy, and open/blocked apps keep their staged copy ready
     # for the later user-approved install.
+    # InteractiveMode 2 only: show a bouncing progress window covering the staging and silent
+    # background-patch steps below, so the user isn't left looking at an empty screen between
+    # the discovery dialog closing and the deferral/hard deadline dialog appearing.
+    if [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+        swiftDialogStagingWindow
+    fi
+
     # Controlled by WorkflowStageUpdatesOption (managed key: WorkflowStageUpdates).
     if [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+        [[ ${InteractiveModeOption} == 2 ]] && swiftDialogUpdate "progresstext: ${display_string_staging_progress} ..."
         workflow_stage_updates
     fi
 
@@ -6104,7 +6319,14 @@ main() {
     # workflow_do_Installations, regardless of whether the app is open.
     # Controlled by WorkflowBackgroundPatchClosedAppsOption (managed key: WorkflowBackgroundPatchClosedApps).
     if [[ ${InteractiveModeOption} -ge 1 ]] && [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+        [[ ${InteractiveModeOption} == 2 ]] && swiftDialogUpdate "progresstext: ${display_string_silent_patch_progress} ..."
         workflow_silent_patch_closed_apps
+    fi
+
+    # Close the staging/silent-patch progress window (if it was opened above) before moving on
+    # to the install-now/silent bypass or the deferral/hard deadline dialog.
+    if [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+        swiftDialogCompleteDialogStaging
     fi
 
     # If queued labels more than zero trigger workflows
