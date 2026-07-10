@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.6.0
+### 10-Jul-2026
+- Updated Profile Manifests with new keys for version 3.6.0
+
 ### 09-Jul-2026 (11) - Build 3.6.0.2607091824
 - Added a progress dialog covering the staging and background-patch-closed-apps phases for `InteractiveMode 2` (#209)
 	- Previously, `InteractiveMode 2` users would see the discovery dialog close (`swiftDialogCompleteDialogDiscover`) and then see nothing at all until the deferral or hard-deadline dialog appeared — a potentially long, unexplained gap while `workflow_stage_updates` and `workflow_silent_patch_closed_apps` ran
