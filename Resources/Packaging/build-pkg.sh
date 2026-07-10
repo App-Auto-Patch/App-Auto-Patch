@@ -15,8 +15,8 @@
 #      hand off to it via restart_aap()).
 #   2. productbuild wraps that component pkg into the final, versioned
 #      product pkg using distribution.xml, adding plain-text Introduction
-#      (welcome) and Read Me (readme) panes (see Resources/Packaging/
-#      Resources) plus the AAP logo as a bottom-left background watermark.
+#      (welcome) and Read Me (readme) panes plus a bottom-left background
+#      logo watermark (see Resources/Packaging/Resources).
 #
 # Signing: if a "Developer ID Installer" identity is available in the
 # default keychain search list (locally: your login keychain: in CI: a
@@ -41,16 +41,10 @@ packaging_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "${packaging_dir}/../.." && pwd)"
 script_name="App-Auto-Patch-via-Dialog.zsh"
 script_path="${repo_root}/${script_name}"
-logo_path="${repo_root}/Images/AAPLogo.png"
 output_dir="${1:-${repo_root}}"
 
 if [[ ! -f "${script_path}" ]]; then
     echo "ERROR: Could not find ${script_path}" >&2
-    exit 1
-fi
-
-if [[ ! -f "${logo_path}" ]]; then
-    echo "ERROR: Could not find ${logo_path}" >&2
     exit 1
 fi
 
@@ -89,13 +83,16 @@ pkgbuild --nopayload \
 # showing raw markup as text on some macOS versions, so plain .txt panes are
 # used instead. The logo is shown via the distribution.xml
 # <background>/<background-darkAqua> elements (the officially documented,
-# reliably-supported mechanism for pane artwork) at native resolution, so it
-# renders as a bottom-left watermark, clipped by the pane edges.
+# reliably-supported mechanism for pane artwork) with scaling="proportional".
+# AAPLogo-background.png is a pre-rendered copy of Images/AAPLogo.png padded
+# onto a tall, mostly-transparent canvas - proportional scaling fits the
+# whole canvas to the pane, so the padding is what keeps the visible logo
+# small and confined to the bottom-left corner instead of filling the pane.
 resources_dir="${scratch_dir}/Resources"
 mkdir -p "${resources_dir}"
 cp "${packaging_dir}/Resources/welcome.txt" "${resources_dir}/welcome.txt"
 cp "${packaging_dir}/Resources/readme.txt" "${resources_dir}/readme.txt"
-cp "${logo_path}" "${resources_dir}/AAPLogo.png"
+cp "${packaging_dir}/Resources/AAPLogo-background.png" "${resources_dir}/AAPLogo-background.png"
 
 # --- Stage 3: signing identity auto-detection ---
 sign_args=()
