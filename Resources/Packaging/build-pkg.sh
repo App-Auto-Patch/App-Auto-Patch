@@ -15,7 +15,10 @@
 #      hand off to it via restart_aap()).
 #   2. productbuild wraps that component pkg into the final, versioned
 #      product pkg using distribution.xml, adding the welcome screen
-#      (icon + description + wiki link, see Resources/Packaging/Resources).
+#      (description + wiki link, see Resources/Packaging/Resources) and the
+#      AAP icon as pane background artwork (Installer.app's welcome-pane HTML
+#      renderer does not reliably support embedded <img> content, so the
+#      icon is shown via the distribution.xml <background> element instead).
 #
 # Signing: if a "Developer ID Installer" identity is available in the
 # default keychain search list (locally: your login keychain: in CI: a
@@ -84,16 +87,19 @@ pkgbuild --nopayload \
 
 # --- Stage 2: distribution resources (welcome screen) ---
 # productbuild only bundles files declared as XML elements in distribution.xml
-# (welcome/license/readme/etc.) - loose files merely referenced by relative
-# path from within the welcome HTML are silently dropped. So the icon is
-# inlined into welcome.html as a base64 data URI instead of shipped alongside
-# it as a sibling file.
+# (welcome/background/license/readme/etc.) - loose files merely referenced by
+# relative path from within the welcome HTML are silently dropped, and
+# Installer.app's welcome-pane HTML renderer does not reliably support
+# embedded images anyway. So the icon is copied here under the filename the
+# distribution.xml <background>/<background-darkAqua> elements reference,
+# while welcome.html (copied as-is) stays text-only.
 resources_dir="${scratch_dir}/Resources"
 mkdir -p "${resources_dir}"
-icon_base64=$(base64 < "${icon_path}" | tr -d '\n')
-welcome_html=$(<"${packaging_dir}/Resources/welcome.html")
-welcome_html="${welcome_html//__AAP_ICON_BASE64__/${icon_base64}}"
-print -r -- "${welcome_html}" > "${resources_dir}/welcome.html"
+cp "${packaging_dir}/Resources/welcome.html" "${resources_dir}/welcome.html"
+# Source icon is a 600x600 sticker graphic - much too large to show at native
+# scale as pane artwork, so it's downsized to a small corner logo here rather
+# than shipping (and permanently resizing) a resized copy in the repo.
+sips -z 96 96 "${icon_path}" --out "${resources_dir}/AAP-icon.png" >/dev/null
 
 # --- Stage 3: signing identity auto-detection ---
 sign_args=()
