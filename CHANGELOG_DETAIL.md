@@ -3,6 +3,46 @@
 # Version 3
 
 ## Version 3.6.0
+### 09-Jul-2026 (11) - Build 3.6.0.2607091824
+- Added a progress dialog covering the staging and background-patch-closed-apps phases for `InteractiveMode 2` (#209)
+	- Previously, `InteractiveMode 2` users would see the discovery dialog close (`swiftDialogCompleteDialogDiscover`) and then see nothing at all until the deferral or hard-deadline dialog appeared — a potentially long, unexplained gap while `workflow_stage_updates` and `workflow_silent_patch_closed_apps` ran
+	- New `swiftDialogStagingWindow`/`swiftDialogCompleteDialogStaging` functions and `dialogStagingConfigurationOptions` array mirror the existing discovery dialog's bouncing/indeterminate `--mini --progress` window, built in `workflow_startup` alongside `dialogDiscoverConfigurationOptions`
+	- Shown only when `InteractiveModeOption == 2` and there is at least one queued label (`countOfElementsArray` non-empty) — `InteractiveMode 1` (Silent Discovery, Interactive Patching) intentionally keeps this phase dialog-free, matching its existing behavior for the discovery phase itself
+	- The window's `progresstext` is updated live (via the existing `swiftDialogUpdate` command-file mechanism) as the workflow moves from staging to silently patching closed apps, so the message reflects whichever step is actually in progress, then the window is closed just before the install-now/silent bypass or the deferral/hard-deadline dialog is shown
+	- New display strings (overridable via the existing `dialogElements` managed-preference mechanism): `display_string_staging_message` (default `"Preparing updates"`), `display_string_staging_progress` (default `"Staging"`), `display_string_silent_patch_progress` (default `"Installing updates for closed apps"`)
+
+### 09-Jul-2026 (10) - Build 3.6.0.2607091752
+- Fixed: the countdown line in the "Install Now" confirmation dialog disappeared after the first per-second update (#209)
+	- swiftDialog's runtime command-file `message:` update does not honor literal `\n` line breaks the way the initial `--message` CLI argument does — text after the break simply failed to render once `_dialog_confirm_install_now`'s per-second loop sent its first `swiftDialogUpdate "message: ..."` command
+	- Switched to `<br>` for the line break between the confirmation question and the countdown text, in both the initial dialog launch and every per-second update, matching the same convention already used elsewhere in this script for live `infobox:` updates (e.g. `workflow_do_Installations`'s `swiftDialogUpdate "infobox: + <br><br>"`)
+
+### 09-Jul-2026 (9) - Build 3.6.0.2607091725
+- Fixed: the "Install Now" confirmation dialog's countdown made both buttons unresponsive for the first ~4 seconds
+	- This is swiftDialog's own built-in behavior whenever `--timer` is used — buttons are disabled briefly to prevent accidental dismissal — which was undesirable here since a user who already clicked `Install Now` once shouldn't have to wait to click through a second time
+	- `_dialog_confirm_install_now` no longer passes `--timer` to swiftDialog. Instead, it launches the confirmation dialog in the background, tracks its own countdown in the script (one tick per second), and live-updates a small line of text in the dialog's message (via the existing `swiftDialogUpdate`/command-file mechanism) showing how many seconds remain — the buttons themselves are fully clickable from the moment the dialog appears
+	- The countdown text uses `--messagefont size=12` to keep it visually secondary/small relative to the main confirmation question, without changing the mini dialog's overall size
+	- Once per second the function checks (via `kill -0`) whether the user has already dismissed the dialog, so clicking a button is picked up promptly rather than waiting for the full countdown to finish
+	- If the countdown reaches zero with no response, the function sends the dialog a `quit:` command and defaults to continuing the install (unchanged from the previous behavior) — it no longer relies on swiftDialog's own exit-code-4 timeout signal, since there's no built-in `--timer` running anymore
+	- `${DialogTimeoutConfirmInstall}` (added in the previous build) continues to control the countdown duration, now purely as a script-managed value rather than a swiftDialog `--timer` argument
+	- New display strings (overridable via the existing `dialogElements` managed-preference mechanism): `display_string_confirminstall_countdown` (default `"Continuing automatically in"`), `display_string_confirminstall_countdown_suffix` (default `"seconds…"`)
+
+### 09-Jul-2026 (8) - Build 3.6.0.2607091700
+- Added a countdown timer and default-to-install timeout behavior to the "Install Now" confirmation dialog
+	- `_dialog_confirm_install_now` now passes `--timer "${DialogTimeoutConfirmInstall}"` to the mini confirmation dialog, so the user can see a countdown bar indicating how long they have to respond, while keeping the dialog itself unchanged in size (`--style mini`, no additional UI elements added)
+	- New managed preference `DialogTimeoutConfirmInstall` (integer seconds, default `15`), following the same managed > local > default resolution pipeline as `DialogTimeoutDeferral` (`dialog_timeout_confirm_install_managed`/`_local` in `get_preferences`, resolved and logged in `set_defaults`/`get_preferences`)
+	- Unlike the deferral dialog's timeout (swiftDialog exit code 4, which defaults to *deferring*), letting the confirmation dialog's timer expire defaults to *continuing with the install* — the user already clicked `Install Now` once, so a silent, un-acknowledged timeout is treated as tacit confirmation rather than a change of mind
+	- `_dialog_confirm_install_now`'s exit-code handling was expanded from a binary `0`-vs-everything-else check to an explicit `case`: exit code `2` (button2, `No, Go Back`) sets `dialog_user_choice_install="FALSE"`; exit code `4` (timer expired) and everything else (button1, quit key) set `dialog_user_choice_install="TRUE"`
+	- Managed Preference Key: `<key>DialogTimeoutConfirmInstall</key>` `<integer>seconds</integer>`
+
+### 09-Jul-2026 (7) - Build 3.6.0.2607091622
+- Added an "Install Now" confirmation prompt to `dialog_install_or_defer`
+	- Clicking the `Install Now` button (button2, swiftDialog exit code 2, previously caught by the `*` catch-all case) no longer immediately proceeds to installation — it now displays a small `--style mini` confirmation dialog (new `_dialog_confirm_install_now` helper) asking the user to confirm
+	- Confirming (`Yes, Install Now`, button1) sets `dialog_user_choice_install="TRUE"` and proceeds exactly as before; declining (`No, Go Back`, button2, or dismissing/timing out the mini dialog) returns to the deferral dialog rather than deferring or installing
+	- `dialog_install_hard_deadline` is intentionally unchanged — that dialog offers no real choice (button2 is disabled), so a confirmation step would add no value there
+	- The deferral dialog's on-screen swiftDialog `--timer` countdown now stays consistent across the confirmation detour: `dialog_install_or_defer` records a wall-clock start time once (`deferral_dialog_start_epoch`) and, each time it (re)displays the deferral dialog inside its new loop, passes the remaining seconds (`${DialogTimeoutDeferral}` minus elapsed real time, floored at 1 second) rather than the full original duration — so time spent on the confirmation prompt counts against the same overall countdown instead of resetting it
+	- If the countdown fully elapses while the confirmation dialog is showing, the very next redisplay of the deferral dialog receives a 1-second timer and immediately times out via the existing swiftDialog exit-code-4 "display timeout" path, rather than requiring special-case handling
+	- New display strings (overridable via the existing `dialogElements` managed-preference mechanism): `display_string_confirminstall_message`, `display_string_confirminstall_button1` (default `"Yes, Install Now"`), `display_string_confirminstall_button2` (default `"No, Go Back"`)
+
 ### 08-Jul-2026 (6) - Build 3.6.0.2607081400
 - Added `--force-discovery` CLI trigger to force the App Discovery workflow to run once, bypassing the `DiscoveryFrequency` window
 	- New `force_discovery_option` variable, set by the `--force-discovery` CLI flag, and a new one-shot flag file (`FORCE_DISCOVERY_FILE`, `${appAutoPatchFolder}/.ForceDiscovery`) following the same pattern already used for `--workflow-install-now`
@@ -12,14 +52,14 @@
 	- Explicit administrative disabling of discovery (`WorkflowDisableAppDiscovery` / `workflow_disable_app_discovery_option`) still takes precedence over a forced-discovery request — `--force-discovery` only bypasses the frequency window, not a hard admin disable
 	- `reset_defaults` clears the `FORCE_DISCOVERY_FILE` flag file alongside the existing `WORKFLOW_INSTALL_NOW_FILE`/`WORKFLOW_INSTALL_NOW_SILENT_FILE` cleanup
 
-### 08-Jul-2026 (5)
+### 08-Jul-2026 (5) - Build 3.6.0.2607081309
 - Fixed: Background Patch Closed Apps was gated to `InteractiveMode 1` only, excluding `InteractiveMode 2`
 	- Per AAP's documented mode definitions, `InteractiveMode 0` is Completely Silent, `1` is Silent Discovery/Interactive Patching, and `2` is Full Interactive — both `1` and `2` display the same interactive patching dialog (deferral or hard-deadline) for any remaining open apps, so both benefit equally from silently pre-patching closed apps first
 	- `InteractiveMode 0` is correctly excluded: it never shows a dialog and already installs every queued app directly via `workflow_do_Installations` regardless of whether the app is open, so a pre-patch pass would add no value there
 	- Changed the gating condition in `main()` from `[[ ${InteractiveModeOption} == 1 ]]` to `[[ ${InteractiveModeOption} -ge 1 ]]`, matching the same `-ge 1` pattern already used elsewhere in the script for other "any interactive mode" checks
 	- Updated related log messages and comments in `workflow_silent_patch_closed_apps` accordingly
 
-### 08-Jul-2026 (4)
+### 08-Jul-2026 (4) - Build 3.6.0.2607081219
 - Added swiftDialog banner image support (`--bannerimage`/`--bannertitle`/`--bannerheight`) as an alternative to the standard `--title` text banner (#205)
 	- New `bannerImageOption`, `bannerTitleOption`, and `bannerHeightOption` variables, populated via the standard managed > local > default preference pipeline
 	- New `dialogTitleOptions` array is built once in `workflow_startup`, immediately after the existing icon-resolution logic (`icon`/`dialog_icon_option`), and replaces every hardcoded `--title "$appTitle"` array element across the codebase: `dialogPatchingConfigurationOptions`, both branches of `dialog_install_or_defer`'s `deferralDialogContent`, `dialog_install_hard_deadline`'s `deferralDialogContent`
@@ -30,7 +70,7 @@
 	- `BannerImage` accepts everything swiftDialog's `--bannerimage` supports: a filepath, a URL, `colour=#hex`, or `gradient=colour,colour`
 	- Managed Preference Keys: `<key>BannerImage</key>` `<string>Filepath|URL|colour=#hex|gradient=colour,colour</string>`, `<key>BannerTitle</key>` `<string>Text</string>`, `<key>BannerHeight</key>` `<integer>points</integer>`
 
-### 08-Jul-2026 (3)
+### 08-Jul-2026 (3) - Build 3.6.0.2607080957
 - Added current/new version subtitles to app listitems in the deferral and hard-deadline dialogs (#146)
 	- `dialog_install_or_defer` and `dialog_install_hard_deadline` now display a subtitle under each app name, e.g. `Current Version: 128.0.6613.138  →  New Version: 129.0.6668.59`, using swiftDialog's `--listitem` `subtitle` option
 	- New `AAPInstalledVersionByLabel` associative array tracks each queued label's currently-installed version, populated alongside the existing `AAPVersionByLabel` (new/available version) both during discovery and when restoring queue state from the report PLIST on DiscoveryFrequency-skipped runs
