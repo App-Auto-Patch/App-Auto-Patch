@@ -15,12 +15,21 @@
 # location and runs it once, so that existing self-install logic takes over.
 # No changes to the App Auto-Patch script itself are required.
 #
-# The staged script is launched in the background and disowned (the same
-# pattern the script itself uses in restart_aap()), so this postinstall
-# script - and therefore the installer/MDM transaction - returns immediately
-# instead of waiting for the self-install + LaunchDaemon hand-off to finish.
-# Cleanup of the temp folder happens inside that same backgrounded subshell,
-# after the staged script has finished running.
+# The staged script is run synchronously (foreground, no backgrounding/
+# disown) so the installer/MDM transaction does not report success until
+# App Auto-Patch has actually finished copying itself into place and setting
+# up its LaunchDaemon. This step is normally quick - the staged instance
+# calls restart_aap(), which itself backgrounds a brief, disowned
+# `launchctl bootstrap` and exits immediately, so it hands off the real
+# discovery/patch run to the LaunchDaemon rather than running it here.
+#
+# Backgrounding+disowning this outer invocation was tried previously so the
+# installer transaction could return immediately, but installer(8)/MDM can
+# tear down this script's process group as soon as postinstall itself
+# returns - killing the still-running staged script (and racing our own
+# cleanup below) before it finished copying itself into place. Running it
+# synchronously avoids that: nothing below runs, and the temp folder is not
+# removed, until the staged script has actually exited.
 
 set -e
 
@@ -30,7 +39,8 @@ TMP_DIR=$(mktemp -d /private/tmp/AppAutoPatchInstaller.XXXXXX)
 cp "${SCRIPT_DIR}/App-Auto-Patch-via-Dialog.zsh" "${TMP_DIR}/App-Auto-Patch-via-Dialog.zsh"
 chmod 755 "${TMP_DIR}/App-Auto-Patch-via-Dialog.zsh"
 
-( "${TMP_DIR}/App-Auto-Patch-via-Dialog.zsh"; rm -rf "${TMP_DIR}" ) &
-disown
+"${TMP_DIR}/App-Auto-Patch-via-Dialog.zsh"
+
+rm -rf "${TMP_DIR}"
 
 exit 0
