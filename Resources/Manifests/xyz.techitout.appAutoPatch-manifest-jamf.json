@@ -112,6 +112,24 @@
             ],
             "property_order": 30
         },
+        "DiscoveryFrequency": {
+            "type": "integer",
+            "title": "Discovery Frequency",
+            "description": "The number of hours since the last successful App Discovery before App Auto-Patch will run discovery again. If the workflow resets and re-runs (e.g. after a deferral) within this window, discovery is skipped and the previously discovered queue is reused. A value of 0 forces discovery to run on every workflow execution",
+            "default": 24,
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "24"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#discovery-frequency"
+                }
+            ],
+            "property_order": 32
+        },
         "DeferralTimerDefault": {
             "type": "string",
             "title": "Deferral Timer Default",
@@ -368,6 +386,24 @@
             ],
             "property_order": 70
         },
+        "DialogTimeoutConfirmInstall": {
+            "type": "integer",
+            "title": "Confirm Install Dialog Timeout",
+            "description": "The number of seconds given to the user to respond to the \"Are you sure?\" confirmation dialog shown after clicking Install Now on the deferral dialog. If the timer expires with no response, App Auto-Patch defaults to continuing with the install",
+            "default": 15,
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "15"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#dialogtimeoutconfirminstall"
+                }
+            ],
+            "property_order": 72
+        },
         "UnattendedExit": {
             "type": "string",
             "title": "Unattended Exit",
@@ -441,6 +477,57 @@
                 }
             ],
             "property_order": 86
+        },
+        "BannerImage": {
+            "type": "string",
+            "title": "Banner Image",
+            "description": "Displays a swiftDialog banner image in place of the standard title text. Accepts a filepath, a URL, a solid colour (colour=#hex), or a gradient (gradient=colour,colour). When set, this replaces the standard title text banner and hides the standard dialog icon area, matching swiftDialog's own banner behavior. Not applied to the App Discovery or \"All Apps Up To Date\" mini dialogs, which are too small to display a banner",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "Filepath|URL|colour=#hex|gradient=colour,colour"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#bannerimage"
+                }
+            ],
+            "property_order": 87
+        },
+        "BannerTitle": {
+            "type": "string",
+            "title": "Banner Title",
+            "description": "The text displayed within the banner image set by Banner Image. Falls back to App Title if left blank. Has no effect unless Banner Image is also configured",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "App Auto-Patch"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#bannertitle"
+                }
+            ],
+            "property_order": 88
+        },
+        "BannerHeight": {
+            "type": "integer",
+            "title": "Banner Height",
+            "description": "Overrides the default height, in points, of the banner image set by Banner Image. Invalid (non-integer) values are ignored. Has no effect unless Banner Image is also configured",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "points"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#bannerheight"
+                }
+            ],
+            "property_order": 89
         },
         "IgnoredLabels": {
             "type": "string",
@@ -848,6 +935,49 @@
             ],
             "property_order": 190
         },
+        "WorkflowBackgroundPatchClosedApps": {
+            "type": "boolean",
+            "title": "Background Patch Closed Apps",
+            "default": true,
+            "description": "When Interactive Mode is 1 or 2, silently pre-patches apps that are not currently open immediately after discovery and before any deferral/deadline dialog is shown. Apps that are open (blocking process detected) remain in the queue and are presented to the user as normal",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#background-patch-closed-apps"
+                }
+            ],
+            "property_order": 191
+        },
+        "WorkflowStageUpdates": {
+            "type": "boolean",
+            "title": "Stage Updates",
+            "default": false,
+            "description": "Pre-downloads (stages) installers for queued updates to a local staging folder immediately after discovery, before the deferral/deadline dialog is shown to the user. This makes the later install step nearly instantaneous for staged updates. Works alongside Background Patch Closed Apps without downloading the same update twice",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#update-staging"
+                }
+            ],
+            "property_order": 192
+        },
+        "IgnoreDNDApps": {
+            "type": "string",
+            "title": "Ignore Do Not Disturb Apps",
+            "description": "A comma-separated list of app/process names to exclude from display-sleep assertion (Focus/Do Not Disturb) detection. Useful for background utilities that permanently hold display assertions (e.g. Logi Options+, Amphetamine) that should not block interactive patching. Process names must match exactly as pmset reports them, including spaces",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "App1,App2,App3"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#ignorednapps"
+                }
+            ],
+            "property_order": 193
+        },
         "WorkflowDisableRelaunch": {
             "type": "string",
             "title": "Disable Relaunch Workflow",
@@ -1133,6 +1263,39 @@
                                     }
                                 ]
                             },
+                            "display_string_staging_message": {
+                                "type": "string",
+                                "title": "Staging Dialog Message",
+                                "description": "Language for the message shown on the progress dialog covering the update staging and background-patch-closed-apps phases (Interactive Mode 2 only)",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_staging_progress": {
+                                "type": "string",
+                                "title": "Staging Dialog Progress",
+                                "description": "Language for the progress text shown while updates are being staged (downloaded ahead of time)",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_silent_patch_progress": {
+                                "type": "string",
+                                "title": "Silent Patch Progress",
+                                "description": "Language for the progress text shown while closed apps are being silently patched in the background",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
                             "display_string_deferral_button1": {
                                 "type": "string",
                                 "title": "Deferral Dialog Button1",
@@ -1148,6 +1311,61 @@
                                 "type": "string",
                                 "title": "Deferral Dialog Button2",
                                 "description": "Language for Button1 of the Deferral Dialog",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_confirminstall_message": {
+                                "type": "string",
+                                "title": "Confirm Install Dialog Message",
+                                "description": "Language for the message on the \"Install Now\" confirmation dialog shown after clicking Install Now on the Deferral Dialog",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_confirminstall_button1": {
+                                "type": "string",
+                                "title": "Confirm Install Dialog Button1",
+                                "description": "Language for Button1 (confirm) of the \"Install Now\" confirmation dialog",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_confirminstall_button2": {
+                                "type": "string",
+                                "title": "Confirm Install Dialog Button2",
+                                "description": "Language for Button2 (cancel, returns to Deferral Dialog) of the \"Install Now\" confirmation dialog",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_confirminstall_countdown": {
+                                "type": "string",
+                                "title": "Confirm Install Dialog Countdown",
+                                "description": "Language for the first part of the countdown text on the \"Install Now\" confirmation dialog, shown before the remaining number of seconds",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_confirminstall_countdown_suffix": {
+                                "type": "string",
+                                "title": "Confirm Install Dialog Countdown Suffix",
+                                "description": "Language for the suffix of the countdown text on the \"Install Now\" confirmation dialog, shown after the remaining number of seconds",
                                 "links": [
                                     {
                                         "rel": "More information",
