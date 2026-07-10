@@ -114,7 +114,7 @@ fi
 
 # --- Stage 4: productbuild - wrap component pkg + distribution.xml ---
 mkdir -p "${output_dir}"
-pkg_name="AppAutoPatch-${script_version}-${script_build}.pkg"
+pkg_name="AppAutoPatch-${script_version}.pkg"
 pkg_path="${output_dir}/${pkg_name}"
 
 productbuild --distribution "${packaging_dir}/distribution.xml" \
