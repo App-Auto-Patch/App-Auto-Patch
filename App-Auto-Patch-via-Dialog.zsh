@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.6.0"
-scriptDate="2026/07/06"
-scriptBuild="3.6.0.2607091824"
+scriptDate="2026/07/11"
+scriptBuild="3.6.0.2607111530"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -416,12 +416,8 @@ set_defaults() {
     # Local directory used to store staged installer files. Defaults to /private/tmp/AAPStage.
     AAPStagingFolder="/private/tmp/AAPStage"
 
-    # Optional swiftDialog banner image support. When bannerImageOption is set (via managed
-    # preference), it replaces the standard --title text banner on every AAP dialog with a
-    # --bannerimage (accepts a filepath, URL, or colour=/gradient= value). bannerTitleOption
-    # sets the text rendered inside the banner (falls back to appTitle if left blank so the
-    # banner is never empty); bannerHeightOption overrides the default banner height in points.
-    # See: https://github.com/swiftDialog/swiftDialog/wiki/Displaying-Banner-Images
+    # Optional swiftDialog banner (filepath/URL/colour=/gradient=) in place of the standard
+    # --title text; bannerTitleOption is the text inside it, bannerHeightOption overrides height.
     bannerImageOption="" # MDM Enabled
     bannerTitleOption="" # MDM Enabled
     bannerHeightOption="" # MDM Enabled
@@ -2456,17 +2452,10 @@ workflow_startup() {
         icon="$dialog_icon_option"
     fi
 
-    # Build the dialog title options once for the whole run. When BannerImage is configured,
-    # the larger dialogs (Patching, Deferral, Hard Deadline) use a --bannerimage (accepts a
-    # filepath, URL, or colour=/gradient= value) with --bannertitle for the text rendered inside
-    # the banner (falling back to $appTitle so the banner is never left blank) and an optional
-    # --bannerheight override, in place of a plain --title "$appTitle". Note that swiftDialog
-    # hides the standard icon area whenever a banner image is active. See:
-    # https://github.com/swiftDialog/swiftDialog/wiki/Displaying-Banner-Images
-    #
-    # The Discover mini-progress dialog and the standalone "all apps up to date" mini dialog are
-    # intentionally excluded (they always use --title "$appTitle" directly) — both use swiftDialog's
-    # --mini/--style "mini" compact layouts, which are too small to appropriately display a banner.
+    # Build dialog title options once for the run: --bannerimage/--bannertitle/--bannerheight in
+    # place of --title "$appTitle" when BannerImage is configured (hides the standard icon area -
+    # see https://github.com/swiftDialog/swiftDialog/wiki/Displaying-Banner-Images). Not used by
+    # the Discover mini-progress or "all apps up to date" mini dialogs - too small for a banner.
     dialogTitleOptions=()
     if [[ -n "${bannerImageOption}" ]]; then
         log_info "Banner image configured (${bannerImageOption}); using banner in place of the standard title."
@@ -3863,13 +3852,9 @@ swiftDialogCommand(){
     
 }
 
-# Helper function to resolve the app icon path for dialog display
-# Usage: resolve_app_icon_path "label_name"
-# Returns: the full path to the app for icon display, or logoImage if not found
-# This function extracts targetDir from the label fragment to properly locate apps
-# in non-traditional paths (e.g., /Applications/Utilities/, /usr/local/, etc.)
-# Note: Variables are evaluated in dependency order since appName may reference folderName
-#       (e.g., appName="${folderName}/SketchUp.app")
+# Resolves the app icon path for dialog display from a label's targetDir/appName/folderName
+# (supports non-traditional install paths). Usage: resolve_app_icon_path "label_name"
+# Returns the app path, or $logoImage as a fallback.
 resolve_app_icon_path() {
     local label="$1"
     local icon_appName icon_targetDir icon_name icon_path
@@ -3900,12 +3885,8 @@ resolve_app_icon_path() {
         icon_appName="${appName%.app}.app"
     fi
     
-    # Check paths in order of priority matching PgetAppVersion logic:
-    # 1. targetDir (custom path from label fragment)
-    # 2. /Applications/ (standard location)
-    # 3. /Applications/Utilities/ (utilities folder)
-    # 4. mdfind fallback (spotlight search)
-    # 5. logoImage fallback (default icon)
+    # Check paths in priority order (matching PgetAppVersion): targetDir, /Applications/,
+    # /Applications/Utilities/, mdfind (Spotlight), then fall back to logoImage.
     if [[ -e "${icon_targetDir}${icon_appName}" ]]; then
         echo "${icon_targetDir}${icon_appName}"
     elif [[ -e "/Applications/${icon_appName}" ]]; then
@@ -3923,13 +3904,9 @@ resolve_app_icon_path() {
 }
 
 _compute_version_subtitle() {
-    # Builds a "Current Version: x  →  New Version: y" string for a label's swiftDialog
-    # --listitem subtitle, using the version data collected during discovery (or restored from
-    # the report PLIST on DiscoveryFrequency-skipped runs). Sets the global ${versionSubtitle}.
-    #
-    # swiftDialog's non-JSON --listitem syntax treats commas as property separators, so any
-    # commas present in a version string are stripped to avoid breaking the subtitle.
-    #
+    # Builds a "Current Version: x  →  New Version: y" swiftDialog --listitem subtitle from
+    # discovery data (or the report PLIST on DiscoveryFrequency-skipped runs) into the global
+    # ${versionSubtitle}. Commas are stripped since --listitem treats them as separators.
     # Usage: _compute_version_subtitle "labelname"
     local _label="$1"
     local _cur _new
@@ -4029,13 +4006,9 @@ swiftDialogCompleteDialogDiscover(){
 }
 
 # Bouncing progress window shown while updates are staged (workflow_stage_updates) and closed
-# apps are patched silently (workflow_silent_patch_closed_apps). Without this, InteractiveMode 2
-# users see the discovery dialog close and then see nothing at all until the deferral/hard
-# deadline dialog appears - which can be a noticeably long, unexplained gap if there are many
-# apps to stage/patch. Mirrors swiftDialogDiscoverWindow/swiftDialogCompleteDialogDiscover.
-# Only shown for InteractiveMode 2 (Full Interactive) - Mode 1 (Silent Discovery, Interactive
-# Patching) intentionally keeps this phase silent/dialog-free, matching its existing behavior
-# for the discovery phase.
+# apps are patched silently (workflow_silent_patch_closed_apps), so InteractiveMode 2 users
+# aren't left staring at nothing between the discovery dialog closing and the deferral/hard
+# deadline dialog appearing. InteractiveMode 2 only - mirrors swiftDialogDiscoverWindow.
 swiftDialogStagingWindow(){
 
     _prepare_dialog_command_file
@@ -4057,13 +4030,9 @@ swiftDialogCompleteDialogStaging(){
 }
 
 _prepare_dialog_command_file() {
-    # Ensure the swiftDialog command file exists and is world-readable.
-    # mktemp creates it with mode 600 (root-only). swiftDialogDiscoverWindow normally
-    # runs chmod 644 as a side-effect, but when discovery is skipped that function is
-    # never called, leaving the file at 600. SwiftDialog runs in the console user's GUI
-    # context and cannot read a root-owned 600 file — it exits immediately with code 1,
-    # which hits the '*' catch-all in the dialog case statements and falsely signals
-    # "Install Now" without ever displaying the dialog.
+    # Ensures the command file exists and is world-readable (mktemp defaults to 600/root-only,
+    # which the console-user swiftDialog process can't read, causing an immediate exit-1 that
+    # falsely signals "Install Now" via the '*' catch-all - see swiftDialogDiscoverWindow).
     [[ ! -f "$dialogCommandFile" ]] && touch "$dialogCommandFile"
     chmod 644 "$dialogCommandFile" 2>/dev/null
 }
@@ -4295,24 +4264,15 @@ dialog_install_or_defer() {
     done
 }
 
-# Small confirmation prompt shown when the user clicks "Install Now" on the deferral dialog
-# (dialog_install_or_defer only - dialog_install_hard_deadline offers no choice, so no
-# confirmation is needed there). Sets ${dialog_user_choice_install} to "TRUE" if the user
-# confirms (or the confirmation times out - see below), or "FALSE" if they explicitly back
-# out (caller then redisplays the deferral dialog).
+# Confirmation prompt shown when the user clicks "Install Now" on the deferral dialog only
+# (dialog_install_hard_deadline offers no choice, so none needed there). Sets
+# ${dialog_user_choice_install} to "TRUE" on confirm or timeout (an unacknowledged timeout here
+# means continue, unlike the deferral dialog's timeout, since the user already chose to
+# install), or "FALSE" if they back out (caller redisplays the deferral dialog).
 #
-# The confirmation carries its own short countdown (${DialogTimeoutConfirmInstall}, default
-# 15 seconds) so the user can see they only have a moment to respond. Unlike the deferral
-# dialog's timeout (which defaults to deferring), letting this one expire defaults to
-# *continuing* with the install - the user already asked to install now, so a silent,
-# un-acknowledged timeout should not be interpreted as a change of mind.
-#
-# swiftDialog's own --timer disables both buttons for the first ~4 seconds it's displayed
-# (to prevent accidental dismissal), which is undesirable here since a user who already
-# intended to install now would have to wait to click through. Instead, this function
-# manages the countdown itself: the dialog is launched with no --timer (buttons are
-# immediately clickable), run in the background, and polled once per second while its
-# small countdown text is updated in place via the swiftDialog command file.
+# Manages its own countdown (${DialogTimeoutConfirmInstall}, default 15s) instead of using
+# swiftDialog's --timer, since --timer disables both buttons for ~4s to prevent accidental
+# dismissal - undesirable when the user already intends to click through immediately.
 _dialog_confirm_install_now() {
     _prepare_dialog_command_file
 
@@ -4999,7 +4959,7 @@ workflow_stage_updates() {
         fi
 
         # Parse KEY=VALUE output — use cut -d= -f2- to preserve URLs that contain '='
-        local stagingType stagingURL stagingVersion stagingTeamID stagingArchive stagingCurlOpts
+        local stagingType stagingURL stagingVersion stagingTeamID stagingCurlOpts
         stagingType=$(echo "$labelInfo"    | grep '^TYPE='            | cut -d= -f2-)
         stagingURL=$(echo "$labelInfo"     | grep '^DOWNLOAD_URL='    | cut -d= -f2-)
         stagingVersion=$(echo "$labelInfo" | grep '^APP_NEW_VERSION=' | cut -d= -f2-)
@@ -5455,15 +5415,6 @@ appsUpToDate(){
     appsUpToDate=$(tail -n 200 "$scriptLog" | grep 'All apps are up to date. Nothing to do.' | tail -n 1)
     
     errorsCount=$(echo $errorCount)
-    
-    #Function to print with bullet points
-    print_with_bullet() {
-        local input_text="$1"
-        while IFS= read -r line; do
-            #echo "• $line"
-            echo   # Add a space after each line
-        done <<< "$input_text"
-    }
     
     if [ -n "$appsUpToDate" ]; then
         formatted_app_result=$(echo "$appsUpToDate" | awk -F 'All apps are up to date. Nothing to do.' '{print $2}' | tr -d '[:space:]')
@@ -6289,18 +6240,16 @@ main() {
         countOfElementsArray+=($label)
     done
 
-    # Stage installers before any other Installomator activity (including the silent background
-    # patch pass below) so every queued app is downloaded at most once per run. Without this
-    # ordering, workflow_silent_patch_closed_apps would trigger a full download for each label
-    # (even ones that turn out to be open/blocked), and then workflow_stage_updates would download
-    # the same file again later — wasting time and bandwidth. Staging first means closed apps
-    # install directly from the staged copy, and open/blocked apps keep their staged copy ready
-    # for the later user-approved install.
-    # InteractiveMode 2 only: show a bouncing progress window covering the staging and silent
-    # background-patch steps below, so the user isn't left looking at an empty screen between
-    # the discovery dialog closing and the deferral/hard deadline dialog appearing.
+    # Stage installers before the silent background-patch pass below, so each queued app is
+    # downloaded at most once (closed apps then install from the staged copy; open/blocked apps
+    # keep it ready for the later user-approved install). InteractiveMode 2 only: show a bouncing
+    # progress window over both steps. stagingWindowOpened tracks whether it was opened, since
+    # countOfElementsArray can end up empty afterward (all apps patched silently) even though the
+    # window still needs closing.
+    stagingWindowOpened="FALSE"
     if [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         swiftDialogStagingWindow
+        stagingWindowOpened="TRUE"
     fi
 
     # Controlled by WorkflowStageUpdatesOption (managed key: WorkflowStageUpdates).
@@ -6309,23 +6258,18 @@ main() {
         workflow_stage_updates
     fi
 
-    # InteractiveMode 1 or 2 only (i.e. not 0): Before showing any dialog, silently patch apps
-    # that are NOT currently open. Apps whose blocking processes are running (Installomator exit
-    # 12) stay in the queue and will be presented to the user via the normal deferral/deadline
-    # dialog workflow. Both modes 1 (Silent Discovery, Interactive Patching) and 2 (Full
-    # Interactive) show the same interactive patching dialog for any remaining open apps, so both
-    # benefit equally from pre-patching closed apps silently. Mode 0 (Completely Silent) is
-    # excluded because it never shows a dialog and already installs every queued app directly via
-    # workflow_do_Installations, regardless of whether the app is open.
-    # Controlled by WorkflowBackgroundPatchClosedAppsOption (managed key: WorkflowBackgroundPatchClosedApps).
+    # InteractiveMode 1 or 2 only (not 0, which already installs everything directly regardless
+    # of open state): before showing any dialog, silently patch apps that aren't currently open.
+    # Apps with a blocking process (Installomator exit 12) stay queued for the deferral/deadline
+    # dialog. Controlled by WorkflowBackgroundPatchClosedAppsOption (managed key: WorkflowBackgroundPatchClosedApps).
     if [[ ${InteractiveModeOption} -ge 1 ]] && [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         [[ ${InteractiveModeOption} == 2 ]] && swiftDialogUpdate "progresstext: ${display_string_silent_patch_progress} ..."
         workflow_silent_patch_closed_apps
     fi
 
-    # Close the staging/silent-patch progress window (if it was opened above) before moving on
-    # to the install-now/silent bypass or the deferral/hard deadline dialog.
-    if [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+    # Close the staging/silent-patch progress window (if opened above), checked against
+    # stagingWindowOpened rather than countOfElementsArray since the latter may now be empty.
+    if [[ "${stagingWindowOpened}" == "TRUE" ]]; then
         swiftDialogCompleteDialogStaging
     fi
 
