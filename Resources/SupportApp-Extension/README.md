@@ -1,5 +1,7 @@
 # App Auto-Patch Extension for Root3 Support App
 
+![alt](https://github.com/App-Auto-Patch/App-Auto-Patch/blob/9112d1cdab79e53c4e5d4276616e41dfa872f762/Images/AAP-Root3%20SupportApp%20Extension.png)
+
 Adds an App Auto-Patch (AAP) tile to the [Root3 Support App](https://github.com/root3nl/SupportApp) showing the number of pending updates - clicking the tile triggers an immediate patch run. Requires AAP 3.6.0 or later (introduced the `xyz.techitout.appAutoPatchReport.plist` report file these scripts read from).
 
 See the Support App wiki for background on how these pieces fit together: [Extensions](https://github.com/root3nl/SupportApp/wiki/Extensions), [Privileged Scripts](https://github.com/root3nl/SupportApp/wiki/Privileged-Scripts), [Configuration](https://github.com/root3nl/SupportApp/wiki/Configuration).
