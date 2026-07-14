@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.0"
 scriptDate="2026/07/13"
-scriptBuild="3.6.0.2607131550"
+scriptBuild="3.6.0.2607132238"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2125,8 +2125,14 @@ gather_error_log(){
     installomatorLogFile="/var/log/Installomator.log"
     duplicate_log_dir=$( mktemp -d /var/tmp/InstallomatorErrors.XXXXXX )
     marker_file="/var/tmp/Installomator_marker.txt"
-    
-    chmod 655 "$duplicate_log_dir" 
+
+    # marker_file is a fixed path under world-writable /var/tmp that root later reads/writes.
+    # Remove any pre-existing symlink so a local user can't redirect the read/write elsewhere.
+    [[ -L "$marker_file" ]] && rm -f "$marker_file" 2>/dev/null
+
+    # 0700: duplicate_log_dir holds copied Installomator error log excerpts; 655 left it
+    # world/group-readable, exposing that content to any local user.
+    chmod 700 "$duplicate_log_dir"
     
     function createMarkerFile(){
         
@@ -2485,6 +2491,9 @@ workflow_startup() {
 
     # Create `overlayicon` from Self Service's custom icon (thanks, @meschwartz!)
     if [[ "$useOverlayIcon" == "TRUE" ]]; then
+        # /var/tmp/overlayicon.icns is a fixed path under world-writable /var/tmp. Remove any
+        # pre-existing file/symlink first so a local user can't redirect this root-owned write.
+        rm -f /var/tmp/overlayicon.icns 2>/dev/null
         if [[ -n "$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_app_path)" ]]; then
             # Use Self Service icon for overlay if found
             xxd -p -s 260 "$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_app_path)"/Icon$'\r'/..namedfork/rsrc | xxd -r -p > /var/tmp/overlayicon.icns
@@ -4934,7 +4943,30 @@ workflow_stage_updates() {
 
     log_info "Staging pending updates before displaying user dialog..."
 
+    # Harden the staging directory. It lives under world-writable /private/tmp, so an
+    # unprivileged local user could pre-create it (and own it) before this root run, then drop
+    # malicious installers named <label>.pkg/.dmg that we'd later trust via downloadURL=file://.
+    # Refuse to reuse a staging dir that's a symlink or not root-owned, then (re)create it
+    # root-owned and private (0700).
+    if [[ -L "${AAPStagingFolder}" ]]; then
+        log_warning "Staging folder ${AAPStagingFolder} is a symlink — removing before use."
+        rm -f "${AAPStagingFolder}" 2>/dev/null
+    fi
+    if [[ -d "${AAPStagingFolder}" ]]; then
+        local _stageOwner
+        _stageOwner=$(/usr/bin/stat -f '%u' "${AAPStagingFolder}" 2>/dev/null)
+        if [[ "${_stageOwner}" != "0" ]]; then
+            log_warning "Staging folder ${AAPStagingFolder} is not root-owned (uid=${_stageOwner:-unknown}) — recreating."
+            rm -rf "${AAPStagingFolder}" 2>/dev/null
+        fi
+    fi
     mkdir -p "${AAPStagingFolder}" 2>/dev/null
+    /usr/sbin/chown root:wheel "${AAPStagingFolder}" 2>/dev/null
+    chmod 700 "${AAPStagingFolder}" 2>/dev/null
+    if [[ ! -d "${AAPStagingFolder}" ]] || [[ "$(/usr/bin/stat -f '%u' "${AAPStagingFolder}" 2>/dev/null)" != "0" ]]; then
+        log_error "Unable to secure staging folder ${AAPStagingFolder}; skipping pre-staging."
+        return 0
+    fi
 
     # Remove staged files that are no longer in the active queue to avoid stale installers
     # accumulating on disk across multiple runs.
@@ -5372,7 +5404,11 @@ check_and_echo_errors() {
     # Create a timestamp for the current run
     timestamp=$(date +%Y%m%d%H%M%S)
     log_info "Current time stamp: $timestamp"
-    
+
+    # Re-check marker_file isn't a symlink before reusing it here - this function runs much
+    # later than gather_error_log's initial guard, so re-validate on every call.
+    [[ -L "$marker_file" ]] && rm -f "$marker_file" 2>/dev/null
+
     # Create a directory for duplicate log files if it doesn't exist
     if [ ! -d "$duplicate_log_dir" ]; then
         mkdir -p "$duplicate_log_dir"
@@ -5756,6 +5792,16 @@ self_update() {
         *)       freq="daily" ;;
     esac
 
+    # Precompute the retry interval in seconds here. zsh's $(( )) arithmetic coerces non-numeric
+    # string operands to 0 before comparing, so freq=="daily" is always true regardless of
+    # freq's actual value - resolve the interval via case/esac instead and reference it below.
+    local freqSeconds
+    case "$freq" in
+        weekly)  freqSeconds=$(( 7 * 24 * 3600 )) ;;
+        monthly) freqSeconds=$(( 30 * 24 * 3600 )) ;;
+        *)       freqSeconds=$(( 24 * 3600 )) ;;
+    esac
+
     now=$(date +%s)
     nextDue=$(defaults read "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch 2>/dev/null || echo "0")
 
@@ -5788,7 +5834,7 @@ self_update() {
         rm -f "$tmpfile"
         log_error "Unable to download remote script for version check."
         # schedule next attempt
-        local interval=$(( freq=="daily" ? 24*3600 : (freq=="weekly" ? 7*24*3600 : 30*24*3600) ))
+        local interval=${freqSeconds}
         defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateCheckEpoch -int "$now"
         defaults write "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch -int $(( now + interval ))
         defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateNote -string "download-failed"
@@ -5798,7 +5844,7 @@ self_update() {
     [[ ! -s "$tmpfile" ]] && {
         rm -f "$tmpfile"
         log_error "Downloaded script is empty."
-        local interval=$(( freq=="daily" ? 24*3600 : (freq=="weekly" ? 7*24*3600 : 30*24*3600) ))
+        local interval=${freqSeconds}
         defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateCheckEpoch -int "$now"
         defaults write "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch -int $(( now + interval ))
         defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateNote -string "empty-download"
@@ -5821,7 +5867,7 @@ self_update() {
     if [[ -z "$remote_version" ]]; then
         rm -f "$tmpfile"
         log_error "Unable to parse remote script_version."
-        local interval=$(( freq=="daily" ? 24*3600 : (freq=="weekly" ? 7*24*3600 : 30*24*3600) ))
+        local interval=${freqSeconds}
         defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateCheckEpoch -int "$now"
         defaults write "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch -int $(( now + interval ))
         defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateNote -string "parse-failed"
@@ -5832,7 +5878,7 @@ self_update() {
     if [[ "$remote_version" == "$local_version" ]]; then
         log_info "Already running the latest version ($local_version)."
         rm -f "$tmpfile"
-        local interval=$(( freq=="daily" ? 24*3600 : (freq=="weekly" ? 7*24*3600 : 30*24*3600) ))
+        local interval=${freqSeconds}
         defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateCheckEpoch -int "$now"
         defaults write "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch -int $(( now + interval ))
         defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateNote -string "already-latest"
@@ -5853,7 +5899,7 @@ self_update() {
     if (( remote_is_newer == 0 )); then
         log_info "Remote version ($remote_version) is not newer than local ($local_version)."
         rm -f "$tmpfile"
-        local interval=$(( freq=="daily" ? 24*3600 : (freq=="weekly" ? 7*24*3600 : 30*24*3600) ))
+        local interval=${freqSeconds}
         defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateCheckEpoch -int "$now"
         defaults write "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch -int $(( now + interval ))
         defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateNote -string "not-newer"
@@ -5882,7 +5928,7 @@ self_update() {
     # ---- stamp plist + schedule next ----
     defaults write "${appAutoPatchLocalPLIST}" AAPBuild -string "$remote_version" || true
     log_info "Wrote AAPBuild=$remote_version to ${appAutoPatchLocalPLIST}"
-    local interval=$(( freq=="daily" ? 24*3600 : (freq=="weekly" ? 7*24*3600 : 30*24*3600) ))
+    local interval=${freqSeconds}
     defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateCheckEpoch -int "$now"
     defaults write "${appAutoPatchLocalPLIST}" NextSelfUpdateCheckEpoch -int $(( now + interval ))
     defaults write "${appAutoPatchLocalPLIST}" LastSelfUpdateNote -string "updated-to-${remote_version}"
