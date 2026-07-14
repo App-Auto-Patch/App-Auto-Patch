@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.6.0"
-scriptDate="2026/07/11"
-scriptBuild="3.6.0.2607111530"
+scriptDate="2026/07/13"
+scriptBuild="3.6.0.2607131550"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -466,6 +466,11 @@ set_display_strings_language() {
     display_string_deferral_unlimited="No deadline date and unlimited deferrals\n"
     display_string_deferral_selecttitle="Defer updates for:"
 
+    #### Language for the Current/New Version subtitles shown under each app in the
+    #### deferral and hard deadline dialog patch lists
+    display_string_version_current="Current Version:"
+    display_string_version_new="New Version:"
+
     #### Language for the Install Now confirmation mini dialog
     display_string_confirminstall_message="Are you sure you want to install updates now? This will close the applications listed."
     display_string_confirminstall_button1="Yes, Install Now"
@@ -579,6 +584,10 @@ set_display_strings_language() {
             display_string_deferral_unlimited_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_unlimited" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferral_selecttitle_managed
             display_string_deferral_selecttitle_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_selecttitle" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            # local display_string_version_current_managed
+            display_string_version_current_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_version_current" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            # local display_string_version_new_managed
+            display_string_version_new_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_version_new" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_confirminstall_message_managed
             display_string_confirminstall_message_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_confirminstall_message" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_confirminstall_button1_managed
@@ -672,6 +681,8 @@ set_display_strings_language() {
     [[ -n "${display_string_deferral_message_02_managed}" ]] && display_string_deferral_message_02="${display_string_deferral_message_02_managed}"
     [[ -n "${display_string_deferral_unlimited_managed}" ]] && display_string_deferral_unlimited="${display_string_deferral_unlimited_managed}"
     [[ -n "${display_string_deferral_selecttitle_managed}" ]] && display_string_deferral_selecttitle="${display_string_deferral_selecttitle_managed}"
+    [[ -n "${display_string_version_current_managed}" ]] && display_string_version_current="${display_string_version_current_managed}"
+    [[ -n "${display_string_version_new_managed}" ]] && display_string_version_new="${display_string_version_new_managed}"
     [[ -n "${display_string_confirminstall_message_managed}" ]] && display_string_confirminstall_message="${display_string_confirminstall_message_managed}"
     [[ -n "${display_string_confirminstall_button1_managed}" ]] && display_string_confirminstall_button1="${display_string_confirminstall_button1_managed}"
     [[ -n "${display_string_confirminstall_button2_managed}" ]] && display_string_confirminstall_button2="${display_string_confirminstall_button2_managed}"
@@ -729,6 +740,8 @@ set_display_strings_language() {
     log_verbose "display_string_deferral_message_02: $display_string_deferral_message_02"
     log_verbose "display_string_deferral_unlimited: $display_string_deferral_unlimited"
     log_verbose "display_string_deferral_selecttitle: $display_string_deferral_selecttitle"
+    log_verbose "display_string_version_current: $display_string_version_current"
+    log_verbose "display_string_version_new: $display_string_version_new"
     log_verbose "display_string_confirminstall_message: $display_string_confirminstall_message"
     log_verbose "display_string_confirminstall_button1: $display_string_confirminstall_button1"
     log_verbose "display_string_confirminstall_button2: $display_string_confirminstall_button2"
@@ -3916,11 +3929,11 @@ _compute_version_subtitle() {
     _new="${_new//,/}"
 
     if [[ -n "$_cur" ]] && [[ -n "$_new" ]]; then
-        versionSubtitle="Current Version: ${_cur}  →  New Version: ${_new}"
+        versionSubtitle="${display_string_version_current} ${_cur}  →  ${display_string_version_new} ${_new}"
     elif [[ -n "$_new" ]]; then
-        versionSubtitle="New Version: ${_new}"
+        versionSubtitle="${display_string_version_new} ${_new}"
     elif [[ -n "$_cur" ]]; then
-        versionSubtitle="Current Version: ${_cur}"
+        versionSubtitle="${display_string_version_current} ${_cur}"
     else
         versionSubtitle=""
     fi

@@ -1450,6 +1450,28 @@
                                     }
                                 ]
                             },
+                            "display_string_version_current": {
+                                "type": "string",
+                                "title": "Current Version Prefix",
+                                "description": "Language for the \"Current Version\" prefix shown under each app in the deferral/hard deadline dialog patch lists",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_version_new": {
+                                "type": "string",
+                                "title": "New Version Prefix",
+                                "description": "Language for the \"New Version\" prefix shown under each app in the deferral/hard deadline dialog patch lists",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
                             "display_string_deferraldeadline_button1": {
                                 "type": "string",
                                 "title": "Deadline Dialog Button 1",
