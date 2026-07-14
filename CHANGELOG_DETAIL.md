@@ -3,6 +3,27 @@
 # Version 3
 
 ## Version 3.6.0
+### 13-Jul-2026 (2) - Build 3.6.0.2607132238
+- Hardened several local-privilege-escalation-adjacent paths flagged by a third-party review of the 3.6.0.2607131550 build
+	- Fixed: `self_update`'s retry-interval calculation (`local interval=$(( freq=="daily" ? ... ))`) always resolved to the 24-hour ("daily") interval regardless of the configured `SelfUpdateFrequency`, because zsh's `$(( ))` arithmetic coerces non-numeric string operands to `0` before comparing, so `freq=="daily"` evaluated true no matter what `freq` actually held. The interval is now precomputed once via a `case`/`esac` into a plain `freqSeconds` variable and referenced numerically in all six call sites
+	- Hardened `workflow_stage_updates`'s staging folder (`/private/tmp/AAPStage`, under world-writable `/private/tmp`): it is now refused and recreated if found to be a symlink or not root-owned, then explicitly `chown root:wheel`/`chmod 700`'d before use, with staging skipped entirely if it can't be secured. Previously a local user could pre-create/own this directory and plant a malicious installer that would later be trusted and installed as root via `downloadURL=file://...`
+	- Hardened two fixed, predictable root-written paths under world-writable `/var/tmp` (`Installomator_marker.txt`, `overlayicon.icns`) against symlink redirection by removing any pre-existing symlink immediately before each write
+	- Changed the duplicate Installomator error-log directory (used for webhook reporting) from `chmod 655` to `chmod 700` - `655` left copied error-log excerpts readable by any local user
+
+### 11-Jul-2026 (2) - Build 3.6.0.2607111525
+- Fixed: the staging/silent-patch progress dialog (`InteractiveMode 2`) could be left open indefinitely if every queued app was successfully patched silently
+	- `swiftDialogStagingWindow` (opened when `countOfElementsArray` is non-empty, before staging/`workflow_silent_patch_closed_apps` run) and `swiftDialogCompleteDialogStaging` (which closes it) were both gated on the same `[[ ${#countOfElementsArray[@]} -gt 0 ]]` check
+	- `workflow_silent_patch_closed_apps` rebuilds `countOfElementsArray` to reflect only the labels still remaining after silent patching - if every queued app was successfully patched silently, the array is empty by the time the close-check runs, even though the window was definitely opened earlier (against the original, non-empty count)
+	- As a result, the close-check's condition evaluated to false and `swiftDialogCompleteDialogStaging` was never called, leaving the progress window open on screen indefinitely, even after the script itself exited
+	- Introduced a dedicated `stagingWindowOpened` flag, set to `TRUE` at the moment the window is actually opened; the close-check now tests this flag instead of re-evaluating `countOfElementsArray`
+
+### 11-Jul-2026 (1)
+- Added a Root3 Support App Extension example (`Resources/SupportApp-Extension/`)
+	- New `aap_pending_updates.zsh` populates a Support App Extension with the count of apps currently queued for patching, read from the `xyz.techitout.appAutoPatchReport.plist` report file added earlier in 3.6.0. Intended to run via the Extension's `OnAppearAction` so the count stays current every time the Support App popover appears
+	- New `aap_install_now.zsh` runs `appautopatch --workflow-install-now` when the Extension tile is clicked (`Action`/`ActionType: PrivilegedScript`), then re-runs `aap_pending_updates.zsh` to refresh the count once the run completes
+	- Both scripts default to reading/writing against AAP's default install folder and a configurable deployment path (`/Library/Management/AppAutoPatch/SupportApp/`), overridable via variables at the top of each script
+	- Includes a README with deployment steps and an example Configuration Profile snippet - see the [Reporting](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Reporting) wiki page for full details
+
 ### 10-Jul-2026
 - Updated Profile Manifests with new keys for version 3.6.0
 
