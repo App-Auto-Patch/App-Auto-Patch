@@ -25,7 +25,7 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.6.0"
-scriptDate="2026/07/13"
+scriptDate="2026/07/14"
 scriptBuild="3.6.0.2607132238"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
@@ -2941,6 +2941,16 @@ EOLD
     chmod -R a+r "${appAutoPatchFolder}"
     chmod a+x "${appAutoPatchFolder}/appautopatch"
     chmod a+x "${appAutoPatchFolder}/aap-starter"
+
+    # If appAutoPatchFolder's parent is the default /Library/Management container (which the
+    # mkdir -p above may have just created for the first time, picking up whatever umask/perms
+    # happened to be in effect), make sure that parent is also root:wheel 755. Only applied to
+    # the container itself (non-recursive) - other tools may store unrelated items there with
+    # their own intended permissions. Skipped if appAutoPatchFolder has been redirected elsewhere.
+    if [[ "$(dirname "${appAutoPatchFolder}")" == "/Library/Management" ]] && [[ -d "/Library/Management" ]]; then
+        chown root:wheel "/Library/Management"
+        chmod 755 "/Library/Management"
+    fi
 
     chown root:wheel "${appAutoPatchLink}"
     chmod a+rx "${appAutoPatchLink}"
