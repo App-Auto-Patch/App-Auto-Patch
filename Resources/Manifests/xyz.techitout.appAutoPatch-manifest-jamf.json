@@ -1472,6 +1472,17 @@
                                     }
                                 ]
                             },
+                            "display_string_pendingapps_button_later": {
+                                "type": "string",
+                                "title": "Pending Apps Dialog \"Later\" Button (Support App Extension)",
+                                "description": "Language for the \"Later\" button shown by the aap_pending_apps_dialog.zsh Root3 Support App Extension example script (Resources/SupportApp-Extension/) - not used by App Auto-Patch itself",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Reporting"
+                                    }
+                                ]
+                            },
                             "display_string_deferraldeadline_button1": {
                                 "type": "string",
                                 "title": "Deadline Dialog Button 1",

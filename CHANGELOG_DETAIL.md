@@ -3,6 +3,14 @@
 # Version 3
 
 ## Version 3.6.0
+### 14-Jul-2026
+- Added `aap_pending_apps_dialog.zsh` to the Root3 Support App Extension example (`Resources/SupportApp-Extension/`), as a second option for the Extension tile's `Action` alongside the existing `aap_install_now.zsh` - admins can choose whichever fits their environment
+	- Reads pending apps from the `xyz.techitout.appAutoPatchReport.plist` report file (no fresh discovery scan) and shows a swiftDialog list - app icon, name, and a "Current Version → New Version" subtitle for each - with only "Install Now"/"Later" buttons; no deferral timer or menu
+	- "Install Now" kicks off `appautopatch --workflow-install-now` in the background; either button then re-runs `aap_pending_updates.zsh` to refresh the tile's count. If there are zero pending apps when clicked, shows a brief "You're all up to date!" message instead of the list
+	- Reads the same managed/local preferences AAP itself uses to build this dialog - `DialogIcon`, `UseOverlayIcon`, `BannerImage`/`BannerTitle`/`BannerHeight`, `AppTitle`, `DialogOnTop`, and the existing `display_string_version_current`/`display_string_version_new`/`display_string_there_are`/`display_string_deferral_button2` language overrides (Managed Preferences only, matching AAP's own behavior) - so its appearance and wording stay consistent with AAP's own dialogs
+	- Added a new, optional managed preference key, `display_string_pendingapps_button_later` (under the same `dialogElements` array used for AAP's other language overrides), to customize the "Later" button's text; defaults to "Later". Added to both Profile Manifests (`xyz.techitout.appAutoPatch-manifest.plist` and `xyz.techitout.appAutoPatch-manifest-jamf.json`)
+	- `aap_install_now.zsh` (immediate patch run, no pending-apps list or confirmation dialog first) remains available as the alternative `Action` for admins who prefer a single-click "patch now" tile
+
 ### 13-Jul-2026 (2) - Build 3.6.0.2607132238
 - Hardened several local-privilege-escalation-adjacent paths flagged by a third-party review of the 3.6.0.2607131550 build
 	- Fixed: `self_update`'s retry-interval calculation (`local interval=$(( freq=="daily" ? ... ))`) always resolved to the 24-hour ("daily") interval regardless of the configured `SelfUpdateFrequency`, because zsh's `$(( ))` arithmetic coerces non-numeric string operands to `0` before comparing, so `freq=="daily"` evaluated true no matter what `freq` actually held. The interval is now precomputed once via a `case`/`esac` into a plain `freqSeconds` variable and referenced numerically in all six call sites
