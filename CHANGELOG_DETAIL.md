@@ -3,6 +3,15 @@
 # Version 3
 
 ## Version 3.6.0
+### 17-Jul-2026 (2) - Build 3.6.0.2607171635
+- Fixed: label fragments that call Installomator's own `printlog` helper directly (e.g. `googlechrome`'s deprecation warning, `printlog "..." REQ`) crashed evaluation of that label's case block with `printlog:40: bad math expression: empty string`, so the label silently failed to be evaluated (no version/name/etc. extracted) every time it was encountered during discovery
+	- Root cause: `printlog` (defined in Installomator's `functions.sh`, which AAP sources to pick up label-fragment helper functions) references a `${levels}` associative array and `${LOGGING}` variable that Installomator normally defines in `arguments.sh` - a file AAP intentionally never sources, since it also handles Installomator's full CLI argument parsing/label routing, which would conflict with AAP's own flow. Without them, `${levels[$log_priority]} -ge ${levels[$LOGGING]}` resolves to comparing two empty strings, which zsh's `(( ))` arithmetic can't evaluate
+	- Fixed by defining a minimal `levels`/`LOGGING` (plus `label`/`log_location`/`previous_log_message`/`logrepeat`) shim immediately before AAP sources `functions.sh`, letting `printlog` run standalone and folding any label-emitted messages into AAP's own verbose log rather than losing them (or crashing the label)
+	- Verified against the live `googlechrome` fragment and Installomator's real `functions.sh`/`getJSONValue`: the label's case block now evaluates cleanly end-to-end (including the live network lookup for `appNewVersion`) with no error, where it previously failed every time
+
+### 17-Jul-2026 (1) - Build 3.6.0.2607171559
+- Fixed: `dialogTitleOptions`'s banner logic always passed `--bannertitle`, falling back to `${appTitle}` whenever `BannerTitle` was unset - so admins using a `BannerImage` that already has title text baked into the image itself had no way to avoid AAP layering a redundant/conflicting `--bannertitle` on top of it. `--bannertitle` is now only added when `BannerTitle` is explicitly set; leaving it unset now displays the banner image with no title text overlaid
+
 ### 14-Jul-2026
 - Added `aap_pending_apps_dialog.zsh` to the Root3 Support App Extension example (`Resources/SupportApp-Extension/`), as a second option for the Extension tile's `Action` alongside the existing `aap_install_now.zsh` - admins can choose whichever fits their environment
 	- Reads pending apps from the `xyz.techitout.appAutoPatchReport.plist` report file (no fresh discovery scan) and shows a swiftDialog list - app icon, name, and a "Current Version → New Version" subtitle for each - with only "Install Now"/"Later" buttons; no deferral timer or menu

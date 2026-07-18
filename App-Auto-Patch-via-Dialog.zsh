@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.6.0"
-scriptDate="2026/07/14"
-scriptBuild="3.6.0.2607132238"
+scriptDate="2026/07/17"
+scriptBuild="3.6.0.2607171635"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -108,7 +108,7 @@ echo "
 
     <key>AppTitle</key> <string>App Auto-Patch</string>
     <key>BannerImage</key> <string>Filepath|URL|colour=#hex|gradient=colour,colour</string>
-    <key>BannerTitle</key> <string>Text to display within the banner (defaults to AppTitle)</string>
+    <key>BannerTitle</key> <string>Text to display within the banner (leave unset for no title text - e.g. if BannerImage already has title text baked in)</string>
     <key>BannerHeight</key> <integer>points</integer>
     <key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</string>
     <key>DaysUntilReset</key> <integer>number</integer>
@@ -2475,15 +2475,16 @@ workflow_startup() {
     # place of --title "$appTitle" when BannerImage is configured (hides the standard icon area -
     # see https://github.com/swiftDialog/swiftDialog/wiki/Displaying-Banner-Images). Not used by
     # the Discover mini-progress or "all apps up to date" mini dialogs - too small for a banner.
+    #
+    # Unlike the standard --title (which always falls back to $appTitle), --bannertitle is only
+    # added when BannerTitle is explicitly set - it does NOT fall back to $appTitle. This lets
+    # admins use a BannerImage that already has title text baked into the image itself, by simply
+    # leaving BannerTitle unset, without AAP layering a redundant/conflicting title on top of it.
     dialogTitleOptions=()
     if [[ -n "${bannerImageOption}" ]]; then
         log_info "Banner image configured (${bannerImageOption}); using banner in place of the standard title."
         dialogTitleOptions=(--bannerimage "${bannerImageOption}")
-        if [[ -n "${bannerTitleOption}" ]]; then
-            dialogTitleOptions+=(--bannertitle "${bannerTitleOption}")
-        else
-            dialogTitleOptions+=(--bannertitle "${appTitle}")
-        fi
+        [[ -n "${bannerTitleOption}" ]] && dialogTitleOptions+=(--bannertitle "${bannerTitleOption}")
         [[ -n "${bannerHeightOption}" ]] && dialogTitleOptions+=(--bannerheight "${bannerHeightOption}")
     else
         dialogTitleOptions=(--title "${appTitle}")
@@ -4601,6 +4602,14 @@ function verifyApp() {
         return
     else
         
+        typeset -gA levels
+        levels=(DEBUG 0 INFO 1 WARN 2 ERROR 3 REQ 4)
+        LOGGING="${LOGGING:-INFO}"
+        label="${label_name}"
+        log_location="${appAutoPatchVerboseLog}"
+        previous_log_message=""
+        logrepeat=0
+
         functionsPath="$fragmentsPath/functions.sh"
         source "${functionsPath}"
         
