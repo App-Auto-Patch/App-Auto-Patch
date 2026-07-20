@@ -15,7 +15,7 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.6.0
-**⚠️ Before you upgrade:** Background Patch Closed Apps (below) is **enabled by default** and applies under both `InteractiveMode 1` and `InteractiveMode 2`. If you are not ready for AAP to silently patch closed apps, set `WorkflowBackgroundPatchClosedApps` to `false` in your managed configuration before deploying this version. There are no other breaking changes in this release, and no CLI triggers were added.
+**⚠️ Before you upgrade:** Background Patch Closed Apps (below) is **enabled by default** and applies under both `InteractiveMode 1` and `InteractiveMode 2`. If you are not ready for AAP to silently patch closed apps, set `WorkflowBackgroundPatchClosedApps` to `false` in your managed configuration before deploying this version. There are no other breaking changes in this release.
 
 **New Features**
 
@@ -37,7 +37,7 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 
 - **Update queue reporting** — A new report file (`xyz.techitout.appAutoPatchReport.plist`) tracks every currently-queued app (name, installed version, available version) in a Munki-style `ItemsToInstall` array, making it easy for third-party reporting or inventory tools to surface pending updates for a Mac.
 
-- **Root3 Support App Extension example** — A ready-to-deploy example integration (`Resources/SupportApp-Extension/`) for the [Root3 Support App](https://github.com/root3nl/SupportApp): shows the count of pending updates in a Support App tile, and clicking it triggers an immediate `--workflow-install-now` patch run before refreshing the count. See the [Reporting](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Reporting) wiki page for setup instructions.
+- **Root3 Support App Extension example** — A ready-to-deploy example integration (`Resources/SupportApp-Extension/`) for the [Root3 Support App](https://github.com/root3nl/SupportApp): shows the count of pending updates in a Support App tile, with a choice of two scripts for what happens when it's clicked — show a dialog listing the pending apps (with icons and current/new version) and "Install Now"/"Later" buttons before kicking off a `--workflow-install-now` patch run, or skip straight to the patch run with no dialog first. See the [Reporting](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Reporting) wiki page for setup instructions.
 
 - **Version details in patch dialogs** — The deferral and hard-deadline dialogs now show each app's current and new version underneath its name, e.g. "Current Version: 128.0.6613.138 → New Version: 129.0.6668.59", so users know exactly what's changing before they install.
 
@@ -49,7 +49,7 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 
 - **Banner image support** — The Patching, Deferral, and Hard Deadline dialogs can now display a custom banner (image, URL, solid colour, or gradient) across the top in place of the plain text title, using swiftDialog's `--bannerimage`/`--bannertitle`/`--bannerheight` options. If no banner image is configured, dialogs look exactly as before.
 	- Managed Preference Key: `<key>BannerImage</key>` `<string>Filepath|URL|colour=#hex|gradient=colour,colour</string>` — leave unset to keep the standard text title
-	- Managed Preference Key: `<key>BannerTitle</key>` `<string>Text</string>` — text shown inside the banner; falls back to the app title if left blank
+	- Managed Preference Key: `<key>BannerTitle</key>` `<string>Text</string>` — text shown inside the banner; leave unset for no title text at all (e.g. if your `BannerImage` already has title text baked into the image itself)
 	- Managed Preference Key: `<key>BannerHeight</key>` `<integer>points</integer>` — optional, overrides swiftDialog's default banner height
 	- Note: activating a banner image hides the standard dialog icon, per swiftDialog's own behavior
 	- Not available on the compact discovery-scan and "all apps up to date" mini dialogs — they're too small to display a banner and always show the standard text title
@@ -71,6 +71,8 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 - Fixed: under `InteractiveMode 2`, the staging/silent-patch progress dialog could be left open indefinitely (even after AAP itself exited) if every queued app was successfully patched silently, with none left to show the user
 - Fixed: the self-update interval always used the 24-hour ("daily") schedule regardless of the configured `SelfUpdateFrequency` value, due to a zsh arithmetic quirk
 - Hardened several file paths used internally by AAP (staging folder, error-log temp files) against tampering by other local users on shared/multi-user Macs; no configuration changes are needed and there is no expected behavior change on typical single-user deployments
+- Fixed: leaving `BannerTitle` unset always fell back to showing the app title inside the banner - there was no way to display a `BannerImage` with no title text overlaid at all. Leaving `BannerTitle` unset now shows the banner image with no title text, useful if your `BannerImage` already has title text baked into the image itself
+- Fixed: certain Installomator labels that call the `printlog` logging helper directly from within their own label code (e.g. `googlechrome`, which uses it to display a deprecation warning) would fail to be evaluated during discovery, silently skipping that app every run instead of detecting available updates for it
 
 ## New features/Specific Changes in 3.5.0
 - [New Version Comparison Method options](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Version-Comparison-Methods)
