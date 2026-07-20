@@ -1,18 +1,78 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.5.0
+# App Auto-Patch 3.6.0
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub pre-release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag&include_prereleases) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch) [![swiftDialog](https://img.shields.io/badge/swiftDialog-Enabled-blue)](https://swiftdialog.app)
 
 ## Introduction
-App Auto-Patch combines local application discovery, an Installomator integration, and user-friendly swiftDialog prompts to automate application patch management across Mac computers.
+App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local application discovery, an Installomator integration, and user-friendly swiftDialog prompts to automate application patch management across Mac computers.
 
 <img alt="Dialog Example" src="https://github.com/App-Auto-Patch/App-Auto-Patch/blob/176f0c284d7b2312375a3a11ae8a8e4f2159ecdf/Images/Combined%20Dialogs.png" />
 
 ## Why Build This
 
-App Auto-Patch simplifies the process of inventorying installed applications and patching them, eliminating the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
+App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
+
+## New features/Specific Changes in 3.6.0
+**⚠️ Before you upgrade:** Background Patch Closed Apps (below) is **enabled by default** and applies under both `InteractiveMode 1` and `InteractiveMode 2`. If you are not ready for AAP to silently patch closed apps, set `WorkflowBackgroundPatchClosedApps` to `false` in your managed configuration before deploying this version. There are no other breaking changes in this release.
+
+**New Features**
+
+- **Background Patch Closed Apps** — Under `InteractiveMode 1` or `2`, AAP now silently installs updates for any app that isn't currently open, immediately after discovery and before any dialog is shown to the user. Apps that are open are left in the queue and presented to the user as before, so they can choose when to close them. If every pending update is resolved silently, no dialog appears at all. (`InteractiveMode 0` is unaffected — it already installs everything silently regardless of whether an app is open.)
+	- Managed Preference Key: `<key>WorkflowBackgroundPatchClosedApps</key>` `<true/>` | `<false/>` — **default: `true`**
+
+- **Update Staging** — Pending updates can now be pre-downloaded to a local staging folder before the user is ever prompted, making the actual install nearly instantaneous once approved. Staging always runs first (ahead of Background Patch Closed Apps and the user dialog), and later steps reuse the staged installer instead of downloading it a second time. Outdated or stale staged files are cleaned up automatically.
+	- Managed Preference Key: `<key>WorkflowStageUpdates</key>` `<true/>` | `<false/>` — default: `false`
+
+- **Discovery Frequency** — Skip the app-discovery (scanning) phase on subsequent runs within a configurable time window. Useful when a user defers multiple times in a day — AAP won't re-scan every app each time, saving runtime, bandwidth, and system resources.
+	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>` — default: `0` (always run discovery)
+
+- **Force Discovery CLI trigger** — A new `--force-discovery` CLI trigger runs the app-discovery (scanning) phase immediately, even if `DiscoveryFrequency` hasn't elapsed yet. It's a one-shot trigger: it applies to the very next run only, then automatically clears itself — including when the run is relaunched via the LaunchDaemon (e.g. triggered remotely through Jamf), so it still takes effect even though the relaunched process doesn't see the original command-line flag.
+	- CLI Trigger: `--force-discovery`
+	- Note: an administrator-disabled discovery workflow (`WorkflowDisableAppDiscovery`) still takes priority — `--force-discovery` only bypasses the `DiscoveryFrequency` wait, not a hard disable.
+
+- **Ignore DND Apps** — Exclude specific apps from Focus/Do-Not-Disturb display-sleep-assertion detection, so background utilities that permanently hold a display assertion (e.g. Logi Options+, Amphetamine) don't indefinitely block interactive patching from proceeding. (#149)
+	- Managed Preference Key: `<key>IgnoreDNDApps</key>` `<string>App1,App2,App3</string>` — comma-separated app names, matched exactly as reported by macOS (including spaces)
+
+- **Update queue reporting** — A new report file (`xyz.techitout.appAutoPatchReport.plist`) tracks every currently-queued app (name, installed version, available version) in a Munki-style `ItemsToInstall` array, making it easy for third-party reporting or inventory tools to surface pending updates for a Mac.
+
+- **Root3 Support App Extension example** — A ready-to-deploy example integration (`Resources/SupportApp-Extension/`) for the [Root3 Support App](https://github.com/root3nl/SupportApp): shows the count of pending updates in a Support App tile, with a choice of two scripts for what happens when it's clicked — show a dialog listing the pending apps (with icons and current/new version) and "Install Now"/"Later" buttons before kicking off a `--workflow-install-now` patch run, or skip straight to the patch run with no dialog first. See the [Reporting](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Reporting) wiki page for setup instructions.
+
+- **Version details in patch dialogs** — The deferral and hard-deadline dialogs now show each app's current and new version underneath its name, e.g. "Current Version: 128.0.6613.138 → New Version: 129.0.6668.59", so users know exactly what's changing before they install.
+
+- **Startup & download reliability improvements**
+	- AAP now waits for the Dock to become active (up to 2 minutes) before proceeding at startup, ensuring a full user session is established first.
+	- The swiftDialog download and code-signing verification now automatically retry up to 3 times before failing, reducing false failures on flaky networks.
+
+- **Verbose log retention** — The verbose log is now archived (instead of being deleted every run) once it grows past a size threshold, matching the existing rotation behavior of the main log, with a capped number of archives to prevent unbounded disk usage.
+
+- **Banner image support** — The Patching, Deferral, and Hard Deadline dialogs can now display a custom banner (image, URL, solid colour, or gradient) across the top in place of the plain text title, using swiftDialog's `--bannerimage`/`--bannertitle`/`--bannerheight` options. If no banner image is configured, dialogs look exactly as before.
+	- Managed Preference Key: `<key>BannerImage</key>` `<string>Filepath|URL|colour=#hex|gradient=colour,colour</string>` — leave unset to keep the standard text title
+	- Managed Preference Key: `<key>BannerTitle</key>` `<string>Text</string>` — text shown inside the banner; leave unset for no title text at all (e.g. if your `BannerImage` already has title text baked into the image itself)
+	- Managed Preference Key: `<key>BannerHeight</key>` `<integer>points</integer>` — optional, overrides swiftDialog's default banner height
+	- Note: activating a banner image hides the standard dialog icon, per swiftDialog's own behavior
+	- Not available on the compact discovery-scan and "all apps up to date" mini dialogs — they're too small to display a banner and always show the standard text title
+
+- Apps found in `.Trash`, `/Applications (Parallels)/`, and `/Applications (Virtual Machines)/` are now automatically ignored during discovery.
+
+- **Staging / background-patch progress dialog for Full Interactive mode** — Under `InteractiveMode 2`, a small progress window now stays visible while updates are staged and closed apps are silently patched, instead of leaving users looking at an empty screen between the discovery dialog closing and the deferral/hard-deadline dialog appearing.
+
+- **"Install Now" confirmation prompt** — Clicking `Install Now` on the deferral dialog now shows a small confirmation prompt before proceeding, so users don't accidentally close their apps and trigger installs with a single click. The confirmation shows a small countdown (default 15 seconds) so users know how long they have to respond — the buttons are clickable immediately (no brief delay before they respond), and if the countdown runs out without a response, AAP proceeds with the install by default (the user already asked to install, so no response is treated as confirmation rather than a change of mind). Choosing "No" returns to the deferral dialog, and that dialog's own countdown timer picks up right where it left off (it does not reset). This confirmation only applies to the deferral dialog — the hard-deadline dialog is unaffected, since it offers no choice to begin with.
+	- Managed Preference Key: `<key>DialogTimeoutConfirmInstall</key>` `<integer>seconds</integer>` — default: `15`
+
+**Fixes**
+
+- Fixed: the `RemoveInstallomatorPath` managed preference could be forced to `FALSE` even when explicitly set to `TRUE`
+- Fixed: the Support Team Website field wasn't hidden when its managed value was set to `hide`
+- Fixed: the Workspace One MDM URL wasn't populating correctly for Slack webhook notifications
+- Fixed: Support Team Name values containing umlaut characters populated incorrectly
+- Fixed: Installomator version/date now displays correctly in logs when the Installomator self-updater is disabled
+- Fixed: under `InteractiveMode 2`, the staging/silent-patch progress dialog could be left open indefinitely (even after AAP itself exited) if every queued app was successfully patched silently, with none left to show the user
+- Fixed: the self-update interval always used the 24-hour ("daily") schedule regardless of the configured `SelfUpdateFrequency` value, due to a zsh arithmetic quirk
+- Hardened several file paths used internally by AAP (staging folder, error-log temp files) against tampering by other local users on shared/multi-user Macs; no configuration changes are needed and there is no expected behavior change on typical single-user deployments
+- Fixed: leaving `BannerTitle` unset always fell back to showing the app title inside the banner - there was no way to display a `BannerImage` with no title text overlaid at all. Leaving `BannerTitle` unset now shows the banner image with no title text, useful if your `BannerImage` already has title text baked into the image itself
+- Fixed: certain Installomator labels that call the `printlog` logging helper directly from within their own label code (e.g. `googlechrome`, which uses it to display a deprecation warning) would fail to be evaluated during discovery, silently skipping that app every run instead of detecting available updates for it
 
 ## New features/Specific Changes in 3.5.0
 - [New Version Comparison Method options](https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Version-Comparison-Methods)
