@@ -3323,6 +3323,10 @@ get_mdm(){
             log_info "MDM is Workspace One"
             mdmName="Workspace One"
         ;;
+        *mosyle*)
+            log_info "MDM is Mosyle"
+            mdmName="Mosyle"
+        ;;
         *)
             log_info "Unable to determine MDM from ServerURL"
         ;;
@@ -5551,6 +5555,10 @@ webHookMessage() {
                 # Fallback to generic Workspace One console
                 mdmComputerURL="https://console.workspace.one"
             fi
+        elif [[ $mdmName == "Mosyle" ]]; then
+                base_url="https://mybusiness.mosyle.com"
+                mdmComputerURL="${base_url}/#device_$(ioreg -d2 -c IOPlatformExpertDevice | awk -F\" '/IOPlatformUUID/{print $(NF-1)}')"
+            # If Mac is managed by Mosyle, link to the Mosyle device page
         else
             log_info "No MDM determined - webhook call will fail"
         fi
@@ -5623,6 +5631,10 @@ webHookMessage() {
             # If Mac is managed by Jumpcloud, link to the Jumpcloud devices page
         elif [[  $mdmName == "Jumpcloud" ]]; then
             mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
+        elif [[ $mdmName == "Mosyle" ]]; then
+            base_url="https://mybusiness.mosyle.com"
+            mdmComputerURL="${base_url}/#device_$(ioreg -d2 -c IOPlatformExpertDevice | awk -F\" '/IOPlatformUUID/{print $(NF-1)}')"
+            # If Mac is managed by Mosyle, link to the Mosyle device page
         else
             log_info "No MDM determined - webhook call will fail"
         fi
