@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.6.0"
-scriptDate="2026/07/17"
-scriptBuild="3.6.0.2607171635"
+scriptVersion="3.6.1"
+scriptDate="2026/07/23"
+scriptBuild="3.6.1.2607232200"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -337,11 +337,11 @@ set_defaults() {
 
     supportTeamName="Add IT Support" # MDM Enabled
 
-    supportTeamPhone="Add IT Phone Number" # MDM Enabled
+    supportTeamPhone="" # MDM Enabled - blank or "hide" both omit this line from the info dialog
 
-    supportTeamEmail="Add email" # MDM Enabled
+    supportTeamEmail="" # MDM Enabled - blank or "hide" both omit this line from the info dialog
 
-    supportTeamWebsite="Add IT Help site" # MDM Enabled
+    supportTeamWebsite="" # MDM Enabled - blank or "hide" both omit this line from the info dialog
 
     computerName=$( scutil --get ComputerName )
 
@@ -1156,10 +1156,6 @@ get_preferences() {
         support_team_email_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamEmail 2> /dev/null)
         local support_team_website_managed
         support_team_website_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamWebsite 2> /dev/null)
-        local self_update_enabled_managed
-        self_update_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateEnabled 2> /dev/null)
-        local self_update_frequency_managed
-        self_update_frequency_managed=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateFrequency 2> /dev/null)
         local dialog_icon_path_managed
         dialog_icon_path_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogIcon 2> /dev/null)
         local monthly_patching_cadence_enabled_managed
@@ -1284,10 +1280,6 @@ get_preferences() {
         support_team_email_local=$(defaults read "${appAutoPatchLocalPLIST}" SupportTeamEmail 2> /dev/null)
         local support_team_website_local
         support_team_website_local=$(defaults read "${appAutoPatchLocalPLIST}" SupportTeamWebsite 2> /dev/null)
-        local self_update_enabled_local
-        self_update_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateEnabled 2> /dev/null)
-        local self_update_frequency_local
-        self_update_frequency_local=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateFrequency 2> /dev/null)
         local dialog_icon_path_local
         dialog_icon_path_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogIcon 2> /dev/null)
         local monthly_patching_cadence_enabled_local
@@ -1437,20 +1429,21 @@ get_preferences() {
     { [[ -z "${remove_installomator_path_managed}" ]] && [[ -n "${removeInstallomatorPath}" ]] && [[ -n "${remove_installomator_path_local}" ]]; } && removeInstallomatorPath="${remove_installomator_path_local}"
     [[ -n "${support_team_name_managed}" ]] && supportTeamName="${support_team_name_managed}"
     { [[ -z "${support_team_name_managed}" ]] && [[ -n "${supportTeamName}" ]] && [[ -n "${support_team_name_local}" ]]; } && supportTeamName="${support_team_name_local}"
+    # Note: unlike most other merges here, these three don't gate the local-preference fallback on
+    # the current value already being non-empty - supportTeamPhone/Email/Website now default to ""
+    # (so blank/unconfigured hides the line entirely, same as "hide" - see #241), so that gate would
+    # never be true and local prefs would never be picked up.
     [[ -n "${support_team_phone_managed}" ]] && supportTeamPhone="${support_team_phone_managed}"
-    { [[ -z "${support_team_phone_managed}" ]] && [[ -n "${supportTeamPhone}" ]] && [[ -n "${support_team_phone_local}" ]]; } && supportTeamPhone="${support_team_phone_local}"
+    { [[ -z "${support_team_phone_managed}" ]] && [[ -n "${support_team_phone_local}" ]]; } && supportTeamPhone="${support_team_phone_local}"
     [[ -n "${support_team_email_managed}" ]] && supportTeamEmail="${support_team_email_managed}"
-    { [[ -z "${support_team_email_managed}" ]] && [[ -n "${supportTeamEmail}" ]] && [[ -n "${support_team_email_local}" ]]; } && supportTeamEmail="${support_team_email_local}"
+    { [[ -z "${support_team_email_managed}" ]] && [[ -n "${support_team_email_local}" ]]; } && supportTeamEmail="${support_team_email_local}"
     [[ -n "${support_team_website_managed}" ]] && supportTeamWebsite="${support_team_website_managed}"
-    { [[ -z "${support_team_website_managed}" ]] && [[ -n "${supportTeamWebsite}" ]] && [[ -n "${support_team_website_local}" ]]; } && supportTeamWebsite="${support_team_website_local}"
+    { [[ -z "${support_team_website_managed}" ]] && [[ -n "${support_team_website_local}" ]]; } && supportTeamWebsite="${support_team_website_local}"
 
 
 
-    [[ -n "${self_update_enabled_managed}" ]] && self_update_enabled_option="${self_update_enabled_managed}"
-    { [[ -z "${self_update_enabled_managed}" ]] && [[ -n "${self_update_enabled_option}" ]] && [[ -n "${self_update_enabled_local}" ]]; } && self_update_enabled_option="${self_update_enabled_local}"
-
-    [[ -n "${self_update_frequency_managed}" ]] && self_update_frequency_option="${self_update_frequency_managed}"
-    { [[ -z "${self_update_frequency_managed}" ]] && [[ -n "${self_update_frequency_option}" ]] && [[ -n "${self_update_frequency_local}" ]]; } && self_update_frequency_option="${self_update_frequency_local}"
+    # SelfUpdateEnabled/SelfUpdateFrequency are resolved earlier by resolve_self_update_preferences()
+    # (before self_update() runs in workflow_startup()), not here - see that function for why.
 
     [[ -n "${dialog_icon_path_managed}" ]] && dialog_icon_option="${dialog_icon_path_managed}"
     { [[ -z "${dialog_icon_path_managed}" ]] && [[ -z "${dialog_icon_option}" ]] && [[ -n "${dialog_icon_path_local}" ]]; } && dialog_icon_option="${dialog_icon_path_local}"
@@ -2038,16 +2031,6 @@ manage_parameter_options() {
     fi
     log_verbose "InteractiveModeOption: $InteractiveModeOption"
 
-        # self_update_enabled_option normalization
-    case "${self_update_enabled_option:l}" in
-        true|1|yes)  _sue_norm="TRUE"  ;;
-        false|0|no|"") _sue_norm="FALSE" ;;
-        *)
-            log_warning "Invalid SelfUpdateEnabled value '${self_update_enabled_option:-<empty>}' — forcing to FALSE."
-            _sue_norm="FALSE"
-        ;;
-    esac
-    
     # Manage ${workflow_install_now_patching_status_action_option} and save to ${appAutoPatchLocalPLIST}
     if [[ -n "${workflow_install_now_patching_status_action_option}" ]]; then
         defaults write "${appAutoPatchLocalPLIST}" WorkflowInstallNowPatchingStatusAction -string "${workflow_install_now_patching_status_action_option}"
@@ -2080,23 +2063,9 @@ manage_parameter_options() {
     { [[ -n "${webhook_url_slack_option}" ]]; } && log_verbose "webhook_url_slack_option is: ${webhook_url_slack_option}"
     { [[ -n "${webhook_url_teams_option}" ]]; } && log_verbose "webhook_url_teams_option is: ${webhook_url_teams_option}"
 
-    # Manage ${self_update_enabled_option} and save to ${appAutoPatchLocalPLIST}.
-    if [[ "${self_update_enabled_option}" -eq 1 ]] || [[ "${self_update_enabled_option}" == "TRUE" ]]; then
-        self_update_enabled_option="TRUE"
-        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool true
-    else
-        self_update_enabled_option="FALSE"
-        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool false
-    fi
-
-    # Manage ${self_update_frequency_option} and save to ${appAutoPatchLocalPLIST}.
-    if [[ -n "${self_update_frequency_option:-}" ]]; then
-        # normalize to lower-case daily|weekly|monthly
-        local _freq_norm="${${self_update_frequency_option:l}}"
-        case "$_freq_norm" in daily|weekly|monthly) ;; *) _freq_norm="daily" ;; esac
-        /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateFrequency -string "$_freq_norm"
-        log_info "Self-update frequency set to: ${_freq_norm}"
-    fi
+    # SelfUpdateEnabled/SelfUpdateFrequency are already resolved, normalized, and saved by
+    # resolve_self_update_preferences() before self_update() runs earlier in workflow_startup() -
+    # see that function for why.
 
     # Manage ${version_comparison_method_option} and save to ${appAutoPatchLocalPLIST}
     if [[ -n "${version_comparison_method_option}" ]]; then
@@ -2198,8 +2167,8 @@ gather_error_log(){
     }
     
     function verifyLastPosition(){
-        # Find the last position text in scriptLog
-        lastPosition_line=$(tail -n 400 "$scriptLog" | grep 'Last position:' | tail -n 1)
+        # Find the last position text in appAutoPatchLog
+        lastPosition_line=$(tail -n 400 "$appAutoPatchLog" | grep 'Last position:' | tail -n 1)
         
         if [ -n "$lastPosition_line" ]; then
             # Extract the last position from the line
@@ -2287,6 +2256,19 @@ workflow_startup() {
         forceSelfUpdateCheck="true"
     fi
 
+    # Resolve SelfUpdateEnabled/SelfUpdateFrequency (managed/local/CLI) before checking for
+    # updates - self_update() runs ahead of get_preferences()/manage_parameter_options() so an
+    # outdated script can update itself before doing anything else, so those preferences aren't
+    # populated yet otherwise.
+    resolve_self_update_preferences
+
+    # Preview whether this run will end up fully silent (InteractiveMode 0, or the
+    # --workflow-install-now-silent trigger) before get_preferences()/manage_parameter_options()
+    # normally decide that - so the Dock/loginwindow wait and the swiftDialog install/update check
+    # below can be skipped for unattended lab/kiosk Macs with no user session, where neither is
+    # ever needed. The authoritative InteractiveModeOption is still resolved normally afterward.
+    resolve_early_silent_mode
+
     # Check for AAP Updates
     self_update "$@"
 
@@ -2303,8 +2285,13 @@ workflow_startup() {
         exit 1
     fi
 
-    #Check for Dialog
-    get_dialog
+    #Check for Dialog - skipped for fully-silent runs (InteractiveMode 0, or
+    # --workflow-install-now-silent), which never show a swiftDialog window
+    if [[ "${runningSilentlyOption}" == "TRUE" ]]; then
+        log_info "Running silently; skipping swiftDialog install/update check."
+    else
+        get_dialog
+    fi
     
     # Check for logs that need to be archived.
     archive_logs
@@ -2377,14 +2364,20 @@ workflow_startup() {
 		log_debug "Debug mode enabled."
 	fi
 	
-	# In case aap is running at system startup, wait for the loginwindow process befor continuing.
-	local startup_timeout
-	startup_timeout=0
-	while [[ ! $(pgrep "loginwindow") ]] && [[ "${startup_timeout}" -lt 600 ]]; do
-		log_status "Waiting for macOS startup to complete..."
-		sleep 10
-		startup_timeout=$((startup_timeout + 10))
-	done
+	# In case aap is running at system startup, wait for the loginwindow process before continuing -
+	# skipped for fully-silent runs (InteractiveMode 0, or --workflow-install-now-silent), which are
+	# expected to run unattended (e.g. lab/kiosk Macs) with no user session ever active.
+	if [[ "${runningSilentlyOption}" == "TRUE" ]]; then
+		log_info "Running silently; skipping wait for an active user session."
+	else
+		local startup_timeout
+		startup_timeout=0
+		while [[ ! $(pgrep "loginwindow") ]] && [[ "${startup_timeout}" -lt 600 ]]; do
+			log_status "Waiting for macOS startup to complete..."
+			sleep 10
+			startup_timeout=$((startup_timeout + 10))
+		done
+	fi
 	
 	# Detailed system and user checks.
 	get_logged_in_user
@@ -2547,12 +2540,15 @@ workflow_startup() {
     # entire run: it must happen after get_preferences (which populates langUser) and only needs
     # to run once per execution, since langUser and the managed profile do not change mid-run.
     set_display_strings_language
-    supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
+    [[ -n "${supportTeamWebsite}" ]] && [[ "${supportTeamWebsite}" != "hide" ]] && supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
     helpMessage="${display_string_help_message_intro} **${supportTeamName}:**"
 
-    [[ "${supportTeamPhone}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_telephone}:** ${supportTeamPhone}"
-    [[ "${supportTeamEmail}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_email}:** ${supportTeamEmail}"
-    [[ "${supportTeamWebsite}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_help_website}:** ${supportTeamHyperlink}"
+    # A blank/unconfigured value hides the line the same way "hide" does (#241) - a blank field
+    # previously fell back to a hardcoded placeholder (e.g. "Add IT Phone Number") that displayed
+    # literally in the info dialog as if it were a real, configured value.
+    [[ -n "${supportTeamPhone}" ]] && [[ "${supportTeamPhone}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_telephone}:** ${supportTeamPhone}"
+    [[ -n "${supportTeamEmail}" ]] && [[ "${supportTeamEmail}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_email}:** ${supportTeamEmail}"
+    [[ -n "${supportTeamWebsite}" ]] && [[ "${supportTeamWebsite}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_help_website}:** ${supportTeamHyperlink}"
 
     # Computer Information
     helpMessage+="\n\n**${display_string_help_message_computer_info}:**"
@@ -3103,10 +3099,14 @@ get_installomator() {
             latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
         elif [[ "$installomatorVersion" == "Custom" ]] || [[ "$installomatorVersion" == "custom" ]]; then
             log_info "Attempting to download Installomator from Custom Repo"
-            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "$installomatorVersionCustomBranchName" | tail -1 | cut -d'"' -f4)"
+            # Match the exact `"name": "branch"` JSON line, not a bare substring - otherwise a
+            # branch name that's a substring of another (e.g. "apple-ls" vs "dev-apple-ls") can
+            # match multiple entries in the branches API response, and `tail -1` silently picks
+            # the wrong one's commit sha (whichever sorts last alphabetically).
+            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "\"name\": \"${installomatorVersionCustomBranchName}\"" | tail -1 | cut -d'"' -f4)"
         else
             log_info "Attempting to download Installomator main version"
-            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "main" | tail -1 | cut -d'"' -f4)"
+            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "\"name\": \"main\"" | tail -1 | cut -d'"' -f4)"
         fi
         
         tarPath="$installomatorPath/installomator.latest.tar.gz"
@@ -3135,7 +3135,7 @@ get_installomator() {
             appVersion="$(cat $fragmentsPath/version.sh)"
         elif [[ "$installomatorVersion" == "Custom" ]] || [[ "$installomatorVersion" == "custom" ]]; then
             log_notice "Pulling from custom installomator"
-            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "$installomatorVersionCustomBranchName" | tail -1 | cut -d'"' -f4)"
+            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "\"name\": \"${installomatorVersionCustomBranchName}\"" | tail -1 | cut -d'"' -f4)"
             appNewVersion="$(curl -sL "https://raw.githubusercontent.com/$installomatorVersionCustomRepoPath/refs/heads/$installomatorVersionCustomBranchName/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
             appVersion="$(cat "${installomatorScript}" | grep VERSIONDATE= | cut -d'"' -f2)"
             # convert to epoch
@@ -3143,7 +3143,7 @@ get_installomator() {
             #appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
         else
             log_notice "Pulling from Installomator Main Branch"
-            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "main" | tail -1 | cut -d'"' -f4)"
+            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "\"name\": \"main\"" | tail -1 | cut -d'"' -f4)"
             appNewVersion="$(curl -sL "https://raw.githubusercontent.com/Installomator/Installomator/refs/heads/main/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
             appVersion="$(cat "${installomatorScript}" | grep VERSIONDATE= | cut -d'"' -f2)"
             # convert to epoch
@@ -3396,9 +3396,38 @@ check_completion_status() {
     fi
     
     if [[  $PatchingComplete == 1 ]]; then
-        #This should be set by configuration # # # deferral_timer_minutes="1440"
-        log_info "Patching Status Already Complete, trying again in ${deferral_timer_minutes} minutes."
-        set_auto_launch_deferral
+        if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
+        || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
+            # Monthly Patching Cadence already calculated and stored the correct (often weeks/months
+            # out) NextAutoLaunch the first time patching completed this cycle. Don't let an
+            # out-of-band re-trigger (manual run, reinstall/upgrade, etc.) landing here again blow
+            # that away with set_auto_launch_deferral()'s much shorter deferral_timer_minutes-based
+            # date instead (#236) - only (re)calculate it if there isn't already a valid, future one.
+            local existing_next_auto_launch existing_next_auto_launch_epoch
+            existing_next_auto_launch=$(defaults read "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null)
+            if [[ "${existing_next_auto_launch}" == "FALSE" ]] || [[ "${existing_next_auto_launch}" == "0" ]]; then
+                # Automatic Relaunch is explicitly disabled (WorkflowDisableRelaunch) - leave that
+                # sentinel value alone rather than re-enabling it with a calculated cadence date.
+                log_info "Patching Status Already Complete; Automatic Relaunch is disabled (NextAutoLaunch=${existing_next_auto_launch}) - leaving it as-is."
+                log_exit "Automatic Relaunch is disabled; AAP will not automatically relaunch."
+                exit_clean
+            fi
+            existing_next_auto_launch_epoch=$(date -j -f "${timestamp_format}" "${existing_next_auto_launch}" +%s 2> /dev/null)
+            if [[ -n "${existing_next_auto_launch_epoch}" ]] && (( existing_next_auto_launch_epoch > $(date +%s) )); then
+                log_info "Patching Status Already Complete; Monthly Patching Cadence enabled and a future NextAutoLaunch (${existing_next_auto_launch}) is already set - leaving it as-is."
+                log_exit "AAP is scheduled to automatically relaunch at: ${existing_next_auto_launch}"
+                exit_clean
+            else
+                log_info "Patching Status Already Complete; Monthly Patching Cadence enabled but no valid future NextAutoLaunch is set - calculating it now."
+                next_nth_weekday=$(next_nth_weekday_datetime ${monthly_patching_cadence_weekday_index} ${monthly_patching_cadence_ordinal_value} "${monthly_patching_cadence_start_time}")
+                log_notice "Will auto launch on ${next_nth_weekday}"
+                set_auto_launch_monthly_cadence
+            fi
+        else
+            #This should be set by configuration # # # deferral_timer_minutes="1440"
+            log_info "Patching Status Already Complete, trying again in ${deferral_timer_minutes} minutes."
+            set_auto_launch_deferral
+        fi
     elif [[  $PatchingComplete == 0 ]]; then
         log_info "Continuing App Auto-Patch Workflow"
     else
@@ -5479,16 +5508,16 @@ check_and_echo_errors() {
 }
 
 appsUpToDate(){
-    # Find the last position text in scriptLog
-    appsUpToDate=$(tail -n 200 "$scriptLog" | grep 'All apps are up to date. Nothing to do.' | tail -n 1)
+    # Find the last position text in appAutoPatchLog
+    appsUpToDate=$(tail -n 200 "$appAutoPatchLog" | grep 'All apps are up to date. Nothing to do.' | tail -n 1)
     
     errorsCount=$(echo $errorCount)
     
     if [ -n "$appsUpToDate" ]; then
         formatted_app_result=$(echo "$appsUpToDate" | awk -F 'All apps are up to date. Nothing to do.' '{print $2}' | tr -d '[:space:]')
-        notice $formatted_app_result
+        log_notice "${formatted_app_result}"
     else
-        notice "Apps were updated"
+        log_notice "Apps were updated"
     fi
     
     # Extract the App up to date info from the AAP log
@@ -5793,23 +5822,94 @@ check_webhook(){
     esac
 }
 
+resolve_early_silent_mode() {
+    # Lightweight, read-only preview of whether this run will end up fully silent - either the
+    # --workflow-install-now-silent trigger, or InteractiveMode resolving to 0 once managed/local
+    # preferences are taken into account. Mirrors the same managed-overrides-local-overrides-CLI/
+    # default precedence get_preferences()/manage_parameter_options() use for InteractiveMode, but
+    # doesn't mutate InteractiveModeOption itself - that's still resolved normally, later, as the
+    # single source of truth for the rest of the run.
+    runningSilentlyOption="FALSE"
+
+    # --workflow-install-now (non-silent) always forces InteractiveModeOption to 2 later on, so
+    # never treat this run as silent even if InteractiveMode itself is configured as 0.
+    if [[ "${workflow_install_now_option:-}" == "TRUE" ]] || [[ -f "${WORKFLOW_INSTALL_NOW_FILE}" ]]; then
+        return 0
+    fi
+
+    if [[ "${workflow_install_now_silent_option:-}" == "TRUE" ]] || [[ -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" ]]; then
+        runningSilentlyOption="TRUE"
+        return 0
+    fi
+
+    local interactive_mode_managed interactive_mode_local interactive_mode_preview
+    interactive_mode_managed=$(defaults read "${appAutoPatchManagedPLIST}" InteractiveMode 2> /dev/null)
+    interactive_mode_local=$(defaults read "${appAutoPatchLocalPLIST}" InteractiveMode 2> /dev/null)
+
+    interactive_mode_preview="${InteractiveModeOption:-${InteractiveMode}}"
+    [[ -n "${interactive_mode_managed}" ]] && interactive_mode_preview="${interactive_mode_managed}"
+    { [[ -z "${interactive_mode_managed}" ]] && [[ -z "${InteractiveModeOption}" ]] && [[ -n "${interactive_mode_local}" ]]; } && interactive_mode_preview="${interactive_mode_local}"
+
+    [[ "${interactive_mode_preview}" == "0" ]] && runningSilentlyOption="TRUE"
+}
+
+resolve_self_update_preferences() {
+    # self_update() must run very early in workflow_startup() - before get_preferences() and
+    # manage_parameter_options() populate/normalize every other preference - so that an outdated
+    # script can update itself before doing anything else. But that meant self_update() previously
+    # read SelfUpdateEnabled/SelfUpdateFrequency directly from the local plist on its own, ignoring
+    # both the managed preference and the set_defaults()/CLI-resolved option variables entirely: on
+    # a Mac's first-ever run (no local plist yet), it would silently fall back to enabled regardless
+    # of a managed SelfUpdateEnabled=false. This resolves and normalizes both values the same way
+    # get_preferences()/manage_parameter_options() do for every other key (managed overrides
+    # local/CLI overrides the set_defaults() default), and writes the result back to the local
+    # plist, so self_update() can just trust ${self_update_enabled_option}/${self_update_frequency_option}.
+    [[ ! -d "${appAutoPatchFolder}" ]] && mkdir -p "${appAutoPatchFolder}"
+
+    local self_update_enabled_managed self_update_frequency_managed
+    local self_update_enabled_local self_update_frequency_local
+    self_update_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateEnabled 2> /dev/null)
+    self_update_frequency_managed=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateFrequency 2> /dev/null)
+    self_update_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateEnabled 2> /dev/null)
+    self_update_frequency_local=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateFrequency 2> /dev/null)
+
+    [[ -n "${self_update_enabled_managed}" ]] && self_update_enabled_option="${self_update_enabled_managed}"
+    { [[ -z "${self_update_enabled_managed}" ]] && [[ -n "${self_update_enabled_option}" ]] && [[ -n "${self_update_enabled_local}" ]]; } && self_update_enabled_option="${self_update_enabled_local}"
+
+    [[ -n "${self_update_frequency_managed}" ]] && self_update_frequency_option="${self_update_frequency_managed}"
+    { [[ -z "${self_update_frequency_managed}" ]] && [[ -n "${self_update_frequency_option}" ]] && [[ -n "${self_update_frequency_local}" ]]; } && self_update_frequency_option="${self_update_frequency_local}"
+
+    case "${self_update_enabled_option:l}" in
+        true|1|yes) self_update_enabled_option="TRUE" ;;
+        *)          self_update_enabled_option="FALSE" ;;
+    esac
+    if [[ "${self_update_enabled_option}" == "TRUE" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool true
+    else
+        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool false
+    fi
+
+    case "${self_update_frequency_option:l}" in
+        daily|weekly|monthly) self_update_frequency_option="${self_update_frequency_option:l}" ;;
+        *)                    self_update_frequency_option="daily" ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" SelfUpdateFrequency -string "${self_update_frequency_option}"
+
+    log_verbose "self_update_enabled_option (resolved pre-self_update): ${self_update_enabled_option}"
+    log_verbose "self_update_frequency_option (resolved pre-self_update): ${self_update_frequency_option}"
+}
+
 self_update() {
 
     # Check AAP & Log Folder exist for firs trun
     [[ ! -d "${appAutoPatchFolder}" ]] && mkdir -p "${appAutoPatchFolder}"
     [[ ! -d "${appAutoPatchLogFolder}" ]] && mkdir -p "${appAutoPatchLogFolder}"
 
-    local enabled freq now nextDue
-    enabled=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateEnabled 2>/dev/null || echo "1")
-    [[ "$enabled" == "0" || "$enabled" == "FALSE" ]] && { log_info "Self-update disabled by prefs."; return 0; }
-
-    freq=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateFrequency 2>/dev/null || echo "daily")
-    case "${freq:l}" in
-        daily)   freq="daily" ;;
-        weekly)  freq="weekly" ;;
-        monthly) freq="monthly" ;;
-        *)       freq="daily" ;;
-    esac
+    # SelfUpdateEnabled/SelfUpdateFrequency are resolved by resolve_self_update_preferences(),
+    # called immediately before self_update() in workflow_startup() - see that function for why.
+    local freq now nextDue
+    [[ "${self_update_enabled_option:-FALSE}" != "TRUE" ]] && { log_info "Self-update disabled by prefs."; return 0; }
+    freq="${self_update_frequency_option:-daily}"
 
     # Precompute the retry interval in seconds here. zsh's $(( )) arithmetic coerces non-numeric
     # string operands to 0 before comparing, so freq=="daily" is always true regardless of

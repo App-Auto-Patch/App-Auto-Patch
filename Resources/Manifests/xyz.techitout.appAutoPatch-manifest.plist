@@ -215,7 +215,7 @@ During a profile replacement, the system updates payloads with the same `Payload
 					<string>IgnoreDNDApps</string>
 					<string>SelfUpdateEnabled</string>
 					<string>SelfUpdateFrequency</string>
-					<string>versionComparisonMethod</string>
+					<string>VersionComparisonMethod</string>
 					<string>VersionComparisonInstallomatorFallback</string>
 				</array>
 			</dict>
@@ -1306,7 +1306,7 @@ During a profile replacement, the system updates payloads with the same `Payload
 			<key>pfm_documentation_url</key>
 			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Version-Comparison-Methods#version-comparison-method</string>
 			<key>pfm_name</key>
-			<string>versionComparisonMethod</string>
+			<string>VersionComparisonMethod</string>
 			<key>pfm_range_list</key>
 			<array>
 				<string>IS_AT_LEAST</string>
