@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.1"
 scriptDate="2026/07/23"
-scriptBuild="3.6.1.2607232100"
+scriptBuild="3.6.1.2607232200"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -3396,9 +3396,38 @@ check_completion_status() {
     fi
     
     if [[  $PatchingComplete == 1 ]]; then
-        #This should be set by configuration # # # deferral_timer_minutes="1440"
-        log_info "Patching Status Already Complete, trying again in ${deferral_timer_minutes} minutes."
-        set_auto_launch_deferral
+        if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
+        || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
+            # Monthly Patching Cadence already calculated and stored the correct (often weeks/months
+            # out) NextAutoLaunch the first time patching completed this cycle. Don't let an
+            # out-of-band re-trigger (manual run, reinstall/upgrade, etc.) landing here again blow
+            # that away with set_auto_launch_deferral()'s much shorter deferral_timer_minutes-based
+            # date instead (#236) - only (re)calculate it if there isn't already a valid, future one.
+            local existing_next_auto_launch existing_next_auto_launch_epoch
+            existing_next_auto_launch=$(defaults read "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null)
+            if [[ "${existing_next_auto_launch}" == "FALSE" ]] || [[ "${existing_next_auto_launch}" == "0" ]]; then
+                # Automatic Relaunch is explicitly disabled (WorkflowDisableRelaunch) - leave that
+                # sentinel value alone rather than re-enabling it with a calculated cadence date.
+                log_info "Patching Status Already Complete; Automatic Relaunch is disabled (NextAutoLaunch=${existing_next_auto_launch}) - leaving it as-is."
+                log_exit "Automatic Relaunch is disabled; AAP will not automatically relaunch."
+                exit_clean
+            fi
+            existing_next_auto_launch_epoch=$(date -j -f "${timestamp_format}" "${existing_next_auto_launch}" +%s 2> /dev/null)
+            if [[ -n "${existing_next_auto_launch_epoch}" ]] && (( existing_next_auto_launch_epoch > $(date +%s) )); then
+                log_info "Patching Status Already Complete; Monthly Patching Cadence enabled and a future NextAutoLaunch (${existing_next_auto_launch}) is already set - leaving it as-is."
+                log_exit "AAP is scheduled to automatically relaunch at: ${existing_next_auto_launch}"
+                exit_clean
+            else
+                log_info "Patching Status Already Complete; Monthly Patching Cadence enabled but no valid future NextAutoLaunch is set - calculating it now."
+                next_nth_weekday=$(next_nth_weekday_datetime ${monthly_patching_cadence_weekday_index} ${monthly_patching_cadence_ordinal_value} "${monthly_patching_cadence_start_time}")
+                log_notice "Will auto launch on ${next_nth_weekday}"
+                set_auto_launch_monthly_cadence
+            fi
+        else
+            #This should be set by configuration # # # deferral_timer_minutes="1440"
+            log_info "Patching Status Already Complete, trying again in ${deferral_timer_minutes} minutes."
+            set_auto_launch_deferral
+        fi
     elif [[  $PatchingComplete == 0 ]]; then
         log_info "Continuing App Auto-Patch Workflow"
     else

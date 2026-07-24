@@ -16,6 +16,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 - Fixed: `appsUpToDate()` called a non-existent `notice` function (instead of `log_notice`) after a patch run, producing a `command not found: notice` error in the log even on an otherwise-successful run (#237)
 - Fixed: `appsUpToDate()`'s "all apps up to date" detection and the Installomator error-log position tracker both referenced an undefined `scriptLog` variable (should have been `appAutoPatchLog`), causing a `tail: : No such file or directory` error on every patch run
 - Changed: leaving `SupportTeamPhone`/`SupportTeamEmail`/`SupportTeamWebsite` unconfigured now hides that line from the info dialog, the same as explicitly setting it to `hide` - previously an unconfigured field fell back to a hardcoded placeholder (e.g. "Add IT Phone Number") that displayed literally as if it were a real value (#241)
+- Fixed: with `MonthlyPatchingCadenceEnabled`, if AAP was re-triggered ahead of its scheduled relaunch (e.g. a manual run, or a reinstall/upgrade) after that cycle's patching had already completed, `NextAutoLaunch` was recalculated using the regular deferral timer (24 hours by default) instead of leaving the already-correct, further-out monthly cadence date in place - causing AAP to relaunch far more often than intended, especially with a shorter `DaysUntilReset` (#236)
 
 ## Version 3.6.0
 ### 20-Jul-2026
