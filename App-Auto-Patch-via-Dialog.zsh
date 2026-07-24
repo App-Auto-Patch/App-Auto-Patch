@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.1"
 scriptDate="2026/07/23"
-scriptBuild="3.6.1.2607231900"
+scriptBuild="3.6.1.2607232000"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2163,8 +2163,8 @@ gather_error_log(){
     }
     
     function verifyLastPosition(){
-        # Find the last position text in scriptLog
-        lastPosition_line=$(tail -n 400 "$scriptLog" | grep 'Last position:' | tail -n 1)
+        # Find the last position text in appAutoPatchLog
+        lastPosition_line=$(tail -n 400 "$appAutoPatchLog" | grep 'Last position:' | tail -n 1)
         
         if [ -n "$lastPosition_line" ]; then
             # Extract the last position from the line
@@ -5472,16 +5472,16 @@ check_and_echo_errors() {
 }
 
 appsUpToDate(){
-    # Find the last position text in scriptLog
-    appsUpToDate=$(tail -n 200 "$scriptLog" | grep 'All apps are up to date. Nothing to do.' | tail -n 1)
+    # Find the last position text in appAutoPatchLog
+    appsUpToDate=$(tail -n 200 "$appAutoPatchLog" | grep 'All apps are up to date. Nothing to do.' | tail -n 1)
     
     errorsCount=$(echo $errorCount)
     
     if [ -n "$appsUpToDate" ]; then
         formatted_app_result=$(echo "$appsUpToDate" | awk -F 'All apps are up to date. Nothing to do.' '{print $2}' | tr -d '[:space:]')
-        notice $formatted_app_result
+        log_notice "${formatted_app_result}"
     else
-        notice "Apps were updated"
+        log_notice "Apps were updated"
     fi
     
     # Extract the App up to date info from the AAP log

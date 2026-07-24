@@ -1064,7 +1064,7 @@
             ],
             "property_order": 202
         },
-        "versionComparisonMethod": {
+        "VersionComparisonMethod": {
             "type": "string",
             "title": "Version Comparison Method",
             "description": "Determines the version comparison method used when checking for updates",

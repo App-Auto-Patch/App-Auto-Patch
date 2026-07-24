@@ -12,6 +12,9 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 - Fixed: when using `InstallomatorVersionCustomRepoPath`/`InstallomatorVersionCustomBranchName` to pull Installomator from a custom fork and branch, AAP could silently download from the wrong branch if another branch's name contained the configured branch name as a substring (e.g. `apple-ls` vs. `dev-apple-ls`)
 - Fixed: `SelfUpdateEnabled`/`SelfUpdateFrequency` weren't resolved (from managed preferences or local config) until after AAP had already checked for and installed a self-update, so a managed `SelfUpdateEnabled=false` had no effect on a Mac's first-ever run (before any local preference existed). These are now resolved before the self-update check runs
 - Fixed: on fully-silent, unattended runs (`InteractiveMode 0`, or the `--workflow-install-now-silent` trigger) - intended for lab/kiosk Macs with no user ever logged in - AAP still waited for the Dock/loginwindow to become active (up to 10 minutes) and still checked for/installed/updated swiftDialog, even though neither is ever needed for a fully-silent run. Both are now skipped for those runs
+- Fixed: the Jamf Application & Custom Settings schema defined `VersionComparisonMethod` with incorrect lowercase casing (`versionComparisonMethod`), so a value set through the Jamf schema UI was silently never read by AAP and always fell back to the default (`IS_AT_LEAST`) (#237)
+- Fixed: `appsUpToDate()` called a non-existent `notice` function (instead of `log_notice`) after a patch run, producing a `command not found: notice` error in the log even on an otherwise-successful run (#237)
+- Fixed: `appsUpToDate()`'s "all apps up to date" detection and the Installomator error-log position tracker both referenced an undefined `scriptLog` variable (should have been `appAutoPatchLog`), causing a `tail: : No such file or directory` error on every patch run
 
 ## Version 3.6.0
 ### 20-Jul-2026
