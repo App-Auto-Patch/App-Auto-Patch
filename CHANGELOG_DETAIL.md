@@ -2,6 +2,11 @@
 
 # Version 3
 
+## Version 3.6.1
+### 23-Jul-2026 - Build 3.6.1.2607231457
+- Fixed: `installomatorVersionCustomBranchName`/main-branch lookups resolved the wrong commit SHA when another branch's name contained the target branch name as a substring (e.g. requesting `apple-ls` could return `dev-apple-ls`'s commit instead), because `grep -A2 "$installomatorVersionCustomBranchName"` matched any line containing that text, and `tail -1` then picked whichever matching branch happened to sort last in the GitHub API response
+	- Fixed by tightening the `grep` pattern to match the exact `"name": "branch"` JSON key/value line (`grep -A2 "\"name\": \"${installomatorVersionCustomBranchName}\""`), applied to both the custom-repo/branch and standard `main`-branch lookups (4 call sites total)
+
 ## Version 3.6.0
 ### 17-Jul-2026 (2) - Build 3.6.0.2607171635
 - Fixed: label fragments that call Installomator's own `printlog` helper directly (e.g. `googlechrome`'s deprecation warning, `printlog "..." REQ`) crashed evaluation of that label's case block with `printlog:40: bad math expression: empty string`, so the label silently failed to be evaluated (no version/name/etc. extracted) every time it was encountered during discovery
