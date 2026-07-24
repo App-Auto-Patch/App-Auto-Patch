@@ -5,7 +5,11 @@
     <background-darkAqua file="AAPLogo-background.png" alignment="bottomleft" scaling="proportional" mime-type="image/png"/>
     <welcome file="welcome.txt" mime-type="text/plain"/>
     <readme file="readme.txt" mime-type="text/plain"/>
-    <options customize="never" require-scripts="false" rootVolumeOnly="true"/>
+    <!-- Without hostArchitectures, macOS Installer on Apple Silicon assumes the product requires
+         Rosetta 2 and prompts to install it before proceeding, even though this pkg has no
+         compiled payload at all (nopayload) and only ever runs a zsh script. Declaring both
+         architectures here tells the installer this product runs natively on either. -->
+    <options customize="never" require-scripts="false" rootVolumeOnly="true" hostArchitectures="arm64,x86_64"/>
     <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
     <choices-outline>
         <line choice="default">
