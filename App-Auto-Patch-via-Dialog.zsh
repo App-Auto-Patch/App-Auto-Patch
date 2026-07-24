@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.1"
 scriptDate="2026/07/23"
-scriptBuild="3.6.1.2607232200"
+scriptBuild="3.6.1.2607232300"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2488,14 +2488,35 @@ workflow_startup() {
         # /var/tmp/overlayicon.icns is a fixed path under world-writable /var/tmp. Remove any
         # pre-existing file/symlink first so a local user can't redirect this root-owned write.
         rm -f /var/tmp/overlayicon.icns 2>/dev/null
-        if [[ -n "$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_app_path)" ]]; then
-            # Use Self Service icon for overlay if found
-            xxd -p -s 260 "$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_app_path)"/Icon$'\r'/..namedfork/rsrc | xxd -r -p > /var/tmp/overlayicon.icns
-            overlayicon="/var/tmp/overlayicon.icns"
-        elif [[ -n "$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_plus_path)" ]]; then
-            # Use Self Service Plus icon for overlay if found
-            xxd -p -s 260 "$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_plus_path)"/Icon$'\r'/..namedfork/rsrc | xxd -r -p > /var/tmp/overlayicon.icns
-            overlayicon="/var/tmp/overlayicon.icns"
+        local selfServiceAppPath selfServicePlusPath
+        selfServiceAppPath="$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_app_path 2>/dev/null)"
+        selfServicePlusPath="$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_plus_path 2>/dev/null)"
+
+        # A custom icon (set via Finder's Get Info) is marked by an invisible "Icon\r" file whose
+        # *resource fork* holds the actual icon data - the file itself is otherwise always present/
+        # empty-looking, so its existence alone doesn't mean a custom icon was actually set. Without
+        # checking the resource fork's size too, an app with no custom icon still matched here and
+        # produced a zero-byte, unusable overlayicon.icns. Fall back to the app's own default
+        # AppIcon.icns (still identifies the MDM/tool correctly) when no custom icon is present.
+        if [[ -n "$selfServiceAppPath" ]] && [[ -s "${selfServiceAppPath}/Icon"$'\r'/..namedfork/rsrc ]]; then
+            xxd -p -s 260 "${selfServiceAppPath}/Icon"$'\r'/..namedfork/rsrc | xxd -r -p > /var/tmp/overlayicon.icns
+            if [[ -s /var/tmp/overlayicon.icns ]]; then
+                overlayicon="/var/tmp/overlayicon.icns"
+            else
+                overlayicon="${selfServiceAppPath}/Contents/Resources/AppIcon.icns"
+            fi
+        elif [[ -n "$selfServicePlusPath" ]] && [[ -s "${selfServicePlusPath}/Icon"$'\r'/..namedfork/rsrc ]]; then
+            xxd -p -s 260 "${selfServicePlusPath}/Icon"$'\r'/..namedfork/rsrc | xxd -r -p > /var/tmp/overlayicon.icns
+            if [[ -s /var/tmp/overlayicon.icns ]]; then
+                overlayicon="/var/tmp/overlayicon.icns"
+            else
+                overlayicon="${selfServicePlusPath}/Contents/Resources/AppIcon.icns"
+            fi
+        elif [[ -n "$selfServiceAppPath" ]]; then
+            # No custom icon set - use Self Service's own default icon instead of a blank overlay.
+            overlayicon="${selfServiceAppPath}/Contents/Resources/AppIcon.icns"
+        elif [[ -n "$selfServicePlusPath" ]]; then
+            overlayicon="${selfServicePlusPath}/Contents/Resources/AppIcon.icns"
         # Computer is not Jamf enrolled (or can't use Self Service logo), get a different overlay icon
         elif [[ -e "/Library/Application Support/JAMF/Jamf.app" ]]; then
             overlayicon="/Library/Application Support/JAMF/Jamf.app/Contents/Resources/AppIcon.icns"
