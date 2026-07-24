@@ -10,6 +10,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 **Fixes**
 
 - Fixed: when using `InstallomatorVersionCustomRepoPath`/`InstallomatorVersionCustomBranchName` to pull Installomator from a custom fork and branch, AAP could silently download from the wrong branch if another branch's name contained the configured branch name as a substring (e.g. `apple-ls` vs. `dev-apple-ls`)
+- Fixed: `SelfUpdateEnabled`/`SelfUpdateFrequency` weren't resolved (from managed preferences or local config) until after AAP had already checked for and installed a self-update, so a managed `SelfUpdateEnabled=false` had no effect on a Mac's first-ever run (before any local preference existed). These are now resolved before the self-update check runs
 
 ## Version 3.6.0
 ### 20-Jul-2026

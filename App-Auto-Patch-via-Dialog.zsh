@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.1"
 scriptDate="2026/07/23"
-scriptBuild="3.6.1.2607231457"
+scriptBuild="3.6.1.2607231800"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -1156,10 +1156,6 @@ get_preferences() {
         support_team_email_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamEmail 2> /dev/null)
         local support_team_website_managed
         support_team_website_managed=$(defaults read "${appAutoPatchManagedPLIST}" SupportTeamWebsite 2> /dev/null)
-        local self_update_enabled_managed
-        self_update_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateEnabled 2> /dev/null)
-        local self_update_frequency_managed
-        self_update_frequency_managed=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateFrequency 2> /dev/null)
         local dialog_icon_path_managed
         dialog_icon_path_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogIcon 2> /dev/null)
         local monthly_patching_cadence_enabled_managed
@@ -1284,10 +1280,6 @@ get_preferences() {
         support_team_email_local=$(defaults read "${appAutoPatchLocalPLIST}" SupportTeamEmail 2> /dev/null)
         local support_team_website_local
         support_team_website_local=$(defaults read "${appAutoPatchLocalPLIST}" SupportTeamWebsite 2> /dev/null)
-        local self_update_enabled_local
-        self_update_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateEnabled 2> /dev/null)
-        local self_update_frequency_local
-        self_update_frequency_local=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateFrequency 2> /dev/null)
         local dialog_icon_path_local
         dialog_icon_path_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogIcon 2> /dev/null)
         local monthly_patching_cadence_enabled_local
@@ -1446,11 +1438,8 @@ get_preferences() {
 
 
 
-    [[ -n "${self_update_enabled_managed}" ]] && self_update_enabled_option="${self_update_enabled_managed}"
-    { [[ -z "${self_update_enabled_managed}" ]] && [[ -n "${self_update_enabled_option}" ]] && [[ -n "${self_update_enabled_local}" ]]; } && self_update_enabled_option="${self_update_enabled_local}"
-
-    [[ -n "${self_update_frequency_managed}" ]] && self_update_frequency_option="${self_update_frequency_managed}"
-    { [[ -z "${self_update_frequency_managed}" ]] && [[ -n "${self_update_frequency_option}" ]] && [[ -n "${self_update_frequency_local}" ]]; } && self_update_frequency_option="${self_update_frequency_local}"
+    # SelfUpdateEnabled/SelfUpdateFrequency are resolved earlier by resolve_self_update_preferences()
+    # (before self_update() runs in workflow_startup()), not here - see that function for why.
 
     [[ -n "${dialog_icon_path_managed}" ]] && dialog_icon_option="${dialog_icon_path_managed}"
     { [[ -z "${dialog_icon_path_managed}" ]] && [[ -z "${dialog_icon_option}" ]] && [[ -n "${dialog_icon_path_local}" ]]; } && dialog_icon_option="${dialog_icon_path_local}"
@@ -2038,16 +2027,6 @@ manage_parameter_options() {
     fi
     log_verbose "InteractiveModeOption: $InteractiveModeOption"
 
-        # self_update_enabled_option normalization
-    case "${self_update_enabled_option:l}" in
-        true|1|yes)  _sue_norm="TRUE"  ;;
-        false|0|no|"") _sue_norm="FALSE" ;;
-        *)
-            log_warning "Invalid SelfUpdateEnabled value '${self_update_enabled_option:-<empty>}' — forcing to FALSE."
-            _sue_norm="FALSE"
-        ;;
-    esac
-    
     # Manage ${workflow_install_now_patching_status_action_option} and save to ${appAutoPatchLocalPLIST}
     if [[ -n "${workflow_install_now_patching_status_action_option}" ]]; then
         defaults write "${appAutoPatchLocalPLIST}" WorkflowInstallNowPatchingStatusAction -string "${workflow_install_now_patching_status_action_option}"
@@ -2080,23 +2059,9 @@ manage_parameter_options() {
     { [[ -n "${webhook_url_slack_option}" ]]; } && log_verbose "webhook_url_slack_option is: ${webhook_url_slack_option}"
     { [[ -n "${webhook_url_teams_option}" ]]; } && log_verbose "webhook_url_teams_option is: ${webhook_url_teams_option}"
 
-    # Manage ${self_update_enabled_option} and save to ${appAutoPatchLocalPLIST}.
-    if [[ "${self_update_enabled_option}" -eq 1 ]] || [[ "${self_update_enabled_option}" == "TRUE" ]]; then
-        self_update_enabled_option="TRUE"
-        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool true
-    else
-        self_update_enabled_option="FALSE"
-        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool false
-    fi
-
-    # Manage ${self_update_frequency_option} and save to ${appAutoPatchLocalPLIST}.
-    if [[ -n "${self_update_frequency_option:-}" ]]; then
-        # normalize to lower-case daily|weekly|monthly
-        local _freq_norm="${${self_update_frequency_option:l}}"
-        case "$_freq_norm" in daily|weekly|monthly) ;; *) _freq_norm="daily" ;; esac
-        /usr/bin/defaults write "${appAutoPatchLocalPLIST}" SelfUpdateFrequency -string "$_freq_norm"
-        log_info "Self-update frequency set to: ${_freq_norm}"
-    fi
+    # SelfUpdateEnabled/SelfUpdateFrequency are already resolved, normalized, and saved by
+    # resolve_self_update_preferences() before self_update() runs earlier in workflow_startup() -
+    # see that function for why.
 
     # Manage ${version_comparison_method_option} and save to ${appAutoPatchLocalPLIST}
     if [[ -n "${version_comparison_method_option}" ]]; then
@@ -2286,6 +2251,12 @@ workflow_startup() {
     if [[ "${force_self_update_check_option:-}" == "TRUE" ]]; then
         forceSelfUpdateCheck="true"
     fi
+
+    # Resolve SelfUpdateEnabled/SelfUpdateFrequency (managed/local/CLI) before checking for
+    # updates - self_update() runs ahead of get_preferences()/manage_parameter_options() so an
+    # outdated script can update itself before doing anything else, so those preferences aren't
+    # populated yet otherwise.
+    resolve_self_update_preferences
 
     # Check for AAP Updates
     self_update "$@"
@@ -5797,23 +5768,63 @@ check_webhook(){
     esac
 }
 
+resolve_self_update_preferences() {
+    # self_update() must run very early in workflow_startup() - before get_preferences() and
+    # manage_parameter_options() populate/normalize every other preference - so that an outdated
+    # script can update itself before doing anything else. But that meant self_update() previously
+    # read SelfUpdateEnabled/SelfUpdateFrequency directly from the local plist on its own, ignoring
+    # both the managed preference and the set_defaults()/CLI-resolved option variables entirely: on
+    # a Mac's first-ever run (no local plist yet), it would silently fall back to enabled regardless
+    # of a managed SelfUpdateEnabled=false. This resolves and normalizes both values the same way
+    # get_preferences()/manage_parameter_options() do for every other key (managed overrides
+    # local/CLI overrides the set_defaults() default), and writes the result back to the local
+    # plist, so self_update() can just trust ${self_update_enabled_option}/${self_update_frequency_option}.
+    [[ ! -d "${appAutoPatchFolder}" ]] && mkdir -p "${appAutoPatchFolder}"
+
+    local self_update_enabled_managed self_update_frequency_managed
+    local self_update_enabled_local self_update_frequency_local
+    self_update_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateEnabled 2> /dev/null)
+    self_update_frequency_managed=$(defaults read "${appAutoPatchManagedPLIST}" SelfUpdateFrequency 2> /dev/null)
+    self_update_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateEnabled 2> /dev/null)
+    self_update_frequency_local=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateFrequency 2> /dev/null)
+
+    [[ -n "${self_update_enabled_managed}" ]] && self_update_enabled_option="${self_update_enabled_managed}"
+    { [[ -z "${self_update_enabled_managed}" ]] && [[ -n "${self_update_enabled_option}" ]] && [[ -n "${self_update_enabled_local}" ]]; } && self_update_enabled_option="${self_update_enabled_local}"
+
+    [[ -n "${self_update_frequency_managed}" ]] && self_update_frequency_option="${self_update_frequency_managed}"
+    { [[ -z "${self_update_frequency_managed}" ]] && [[ -n "${self_update_frequency_option}" ]] && [[ -n "${self_update_frequency_local}" ]]; } && self_update_frequency_option="${self_update_frequency_local}"
+
+    case "${self_update_enabled_option:l}" in
+        true|1|yes) self_update_enabled_option="TRUE" ;;
+        *)          self_update_enabled_option="FALSE" ;;
+    esac
+    if [[ "${self_update_enabled_option}" == "TRUE" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool true
+    else
+        defaults write "${appAutoPatchLocalPLIST}" SelfUpdateEnabled -bool false
+    fi
+
+    case "${self_update_frequency_option:l}" in
+        daily|weekly|monthly) self_update_frequency_option="${self_update_frequency_option:l}" ;;
+        *)                    self_update_frequency_option="daily" ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" SelfUpdateFrequency -string "${self_update_frequency_option}"
+
+    log_verbose "self_update_enabled_option (resolved pre-self_update): ${self_update_enabled_option}"
+    log_verbose "self_update_frequency_option (resolved pre-self_update): ${self_update_frequency_option}"
+}
+
 self_update() {
 
     # Check AAP & Log Folder exist for firs trun
     [[ ! -d "${appAutoPatchFolder}" ]] && mkdir -p "${appAutoPatchFolder}"
     [[ ! -d "${appAutoPatchLogFolder}" ]] && mkdir -p "${appAutoPatchLogFolder}"
 
-    local enabled freq now nextDue
-    enabled=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateEnabled 2>/dev/null || echo "1")
-    [[ "$enabled" == "0" || "$enabled" == "FALSE" ]] && { log_info "Self-update disabled by prefs."; return 0; }
-
-    freq=$(defaults read "${appAutoPatchLocalPLIST}" SelfUpdateFrequency 2>/dev/null || echo "daily")
-    case "${freq:l}" in
-        daily)   freq="daily" ;;
-        weekly)  freq="weekly" ;;
-        monthly) freq="monthly" ;;
-        *)       freq="daily" ;;
-    esac
+    # SelfUpdateEnabled/SelfUpdateFrequency are resolved by resolve_self_update_preferences(),
+    # called immediately before self_update() in workflow_startup() - see that function for why.
+    local freq now nextDue
+    [[ "${self_update_enabled_option:-FALSE}" != "TRUE" ]] && { log_info "Self-update disabled by prefs."; return 0; }
+    freq="${self_update_frequency_option:-daily}"
 
     # Precompute the retry interval in seconds here. zsh's $(( )) arithmetic coerces non-numeric
     # string operands to 0 before comparing, so freq=="daily" is always true regardless of

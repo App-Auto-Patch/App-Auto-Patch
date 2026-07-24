@@ -3,7 +3,12 @@
 # Version 3
 
 ## Version 3.6.1
-### 23-Jul-2026 - Build 3.6.1.2607231457
+### 23-Jul-2026 (2) - Build 3.6.1.2607231800
+- Fixed: `self_update()` read `SelfUpdateEnabled`/`SelfUpdateFrequency` directly from `appAutoPatchLocalPLIST` on its own, completely bypassing the managed-preference/local-preference merge and `set_defaults()`/CLI-resolved option variables that every other preference goes through - because `self_update()` is called early in `workflow_startup()` (right after `install_app_auto_patch`), well before `get_preferences()`/`manage_parameter_options()` run and populate/normalize those option variables from managed and local prefs. On a Mac's first-ever run (no local plist yet), `self_update()`'s own fallback (`|| echo "1"`) meant it always checked for and could install an update, even with a managed `SelfUpdateEnabled=false` in place, since that managed value hadn't been read yet
+	- Fixed by extracting a new `resolve_self_update_preferences()` function that performs the same managed-overrides-local-overrides-default merge and normalization used elsewhere in the script for `SelfUpdateEnabled`/`SelfUpdateFrequency` specifically, called immediately before `self_update()` in `workflow_startup()`. `self_update()` itself now just reads the already-resolved `${self_update_enabled_option}`/`${self_update_frequency_option}` instead of doing its own independent `defaults read`
+	- Removed the now-redundant/duplicate `SelfUpdateEnabled`/`SelfUpdateFrequency` managed+local reads and merge in `get_preferences()`, and the redundant normalization/save-back block (including previously-dead, unused `_sue_norm` normalization) in `manage_parameter_options()`, since both are now handled solely by `resolve_self_update_preferences()`
+
+### 23-Jul-2026 (1) - Build 3.6.1.2607231457
 - Fixed: `installomatorVersionCustomBranchName`/main-branch lookups resolved the wrong commit SHA when another branch's name contained the target branch name as a substring (e.g. requesting `apple-ls` could return `dev-apple-ls`'s commit instead), because `grep -A2 "$installomatorVersionCustomBranchName"` matched any line containing that text, and `tail -1` then picked whichever matching branch happened to sort last in the GitHub API response
 	- Fixed by tightening the `grep` pattern to match the exact `"name": "branch"` JSON key/value line (`grep -A2 "\"name\": \"${installomatorVersionCustomBranchName}\""`), applied to both the custom-repo/branch and standard `main`-branch lookups (4 call sites total)
 
