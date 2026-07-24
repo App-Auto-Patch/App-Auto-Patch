@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.1"
 scriptDate="2026/07/23"
-scriptBuild="3.6.1.2607231800"
+scriptBuild="3.6.1.2607231900"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2258,6 +2258,13 @@ workflow_startup() {
     # populated yet otherwise.
     resolve_self_update_preferences
 
+    # Preview whether this run will end up fully silent (InteractiveMode 0, or the
+    # --workflow-install-now-silent trigger) before get_preferences()/manage_parameter_options()
+    # normally decide that - so the Dock/loginwindow wait and the swiftDialog install/update check
+    # below can be skipped for unattended lab/kiosk Macs with no user session, where neither is
+    # ever needed. The authoritative InteractiveModeOption is still resolved normally afterward.
+    resolve_early_silent_mode
+
     # Check for AAP Updates
     self_update "$@"
 
@@ -2274,8 +2281,13 @@ workflow_startup() {
         exit 1
     fi
 
-    #Check for Dialog
-    get_dialog
+    #Check for Dialog - skipped for fully-silent runs (InteractiveMode 0, or
+    # --workflow-install-now-silent), which never show a swiftDialog window
+    if [[ "${runningSilentlyOption}" == "TRUE" ]]; then
+        log_info "Running silently; skipping swiftDialog install/update check."
+    else
+        get_dialog
+    fi
     
     # Check for logs that need to be archived.
     archive_logs
@@ -2348,14 +2360,20 @@ workflow_startup() {
 		log_debug "Debug mode enabled."
 	fi
 	
-	# In case aap is running at system startup, wait for the loginwindow process befor continuing.
-	local startup_timeout
-	startup_timeout=0
-	while [[ ! $(pgrep "loginwindow") ]] && [[ "${startup_timeout}" -lt 600 ]]; do
-		log_status "Waiting for macOS startup to complete..."
-		sleep 10
-		startup_timeout=$((startup_timeout + 10))
-	done
+	# In case aap is running at system startup, wait for the loginwindow process before continuing -
+	# skipped for fully-silent runs (InteractiveMode 0, or --workflow-install-now-silent), which are
+	# expected to run unattended (e.g. lab/kiosk Macs) with no user session ever active.
+	if [[ "${runningSilentlyOption}" == "TRUE" ]]; then
+		log_info "Running silently; skipping wait for an active user session."
+	else
+		local startup_timeout
+		startup_timeout=0
+		while [[ ! $(pgrep "loginwindow") ]] && [[ "${startup_timeout}" -lt 600 ]]; do
+			log_status "Waiting for macOS startup to complete..."
+			sleep 10
+			startup_timeout=$((startup_timeout + 10))
+		done
+	fi
 	
 	# Detailed system and user checks.
 	get_logged_in_user
@@ -5766,6 +5784,37 @@ check_webhook(){
         ;;
         
     esac
+}
+
+resolve_early_silent_mode() {
+    # Lightweight, read-only preview of whether this run will end up fully silent - either the
+    # --workflow-install-now-silent trigger, or InteractiveMode resolving to 0 once managed/local
+    # preferences are taken into account. Mirrors the same managed-overrides-local-overrides-CLI/
+    # default precedence get_preferences()/manage_parameter_options() use for InteractiveMode, but
+    # doesn't mutate InteractiveModeOption itself - that's still resolved normally, later, as the
+    # single source of truth for the rest of the run.
+    runningSilentlyOption="FALSE"
+
+    # --workflow-install-now (non-silent) always forces InteractiveModeOption to 2 later on, so
+    # never treat this run as silent even if InteractiveMode itself is configured as 0.
+    if [[ "${workflow_install_now_option:-}" == "TRUE" ]] || [[ -f "${WORKFLOW_INSTALL_NOW_FILE}" ]]; then
+        return 0
+    fi
+
+    if [[ "${workflow_install_now_silent_option:-}" == "TRUE" ]] || [[ -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" ]]; then
+        runningSilentlyOption="TRUE"
+        return 0
+    fi
+
+    local interactive_mode_managed interactive_mode_local interactive_mode_preview
+    interactive_mode_managed=$(defaults read "${appAutoPatchManagedPLIST}" InteractiveMode 2> /dev/null)
+    interactive_mode_local=$(defaults read "${appAutoPatchLocalPLIST}" InteractiveMode 2> /dev/null)
+
+    interactive_mode_preview="${InteractiveModeOption:-${InteractiveMode}}"
+    [[ -n "${interactive_mode_managed}" ]] && interactive_mode_preview="${interactive_mode_managed}"
+    { [[ -z "${interactive_mode_managed}" ]] && [[ -z "${InteractiveModeOption}" ]] && [[ -n "${interactive_mode_local}" ]]; } && interactive_mode_preview="${interactive_mode_local}"
+
+    [[ "${interactive_mode_preview}" == "0" ]] && runningSilentlyOption="TRUE"
 }
 
 resolve_self_update_preferences() {
