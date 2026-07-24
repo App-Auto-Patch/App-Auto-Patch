@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.1"
 scriptDate="2026/07/23"
-scriptBuild="3.6.1.2607232000"
+scriptBuild="3.6.1.2607232100"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -337,11 +337,11 @@ set_defaults() {
 
     supportTeamName="Add IT Support" # MDM Enabled
 
-    supportTeamPhone="Add IT Phone Number" # MDM Enabled
+    supportTeamPhone="" # MDM Enabled - blank or "hide" both omit this line from the info dialog
 
-    supportTeamEmail="Add email" # MDM Enabled
+    supportTeamEmail="" # MDM Enabled - blank or "hide" both omit this line from the info dialog
 
-    supportTeamWebsite="Add IT Help site" # MDM Enabled
+    supportTeamWebsite="" # MDM Enabled - blank or "hide" both omit this line from the info dialog
 
     computerName=$( scutil --get ComputerName )
 
@@ -1429,12 +1429,16 @@ get_preferences() {
     { [[ -z "${remove_installomator_path_managed}" ]] && [[ -n "${removeInstallomatorPath}" ]] && [[ -n "${remove_installomator_path_local}" ]]; } && removeInstallomatorPath="${remove_installomator_path_local}"
     [[ -n "${support_team_name_managed}" ]] && supportTeamName="${support_team_name_managed}"
     { [[ -z "${support_team_name_managed}" ]] && [[ -n "${supportTeamName}" ]] && [[ -n "${support_team_name_local}" ]]; } && supportTeamName="${support_team_name_local}"
+    # Note: unlike most other merges here, these three don't gate the local-preference fallback on
+    # the current value already being non-empty - supportTeamPhone/Email/Website now default to ""
+    # (so blank/unconfigured hides the line entirely, same as "hide" - see #241), so that gate would
+    # never be true and local prefs would never be picked up.
     [[ -n "${support_team_phone_managed}" ]] && supportTeamPhone="${support_team_phone_managed}"
-    { [[ -z "${support_team_phone_managed}" ]] && [[ -n "${supportTeamPhone}" ]] && [[ -n "${support_team_phone_local}" ]]; } && supportTeamPhone="${support_team_phone_local}"
+    { [[ -z "${support_team_phone_managed}" ]] && [[ -n "${support_team_phone_local}" ]]; } && supportTeamPhone="${support_team_phone_local}"
     [[ -n "${support_team_email_managed}" ]] && supportTeamEmail="${support_team_email_managed}"
-    { [[ -z "${support_team_email_managed}" ]] && [[ -n "${supportTeamEmail}" ]] && [[ -n "${support_team_email_local}" ]]; } && supportTeamEmail="${support_team_email_local}"
+    { [[ -z "${support_team_email_managed}" ]] && [[ -n "${support_team_email_local}" ]]; } && supportTeamEmail="${support_team_email_local}"
     [[ -n "${support_team_website_managed}" ]] && supportTeamWebsite="${support_team_website_managed}"
-    { [[ -z "${support_team_website_managed}" ]] && [[ -n "${supportTeamWebsite}" ]] && [[ -n "${support_team_website_local}" ]]; } && supportTeamWebsite="${support_team_website_local}"
+    { [[ -z "${support_team_website_managed}" ]] && [[ -n "${support_team_website_local}" ]]; } && supportTeamWebsite="${support_team_website_local}"
 
 
 
@@ -2536,12 +2540,15 @@ workflow_startup() {
     # entire run: it must happen after get_preferences (which populates langUser) and only needs
     # to run once per execution, since langUser and the managed profile do not change mid-run.
     set_display_strings_language
-    supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
+    [[ -n "${supportTeamWebsite}" ]] && [[ "${supportTeamWebsite}" != "hide" ]] && supportTeamHyperlink="[${supportTeamWebsite}](https://${supportTeamWebsite})"
     helpMessage="${display_string_help_message_intro} **${supportTeamName}:**"
 
-    [[ "${supportTeamPhone}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_telephone}:** ${supportTeamPhone}"
-    [[ "${supportTeamEmail}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_email}:** ${supportTeamEmail}"
-    [[ "${supportTeamWebsite}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_help_website}:** ${supportTeamHyperlink}"
+    # A blank/unconfigured value hides the line the same way "hide" does (#241) - a blank field
+    # previously fell back to a hardcoded placeholder (e.g. "Add IT Phone Number") that displayed
+    # literally in the info dialog as if it were a real, configured value.
+    [[ -n "${supportTeamPhone}" ]] && [[ "${supportTeamPhone}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_telephone}:** ${supportTeamPhone}"
+    [[ -n "${supportTeamEmail}" ]] && [[ "${supportTeamEmail}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_email}:** ${supportTeamEmail}"
+    [[ -n "${supportTeamWebsite}" ]] && [[ "${supportTeamWebsite}" != "hide" ]] && helpMessage+="\n- **${display_string_help_message_help_website}:** ${supportTeamHyperlink}"
 
     # Computer Information
     helpMessage+="\n\n**${display_string_help_message_computer_info}:**"

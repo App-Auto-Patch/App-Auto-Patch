@@ -3,6 +3,12 @@
 # Version 3
 
 ## Version 3.6.1
+### 23-Jul-2026 (5) - Build 3.6.1.2607232100
+- [#241](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/241): `SupportTeamPhone`/`SupportTeamEmail`/`SupportTeamWebsite` previously defaulted to a hardcoded placeholder string (`"Add IT Phone Number"`, `"Add email"`, `"Add IT Help site"`) when left unconfigured, which then displayed literally in the info dialog's help message as if it were a real, admin-provided value - the existing `!= "hide"` checks only caught the explicit opt-out string, not simply leaving the field blank
+	- Changed the three defaults in `set_defaults()` to `""`, and added an `-n` (non-empty) guard alongside the existing `!= "hide"` check everywhere the info dialog's `helpMessage` is built, so a blank/unconfigured value now hides that line exactly like `hide` does
+	- The managed/local preference merge in `get_preferences()` for these three previously gated the local-preference fallback on the current value already being non-empty (relying on the old placeholder defaults always being truthy) - with defaults now blank, that gate would never pass and local prefs would never be picked up, so it was removed for these three specifically (managed still overrides local, matching every other merge in the script)
+	- Guarded `supportTeamHyperlink`'s construction (`[${supportTeamWebsite}](https://${supportTeamWebsite})`) so it's only built when `supportTeamWebsite` is actually set and not `hide`, avoiding a broken/blank markdown link if referenced before that guard is hit
+
 ### 23-Jul-2026 (4) - Build 3.6.1.2607232000
 - Fixed three issues reported in [#237](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/237):
 	- The Jamf Application & Custom Settings custom schema (`Resources/Manifests/xyz.techitout.appAutoPatch-manifest-jamf.json`) defined the property as lowercase `versionComparisonMethod`, while the script always reads it as `VersionComparisonMethod` (`defaults read` is case-sensitive) - so a value configured through the Jamf schema UI was deployed under the wrong key and silently never read, always falling back to the built-in `IS_AT_LEAST` default. Renamed the schema property to `VersionComparisonMethod` to match the script. Also corrected the same casing in two spots in the iMazing/ProfileCreator manifest plist (`Resources/Manifests/xyz.techitout.appAutoPatch-manifest.plist`) - the `pfm_name` itself, and its entry in the parent group's `pfm_range_list` (used for iMazing's UI ordering) - which had the identical lowercase typo
