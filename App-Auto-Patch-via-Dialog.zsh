@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.1"
 scriptDate="2026/07/23"
-scriptBuild="3.6.1.2607232330"
+scriptBuild="3.6.1.2607250500"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2205,18 +2205,42 @@ workflow_startup() {
 		exit 1
 	fi
 
+    # One-shot override
+    if [[ "${force_self_update_check_option:-}" == "TRUE" ]]; then
+        forceSelfUpdateCheck="true"
+    fi
+
+    # Resolve SelfUpdateEnabled/SelfUpdateFrequency (managed/local/CLI) before checking for
+    # updates - self_update() runs ahead of get_preferences()/manage_parameter_options() so an
+    # outdated script can update itself before doing anything else, so those preferences aren't
+    # populated yet otherwise.
+    resolve_self_update_preferences
+
+    # Preview whether this run will end up fully silent (InteractiveMode 0, or the
+    # --workflow-install-now-silent trigger) before get_preferences()/manage_parameter_options()
+    # normally decide that - so the Dock/loginwindow wait and the swiftDialog install/update check
+    # below can be skipped for unattended lab/kiosk Macs with no user session, where neither is
+    # ever needed. The authoritative InteractiveModeOption is still resolved normally afterward.
+    resolve_early_silent_mode
+
 	# Wait for the Dock to be active before proceeding. The Dock running indicates that a user
-	# session is fully established. Check every 5 seconds for up to 120 seconds total.
-	local dockWaitSeconds=0
-	until pgrep -x "Dock" &>/dev/null; do
-		if [[ $dockWaitSeconds -ge 120 ]]; then
-			log_exit "No user session detected (Dock not active) after waiting 120 seconds. Will retry later."
-			exit 1
-		fi
-		sleep 5
-		dockWaitSeconds=$((dockWaitSeconds + 5))
-	done
-	log_info "Dock is active; proceeding with startup..."
+	# session is fully established. Check every 5 seconds for up to 120 seconds total - skipped
+	# for fully-silent runs (InteractiveMode 0, or --workflow-install-now-silent), which are
+	# expected to run unattended (e.g. lab/kiosk Macs) with no user session ever active.
+	if [[ "${runningSilentlyOption}" == "TRUE" ]]; then
+		log_info "Running silently; skipping wait for the Dock to become active."
+	else
+		local dockWaitSeconds=0
+		until pgrep -x "Dock" &>/dev/null; do
+			if [[ $dockWaitSeconds -ge 120 ]]; then
+				log_exit "No user session detected (Dock not active) after waiting 120 seconds. Will retry later."
+				exit 1
+			fi
+			sleep 5
+			dockWaitSeconds=$((dockWaitSeconds + 5))
+		done
+		log_info "Dock is active; proceeding with startup..."
+	fi
 
 	# Make sure macOS meets the minimum requirement of macOS 12.
 	macos_version_major=$(sw_vers -productVersion | cut -d'.' -f1) # Expected output: 10, 11, 12
@@ -2250,24 +2274,6 @@ workflow_startup() {
 	local aapCurrentFolder
 	aapCurrentFolder=$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")
 	! { [[ "${aapCurrentFolder}" == "${appAutoPatchFolder}" ]] || [[ "${aapCurrentFolder}" == $(dirname "${appAutoPatchLink}") ]]; } && install_app_auto_patch
-	
-    # One-shot override
-    if [[ "${force_self_update_check_option:-}" == "TRUE" ]]; then
-        forceSelfUpdateCheck="true"
-    fi
-
-    # Resolve SelfUpdateEnabled/SelfUpdateFrequency (managed/local/CLI) before checking for
-    # updates - self_update() runs ahead of get_preferences()/manage_parameter_options() so an
-    # outdated script can update itself before doing anything else, so those preferences aren't
-    # populated yet otherwise.
-    resolve_self_update_preferences
-
-    # Preview whether this run will end up fully silent (InteractiveMode 0, or the
-    # --workflow-install-now-silent trigger) before get_preferences()/manage_parameter_options()
-    # normally decide that - so the Dock/loginwindow wait and the swiftDialog install/update check
-    # below can be skipped for unattended lab/kiosk Macs with no user session, where neither is
-    # ever needed. The authoritative InteractiveModeOption is still resolved normally afterward.
-    resolve_early_silent_mode
 
     # Check for AAP Updates
     self_update "$@"

@@ -3,6 +3,10 @@
 # Version 3
 
 ## Version 3.6.1
+### 25-Jul-2026 (9) - Build 3.6.1.2607250500
+- Fixed: `resolve_early_silent_mode()` (added to skip the Dock-active wait and swiftDialog install/update check for fully-silent runs) was itself called too late in `workflow_startup()` - after the Dock-wait loop that immediately follows the root-privilege check. So a fully-silent run (`InteractiveMode 0`, or `--workflow-install-now-silent`) still blocked on the *first* Dock-wait loop (up to 120 seconds, and previously able to `exit 1` entirely if no user ever logs in) before `runningSilentlyOption` was even set; only the second, later loginwindow-wait loop was actually being skipped
+	- Fixed by moving the one-shot self-update override, `resolve_self_update_preferences()`, and `resolve_early_silent_mode()` calls to immediately after the root-privilege check, and guarding the Dock-wait loop with `runningSilentlyOption` the same way the loginwindow-wait loop already was. Both waits are now consistently skipped for fully-silent, unattended runs
+
 ### 23-Jul-2026 (8) - Build 3.6.1.2607232330
 - Fixed: the installer `.pkg` attached to GitHub releases prompted "Rosetta 2 is required" on Apple Silicon Macs before allowing installation to proceed, even though the package has no compiled payload at all (`pkgbuild --nopayload`) and its postinstall script only ever runs a zsh script. Per Apple's own `productbuild` documentation: "the macOS Installer will evaluate the product's distribution under Rosetta 2 unless the arch key includes the arm64 architecture specifier" - with `hostArchitectures` unset, `distribution.xml`'s `<options>` element defaulted to Intel-only, so the installer assumed Rosetta 2 was required and displayed the prompt (and, per the same note, would have actually run the postinstall script itself under Rosetta 2 translation on Apple Silicon Macs without Rosetta pre-installed, had the user proceeded)
 	- Fixed by adding `hostArchitectures="arm64,x86_64"` to the `<options>` element in `Resources/Packaging/distribution.xml`, declaring the product (a plain zsh script with no compiled binaries) as natively supporting both architectures
