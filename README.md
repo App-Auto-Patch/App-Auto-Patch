@@ -16,6 +16,8 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 
 ## New features/Specific Changes in 3.6.2
 - Fixed: the fully-silent Dock-wait skip (introduced in 3.6.1, below) didn't actually take effect - the check that determines whether a run is fully silent ran too late, after the Dock-wait loop it was meant to skip, so `InteractiveMode 0`/`--workflow-install-now-silent` runs still waited on the Dock (and could fail outright on a Mac with no user ever logged in). The Dock wait is now skipped correctly as well
+- Fixed: the overlay icon could still appear blank on Jamf-managed Macs. If the Jamf plist kept a `self_service_app_path` pointing at a Self Service.app that is no longer installed (common after moving to Self Service+), AAP used that stale path anyway - shadowing the correctly-configured Self Service+ and pointing at an icon file that doesn't exist. Self Service and Self Service+ are now each checked for an icon that actually exists and is readable before being used, extracted custom icons are verified to be real `.icns` files, and dialogs render without an overlay rather than showing an empty overlay badge when no usable icon is found
+- Added: verbose logging for the whole overlay icon selection process, so a blank overlay icon can be diagnosed from a verbose log
 
 ## New features/Specific Changes in 3.6.1
 - Fixed: when using `InstallomatorVersionCustomRepoPath`/`InstallomatorVersionCustomBranchName` to pull Installomator from a custom fork and branch, AAP could silently download from the wrong branch if another branch's name contained the configured branch name as a substring (e.g. `apple-ls` vs. `dev-apple-ls`)

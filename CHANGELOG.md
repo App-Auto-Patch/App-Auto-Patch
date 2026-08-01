@@ -10,6 +10,10 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 **Fixes**
 
 - Fixed: the fully-silent Dock-wait skip (introduced in 3.6.1, below) didn't actually take effect - the check that determines whether a run is fully silent ran too late, after the Dock-wait loop it was meant to skip, so `InteractiveMode 0`/`--workflow-install-now-silent` runs still waited on the Dock (and could fail outright on a Mac with no user ever logged in). Only the later loginwindow wait and swiftDialog check were being skipped as intended. The Dock wait is now skipped correctly as well
+- Fixed: the overlay icon could still appear blank on Jamf-managed Macs. If the Jamf plist kept a `self_service_app_path` pointing at a Self Service.app that is no longer installed (common after moving to Self Service+), AAP used that stale path anyway - shadowing the correctly-configured Self Service+ and pointing at an icon file that doesn't exist. Self Service and Self Service+ are now each checked for an icon that actually exists and is readable before being used
+- Fixed: extracting a custom Self Service icon only checked that the result wasn't empty, so a partially-read icon could still be passed to the dialog as a blank overlay. The extracted file is now verified to be a real `.icns` before it's used, falling back to the app's own icon if not
+- Changed: if no usable overlay icon can be found at all, dialogs now render normally without an overlay instead of showing an empty overlay badge
+- Added: verbose logging for the whole overlay icon selection process (which Jamf paths were read, whether each app and its icon were found, extraction results, and the final icon chosen), so a blank overlay icon can be diagnosed from a verbose log
 
 ## Version 3.6.1
 ### 23-Jul-2026
