@@ -18,6 +18,13 @@
 #      (welcome) and Read Me (readme) panes plus a bottom-left background
 #      logo watermark (see Resources/Packaging/Resources).
 #
+# Versioning: the short version (scriptVersion, e.g. 3.6.2) is substituted
+# into distribution.xml's __AAP_VERSION__ placeholder as the product version.
+# The full build string (scriptBuild, e.g. 3.6.2.2608011640) is passed to
+# pkgbuild as the component version, and productbuild copies that onto the
+# pkg-ref. That component version is what an MDM reads back as the package's
+# version - Intune shows it on the pkg's detection rule.
+#
 # Signing: if a "Developer ID Installer" identity is available in the
 # default keychain search list (locally: your login keychain: in CI: a
 # temporary keychain the workflow imports it into), the product pkg is
@@ -71,9 +78,13 @@ chmod 755 "${scripts_dir}/postinstall"
 cp "${script_path}" "${scripts_dir}/${script_name}"
 chmod 755 "${scripts_dir}/${script_name}"
 
+# --version is what ends up in the component's PackageInfo, and is the version an MDM reads back
+# for the package. Without it pkgbuild writes version="0", which made every release look like
+# version 0 to Intune and prevented replacing an uploaded pkg with a newer build.
 component_pkg="${scratch_dir}/AppAutoPatchComponent.pkg"
 pkgbuild --nopayload \
     --identifier "xyz.techitout.appAutoPatch.installer" \
+    --version "${script_build}" \
     --scripts "${scripts_dir}" \
     "${component_pkg}"
 
@@ -94,6 +105,16 @@ cp "${packaging_dir}/Resources/welcome.txt" "${resources_dir}/welcome.txt"
 cp "${packaging_dir}/Resources/readme.txt" "${resources_dir}/readme.txt"
 cp "${packaging_dir}/Resources/AAPLogo-background.png" "${resources_dir}/AAPLogo-background.png"
 
+# distribution.xml is a template: fill in this build's version before handing it to productbuild.
+distribution_xml="${scratch_dir}/distribution.xml"
+sed -e "s/__AAP_VERSION__/${script_version}/g" \
+    "${packaging_dir}/distribution.xml" > "${distribution_xml}"
+
+if grep -q '__AAP_' "${distribution_xml}"; then
+    echo "ERROR: Unsubstituted version placeholders remain in the generated distribution.xml" >&2
+    exit 1
+fi
+
 # --- Stage 3: signing identity auto-detection ---
 sign_args=()
 identity_line=$(security find-identity -v -p basic 2>/dev/null | grep '"Developer ID Installer:' | head -1 || true)
@@ -110,10 +131,11 @@ mkdir -p "${output_dir}"
 pkg_name="AppAutoPatch-${script_version}.pkg"
 pkg_path="${output_dir}/${pkg_name}"
 
-productbuild --distribution "${packaging_dir}/distribution.xml" \
+# Versions come from the <product>/<pkg-ref> elements in the generated distribution above rather
+# than productbuild's --version flag, so distribution.xml stays the single place they're declared.
+productbuild --distribution "${distribution_xml}" \
     --package-path "${scratch_dir}" \
     --resources "${resources_dir}" \
-    --version "${script_build}" \
     "${sign_args[@]}" \
     "${pkg_path}"
 

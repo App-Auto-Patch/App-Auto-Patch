@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.6.1
+# App Auto-Patch 3.6.2
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub pre-release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag&include_prereleases) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch) [![swiftDialog](https://img.shields.io/badge/swiftDialog-Enabled-blue)](https://swiftdialog.app)
 
@@ -14,6 +14,12 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
+## New features/Specific Changes in 3.6.2
+- Fixed: the fully-silent Dock-wait skip (introduced in 3.6.1, below) didn't actually take effect - the check that determines whether a run is fully silent ran too late, after the Dock-wait loop it was meant to skip, so `InteractiveMode 0`/`--workflow-install-now-silent` runs still waited on the Dock (and could fail outright on a Mac with no user ever logged in). The Dock wait is now skipped correctly as well
+- Fixed: the overlay icon could still appear blank on Jamf-managed Macs. If the Jamf plist kept a `self_service_app_path` pointing at a Self Service.app that is no longer installed (common after moving to Self Service+), AAP used that stale path anyway - shadowing the correctly-configured Self Service+ and pointing at an icon file that doesn't exist. Self Service and Self Service+ are now each checked for an icon that actually exists and is readable before being used, extracted custom icons are verified to be real `.icns` files, and dialogs render without an overlay rather than showing an empty overlay badge when no usable icon is found
+- Added: verbose logging for the whole overlay icon selection process, so a blank overlay icon can be diagnosed from a verbose log
+- Fixed: the installer `.pkg` attached to each release reported its version as `0`, so every release looked like the same version to an MDM - in Intune this blocked replacing an already-uploaded pkg with a newer one. The pkg now carries real version numbers (short version as the product version, full build string as the package version an MDM reads), with the package identifier unchanged so existing detection rules keep matching (#248)
+
 ## New features/Specific Changes in 3.6.1
 - Fixed: when using `InstallomatorVersionCustomRepoPath`/`InstallomatorVersionCustomBranchName` to pull Installomator from a custom fork and branch, AAP could silently download from the wrong branch if another branch's name contained the configured branch name as a substring (e.g. `apple-ls` vs. `dev-apple-ls`)
 - Fixed: `SelfUpdateEnabled`/`SelfUpdateFrequency` weren't resolved (from managed preferences or local config) until after AAP had already checked for and installed a self-update, so a managed `SelfUpdateEnabled=false` had no effect on a Mac's first-ever run (before any local preference existed). These are now resolved before the self-update check runs
@@ -23,6 +29,7 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 - Fixed: `appsUpToDate()`'s "all apps up to date" detection and the Installomator error-log position tracker both referenced an undefined `scriptLog` variable (should have been `appAutoPatchLog`), causing a `tail: : No such file or directory` error on every patch run
 - Changed: leaving `SupportTeamPhone`/`SupportTeamEmail`/`SupportTeamWebsite` unconfigured now hides that line from the info dialog, the same as explicitly setting it to `hide` - previously an unconfigured field fell back to a hardcoded placeholder (e.g. "Add IT Phone Number") that displayed literally as if it were a real value (#241)
 - Fixed: with `MonthlyPatchingCadenceEnabled`, if AAP was re-triggered ahead of its scheduled relaunch (e.g. a manual run, or a reinstall/upgrade) after that cycle's patching had already completed, `NextAutoLaunch` was recalculated using the regular deferral timer (24 hours by default) instead of leaving the already-correct, further-out monthly cadence date in place - causing AAP to relaunch far more often than intended, especially with a shorter `DaysUntilReset` (#236)
+- Fixed: the installer `.pkg` attached to GitHub releases prompted to install Rosetta 2 on Apple Silicon Macs before installing, even though the package has no compiled payload and only ever runs a zsh script - the package's distribution file was missing the `hostArchitectures` declaration, which macOS Installer treats as "Intel-only" by default
 
 ## New features/Specific Changes in 3.6.0
 **⚠️ Before you upgrade:** Background Patch Closed Apps (below) is **enabled by default** and applies under both `InteractiveMode 1` and `InteractiveMode 2`. If you are not ready for AAP to silently patch closed apps, set `WorkflowBackgroundPatchClosedApps` to `false` in your managed configuration before deploying this version. There are no other breaking changes in this release.

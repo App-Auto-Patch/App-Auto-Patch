@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.6.1"
-scriptDate="2026/07/23"
-scriptBuild="3.6.1.2607232330"
+scriptVersion="3.6.2"
+scriptDate="2026/08/03"
+scriptBuild="3.6.2.2608030900"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2205,18 +2205,42 @@ workflow_startup() {
 		exit 1
 	fi
 
+    # One-shot override
+    if [[ "${force_self_update_check_option:-}" == "TRUE" ]]; then
+        forceSelfUpdateCheck="true"
+    fi
+
+    # Resolve SelfUpdateEnabled/SelfUpdateFrequency (managed/local/CLI) before checking for
+    # updates - self_update() runs ahead of get_preferences()/manage_parameter_options() so an
+    # outdated script can update itself before doing anything else, so those preferences aren't
+    # populated yet otherwise.
+    resolve_self_update_preferences
+
+    # Preview whether this run will end up fully silent (InteractiveMode 0, or the
+    # --workflow-install-now-silent trigger) before get_preferences()/manage_parameter_options()
+    # normally decide that - so the Dock/loginwindow wait and the swiftDialog install/update check
+    # below can be skipped for unattended lab/kiosk Macs with no user session, where neither is
+    # ever needed. The authoritative InteractiveModeOption is still resolved normally afterward.
+    resolve_early_silent_mode
+
 	# Wait for the Dock to be active before proceeding. The Dock running indicates that a user
-	# session is fully established. Check every 5 seconds for up to 120 seconds total.
-	local dockWaitSeconds=0
-	until pgrep -x "Dock" &>/dev/null; do
-		if [[ $dockWaitSeconds -ge 120 ]]; then
-			log_exit "No user session detected (Dock not active) after waiting 120 seconds. Will retry later."
-			exit 1
-		fi
-		sleep 5
-		dockWaitSeconds=$((dockWaitSeconds + 5))
-	done
-	log_info "Dock is active; proceeding with startup..."
+	# session is fully established. Check every 5 seconds for up to 120 seconds total - skipped
+	# for fully-silent runs (InteractiveMode 0, or --workflow-install-now-silent), which are
+	# expected to run unattended (e.g. lab/kiosk Macs) with no user session ever active.
+	if [[ "${runningSilentlyOption}" == "TRUE" ]]; then
+		log_info "Running silently; skipping wait for the Dock to become active."
+	else
+		local dockWaitSeconds=0
+		until pgrep -x "Dock" &>/dev/null; do
+			if [[ $dockWaitSeconds -ge 120 ]]; then
+				log_exit "No user session detected (Dock not active) after waiting 120 seconds. Will retry later."
+				exit 1
+			fi
+			sleep 5
+			dockWaitSeconds=$((dockWaitSeconds + 5))
+		done
+		log_info "Dock is active; proceeding with startup..."
+	fi
 
 	# Make sure macOS meets the minimum requirement of macOS 12.
 	macos_version_major=$(sw_vers -productVersion | cut -d'.' -f1) # Expected output: 10, 11, 12
@@ -2250,24 +2274,6 @@ workflow_startup() {
 	local aapCurrentFolder
 	aapCurrentFolder=$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")
 	! { [[ "${aapCurrentFolder}" == "${appAutoPatchFolder}" ]] || [[ "${aapCurrentFolder}" == $(dirname "${appAutoPatchLink}") ]]; } && install_app_auto_patch
-	
-    # One-shot override
-    if [[ "${force_self_update_check_option:-}" == "TRUE" ]]; then
-        forceSelfUpdateCheck="true"
-    fi
-
-    # Resolve SelfUpdateEnabled/SelfUpdateFrequency (managed/local/CLI) before checking for
-    # updates - self_update() runs ahead of get_preferences()/manage_parameter_options() so an
-    # outdated script can update itself before doing anything else, so those preferences aren't
-    # populated yet otherwise.
-    resolve_self_update_preferences
-
-    # Preview whether this run will end up fully silent (InteractiveMode 0, or the
-    # --workflow-install-now-silent trigger) before get_preferences()/manage_parameter_options()
-    # normally decide that - so the Dock/loginwindow wait and the swiftDialog install/update check
-    # below can be skipped for unattended lab/kiosk Macs with no user session, where neither is
-    # ever needed. The authoritative InteractiveModeOption is still resolved normally afterward.
-    resolve_early_silent_mode
 
     # Check for AAP Updates
     self_update "$@"
@@ -2489,65 +2495,111 @@ workflow_startup() {
         # pre-existing file/symlink first so a local user can't redirect this root-owned write.
         rm -f /var/tmp/overlayicon.icns 2>/dev/null
         local selfServiceAppPath selfServicePlusPath
+        local selfServiceCandidatePath selfServiceCandidateLabel selfServiceResourceFork selfServiceDefaultIcon
         selfServiceAppPath="$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_app_path 2>/dev/null)"
         selfServicePlusPath="$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist self_service_plus_path 2>/dev/null)"
+        overlayicon=""
 
-        # A custom icon (set via Finder's Get Info) is marked by an invisible "Icon\r" file whose
-        # *resource fork* holds the actual icon data - the file itself is otherwise always present/
-        # empty-looking, so its existence alone doesn't mean a custom icon was actually set. Without
-        # checking the resource fork's size too, an app with no custom icon still matched here and
-        # produced a zero-byte, unusable overlayicon.icns. Fall back to the app's own default
-        # AppIcon.icns (still identifies the MDM/tool correctly) when no custom icon is present.
-        if [[ -n "$selfServiceAppPath" ]] && [[ -s "${selfServiceAppPath}/Icon"$'\r'/..namedfork/rsrc ]]; then
-            xxd -p -s 260 "${selfServiceAppPath}/Icon"$'\r'/..namedfork/rsrc | xxd -r -p > /var/tmp/overlayicon.icns
-            if [[ -s /var/tmp/overlayicon.icns ]]; then
-                overlayicon="/var/tmp/overlayicon.icns"
+        log_verbose "Overlay icon enabled, resolving an overlay icon source."
+        log_verbose "Jamf self_service_app_path: ${selfServiceAppPath:-<not set>}"
+        log_verbose "Jamf self_service_plus_path: ${selfServicePlusPath:-<not set>}"
+
+        # Check Self Service, then Self Service+, accepting a candidate only once it actually
+        # yields a readable icon file. A Jamf plist can retain a stale self_service_app_path
+        # pointing at a Self Service.app that is no longer installed (common once an organization
+        # moves to Self Service+); previously such a path was accepted purely for being a non-empty
+        # string, shadowing an installed Self Service+ and handing swiftDialog a nonexistent icon
+        # path, which renders as a blank overlay.
+        for selfServiceCandidatePath selfServiceCandidateLabel in \
+            "${selfServiceAppPath}" "Self Service" \
+            "${selfServicePlusPath}" "Self Service+"
+        do
+            [[ -z "${selfServiceCandidatePath}" ]] && continue
+            if [[ ! -d "${selfServiceCandidatePath}" ]]; then
+                log_verbose "${selfServiceCandidateLabel} is configured at '${selfServiceCandidatePath}' but no app bundle exists there, skipping it."
+                continue
+            fi
+
+            # A custom icon (set via Finder's Get Info) is marked by an invisible "Icon\r" file
+            # whose *resource fork* holds the actual icon data - the file itself is otherwise
+            # always present/empty-looking, so its existence alone doesn't mean a custom icon was
+            # actually set, and extracting from it anyway produced a zero-byte overlay icon.
+            selfServiceResourceFork="${selfServiceCandidatePath}/Icon"$'\r'/..namedfork/rsrc
+            if [[ -s "${selfServiceResourceFork}" ]]; then
+                log_verbose "${selfServiceCandidateLabel} has a custom icon assigned ($(stat -f%z "${selfServiceResourceFork}" 2> /dev/null) bytes of resource fork data), extracting it."
+                xxd -p -s 260 "${selfServiceResourceFork}" | xxd -r -p > /var/tmp/overlayicon.icns
+                # The 260-byte offset skips the resource fork header to land on the icns data. That
+                # header layout isn't guaranteed, and a miss still yields a large non-empty file of
+                # raw resource data that swiftDialog can only draw as a blank overlay, so confirm
+                # the extraction really produced an icns ("icns" magic bytes) before trusting it.
+                if [[ -s /var/tmp/overlayicon.icns ]] && [[ "$(head -c 4 /var/tmp/overlayicon.icns 2> /dev/null)" == "icns" ]]; then
+                    overlayicon="/var/tmp/overlayicon.icns"
+                    log_verbose "Extracted the custom ${selfServiceCandidateLabel} icon ($(stat -f%z /var/tmp/overlayicon.icns 2> /dev/null) bytes) to ${overlayicon}"
+                    break
+                fi
+                log_warning "Extracting the custom ${selfServiceCandidateLabel} icon did not produce a valid .icns file, falling back to its default icon."
             else
-                overlayicon="${selfServiceAppPath}/Contents/Resources/AppIcon.icns"
+                log_verbose "${selfServiceCandidateLabel} has no custom icon assigned, using its default icon instead."
             fi
-        elif [[ -n "$selfServicePlusPath" ]] && [[ -s "${selfServicePlusPath}/Icon"$'\r'/..namedfork/rsrc ]]; then
-            xxd -p -s 260 "${selfServicePlusPath}/Icon"$'\r'/..namedfork/rsrc | xxd -r -p > /var/tmp/overlayicon.icns
-            if [[ -s /var/tmp/overlayicon.icns ]]; then
-                overlayicon="/var/tmp/overlayicon.icns"
-            else
-                overlayicon="${selfServicePlusPath}/Contents/Resources/AppIcon.icns"
+
+            selfServiceDefaultIcon="${selfServiceCandidatePath}/Contents/Resources/AppIcon.icns"
+            if [[ -s "${selfServiceDefaultIcon}" ]]; then
+                overlayicon="${selfServiceDefaultIcon}"
+                log_verbose "Using the default ${selfServiceCandidateLabel} icon: ${overlayicon}"
+                break
             fi
-        elif [[ -n "$selfServiceAppPath" ]]; then
-            # No custom icon set - use Self Service's own default icon instead of a blank overlay.
-            overlayicon="${selfServiceAppPath}/Contents/Resources/AppIcon.icns"
-        elif [[ -n "$selfServicePlusPath" ]]; then
-            overlayicon="${selfServicePlusPath}/Contents/Resources/AppIcon.icns"
-        # Computer is not Jamf enrolled (or can't use Self Service logo), get a different overlay icon
-        elif [[ -e "/Library/Application Support/JAMF/Jamf.app" ]]; then
-            overlayicon="/Library/Application Support/JAMF/Jamf.app/Contents/Resources/AppIcon.icns"
-        elif [[ -e "/Applications/Self-Service.app" ]]; then
-            overlayicon="/Applications/Self-Service.app/Contents/Resources/AppIcon.icns"
-        elif [[ -e "/Applications/Manager.app" ]]; then
-            overlayicon="/Applications/Manager.app/Contents/Resources/AppIcon.icns"
-        elif [[ -e "/Library/Addigy/macmanage/MacManage.app" ]]; then
-            overlayicon="/Library/Addigy/macmanage/MacManage.app/Contents/Resources/atom.icns"
-        elif [[ "$(profiles show | grep -A4 "Management Profile" | sed -n -e 's/^.*profileIdentifier: //p')" == "Microsoft.Profiles.MDM" ]]; then
-            # Managed by Intune
-            if [[ -e "/Library/Intune/Microsoft Intune Agent.app" ]]; then
-                overlayicon="/Library/Intune/Microsoft Intune Agent.app/Contents/Resources/AppIcon.icns"
-            elif [[ -e "/Applications/Company Portal.app" ]]; then
-            # Added for cases when the Intune Agent is not yet present
-                overlayicon="/Applications/Company Portal.app/Contents/Resources/AppIcon.icns"
+            log_verbose "${selfServiceCandidateLabel} has no readable icon at ${selfServiceDefaultIcon}, skipping it."
+        done
+
+        # Computer is not Jamf enrolled (or Self Service provided no usable icon), get a different overlay icon
+        if [[ -z "${overlayicon}" ]]; then
+            log_verbose "No Self Service icon available, checking for another management tool's icon."
+            if [[ -e "/Library/Application Support/JAMF/Jamf.app" ]]; then
+                overlayicon="/Library/Application Support/JAMF/Jamf.app/Contents/Resources/AppIcon.icns"
+            elif [[ -e "/Applications/Self-Service.app" ]]; then
+                overlayicon="/Applications/Self-Service.app/Contents/Resources/AppIcon.icns"
+            elif [[ -e "/Applications/Manager.app" ]]; then
+                overlayicon="/Applications/Manager.app/Contents/Resources/AppIcon.icns"
+            elif [[ -e "/Library/Addigy/macmanage/MacManage.app" ]]; then
+                overlayicon="/Library/Addigy/macmanage/MacManage.app/Contents/Resources/atom.icns"
+            elif [[ "$(profiles show | grep -A4 "Management Profile" | sed -n -e 's/^.*profileIdentifier: //p')" == "Microsoft.Profiles.MDM" ]]; then
+                # Managed by Intune
+                if [[ -e "/Library/Intune/Microsoft Intune Agent.app" ]]; then
+                    overlayicon="/Library/Intune/Microsoft Intune Agent.app/Contents/Resources/AppIcon.icns"
+                elif [[ -e "/Applications/Company Portal.app" ]]; then
+                # Added for cases when the Intune Agent is not yet present
+                    overlayicon="/Applications/Company Portal.app/Contents/Resources/AppIcon.icns"
+                fi
+            elif [[ -e "/Applications/Workspace ONE Intelligent Hub.app" ]]; then
+                overlayicon="/Applications/Workspace ONE Intelligent Hub.app/Contents/Resources/AppIcon.icns"
+            elif [[ -e "/Applications/Kandji Self Service.app" ]]; then
+                overlayicon="/Applications/Kandji Self Service.app/Contents/Resources/AppIcon.icns"
+            elif [[ -e "/usr/local/sbin/FileWave.app" ]]; then
+                overlayicon="/usr/local/sbin/FileWave.app/Contents/Resources/fwGUI.app/Contents/Resources/kiosk.icns"
+            elif [[ -e "/System/Applications/App Store.app" || -e "/Applications/App Store.app" ]]; then
+                if [[ $(sw_vers -buildVersion) > "19" ]]; then
+                    overlayicon="/System/Applications/App Store.app/Contents/Resources/AppIcon.icns"
+                else
+                    overlayicon="/Applications/App Store.app/Contents/Resources/AppIcon.icns"
+                fi
             fi
-        elif [[ -e "/Applications/Workspace ONE Intelligent Hub.app" ]]; then
-            overlayicon="/Applications/Workspace ONE Intelligent Hub.app/Contents/Resources/AppIcon.icns"
-        elif [[ -e "/Applications/Kandji Self Service.app" ]]; then
-            overlayicon="/Applications/Kandji Self Service.app/Contents/Resources/AppIcon.icns"
-        elif [[ -e "/usr/local/sbin/FileWave.app" ]]; then
-            overlayicon="/usr/local/sbin/FileWave.app/Contents/Resources/fwGUI.app/Contents/Resources/kiosk.icns"
-        elif [[ -e "/System/Applications/App Store.app" || -e "/Applications/App Store.app" ]]; then
-            if [[ $(sw_vers -buildVersion) > "19" ]]; then
-                overlayicon="/System/Applications/App Store.app/Contents/Resources/AppIcon.icns"
-            else
-                overlayicon="/Applications/App Store.app/Contents/Resources/AppIcon.icns"
-            fi
+            [[ -n "${overlayicon}" ]] && log_verbose "Selected management tool overlay icon: ${overlayicon}"
+        fi
+
+        # Every branch above can name an icon path that turns out to be missing or empty (an app
+        # bundle whose icon isn't at the expected path, for example). swiftDialog draws a blank
+        # overlay for an unreadable path, so drop it instead - dialogs then render normally with
+        # no overlay at all rather than showing an empty overlay badge.
+        if [[ -z "${overlayicon}" ]]; then
+            log_warning "No overlay icon source could be determined, continuing without an overlay icon."
+        elif [[ ! -s "${overlayicon}" ]]; then
+            log_warning "Overlay icon '${overlayicon}' is missing or empty, continuing without an overlay icon."
+            overlayicon=""
+        else
+            log_verbose "Overlay icon set to: ${overlayicon} ($(stat -f%z "${overlayicon}" 2> /dev/null) bytes)"
         fi
     else
+        log_verbose "Overlay icon disabled (UseOverlayIcon: ${useOverlayIcon}), continuing without an overlay icon."
         overlayicon=""
     fi
     

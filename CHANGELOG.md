@@ -4,6 +4,18 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 # Version 3
 
+## Version 3.6.2
+### 01-Aug-2026
+
+**Fixes**
+
+- Fixed: the fully-silent Dock-wait skip (introduced in 3.6.1, below) didn't actually take effect - the check that determines whether a run is fully silent ran too late, after the Dock-wait loop it was meant to skip, so `InteractiveMode 0`/`--workflow-install-now-silent` runs still waited on the Dock (and could fail outright on a Mac with no user ever logged in). Only the later loginwindow wait and swiftDialog check were being skipped as intended. The Dock wait is now skipped correctly as well
+- Fixed: the overlay icon could still appear blank on Jamf-managed Macs. If the Jamf plist kept a `self_service_app_path` pointing at a Self Service.app that is no longer installed (common after moving to Self Service+), AAP used that stale path anyway - shadowing the correctly-configured Self Service+ and pointing at an icon file that doesn't exist. Self Service and Self Service+ are now each checked for an icon that actually exists and is readable before being used
+- Fixed: extracting a custom Self Service icon only checked that the result wasn't empty, so a partially-read icon could still be passed to the dialog as a blank overlay. The extracted file is now verified to be a real `.icns` before it's used, falling back to the app's own icon if not
+- Changed: if no usable overlay icon can be found at all, dialogs now render normally without an overlay instead of showing an empty overlay badge
+- Added: verbose logging for the whole overlay icon selection process (which Jamf paths were read, whether each app and its icon were found, extraction results, and the final icon chosen), so a blank overlay icon can be diagnosed from a verbose log
+- Fixed: the installer `.pkg` attached to each release reported its version as `0`, so every release looked like the same version to an MDM. In Intune this showed up as version `0` on the pkg's auto-generated detection rule and blocked replacing an already-uploaded pkg with a newer one ("The version of your existing package is [0], and the selected package equals version [0]"). The pkg now carries real version numbers - the short version (e.g. `3.6.2`) as the product version, and the full build string (e.g. `3.6.2.2608030900`) as the package version an MDM reads and compares. The package identifier is unchanged, so existing detection rules keep matching (#248)
+
 ## Version 3.6.1
 ### 23-Jul-2026
 
