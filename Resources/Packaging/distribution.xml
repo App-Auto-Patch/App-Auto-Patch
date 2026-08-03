@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="1">
     <title>App Auto-Patch</title>
+    <!-- The version placeholders in this file are filled in by build-pkg.sh from the script's
+         scriptVersion (short, e.g. 3.6.2) and scriptBuild (full, e.g. 3.6.2.2608011640). -->
+    <product id="xyz.techitout.appAutoPatch" version="__AAP_VERSION__"/>
     <background file="AAPLogo-background.png" alignment="bottomleft" scaling="proportional" mime-type="image/png"/>
     <background-darkAqua file="AAPLogo-background.png" alignment="bottomleft" scaling="proportional" mime-type="image/png"/>
     <welcome file="welcome.txt" mime-type="text/plain"/>
@@ -20,5 +23,10 @@
     <choice id="xyz.techitout.appAutoPatch.installer" visible="false">
         <pkg-ref id="xyz.techitout.appAutoPatch.installer"/>
     </choice>
-    <pkg-ref id="xyz.techitout.appAutoPatch.installer" version="0" onConclusion="none">AppAutoPatchComponent.pkg</pkg-ref>
+    <!-- No version attribute here on purpose: productbuild fills it in from the component pkg,
+         which build-pkg.sh versions with the script's scriptBuild, so the two can never disagree.
+         This is the version an MDM reads back as the package's version - Intune surfaces it as the
+         app version on the pkg's detection rule. It was previously hardcoded to 0, which left every
+         release looking like version 0 and blocked replacing an uploaded pkg with a newer one. -->
+    <pkg-ref id="xyz.techitout.appAutoPatch.installer" onConclusion="none">AppAutoPatchComponent.pkg</pkg-ref>
 </installer-gui-script>
