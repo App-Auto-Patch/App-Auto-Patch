@@ -51,6 +51,8 @@
 			<string>FALSE</string>
 			<key>IgnoredLabels</key>
 			<string>1password* androidstudio microsoft*</string>
+			<key>ExcludedBackgroundLabels</key>
+			<string>amazoncorretto* nodejs python*</string>
 			<key>InstallomatorOptions</key>
 			<string>BLOCKING_PROCESS_ACTION=quit_kill NOTIFY=silent LOGO=appstore IGNORE_APP_STORE_APPS=yes</string>
 			<key>InstallomatorUpdateDisable</key>

@@ -546,6 +546,23 @@
             ],
             "property_order": 90
         },
+        "ExcludedBackgroundLabels": {
+            "type": "string",
+            "title": "Excluded Background Labels",
+            "description": "A space-separated list of Installomator labels to discover and report, but not update during fully-silent runs (InteractiveMode 0 / --workflow-install-now-silent) or Background Patch Closed Apps. Interactive Install Now and hard-deadline installs still update them. Supports wildcards. Unlike Ignored Labels, these apps stay visible in discovery, logs, and inventory.",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "amazoncorretto* nodejs python*"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Populating-App-Labels#excluded-background"
+                }
+            ],
+            "property_order": 92
+        },
         "RequiredLabels": {
             "type": "string",
             "title": "Required Labels",

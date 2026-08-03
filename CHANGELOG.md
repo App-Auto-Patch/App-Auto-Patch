@@ -4,6 +4,16 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 # Version 3
 
+## Version 3.7.0
+### 03-Aug-2026
+
+**New Features**
+
+- **Excluded Background Labels** — Pin specific apps so AAP still discovers and reports them, but does not update them during fully-silent runs (`InteractiveMode 0` / `--workflow-install-now-silent`) or Background Patch Closed Apps. Interactive Install Now and hard-deadline installs still update them, so there's a manual escape hatch. Unlike `IgnoredLabels`, these apps stay visible in discovery, logs, and inventory — useful for runtimes like Amazon Corretto, Node, or Python where "latest" isn't always correct. Supports wildcards. (#238)
+	- Managed Preference Key: `<key>ExcludedBackgroundLabels</key>` `<string>label1 label2*</string>`
+	- CLI Trigger: `--excluded-background-labels="label1 label2*"`
+	- Cleared by `--reset-labels` along with the other label lists
+
 ## Version 3.6.2
 ### 01-Aug-2026
 

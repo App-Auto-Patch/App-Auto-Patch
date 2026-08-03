@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.6.2"
+scriptVersion="3.7.0"
 scriptDate="2026/08/03"
-scriptBuild="3.6.2.2608030900"
+scriptBuild="3.7.0.2608031015"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -81,6 +81,7 @@ echo "
     [--ignored-labels="label1 label2"]
     [--required-labels="label1 label2"]
     [--optional-labels="label1 label2"]
+    [--excluded-background-labels="label1 label2"]
     [--reset-labels]
 
     Deferral Timer Options:
@@ -128,6 +129,7 @@ echo "
     <key>DialogTimeoutConfirmInstall</key> <integer>seconds</integer>
     <key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>
     <key>IgnoredLabels</key> <string>label label label etc</string>
+    <key>ExcludedBackgroundLabels</key> <string>label label label etc</string>
     <key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc</string>
     <key>InstallomatorUpdateDisable</key> <string>TRUE,FALSE</string>
     <key>InstallomatorVersion</key> <string>Main,Release,Custom</string>
@@ -851,6 +853,9 @@ get_options() {
             --optional-labels=*)
                 optional_labels_option="${1##*=}"
             ;;
+            --excluded-background-labels=*)
+                excluded_background_labels_option="${1##*=}"
+            ;;
             -V|--verbose-mode)
                 verbose_mode_option="TRUE"
             ;;
@@ -1042,6 +1047,7 @@ get_preferences() {
         defaults delete "${appAutoPatchLocalPLIST}" IgnoredLabels 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" RequiredLabels 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" OptionalLabels 2> /dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" ExcludedBackgroundLabels 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" DiscoveredLabels 2> /dev/null
         fi
 
@@ -1111,6 +1117,8 @@ get_preferences() {
         required_labels_managed=$(defaults read "${appAutoPatchManagedPLIST}" RequiredLabels 2> /dev/null)
         local optional_labels_managed
         optional_labels_managed=$(defaults read "${appAutoPatchManagedPLIST}" OptionalLabels 2> /dev/null)
+        local excluded_background_labels_managed
+        excluded_background_labels_managed=$(defaults read "${appAutoPatchManagedPLIST}" ExcludedBackgroundLabels 2> /dev/null)
         local app_title_managed
         app_title_managed=$(defaults read "${appAutoPatchManagedPLIST}" AppTitle 2> /dev/null)
         local convert_apps_in_home_folder_managed
@@ -1236,6 +1244,8 @@ get_preferences() {
         required_labels_local=$(defaults read "${appAutoPatchLocalPLIST}" RequiredLabels 2> /dev/null)
         local optional_labels_local
         optional_labels_local=$(defaults read "${appAutoPatchLocalPLIST}" OptionalLabels 2> /dev/null)
+        local excluded_background_labels_local
+        excluded_background_labels_local=$(defaults read "${appAutoPatchLocalPLIST}" ExcludedBackgroundLabels 2> /dev/null)
         local app_title_local
         app_title_local=$(defaults read "${appAutoPatchLocalPLIST}" AppTitle 2> /dev/null)
         local convert_apps_in_home_folder_local
@@ -1360,6 +1370,8 @@ get_preferences() {
     { [[ -z "${required_labels_managed}" ]] && [[ -z "${required_labels_option}" ]] && [[ -n "${required_labels_local}" ]]; } && required_labels_option="${required_labels_local}"
     [[ -n "${optional_labels_managed}" ]] && optional_labels_option="${optional_labels_managed}"
     { [[ -z "${optional_labels_managed}" ]] && [[ -z "${optional_labels_option}" ]] && [[ -n "${optional_labels_local}" ]]; } && optional_labels_option="${optional_labels_local}"
+    [[ -n "${excluded_background_labels_managed}" ]] && excluded_background_labels_option="${excluded_background_labels_managed}"
+    { [[ -z "${excluded_background_labels_managed}" ]] && [[ -z "${excluded_background_labels_option}" ]] && [[ -n "${excluded_background_labels_local}" ]]; } && excluded_background_labels_option="${excluded_background_labels_local}"
 
     [[ -n "${zoom_call_active_check_managed}" ]] && zoom_call_active_check_option="${zoom_call_active_check_managed}"
     { [[ -z "${zoom_call_active_check_managed}" ]] && [[ -z "${zoom_call_active_check_option}" ]] && [[ -n "${zoom_call_active_check_local}" ]]; } && zoom_call_active_check_option="${zoom_call_active_check_local}"
@@ -1488,6 +1500,7 @@ get_preferences() {
     log_verbose "IgnoredLabels: $ignored_labels_option"
     log_verbose "RequiredLabels: $required_labels_option"
     log_verbose "OptionalLabels: $optional_labels_option"
+    log_verbose "ExcludedBackgroundLabels: $excluded_background_labels_option"
     log_verbose "AppTitle: $appTitle"
     log_verbose "ConvertAppsInHomeFolder: $convertAppsInHomeFolder"
     log_verbose "IgnoreAppsInHomeFolder: $ignoreAppsInHomeFolder"
@@ -1542,6 +1555,7 @@ get_preferences() {
     ignoredLabelsArray=($(echo ${ignored_labels_option}))
     requiredLabelsArray=($(echo ${required_labels_option}))
     optionalLabelsArray=($(echo ${optional_labels_option}))
+    excludedBackgroundLabelsArray=($(echo ${excluded_background_labels_option}))
     convertedLabelsArray=($(echo ${convertedLabels}))
 
     log_status "Clearing previously set labels"
@@ -1549,6 +1563,7 @@ get_preferences() {
     defaults delete "${appAutoPatchLocalPLIST}" IgnoredLabels 2> /dev/null
     defaults delete "${appAutoPatchLocalPLIST}" RequiredLabels 2> /dev/null
     defaults delete "${appAutoPatchLocalPLIST}" OptionalLabels 2> /dev/null
+    defaults delete "${appAutoPatchLocalPLIST}" ExcludedBackgroundLabels 2> /dev/null
     # NOTE: DiscoveredLabels is intentionally NOT cleared here. It holds the results of the last
     # completed discovery pass and must survive across runs so that DiscoveryFrequency-skipped runs
     # (i.e. discovery did not re-run) still know which labels are queued for patching. It is only
@@ -1558,6 +1573,7 @@ get_preferences() {
     /usr/libexec/PlistBuddy -c 'add ":IgnoredLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
     /usr/libexec/PlistBuddy -c 'add ":RequiredLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
     /usr/libexec/PlistBuddy -c 'add ":OptionalLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+    /usr/libexec/PlistBuddy -c 'add ":ExcludedBackgroundLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
     /usr/libexec/PlistBuddy -c 'add ":ConvertedLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
 
      # Attempt to populate the Optional Labels
@@ -1615,6 +1631,47 @@ get_preferences() {
                 done 
             else
                 log_verbose "No such label ${ignoredLabel}"
+            fi
+        fi
+    done
+
+    # Attempt to populate the Excluded Background Labels.
+    # Unlike IgnoredLabels, these are still discovered and reported - they are only skipped
+    # during fully-silent / background-closed-app installs. Supports wildcards like IgnoredLabels.
+    log_info "Attempting to populate excluded background labels"
+    for excludedBackgroundLabel in "${excludedBackgroundLabelsArray[@]}"; do
+        if [[ -f "${fragmentsPath}/labels/${excludedBackgroundLabel}.sh" ]]; then
+            if /usr/libexec/PlistBuddy -c "Print :ExcludedBackgroundLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$excludedBackgroundLabel"; then
+                log_verbose "$excludedBackgroundLabel already exists, skip adding to ExcludedBackgroundLabels"
+            elif /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$excludedBackgroundLabel"; then
+                log_verbose "$excludedBackgroundLabel is listed as Ignored, skip adding to ExcludedBackgroundLabels"
+            else
+                log_verbose "Writing excluded background label $excludedBackgroundLabel to configuration plist"
+                /usr/libexec/PlistBuddy -c "add \":ExcludedBackgroundLabels:\" string \"${excludedBackgroundLabel}\"" "${appAutoPatchLocalPLIST}.plist"
+            fi
+        else
+            if [[ "${excludedBackgroundLabel}" == *"*"* ]]; then
+                log_verbose "Excluding all labels with $excludedBackgroundLabel from background updates"
+                wildExcluded=( $(find $fragmentsPath/labels -name "$excludedBackgroundLabel") )
+                for i in "${wildExcluded[@]}"; do
+                    excluded=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
+                    if [[ ! "$excluded" == "Application" ]]; then
+                        if /usr/libexec/PlistBuddy -c "Print :ExcludedBackgroundLabels:" "${appAutoPatchLocalPLIST}".plist | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$excluded"; then
+                            log_verbose "$excluded already exists, skip adding to ExcludedBackgroundLabels"
+                        elif /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$excluded"; then
+                            log_verbose "$excluded is listed as Ignored, skip adding to ExcludedBackgroundLabels"
+                        else
+                            log_verbose "Writing excluded background label $excluded to configuration plist"
+                            excluded=$(echo $excluded | sed "s/[\"]//g" )
+                            /usr/libexec/PlistBuddy -c "add \":ExcludedBackgroundLabels:\" string \"${excluded}\"" "${appAutoPatchLocalPLIST}.plist"
+                            excludedBackgroundLabelsArray+=($excluded)
+                        fi
+                    else
+                        sleep .1
+                    fi
+                done
+            else
+                log_verbose "No such label ${excludedBackgroundLabel}"
             fi
         fi
     done
@@ -5046,6 +5103,44 @@ _resolve_label_staging_info() {
     return $rc
 }
 
+is_excluded_background_label() {
+    # Returns 0 (true) if $1 is in ExcludedBackgroundLabels. Unlike IgnoredLabels, these apps
+    # are still discovered and reported - they are only withheld from fully-silent installs
+    # (InteractiveMode 0 / --workflow-install-now-silent) and from Background Patch Closed Apps.
+    # Interactive Install Now / hard-deadline installs still update them.
+    local label="$1"
+    [[ -z "${label}" ]] && return 1
+    [[ " ${excludedBackgroundLabelsArray[*]} " == *" ${label} "* ]]
+}
+
+filter_excluded_background_labels_from_silent_install() {
+    # For fully-silent runs only: pull excluded-background labels out of the install queue so
+    # they are not patched unattended, while leaving them in DiscoveredLabels / the report PLIST
+    # so they remain visible to inventory and the next interactive run.
+    local remainingLabels=()
+    local skippedLabels=()
+    local label
+
+    for label in $queuedLabelsArray; do
+        if is_excluded_background_label "${label}"; then
+            skippedLabels+=("${label}")
+            log_info "Skipping silent install of '${label}' (listed in ExcludedBackgroundLabels); leaving it queued for discovery/reporting and interactive installs."
+        else
+            remainingLabels+=("${label}")
+        fi
+    done
+
+    if [[ ${#skippedLabels[@]} -gt 0 ]]; then
+        log_notice "Excluded ${#skippedLabels[@]} label(s) from silent install via ExcludedBackgroundLabels: ${skippedLabels[*]}"
+    fi
+
+    queuedLabelsArray=("${remainingLabels[@]}")
+    countOfElementsArray=()
+    for label in $queuedLabelsArray; do
+        countOfElementsArray+=("${label}")
+    done
+}
+
 workflow_stage_updates() {
     # Pre-download pending update installers to a local staging folder before displaying the
     # user dialog. When workflow_do_Installations later runs, it detects the staged file and
@@ -5113,6 +5208,14 @@ workflow_stage_updates() {
     local stageErrorCount=0
 
     for label in $queuedLabelsArray; do
+        # On fully-silent runs, don't waste a download on labels we will never silently install.
+        # Interactive runs still stage them so Install Now / hard-deadline is fast.
+        if { [[ ${InteractiveModeOption} == 0 ]] || [[ "${workflow_install_now_silent_option}" == "TRUE" ]]; } && is_excluded_background_label "${label}"; then
+            log_info "Skipping staging of '${label}' (ExcludedBackgroundLabels on a silent run)."
+            stageSkipCount=$((stageSkipCount + 1))
+            continue
+        fi
+
         log_info "Resolving download info for staging: ${label}"
 
         # Resolve the label's downloadURL and related vars in an isolated subprocess
@@ -5233,6 +5336,24 @@ workflow_silent_patch_closed_apps() {
     local silentPatchErrors=0
 
     for label in $queuedLabelsArray; do
+
+        # ExcludedBackgroundLabels: discover/report but do not silently patch. Leave in the
+        # remaining queue so InteractiveMode 1/2 can still offer Install Now / hard-deadline.
+        if is_excluded_background_label "${label}"; then
+            log_info "Skipping silent background patch of '${label}' (listed in ExcludedBackgroundLabels); adding to user dialog queue."
+            remainingLabels+=("${label}")
+            local _dname _ipath
+            _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+            _ipath=$(resolve_app_icon_path "${label}")
+            _compute_version_subtitle "${label}"
+            newAppNamesArray+=("--listitem")
+            if [[ -n "$versionSubtitle" ]]; then
+                newAppNamesArray+=(${_dname},icon="${_ipath}",subtitle="${versionSubtitle}")
+            else
+                newAppNamesArray+=(${_dname},icon="${_ipath}")
+            fi
+            continue
+        fi
 
         # Respect Zoom call active check for zoom labels
         if [[ "${zoom_call_active_check_option}" == "TRUE" && "${label}" == "zoom"* ]]; then
@@ -6312,13 +6433,15 @@ main() {
         # for each .sh file in fragments/labels/ strip out the switch/case lines and any comments. 
         log_info "Running discovery of installed applications"
 
-        # Need to grab any required, ingnored, or optional labels
+        # Need to grab any required, ignored, optional, or excluded-background labels
         ignoredLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" IgnoredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
         requiredLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" RequiredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
         optionalLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" OptionalLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+        excludedBackgroundLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" ExcludedBackgroundLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
         ignoredLabelsArray+=($ignoredLabelsFromConfig)
         requiredLabelsArray+=($requiredLabelsFromConfig)
         optionalLabelsArray+=($optionalLabelsFromConfig)
+        excludedBackgroundLabelsArray+=($excludedBackgroundLabelsFromConfig)
 
         for labelFragment in "$fragmentsPath"/labels/*.sh; do 
             
@@ -6424,10 +6547,12 @@ main() {
     ignoredLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" IgnoredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
     requiredLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" RequiredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
     optionalLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" OptionalLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+    excludedBackgroundLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" ExcludedBackgroundLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
     convertedLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" ConvertedLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
     ignoredLabelsArray+=($ignoredLabelsFromConfig)
     requiredLabelsArray+=($requiredLabelsFromConfig)
     optionalLabelsArray+=($optionalLabelsFromConfig)
+    excludedBackgroundLabelsArray+=($excludedBackgroundLabelsFromConfig)
     convertedLabelsArray+=($convertedLabelsFromConfig)
     labelsArray+=($labelsFromConfig $requiredLabels $requiredLabelsFromConfig $convertedLabelsFromConfig)
 
@@ -6439,6 +6564,9 @@ main() {
 
     # Deduplicate optional labels
     optionalLabelsArray=($(tr ' ' '\n' <<< "${optionalLabelsArray[@]}" | sort -u | tr '\n' ' '))
+
+    # Deduplicate excluded background labels
+    excludedBackgroundLabelsArray=($(tr ' ' '\n' <<< "${excludedBackgroundLabelsArray[@]}" | sort -u | tr '\n' ' '))
 
     # Deduplicate converted labels
     convertedLabelsArray=($(tr ' ' '\n' <<< "${convertedLabelsArray[@]}" | sort -u | tr '\n' ' '))
@@ -6476,6 +6604,7 @@ main() {
     log_notice "Ignoring labels: $ignoredLabelsArray"
     log_notice "Required labels: $requiredLabelsArray"
     log_notice "Optional Labels: $optionalLabelsArray"
+    log_notice "Excluded Background Labels: $excludedBackgroundLabelsArray"
     log_notice "Converted Labels: $convertedLabelsArray"
 
     log_info "Discovery of installed applications complete..."
@@ -6513,6 +6642,7 @@ main() {
     # of open state): before showing any dialog, silently patch apps that aren't currently open.
     # Apps with a blocking process (Installomator exit 12) stay queued for the deferral/deadline
     # dialog. Controlled by WorkflowBackgroundPatchClosedAppsOption (managed key: WorkflowBackgroundPatchClosedApps).
+    # ExcludedBackgroundLabels are also skipped here and left for the interactive dialog.
     if [[ ${InteractiveModeOption} -ge 1 ]] && [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         [[ ${InteractiveModeOption} == 2 ]] && swiftDialogUpdate "progresstext: ${display_string_silent_patch_progress} ..."
         workflow_silent_patch_closed_apps
@@ -6532,6 +6662,39 @@ main() {
             rm -f "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
             rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
             log_info "Install Now Workflow or Silent Mode active - Bypassing deferral workflow"
+            # Fully-silent path: withhold ExcludedBackgroundLabels from the install. --workflow-install-now
+            # (non-silent) deliberately does NOT filter them - that is the manual escape hatch.
+            if [[ "${workflow_install_now_silent_option}" == "TRUE" ]] || { [[ ${InteractiveModeOption} == 0 ]] && [[ "${workflow_install_now_option}" != "TRUE" ]]; }; then
+                filter_excluded_background_labels_from_silent_install
+                numberOfUpdates=$((${#countOfElementsArray[@]}))
+            fi
+            if [[ ${#countOfElementsArray[@]} -eq 0 ]]; then
+                log_notice "No apps remain to install after applying ExcludedBackgroundLabels; treating silent run as complete."
+                defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true
+                timestamp="$(date +$timestamp_format)"
+                defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
+                check_webhook
+                if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+                    log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
+                    log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
+                    /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+                    { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+                    disown
+                    exit_clean
+                else
+                    if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
+                    || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
+                        log_aap "Monthly Patching Cadence Enabled: Calculating next launch date"
+                        next_nth_weekday=$(next_nth_weekday_datetime ${monthly_patching_cadence_weekday_index} ${monthly_patching_cadence_ordinal_value} "${monthly_patching_cadence_start_time}")
+                        log_notice "Will auto launch on ${next_nth_weekday}"
+                        set_auto_launch_monthly_cadence
+                    else
+                        deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
+                        log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
+                        set_auto_launch_deferral
+                    fi
+                fi
+            else
             log_notice "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
             workflow_do_Installations
             
@@ -6560,6 +6723,7 @@ main() {
                     log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
                     set_auto_launch_deferral
                 fi
+            fi
             fi
 
         else
