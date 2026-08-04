@@ -2,10 +2,11 @@
 
 # Version 3
 
-## Version 3.6.2
-### 04-Aug-2026 (4) - Build 3.6.2.2608040915
+## Version 3.6.3
+### 04-Aug-2026 (1) - Build 3.6.3.2608040922
 - Changed: the Dock-active wait in `workflow_startup()` no longer exits the script when no user session appears. It still waits briefly (now 20 seconds, down from 120) for the Dock to become active, but if it never does, AAP logs that it's continuing without an active user session and proceeds - some admins intentionally run AAP before anyone is logged in, and the previous `exit 1` after 120 seconds blocked that entirely. When the Dock is not active after that wait, `get_dialog()` is also skipped (the same as fully-silent runs), since swiftDialog can't safely present UI without an active user session. Fully-silent runs (`InteractiveMode 0`, or `--workflow-install-now-silent`) still skip the Dock wait entirely as before
 
+## Version 3.6.2
 ### 03-Aug-2026 (3) - Build 3.6.2.2608030900
 - [#248](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/248): the installer `.pkg` attached to each release reported its version as `0`, so every release looked identical to an MDM. Intune reads the package version off the pkg's component metadata and surfaces it on the auto-generated detection rule (bundle ID `xyz.techitout.appAutoPatch.installer`, version `0`), and refused to let an admin replace an already-uploaded pkg with a newer one: *"Update this app by selecting a newer line-of-business app-package. The version of your existing package is [0], and the selected package equals version [0]."* Two places were responsible: `pkgbuild` was invoked without a version argument, so the component pkg's `PackageInfo` was written with `version="0"`, and `distribution.xml` separately hardcoded `version="0"` on its `<pkg-ref>`. The `<product version>` productbuild wrote was already correct, confirming Intune reads the component/`pkg-ref` version rather than the product version
 	- Fixed by versioning the component pkg with the full build string (`3.6.2.2608030900`), which productbuild then copies onto the `<pkg-ref>` automatically once the hardcoded attribute is removed - so the component and the distribution can't disagree. `distribution.xml` is now a template with an `__AAP_VERSION__` placeholder that `build-pkg.sh` substitutes with the short version (`3.6.2`) for a new `<product id="xyz.techitout.appAutoPatch" version="...">` element, per Apple's guidance that the product version should be the short version string. The build aborts if any placeholder is left unsubstituted

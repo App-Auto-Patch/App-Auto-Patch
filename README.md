@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.6.2
+# App Auto-Patch 3.6.3
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub pre-release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag&include_prereleases) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch) [![swiftDialog](https://img.shields.io/badge/swiftDialog-Enabled-blue)](https://swiftdialog.app)
 
@@ -14,12 +14,14 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
+## New features/Specific Changes in 3.6.3
+- Changed: if no user is logged in, AAP no longer exits after waiting for the Dock - it waits up to 20 seconds, then continues without an active user session and skips the swiftDialog install/update check. Fully-silent runs still skip the Dock wait entirely
+
 ## New features/Specific Changes in 3.6.2
 - Fixed: the fully-silent Dock-wait skip (introduced in 3.6.1, below) didn't actually take effect - the check that determines whether a run is fully silent ran too late, after the Dock-wait loop it was meant to skip, so `InteractiveMode 0`/`--workflow-install-now-silent` runs still waited on the Dock (and could fail outright on a Mac with no user ever logged in). The Dock wait is now skipped correctly as well
 - Fixed: the overlay icon could still appear blank on Jamf-managed Macs. If the Jamf plist kept a `self_service_app_path` pointing at a Self Service.app that is no longer installed (common after moving to Self Service+), AAP used that stale path anyway - shadowing the correctly-configured Self Service+ and pointing at an icon file that doesn't exist. Self Service and Self Service+ are now each checked for an icon that actually exists and is readable before being used, extracted custom icons are verified to be real `.icns` files, and dialogs render without an overlay rather than showing an empty overlay badge when no usable icon is found
 - Added: verbose logging for the whole overlay icon selection process, so a blank overlay icon can be diagnosed from a verbose log
 - Fixed: the installer `.pkg` attached to each release reported its version as `0`, so every release looked like the same version to an MDM - in Intune this blocked replacing an already-uploaded pkg with a newer one. The pkg now carries real version numbers (short version as the product version, full build string as the package version an MDM reads), with the package identifier unchanged so existing detection rules keep matching (#248)
-- Changed: if no user is logged in, AAP no longer exits after waiting for the Dock - it waits up to 20 seconds, then continues without an active user session and skips the swiftDialog install/update check. Fully-silent runs still skip the Dock wait entirely
 
 ## New features/Specific Changes in 3.6.1
 - Fixed: when using `InstallomatorVersionCustomRepoPath`/`InstallomatorVersionCustomBranchName` to pull Installomator from a custom fork and branch, AAP could silently download from the wrong branch if another branch's name contained the configured branch name as a substring (e.g. `apple-ls` vs. `dev-apple-ls`)
