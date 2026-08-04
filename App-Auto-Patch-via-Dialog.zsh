@@ -26,7 +26,7 @@
 
 scriptVersion="3.6.2"
 scriptDate="2026/08/03"
-scriptBuild="3.6.2.2608030900"
+scriptBuild="3.6.2.2608040915"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2223,23 +2223,30 @@ workflow_startup() {
     # ever needed. The authoritative InteractiveModeOption is still resolved normally afterward.
     resolve_early_silent_mode
 
-	# Wait for the Dock to be active before proceeding. The Dock running indicates that a user
-	# session is fully established. Check every 5 seconds for up to 120 seconds total - skipped
-	# for fully-silent runs (InteractiveMode 0, or --workflow-install-now-silent), which are
-	# expected to run unattended (e.g. lab/kiosk Macs) with no user session ever active.
+	# Wait briefly for the Dock to become active. The Dock running indicates that a user session
+	# is fully established. Check every 5 seconds for up to 20 seconds total - skipped for
+	# fully-silent runs (InteractiveMode 0, or --workflow-install-now-silent), which are expected
+	# to run unattended (e.g. lab/kiosk Macs) with no user session ever active. If the Dock never
+	# appears, continue anyway rather than exiting: some admins intentionally run AAP before anyone
+	# is logged in. A missing Dock session does still skip get_dialog() below, since swiftDialog
+	# can't safely present UI without an active user session.
+	dockActiveOption="FALSE"
 	if [[ "${runningSilentlyOption}" == "TRUE" ]]; then
 		log_info "Running silently; skipping wait for the Dock to become active."
 	else
 		local dockWaitSeconds=0
 		until pgrep -x "Dock" &>/dev/null; do
-			if [[ $dockWaitSeconds -ge 120 ]]; then
-				log_exit "No user session detected (Dock not active) after waiting 120 seconds. Will retry later."
-				exit 1
+			if [[ $dockWaitSeconds -ge 20 ]]; then
+				log_info "No user session detected (Dock not active) after waiting 20 seconds. Continuing without an active user session."
+				break
 			fi
 			sleep 5
 			dockWaitSeconds=$((dockWaitSeconds + 5))
 		done
-		log_info "Dock is active; proceeding with startup..."
+		if pgrep -x "Dock" &>/dev/null; then
+			dockActiveOption="TRUE"
+			log_info "Dock is active; proceeding with startup..."
+		fi
 	fi
 
 	# Make sure macOS meets the minimum requirement of macOS 12.
@@ -2291,10 +2298,13 @@ workflow_startup() {
         exit 1
     fi
 
-    #Check for Dialog - skipped for fully-silent runs (InteractiveMode 0, or
-    # --workflow-install-now-silent), which never show a swiftDialog window
+    # Check for Dialog - skipped for fully-silent runs (InteractiveMode 0, or
+    # --workflow-install-now-silent), which never show a swiftDialog window, and also skipped when
+    # no Dock/user session is active, since swiftDialog can't safely present UI without one.
     if [[ "${runningSilentlyOption}" == "TRUE" ]]; then
         log_info "Running silently; skipping swiftDialog install/update check."
+    elif [[ "${dockActiveOption}" != "TRUE" ]]; then
+        log_info "No active user session (Dock not running); skipping swiftDialog install/update check."
     else
         get_dialog
     fi
