@@ -13,6 +13,8 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 	- Managed Preference Key: `<key>ExcludedBackgroundLabels</key>` `<string>label1 label2*</string>`
 	- CLI Trigger: `--excluded-background-labels="label1 label2*"`
 	- Cleared by `--reset-labels` along with the other label lists
+- **Preview Deferral Dialog** — Quickly preview how the deferral dialog looks with your current banner/icon/language settings, without running discovery or installing anything. Uses sample apps with realistic icons and version subtitles. Both Install Now and Defer are no-ops for patching; AAP only reschedules the next run using the default deferral timer.
+	- CLI Trigger: `--preview-deferral-dialog`
 
 ## Version 3.6.2
 ### 01-Aug-2026

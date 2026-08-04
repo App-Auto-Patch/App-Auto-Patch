@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.0"
 scriptDate="2026/08/03"
-scriptBuild="3.7.0.2608031015"
+scriptBuild="3.7.0.2608032255"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -92,6 +92,7 @@ echo "
 
     Dialog Options
     [--dialog-icon-option=filepath|URL]
+    [--preview-deferral-dialog]
     
     Webhook Options:
     [--webhook-feature-all] [--webhook-feature-failures] [--webhook-feature-off]
@@ -903,6 +904,9 @@ get_options() {
             ;;
             --dialog-icon-option=*)
                 dialog_icon_option="${1##*=}"
+            ;;
+            --preview-deferral-dialog)
+                preview_deferral_dialog_option="TRUE"
             ;;
             --patch-week-start-day=*)
                 patch_week_start_day_option="${1##*=}"
@@ -4328,6 +4332,75 @@ set_deferral_menu() {
     fi
 }
 
+# Preview-only path for --preview-deferral-dialog: show the real deferral dialog with sample
+# list items so admins can iterate on BannerImage/BannerTitle/BannerHeight (and other dialog
+# cosmetics) without running discovery or installing anything. Both Install Now and Defer are
+# no-ops for patching; the only side effect is rescheduling the next LaunchDaemon run using the
+# configured default deferral timer.
+workflow_preview_deferral_dialog() {
+    log_notice "**** App Auto-Patch ${scriptVersion} - PREVIEW DEFERRAL DIALOG ****"
+    log_info "Building a sample app list for the deferral dialog preview (no discovery, no patching)."
+
+    # Clear deadline display strings so the preview uses the unlimited-deferrals infobox. Real
+    # deadline state from a prior production run would otherwise leak into a cosmetic preview.
+    unset display_string_deadline
+    unset display_string_deadline_count
+    unset display_string_deadline_count_maximum
+
+    # Prefer real app icons when those apps are installed so the preview looks like production;
+    # fall back to the App Store icon (or AAP's own logo) when they aren't.
+    local fallbackIcon="${icon}"
+    if [[ -s "/System/Applications/App Store.app/Contents/Resources/AppIcon.icns" ]]; then
+        fallbackIcon="/System/Applications/App Store.app/Contents/Resources/AppIcon.icns"
+    elif [[ -s "/Applications/App Store.app/Contents/Resources/AppIcon.icns" ]]; then
+        fallbackIcon="/Applications/App Store.app/Contents/Resources/AppIcon.icns"
+    elif [[ -s "${appAutoPatchFolder}/AAPLogo.png" ]]; then
+        fallbackIcon="${appAutoPatchFolder}/AAPLogo.png"
+    fi
+
+    local -a previewSamples
+    # Each entry: "Display Name|preferred icon path|current version|new version"
+    previewSamples=(
+        "Google Chrome|/Applications/Google Chrome.app/Contents/Resources/app.icns|128.0.6613.138|129.0.6668.59"
+        "Firefox|/Applications/Firefox.app/Contents/Resources/firefox.icns|128.0.3|129.0.1"
+        "Slack|/Applications/Slack.app/Contents/Resources/electron.icns|4.39.95|4.40.12"
+        "zoom.us|/Applications/zoom.us.app/Contents/Resources/ZPLogo.icns|6.1.10|6.2.0"
+        "1Password|/Applications/1Password.app/Contents/Resources/icon.icns|8.10.36|8.10.40"
+        "Safari|/Applications/Safari.app/Contents/Resources/AppIcon.icns|18.3|18.4"
+    )
+
+    appNamesArray=()
+    local sample entry sampleName sampleIcon sampleCurrent sampleNew sampleSubtitle
+    for entry in "${previewSamples[@]}"; do
+        sampleName="${entry%%|*}"
+        sample="${entry#*|}"
+        sampleIcon="${sample%%|*}"
+        sample="${sample#*|}"
+        sampleCurrent="${sample%%|*}"
+        sampleNew="${sample#*|}"
+        [[ -s "${sampleIcon}" ]] || sampleIcon="${fallbackIcon}"
+        sampleSubtitle="${display_string_version_current} ${sampleCurrent}  →  ${display_string_version_new} ${sampleNew}"
+        appNamesArray+=("--listitem")
+        appNamesArray+=(${sampleName},icon="${sampleIcon}",subtitle="${sampleSubtitle}")
+    done
+
+    numberOfUpdates=$(( ${#appNamesArray[@]} / 2 ))
+    log_info "Deferral dialog preview will show ${numberOfUpdates} sample apps."
+
+    # Capture the configured default deferral timer before the dialog runs - selecting a menu
+    # value (or the dialog's own deferral path) would otherwise overwrite ${deferral_timer_minutes},
+    # and this preview must always reschedule using the default regardless of which button is used.
+    local preview_deferral_minutes="${deferral_timer_minutes}"
+
+    dialog_install_or_defer
+
+    dialog_user_choice_install="FALSE"
+    deferral_timer_minutes="${preview_deferral_minutes}"
+    log_notice "Preview complete - no install will be performed. Rescheduling next run using the default deferral timer (${deferral_timer_minutes} minutes)."
+    write_status "Pending: Deferral dialog preview complete; next run in ${deferral_timer_minutes} minutes."
+    set_auto_launch_deferral
+}
+
 dialog_install_or_defer() {
 
     _prepare_dialog_command_file
@@ -6025,6 +6098,12 @@ resolve_early_silent_mode() {
     # single source of truth for the rest of the run.
     runningSilentlyOption="FALSE"
 
+    # --preview-deferral-dialog needs the real UI (swiftDialog + the deferral dialog), so never
+    # treat that run as silent even if InteractiveMode itself is configured as 0.
+    if [[ "${preview_deferral_dialog_option:-}" == "TRUE" ]]; then
+        return 0
+    fi
+
     # --workflow-install-now (non-silent) always forces InteractiveModeOption to 2 later on, so
     # never treat this run as silent even if InteractiveMode itself is configured as 0.
     if [[ "${workflow_install_now_option:-}" == "TRUE" ]] || [[ -f "${WORKFLOW_INSTALL_NOW_FILE}" ]]; then
@@ -6269,6 +6348,15 @@ main() {
     get_options "$@"
 
     workflow_startup
+
+    # Cosmetic preview of the deferral dialog with sample apps/icons - skips discovery, patching,
+    # and completion-status checks. Both dialog buttons are no-ops for install; only the default
+    # deferral-timer reschedule runs. Must happen after workflow_startup so banner/icon/language/
+    # overlay preferences are fully resolved the same way a real run would see them.
+    if [[ "${preview_deferral_dialog_option}" == "TRUE" ]]; then
+        workflow_preview_deferral_dialog
+    fi
+
     #Run the function to check if a user has already completed patching for the set cadence, ignore if using --workflow-install-now
     if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ "${workflow_install_now_silent_option}" == "TRUE" ]]; then
         log_notice "**** App Auto-Patch ${scriptVersion} - WORKFLOW INSTALL NOW - Skipping Completion Status Check"

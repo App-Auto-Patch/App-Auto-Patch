@@ -18,6 +18,8 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 - **Excluded Background Labels** — Pin specific apps so AAP still discovers and reports them, but does not update them during fully-silent runs (`InteractiveMode 0` / `--workflow-install-now-silent`) or Background Patch Closed Apps. Interactive Install Now and hard-deadline installs still update them. Unlike `IgnoredLabels`, these apps stay visible in discovery, logs, and inventory. Supports wildcards. (#238)
 	- Managed Preference Key: `<key>ExcludedBackgroundLabels</key>` `<string>label1 label2*</string>`
 	- CLI Trigger: `--excluded-background-labels="label1 label2*"`
+- **Preview Deferral Dialog** — Quickly preview how the deferral dialog looks with your current banner/icon/language settings, using sample apps (no discovery, no patching). Both buttons are no-ops for install; only the default deferral-timer reschedule runs.
+	- CLI Trigger: `--preview-deferral-dialog`
 
 ## New features/Specific Changes in 3.6.2
 - Fixed: the fully-silent Dock-wait skip (introduced in 3.6.1, below) didn't actually take effect - the check that determines whether a run is fully silent ran too late, after the Dock-wait loop it was meant to skip, so `InteractiveMode 0`/`--workflow-install-now-silent` runs still waited on the Dock (and could fail outright on a Mac with no user ever logged in). The Dock wait is now skipped correctly as well

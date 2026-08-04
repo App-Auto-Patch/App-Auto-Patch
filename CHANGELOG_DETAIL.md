@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.0
+### 03-Aug-2026 (2) - Build 3.7.0.2608032255
+- Added: `--preview-deferral-dialog` CLI trigger - shows the real deferral dialog populated with sample apps/icons/version subtitles so admins can iterate on `BannerImage`/`BannerTitle`/`BannerHeight` (and other dialog cosmetics) without running discovery or installing anything. Both Install Now and Defer are no-ops for patching; the only side effect is rescheduling the next LaunchDaemon run using the configured default deferral timer. Works even when `InteractiveMode` is 0 (the preview forces a non-silent path so swiftDialog is still checked/installed)
+
 ### 03-Aug-2026 (1) - Build 3.7.0.2608031015
 - [#238](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/238): added `ExcludedBackgroundLabels` (CLI: `--excluded-background-labels`) - a space-separated Installomator label list (wildcards supported, same expansion model as `IgnoredLabels`) for apps that should stay in discovery/reporting/inventory but must not be auto-updated during unattended runs. Classic use case: developer runtimes like Amazon Corretto / Node / Python, where a project is pinned to a specific major version and silently bumping it breaks builds. Unlike `IgnoredLabels`, which removes the app from AAP entirely (and therefore from discovery/version reporting), excluded-background labels remain fully visible - AAP just withholds them from fully-silent installs (`InteractiveMode 0` / `--workflow-install-now-silent`) and from Background Patch Closed Apps. Interactive Install Now (deferral dialog or `--workflow-install-now`) and hard-deadline installs still update them, so there's a deliberate manual escape hatch. Cleared by `--reset-labels` alongside the other label lists. Managed preference manifests (iMazing + Jamf JSON) and the All-Options example profile updated accordingly
 
