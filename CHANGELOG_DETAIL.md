@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.0
+### 04-Aug-2026 (2) - Build 3.7.0.2608040927
+- Changed: the Dock-active wait in `workflow_startup()` no longer exits the script when no user session appears (ported from 3.6.3). It still waits briefly (now 20 seconds, down from 120) for the Dock to become active, but if it never does, AAP logs that it's continuing without an active user session and proceeds - some admins intentionally run AAP before anyone is logged in, and the previous `exit 1` after 120 seconds blocked that entirely. When the Dock is not active after that wait, `get_dialog()` is also skipped (the same as fully-silent runs), since swiftDialog can't safely present UI without an active user session. Fully-silent runs (`InteractiveMode 0`, or `--workflow-install-now-silent`) still skip the Dock wait entirely as before
+
 ### 04-Aug-2026 (1) - Build 3.7.0.2608040659
 - [#249](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/249): optional GitHub REST API authentication so large fleets (and custom Installomator forks) don't hit the unauthenticated 60 requests/hour rate limit when AAP looks up Installomator / swiftDialog on `api.github.com`. Managed preferences only:
 	- `GitHubAPIAuthEnabled` (`TRUE`/`FALSE`, default `FALSE`) - master switch

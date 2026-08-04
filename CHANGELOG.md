@@ -5,7 +5,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 # Version 3
 
 ## Version 3.7.0
-### 03-Aug-2026
+### 04-Aug-2026
 
 **New Features**
 
@@ -18,6 +18,10 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 	- Cleared by `--reset-labels` along with the other label lists
 - **Preview Deferral Dialog** — Quickly preview how the deferral dialog looks with your current banner/icon/language settings, without running discovery or installing anything. Uses sample apps with realistic icons and version subtitles. Both Install Now and Defer are no-ops for patching; AAP only reschedules the next run using the default deferral timer.
 	- CLI Trigger: `--preview-deferral-dialog`
+
+**Behavior Changes**
+
+- Changed: if no user is logged in, AAP no longer exits after waiting for the Dock — it waits up to 20 seconds, then continues without an active user session and skips the swiftDialog install/update check (since dialogs can't be shown without a user session). Fully-silent runs still skip the Dock wait entirely
 
 ## Version 3.6.2
 ### 01-Aug-2026
