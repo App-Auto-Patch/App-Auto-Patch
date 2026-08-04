@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.0"
-scriptDate="2026/08/03"
-scriptBuild="3.7.0.2608032255"
+scriptDate="2026/08/04"
+scriptBuild="3.7.0.2608040659"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -136,6 +136,8 @@ echo "
     <key>InstallomatorVersion</key> <string>Main,Release,Custom</string>
     <key>InstallomatorVersionCustomRepoPath</key> <string>Installomator/Installomator</string>
     <key>InstallomatorVersionCustomBranchName</key> <string>main</string>
+    <key>GitHubAPIAuthEnabled</key> <string>TRUE,FALSE</string>
+    <key>GitHubAPIToken</key> <string>github_pat_...</string>
     <key>InteractiveMode</key> <integer>number</integer>
     <key>MonthlyPatchingCadenceEnabled</key> <true/> | <false/>
     <key>MonthlyPatchingCadenceOrdinalValue</key> <string>second</string>
@@ -270,6 +272,13 @@ set_defaults() {
     installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore" # MDM Enabled
     
     installomatorVersion="Main" # MDM Enabled - Use:  Release|Main 
+
+    # Optional GitHub REST API authentication (managed preferences only). When enabled, AAP sends
+    # Authorization: Bearer <token> on api.github.com requests (Installomator / swiftDialog lookups)
+    # to raise the rate limit from 60/hr (unauthenticated) to 5,000/hr. See issue #249.
+    github_api_auth_enabled_option="FALSE" # MDM Enabled
+    github_api_token_option="" # MDM Enabled (never logged, never written to local plist)
+    github_api_curl_auth_args=() # populated by resolve_github_api_auth() when enabled
 
     DialogTimeoutDeferral="300" # MDM Enabled
     
@@ -1080,7 +1089,8 @@ get_preferences() {
 
     # Collect Managed PLIST preferences if any
     if [[ -f ${appAutoPatchManagedPLIST}.plist ]]; then
-        log_verbose "Managed preference file: ${appAutoPatchManagedPLIST}:\n$(defaults read "${appAutoPatchManagedPLIST}" 2> /dev/null)"
+        # Redact GitHubAPIToken from the verbose dump - a PAT must never appear in logs.
+        log_verbose "Managed preference file: ${appAutoPatchManagedPLIST}:\n$(defaults read "${appAutoPatchManagedPLIST}" 2> /dev/null | sed -E 's/(GitHubAPIToken[[:space:]]*=[[:space:]]*).*/\1"<redacted>";/')"
         local deferral_timer_default_managed
         deferral_timer_default_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerDefault 2> /dev/null)
         local deferral_timer_menu_managed
@@ -1542,6 +1552,11 @@ get_preferences() {
     log_verbose "bannerImageOption: $bannerImageOption"
     log_verbose "bannerTitleOption: $bannerTitleOption"
     log_verbose "bannerHeightOption: $bannerHeightOption"
+    # Token value intentionally not logged - only whether auth is enabled.
+    log_verbose "GitHubAPIAuthEnabled: ${github_api_auth_enabled_option}"
+    if [[ "${github_api_auth_enabled_option}" == "TRUE" ]]; then
+        log_verbose "GitHubAPIToken: <redacted, length ${#github_api_token_option}>"
+    fi
     
     #Validate Custom Installomator Options
     if [[ "${installomatorVersion}" == "Custom" ]] || [[ "${installomatorVersion}" == "custom" ]]; then
@@ -1551,6 +1566,14 @@ get_preferences() {
         fi
     { [[ -n "${installomatorVersionCustomRepoPath}" ]]; } && log_verbose "installomatorVersionCustomRepoPath is: ${installomatorVersionCustomRepoPath}"
     { [[ -n "${installomatorVersionCustomBranchName}" ]]; } && log_verbose "installomatorVersionCustomBranchName is: ${installomatorVersionCustomBranchName}"
+
+    # GitHub API auth is resolved earlier by resolve_github_api_auth() (before get_dialog /
+    # get_installomator). Re-assert the same required-key check here so a misconfiguration also
+    # trips the normal option_error / "Initial startup validation failed" path if somehow reached
+    # without that early exit.
+    if [[ "${github_api_auth_enabled_option}" == "TRUE" ]] && [[ -z "${github_api_token_option}" ]]; then
+        log_status "Parameter Error: GitHubAPIAuthEnabled is TRUE but GitHubAPIToken is missing or blank"; option_error="TRUE"
+    fi
 
     # Check for Installomator
     get_installomator
@@ -2352,6 +2375,11 @@ workflow_startup() {
         exit 1
     fi
 
+    # Resolve optional GitHub REST API auth (managed GitHubAPIAuthEnabled / GitHubAPIToken) before
+    # any api.github.com calls - get_dialog and get_installomator both hit the unauthenticated
+    # 60 req/hr rate limit otherwise. Must run after the AAP folder exists so logging/exit paths work.
+    resolve_github_api_auth
+
     #Check for Dialog - skipped for fully-silent runs (InteractiveMode 0, or
     # --workflow-install-now-silent), which never show a swiftDialog window
     if [[ "${runningSilentlyOption}" == "TRUE" ]]; then
@@ -3132,7 +3160,8 @@ function uninstall_app_auto_patch() {
 install_dialog() {
 
     # Get the URL of the latest PKG From the Dialog GitHub repo
-    dialogURL=$(curl -L --silent --fail "https://api.github.com/repos/swiftDialog/swiftDialog/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
+    # github_api_curl_auth_args is empty when auth is disabled; Bearer header when enabled (#249).
+    dialogURL=$(curl -L --silent --fail "${github_api_curl_auth_args[@]}" "https://api.github.com/repos/swiftDialog/swiftDialog/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
 
     # Expected Team ID of the downloaded PKG
     expectedDialogTeamID="PWA5E9TQ59"
@@ -3230,17 +3259,17 @@ get_installomator() {
         
         if [[ "$installomatorVersion" == "Release" ]] || [[ "$installomatorVersion" == "release" ]]; then
             log_info "Attempting to download Installomator release version"
-            latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
+            latestURL=$(curl -sSL "${github_api_curl_auth_args[@]}" -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
         elif [[ "$installomatorVersion" == "Custom" ]] || [[ "$installomatorVersion" == "custom" ]]; then
             log_info "Attempting to download Installomator from Custom Repo"
             # Match the exact `"name": "branch"` JSON line, not a bare substring - otherwise a
             # branch name that's a substring of another (e.g. "apple-ls" vs "dev-apple-ls") can
             # match multiple entries in the branches API response, and `tail -1` silently picks
             # the wrong one's commit sha (whichever sorts last alphabetically).
-            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "\"name\": \"${installomatorVersionCustomBranchName}\"" | tail -1 | cut -d'"' -f4)"
+            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL "${github_api_curl_auth_args[@]}" -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "\"name\": \"${installomatorVersionCustomBranchName}\"" | tail -1 | cut -d'"' -f4)"
         else
             log_info "Attempting to download Installomator main version"
-            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "\"name\": \"main\"" | tail -1 | cut -d'"' -f4)"
+            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL "${github_api_curl_auth_args[@]}" -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "\"name\": \"main\"" | tail -1 | cut -d'"' -f4)"
         fi
         
         tarPath="$installomatorPath/installomator.latest.tar.gz"
@@ -3264,12 +3293,12 @@ get_installomator() {
         log_notice "Installomator was found at $installomatorPath, checking version ..."
         if [[ "$installomatorVersion" == "Release" ]] || [[ "$installomatorVersion" == "release" ]]; then
             log_notice "pulling from Installomator Latest Release"
-            latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
+            latestURL=$(curl -sSL "${github_api_curl_auth_args[@]}" -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
             appNewVersion=$(curl -sLI "https://github.com/Installomator/Installomator/releases/latest" | grep -i "^location" | tr "/" "\n" | tail -1 | sed 's/[^0-9\.]//g')
             appVersion="$(cat $fragmentsPath/version.sh)"
         elif [[ "$installomatorVersion" == "Custom" ]] || [[ "$installomatorVersion" == "custom" ]]; then
             log_notice "Pulling from custom installomator"
-            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "\"name\": \"${installomatorVersionCustomBranchName}\"" | tail -1 | cut -d'"' -f4)"
+            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL "${github_api_curl_auth_args[@]}" -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "\"name\": \"${installomatorVersionCustomBranchName}\"" | tail -1 | cut -d'"' -f4)"
             appNewVersion="$(curl -sL "https://raw.githubusercontent.com/$installomatorVersionCustomRepoPath/refs/heads/$installomatorVersionCustomBranchName/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
             appVersion="$(cat "${installomatorScript}" | grep VERSIONDATE= | cut -d'"' -f2)"
             # convert to epoch
@@ -3277,7 +3306,7 @@ get_installomator() {
             #appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
         else
             log_notice "Pulling from Installomator Main Branch"
-            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "\"name\": \"main\"" | tail -1 | cut -d'"' -f4)"
+            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL "${github_api_curl_auth_args[@]}" -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "\"name\": \"main\"" | tail -1 | cut -d'"' -f4)"
             appNewVersion="$(curl -sL "https://raw.githubusercontent.com/Installomator/Installomator/refs/heads/main/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
             appVersion="$(cat "${installomatorScript}" | grep VERSIONDATE= | cut -d'"' -f2)"
             # convert to epoch
@@ -6124,6 +6153,56 @@ resolve_early_silent_mode() {
     { [[ -z "${interactive_mode_managed}" ]] && [[ -z "${InteractiveModeOption}" ]] && [[ -n "${interactive_mode_local}" ]]; } && interactive_mode_preview="${interactive_mode_local}"
 
     [[ "${interactive_mode_preview}" == "0" ]] && runningSilentlyOption="TRUE"
+}
+
+resolve_github_api_auth() {
+    # Optional GitHub REST API authentication via managed preferences only (#249).
+    # Raised rate limit: unauthenticated 60 req/hr → authenticated 5,000 req/hr.
+    # Must run before get_dialog()/get_installomator() hit api.github.com. Token is never written
+    # to the local plist and never logged in cleartext.
+    # Docs: https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api
+    github_api_curl_auth_args=()
+    github_api_token_option=""
+
+    local github_api_auth_enabled_managed github_api_token_managed
+    github_api_auth_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" GitHubAPIAuthEnabled 2> /dev/null)
+    github_api_token_managed=$(defaults read "${appAutoPatchManagedPLIST}" GitHubAPIToken 2> /dev/null)
+
+    [[ -n "${github_api_auth_enabled_managed}" ]] && github_api_auth_enabled_option="${github_api_auth_enabled_managed}"
+
+    case "${github_api_auth_enabled_option:l}" in
+        true|1|yes) github_api_auth_enabled_option="TRUE" ;;
+        *)          github_api_auth_enabled_option="FALSE" ;;
+    esac
+
+    if [[ "${github_api_auth_enabled_option}" != "TRUE" ]]; then
+        log_verbose "GitHubAPIAuthEnabled: FALSE (unauthenticated GitHub API requests)"
+        return 0
+    fi
+
+    # Trim leading/trailing whitespace from the managed token string.
+    github_api_token_option="${github_api_token_managed}"
+    github_api_token_option="${github_api_token_option#"${github_api_token_option%%[![:space:]]*}"}"
+    github_api_token_option="${github_api_token_option%"${github_api_token_option##*[![:space:]]}"}"
+
+    if [[ -z "${github_api_token_option}" ]]; then
+        if [[ -d "${appAutoPatchLogFolder}" ]]; then
+            log_error "Parameter Error: GitHubAPIAuthEnabled is TRUE but GitHubAPIToken is missing or blank."
+            write_status "Inactive Error: GitHub API auth enabled without token."
+            exit_error
+        else
+            log_echo "[ERROR] Parameter Error: GitHubAPIAuthEnabled is TRUE but GitHubAPIToken is missing or blank."
+            exit 1
+        fi
+    fi
+
+    # Bearer is the documented scheme for PATs; Accept header matches GitHub REST guidance.
+    github_api_curl_auth_args=(
+        -H "Authorization: Bearer ${github_api_token_option}"
+        -H "Accept: application/vnd.github+json"
+    )
+    log_info "GitHub API authentication enabled for api.github.com requests."
+    log_verbose "GitHubAPIAuthEnabled: TRUE; GitHubAPIToken: <redacted, length ${#github_api_token_option}>"
 }
 
 resolve_self_update_preferences() {

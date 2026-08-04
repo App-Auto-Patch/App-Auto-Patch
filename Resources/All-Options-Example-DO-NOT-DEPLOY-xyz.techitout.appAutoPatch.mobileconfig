@@ -63,6 +63,10 @@
 			<string>Installomator/Installomator</string>
 			<key>InstallomatorVersionCustomBranchName</key>
 			<string>Main</string>
+			<key>GitHubAPIAuthEnabled</key>
+			<string>FALSE</string>
+			<key>GitHubAPIToken</key>
+			<string>github_pat_REPLACE_ME</string>
 			<key>InteractiveMode</key>
 			<integer>1</integer>
 			<key>MonthlyPatchingCadenceEnabled</key>

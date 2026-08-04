@@ -9,6 +9,9 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 **New Features**
 
+- **GitHub API Authentication** — Optionally authenticate `api.github.com` requests with a GitHub personal access token so AAP stays under GitHub's rate limits in large fleets (60 → 5,000 requests/hour). Managed preferences only; the token is never written to the local preference file and is never logged. If auth is enabled without a token, startup validation fails. (#249)
+	- Managed Preference Key: `<key>GitHubAPIAuthEnabled</key>` `<string>TRUE,FALSE</string>` — default: `FALSE`
+	- Managed Preference Key: `<key>GitHubAPIToken</key>` `<string>github_pat_...</string>` — required when auth is enabled
 - **Excluded Background Labels** — Pin specific apps so AAP still discovers and reports them, but does not update them during fully-silent runs (`InteractiveMode 0` / `--workflow-install-now-silent`) or Background Patch Closed Apps. Interactive Install Now and hard-deadline installs still update them, so there's a manual escape hatch. Unlike `IgnoredLabels`, these apps stay visible in discovery, logs, and inventory — useful for runtimes like Amazon Corretto, Node, or Python where "latest" isn't always correct. Supports wildcards. (#238)
 	- Managed Preference Key: `<key>ExcludedBackgroundLabels</key>` `<string>label1 label2*</string>`
 	- CLI Trigger: `--excluded-background-labels="label1 label2*"`

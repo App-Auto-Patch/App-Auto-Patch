@@ -15,6 +15,9 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.7.0
+- **GitHub API Authentication** — Optionally authenticate `api.github.com` requests with a GitHub personal access token so AAP stays under GitHub's rate limits in large fleets (60 → 5,000 requests/hour). Managed preferences only; the token is never written to the local preference file and is never logged. If auth is enabled without a token, startup validation fails. (#249)
+	- Managed Preference Key: `<key>GitHubAPIAuthEnabled</key>` `<string>TRUE,FALSE</string>` — default: `FALSE`
+	- Managed Preference Key: `<key>GitHubAPIToken</key>` `<string>github_pat_...</string>` — required when auth is enabled
 - **Excluded Background Labels** — Pin specific apps so AAP still discovers and reports them, but does not update them during fully-silent runs (`InteractiveMode 0` / `--workflow-install-now-silent`) or Background Patch Closed Apps. Interactive Install Now and hard-deadline installs still update them. Unlike `IgnoredLabels`, these apps stay visible in discovery, logs, and inventory. Supports wildcards. (#238)
 	- Managed Preference Key: `<key>ExcludedBackgroundLabels</key>` `<string>label1 label2*</string>`
 	- CLI Trigger: `--excluded-background-labels="label1 label2*"`

@@ -696,6 +696,46 @@
             },
             "property_order": 125
         },
+        "GitHubAPIAuthEnabled": {
+            "type": "string",
+            "title": "GitHub API Auth Enabled",
+            "default": "FALSE",
+            "description": "When TRUE, App Auto-Patch authenticates GitHub REST API requests (api.github.com) with the personal access token in GitHubAPIToken, raising the rate limit from 60 to 5,000 requests per hour. Managed preferences only - the token is never written to the local preference file and is never logged. If this key is TRUE, GitHubAPIToken is required or startup validation fails.",
+            "enum": [
+                "TRUE",
+                "FALSE"
+            ],
+            "options": {
+                "enum_titles": [
+                    "TRUE",
+                    "FALSE"
+                ]
+            },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/249"
+                }
+            ],
+            "property_order": 126
+        },
+        "GitHubAPIToken": {
+            "type": "string",
+            "title": "GitHub API Token",
+            "description": "GitHub personal access token (classic or fine-grained) used when GitHubAPIAuthEnabled is TRUE. Sent as Authorization: Bearer on api.github.com requests for Installomator and swiftDialog lookups. Prefer a fine-grained token with Contents: Read on the repositories AAP queries. Managed preferences only - never stored in the local preference file or written to logs.",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "github_pat_..."
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api"
+                }
+            ],
+            "property_order": 127
+        },
         "InstallomatorVersion": {
             "type": "string",
             "title": "Installomator Version",

@@ -3,6 +3,14 @@
 # Version 3
 
 ## Version 3.7.0
+### 04-Aug-2026 (1) - Build 3.7.0.2608040659
+- [#249](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/249): optional GitHub REST API authentication so large fleets (and custom Installomator forks) don't hit the unauthenticated 60 requests/hour rate limit when AAP looks up Installomator / swiftDialog on `api.github.com`. Managed preferences only:
+	- `GitHubAPIAuthEnabled` (`TRUE`/`FALSE`, default `FALSE`) - master switch
+	- `GitHubAPIToken` - GitHub personal access token (classic or fine-grained); sent as `Authorization: Bearer` per [GitHub's REST auth docs](https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api)
+	- When auth is enabled, `GitHubAPIToken` is required - blank/missing fails startup validation immediately (before any `api.github.com` call)
+	- Token is never written to the local preference plist, never accepted via CLI, and is redacted from verbose managed-preference dumps (only length is logged when auth is on)
+	- Applied to every existing `api.github.com` curl in `install_dialog()` / `get_installomator()`; download URLs on `codeload.github.com` / `raw.githubusercontent.com` / `github.com` are unchanged (those aren't the rate-limited REST API)
+
 ### 03-Aug-2026 (2) - Build 3.7.0.2608032255
 - Added: `--preview-deferral-dialog` CLI trigger - shows the real deferral dialog populated with sample apps/icons/version subtitles so admins can iterate on `BannerImage`/`BannerTitle`/`BannerHeight` (and other dialog cosmetics) without running discovery or installing anything. Both Install Now and Defer are no-ops for patching; the only side effect is rescheduling the next LaunchDaemon run using the configured default deferral timer. Works even when `InteractiveMode` is 0 (the preview forces a non-silent path so swiftDialog is still checked/installed)
 
