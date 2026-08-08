@@ -15,6 +15,7 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.7.0
+- **Mosyle MDM support** — Detect Mosyle from the enrollment ServerURL, include a “View in Mosyle” device deep-link in Slack/Teams webhooks (enrolled MDM host, fallback `https://business.mosyle.com`), and prefer the Mosyle Self Service overlay icon when present. (#240)
 - **GitHub API Authentication** — Optionally authenticate `api.github.com` requests with a GitHub personal access token so AAP stays under GitHub's rate limits in large fleets (60 → 5,000 requests/hour). Managed preferences only; the token is never written to the local preference file and is never logged. If auth is enabled without a token, startup validation fails. (#249)
 	- Managed Preference Key: `<key>GitHubAPIAuthEnabled</key>` `<string>TRUE,FALSE</string>` — default: `FALSE`
 	- Managed Preference Key: `<key>GitHubAPIToken</key>` `<string>github_pat_...</string>` — required when auth is enabled
@@ -24,6 +25,7 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 - **Preview Deferral Dialog** — Quickly preview how the deferral dialog looks with your current banner/icon/language settings, using sample apps (no discovery, no patching). Both buttons are no-ops for install; only the default deferral-timer reschedule runs.
 	- CLI Trigger: `--preview-deferral-dialog`
 - Changed: if no user is logged in, AAP no longer exits after waiting for the Dock — it waits up to 20 seconds, then continues without an active user session and skips the swiftDialog install/update check. Fully-silent runs still skip the Dock wait entirely
+- Fixed: Teams webhooks now resolve Workspace One device links the same way Slack webhooks already did
 
 ## New features/Specific Changes in 3.6.2
 - Fixed: the fully-silent Dock-wait skip (introduced in 3.6.1, below) didn't actually take effect - the check that determines whether a run is fully silent ran too late, after the Dock-wait loop it was meant to skip, so `InteractiveMode 0`/`--workflow-install-now-silent` runs still waited on the Dock (and could fail outright on a Mac with no user ever logged in). The Dock wait is now skipped correctly as well

@@ -5,10 +5,11 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 # Version 3
 
 ## Version 3.7.0
-### 04-Aug-2026
+### 08-Aug-2026
 
 **New Features**
 
+- **Mosyle MDM support** — Detect Mosyle from the enrollment ServerURL, include a “View in Mosyle” device deep-link in Slack/Teams webhooks, and prefer the Mosyle Self Service overlay icon when present. Webhook console host prefers the enrolled MDM URL, with a fallback to `https://business.mosyle.com`. (#240)
 - **GitHub API Authentication** — Optionally authenticate `api.github.com` requests with a GitHub personal access token so AAP stays under GitHub's rate limits in large fleets (60 → 5,000 requests/hour). Managed preferences only; the token is never written to the local preference file and is never logged. If auth is enabled without a token, startup validation fails. (#249)
 	- Managed Preference Key: `<key>GitHubAPIAuthEnabled</key>` `<string>TRUE,FALSE</string>` — default: `FALSE`
 	- Managed Preference Key: `<key>GitHubAPIToken</key>` `<string>github_pat_...</string>` — required when auth is enabled
@@ -22,6 +23,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 **Behavior Changes**
 
 - Changed: if no user is logged in, AAP no longer exits after waiting for the Dock — it waits up to 20 seconds, then continues without an active user session and skips the swiftDialog install/update check (since dialogs can't be shown without a user session). Fully-silent runs still skip the Dock wait entirely
+- Fixed: Teams webhooks now resolve Workspace One device links the same way Slack webhooks already did
 
 ## Version 3.6.2
 ### 01-Aug-2026

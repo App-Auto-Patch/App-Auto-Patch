@@ -3,6 +3,15 @@
 # Version 3
 
 ## Version 3.7.0
+### 08-Aug-2026 (1) - Build 3.7.0.2608081041
+- [#240](https://github.com/App-Auto-Patch/App-Auto-Patch/pull/240): Mosyle MDM support (based on @salzstreuer89's PR, with maintainer adjustments):
+	- `get_mdm()` recognizes `*mosyle*` enrollment ServerURLs and sets `mdmName="Mosyle"`
+	- Slack and Teams webhooks include a "View in Mosyle" device deep-link using Hardware UUID (`IOPlatformUUID`) as `#device_<uuid>`
+	- Console host prefers the enrolled MDM `server_url` from `get_mdm()`, falling back to `https://business.mosyle.com` instead of the PR's org-specific `https://mybusiness.mosyle.com`
+	- Mosyle URL is resolved once at the start of `webHookMessage()` and reused for both Slack and Teams
+	- Overlay icon chain also checks `/Applications/Mosyle Self Service.app` (Self-Service.app / Manager.app were already covered for some Mosyle installs)
+	- Also fixed pre-existing Teams webhook gap: Workspace One device links now resolve on Teams the same as Slack
+
 ### 04-Aug-2026 (2) - Build 3.7.0.2608040927
 - Changed: the Dock-active wait in `workflow_startup()` no longer exits the script when no user session appears (ported from 3.6.3). It still waits briefly (now 20 seconds, down from 120) for the Dock to become active, but if it never does, AAP logs that it's continuing without an active user session and proceeds - some admins intentionally run AAP before anyone is logged in, and the previous `exit 1` after 120 seconds blocked that entirely. When the Dock is not active after that wait, `get_dialog()` is also skipped (the same as fully-silent runs), since swiftDialog can't safely present UI without an active user session. Fully-silent runs (`InteractiveMode 0`, or `--workflow-install-now-silent`) still skip the Dock wait entirely as before
 

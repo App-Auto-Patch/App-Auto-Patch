@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.0"
-scriptDate="2026/08/04"
-scriptBuild="3.7.0.2608040927"
+scriptDate="2026/08/08"
+scriptBuild="3.7.0.2608081041"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2673,6 +2673,8 @@ workflow_startup() {
                 overlayicon="/Applications/Workspace ONE Intelligent Hub.app/Contents/Resources/AppIcon.icns"
             elif [[ -e "/Applications/Kandji Self Service.app" ]]; then
                 overlayicon="/Applications/Kandji Self Service.app/Contents/Resources/AppIcon.icns"
+            elif [[ -e "/Applications/Mosyle Self Service.app" ]]; then
+                overlayicon="/Applications/Mosyle Self Service.app/Contents/Resources/AppIcon.icns"
             elif [[ -e "/usr/local/sbin/FileWave.app" ]]; then
                 overlayicon="/usr/local/sbin/FileWave.app/Contents/Resources/fwGUI.app/Contents/Resources/kiosk.icns"
             elif [[ -e "/System/Applications/App Store.app" || -e "/Applications/App Store.app" ]]; then
@@ -3495,6 +3497,10 @@ get_mdm(){
         *airwatchportals*|*awmdm*)
             log_info "MDM is Workspace One"
             mdmName="Workspace One"
+        ;;
+        *mosyle*)
+            log_info "MDM is Mosyle"
+            mdmName="Mosyle"
         ;;
         *)
             log_info "Unable to determine MDM from ServerURL"
@@ -5850,6 +5856,21 @@ appsUpToDate(){
 }
 
 webHookMessage() {
+
+    # Resolve Mosyle device deep-link once for Slack/Teams payloads (#240). Prefer the enrolled
+    # MDM host from get_mdm(); fall back to the public Mosyle Business console. Device UDID for
+    # Macs is the Hardware UUID (IOPlatformUUID).
+    local mosyleComputerURL=""
+    if [[ "${mdmName}" == "Mosyle" ]]; then
+        local mosyleBaseURL=""
+        if [[ -n "${server_url}" ]]; then
+            mosyleBaseURL=$(echo "${server_url}" | sed -n 's/\(https:\/\/[^\/]*\).*/\1/p')
+        fi
+        [[ -z "${mosyleBaseURL}" ]] && mosyleBaseURL="https://business.mosyle.com"
+        local mosyleHardwareUUID
+        mosyleHardwareUUID=$(ioreg -d2 -c IOPlatformExpertDevice | awk -F\" '/IOPlatformUUID/{print $(NF-1)}')
+        mosyleComputerURL="${mosyleBaseURL}/#device_${mosyleHardwareUUID}"
+    fi
     
     if [[ $webhook_url_slack_option == "" ]]; then
         log_info "No slack URL configured"
@@ -5886,6 +5907,9 @@ webHookMessage() {
                 # Fallback to generic Workspace One console
                 mdmComputerURL="https://console.workspace.one"
             fi
+        # If Mac is managed by Mosyle, link to this device in the Mosyle console
+        elif [[ $mdmName == "Mosyle" ]]; then
+            mdmComputerURL="${mosyleComputerURL}"
         else
             log_info "No MDM determined - webhook call will fail"
         fi
@@ -5958,6 +5982,17 @@ webHookMessage() {
             # If Mac is managed by Jumpcloud, link to the Jumpcloud devices page
         elif [[  $mdmName == "Jumpcloud" ]]; then
             mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
+            # If Mac is managed by Workspace One, link to the devices page
+        elif [[ $mdmName == "Workspace One" ]]; then
+            if [[ -n "$server_url" ]]; then
+                base_url=$(echo "$server_url" | sed -n 's/\(https:\/\/[^\/]*\).*/\1/p')
+                mdmComputerURL="${base_url}/AirWatch/#/AirWatch/Devices/List/"
+            else
+                mdmComputerURL="https://console.workspace.one"
+            fi
+            # If Mac is managed by Mosyle, link to this device in the Mosyle console
+        elif [[ $mdmName == "Mosyle" ]]; then
+            mdmComputerURL="${mosyleComputerURL}"
         else
             log_info "No MDM determined - webhook call will fail"
         fi
