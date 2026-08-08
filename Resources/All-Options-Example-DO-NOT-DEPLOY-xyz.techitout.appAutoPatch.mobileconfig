@@ -127,6 +127,10 @@
 			<string>FALSE</string>
 			<key>WorkflowDisableRelaunch</key>
 			<string>FALSE</string>
+			<key>ScheduleWorkflowActive</key>
+			<string>MON:17:00-23:59,TUE:17:00-23:59,WED:17:00-23:59,THU:17:00-23:59,FRI:17:00-23:59</string>
+			<key>ScheduleWorkflowActiveRespectHardDeadline</key>
+			<false/>
 			<key>WorkflowInstallNowPatchingStatusAction</key>
 			<string>SUCCESS</string>
 			<key>ZoomCallActiveCheck</key>
