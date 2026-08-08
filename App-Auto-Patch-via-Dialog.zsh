@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.0"
 scriptDate="2026/08/08"
-scriptBuild="3.7.0.2608081041"
+scriptBuild="3.7.0.2608081108"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -138,6 +138,11 @@ echo "
     <key>InstallomatorVersionCustomBranchName</key> <string>main</string>
     <key>GitHubAPIAuthEnabled</key> <string>TRUE,FALSE</string>
     <key>GitHubAPIToken</key> <string>github_pat_...</string>
+    <key>PrePatchScript</key> <string>/Library/Management/AppAutoPatch/Hooks/pre.sh</string>
+    <key>PostPatchScript</key> <string>/Library/Management/AppAutoPatch/Hooks/post.sh</string>
+    <key>PrePatchScriptFailAction</key> <string>ABORT,CONTINUE</string>
+    <key>PostPatchScriptFailAction</key> <string>ABORT,CONTINUE</string>
+    <key>PatchScriptTimeoutSeconds</key> <integer>seconds</integer>
     <key>InteractiveMode</key> <integer>number</integer>
     <key>MonthlyPatchingCadenceEnabled</key> <true/> | <false/>
     <key>MonthlyPatchingCadenceOrdinalValue</key> <string>second</string>
@@ -279,6 +284,18 @@ set_defaults() {
     github_api_auth_enabled_option="FALSE" # MDM Enabled
     github_api_token_option="" # MDM Enabled (never logged, never written to local plist)
     github_api_curl_auth_args=() # populated by resolve_github_api_auth() when enabled
+
+    # Optional pre/post patch hooks (#156). Managed preferences only - absolute paths under
+    # ${appAutoPatchFolder}/Hooks, root-owned, not group/world-writable. Never eval'd; never
+    # accepted from CLI or the local preference plist.
+    aapHooksFolder="${appAutoPatchFolder}/Hooks"
+    pre_patch_script_option="" # MDM Enabled
+    post_patch_script_option="" # MDM Enabled
+    pre_patch_script_fail_action="ABORT" # MDM Enabled - ABORT|CONTINUE
+    post_patch_script_fail_action="CONTINUE" # MDM Enabled - ABORT|CONTINUE
+    patch_script_timeout_seconds=300 # MDM Enabled
+    patch_hooks_pre_ran="FALSE"
+    patch_hooks_need_post="FALSE"
 
     DialogTimeoutDeferral="300" # MDM Enabled
     
@@ -1206,6 +1223,17 @@ get_preferences() {
         banner_title_managed=$(defaults read "${appAutoPatchManagedPLIST}" BannerTitle 2> /dev/null)
         local banner_height_managed
         banner_height_managed=$(defaults read "${appAutoPatchManagedPLIST}" BannerHeight 2> /dev/null)
+        # Pre/Post patch hooks are managed-preferences-only (never read from local plist).
+        local pre_patch_script_managed
+        pre_patch_script_managed=$(defaults read "${appAutoPatchManagedPLIST}" PrePatchScript 2> /dev/null)
+        local post_patch_script_managed
+        post_patch_script_managed=$(defaults read "${appAutoPatchManagedPLIST}" PostPatchScript 2> /dev/null)
+        local pre_patch_script_fail_action_managed
+        pre_patch_script_fail_action_managed=$(defaults read "${appAutoPatchManagedPLIST}" PrePatchScriptFailAction 2> /dev/null)
+        local post_patch_script_fail_action_managed
+        post_patch_script_fail_action_managed=$(defaults read "${appAutoPatchManagedPLIST}" PostPatchScriptFailAction 2> /dev/null)
+        local patch_script_timeout_seconds_managed
+        patch_script_timeout_seconds_managed=$(defaults read "${appAutoPatchManagedPLIST}" PatchScriptTimeoutSeconds 2> /dev/null)
         
     else
         log_verbose "No managed preference file found for App Auto-Patch"
@@ -1408,6 +1436,15 @@ get_preferences() {
     [[ -n "${banner_height_managed}" ]] && bannerHeightOption="${banner_height_managed}"
     { [[ -z "${banner_height_managed}" ]] && [[ -z "${bannerHeightOption}" ]] && [[ -n "${banner_height_local}" ]]; } && bannerHeightOption="${banner_height_local}"
 
+    # Pre/Post patch hooks: managed preferences only (never CLI / never local plist).
+    [[ -n "${pre_patch_script_managed}" ]] && pre_patch_script_option="${pre_patch_script_managed}"
+    [[ -n "${post_patch_script_managed}" ]] && post_patch_script_option="${post_patch_script_managed}"
+    [[ -n "${pre_patch_script_fail_action_managed}" ]] && pre_patch_script_fail_action="${pre_patch_script_fail_action_managed}"
+    [[ -n "${post_patch_script_fail_action_managed}" ]] && post_patch_script_fail_action="${post_patch_script_fail_action_managed}"
+    if [[ -n "${patch_script_timeout_seconds_managed}" ]]; then
+        patch_script_timeout_seconds="${patch_script_timeout_seconds_managed}"
+    fi
+
     # Need logic to ensures the priority order of managed preference overrides the saved local preference which overrides the script embedded variables .
     [[ -n "${app_title_managed}" ]] && appTitle="${app_title_managed}"
     { [[ -z "${app_title_managed}" ]] && [[ -n "${appTitle}" ]] && [[ -n "${app_title_local}" ]]; } && appTitle="${app_title_local}"
@@ -1557,6 +1594,11 @@ get_preferences() {
     if [[ "${github_api_auth_enabled_option}" == "TRUE" ]]; then
         log_verbose "GitHubAPIToken: <redacted, length ${#github_api_token_option}>"
     fi
+    log_verbose "PrePatchScript: ${pre_patch_script_option:-<unset>}"
+    log_verbose "PostPatchScript: ${post_patch_script_option:-<unset>}"
+    log_verbose "PrePatchScriptFailAction: ${pre_patch_script_fail_action}"
+    log_verbose "PostPatchScriptFailAction: ${post_patch_script_fail_action}"
+    log_verbose "PatchScriptTimeoutSeconds: ${patch_script_timeout_seconds}"
     
     #Validate Custom Installomator Options
     if [[ "${installomatorVersion}" == "Custom" ]] || [[ "${installomatorVersion}" == "custom" ]]; then
@@ -1573,6 +1615,42 @@ get_preferences() {
     # without that early exit.
     if [[ "${github_api_auth_enabled_option}" == "TRUE" ]] && [[ -z "${github_api_token_option}" ]]; then
         log_status "Parameter Error: GitHubAPIAuthEnabled is TRUE but GitHubAPIToken is missing or blank"; option_error="TRUE"
+    fi
+
+    # Normalize / validate pre/post patch hook preferences (#156).
+    case "${pre_patch_script_fail_action:l}" in
+        continue) pre_patch_script_fail_action="CONTINUE" ;;
+        *)        pre_patch_script_fail_action="ABORT" ;;
+    esac
+    case "${post_patch_script_fail_action:l}" in
+        abort) post_patch_script_fail_action="ABORT" ;;
+        *)     post_patch_script_fail_action="CONTINUE" ;;
+    esac
+    if [[ ! "${patch_script_timeout_seconds}" =~ ^[0-9]+$ ]] || [[ "${patch_script_timeout_seconds}" -lt 1 ]]; then
+        log_status "Parameter Error: PatchScriptTimeoutSeconds must be a positive integer"; option_error="TRUE"
+    fi
+    # Trim whitespace from configured paths.
+    pre_patch_script_option="${pre_patch_script_option#"${pre_patch_script_option%%[![:space:]]*}"}"
+    pre_patch_script_option="${pre_patch_script_option%"${pre_patch_script_option##*[![:space:]]}"}"
+    post_patch_script_option="${post_patch_script_option#"${post_patch_script_option%%[![:space:]]*}"}"
+    post_patch_script_option="${post_patch_script_option%"${post_patch_script_option##*[![:space:]]}"}"
+    if [[ -n "${pre_patch_script_option}" ]]; then
+        if [[ "${pre_patch_script_option}" != /* ]]; then
+            log_status "Parameter Error: PrePatchScript must be an absolute path under ${aapHooksFolder}"; option_error="TRUE"
+        elif [[ "${pre_patch_script_option}" != "${aapHooksFolder}/"* ]]; then
+            log_status "Parameter Error: PrePatchScript must be located under ${aapHooksFolder}"; option_error="TRUE"
+        elif [[ "${pre_patch_script_option}" == *..* ]]; then
+            log_status "Parameter Error: PrePatchScript path must not contain '..'"; option_error="TRUE"
+        fi
+    fi
+    if [[ -n "${post_patch_script_option}" ]]; then
+        if [[ "${post_patch_script_option}" != /* ]]; then
+            log_status "Parameter Error: PostPatchScript must be an absolute path under ${aapHooksFolder}"; option_error="TRUE"
+        elif [[ "${post_patch_script_option}" != "${aapHooksFolder}/"* ]]; then
+            log_status "Parameter Error: PostPatchScript must be located under ${aapHooksFolder}"; option_error="TRUE"
+        elif [[ "${post_patch_script_option}" == *..* ]]; then
+            log_status "Parameter Error: PostPatchScript path must not contain '..'"; option_error="TRUE"
+        fi
     fi
 
     # Check for Installomator
@@ -2970,6 +3048,12 @@ install_app_auto_patch() {
     [[ ! -d "${appAutoPatchLogArchiveFolder}" ]] && mkdir -p "${appAutoPatchLogArchiveFolder}"
     [[ ! -d "${appAutoPatchVerboseLogArchiveFolder}" ]] && mkdir -p "${appAutoPatchVerboseLogArchiveFolder}"
     [[ ! -d "${appAutoPatchReceiptsFolder}" ]] && mkdir -p "${appAutoPatchReceiptsFolder}"
+    # Root-owned hooks directory for optional PrePatchScript / PostPatchScript (#156).
+    if [[ ! -d "${aapHooksFolder}" ]]; then
+        mkdir -p "${aapHooksFolder}"
+        chown root:wheel "${aapHooksFolder}"
+        chmod 755 "${aapHooksFolder}"
+    fi
     [[ ! -f "${appAutoPatchReportPLIST}.plist" ]] && clear_aap_report
 
     log_notice "###### App Auto-Patch ${scriptVersion} - Installing ... ######"
@@ -5434,6 +5518,8 @@ workflow_silent_patch_closed_apps() {
 
     log_info "InteractiveMode ${InteractiveModeOption}: Attempting silent background patch for apps that are not currently open..."
 
+    run_pre_patch_hook_once
+
     # Ensure installomatorOptions is populated before we manipulate it
     local baseOptions="${installomatorOptions}"
     if [[ -z "${baseOptions}" ]]; then
@@ -5585,6 +5671,12 @@ workflow_silent_patch_closed_apps() {
     done
 
     log_notice "Apps remaining for user interaction after silent pre-patch: ${#countOfElementsArray[@]}"
+
+    # If every pending update was handled silently, run the post-patch hook now. Otherwise leave
+    # it for workflow_do_Installations() after the interactive / hard-deadline install pass.
+    if [[ ${#countOfElementsArray[@]} -eq 0 ]]; then
+        run_post_patch_hook_if_needed
+    fi
 }
 
 workflow_do_Installations() {
@@ -5596,6 +5688,8 @@ workflow_do_Installations() {
     fi
     
     log_info "Installomator Options: $installomatorOptions"
+
+    run_pre_patch_hook_once
     
     # Count errors
     errorCount=0
@@ -5755,7 +5849,9 @@ workflow_do_Installations() {
     
     remove_installomator
     
-    log_info "Error Count $errorCount" 
+    log_info "Error Count $errorCount"
+
+    run_post_patch_hook_if_needed
     
 }
 
@@ -6198,6 +6294,206 @@ resolve_early_silent_mode() {
     { [[ -z "${interactive_mode_managed}" ]] && [[ -z "${InteractiveModeOption}" ]] && [[ -n "${interactive_mode_local}" ]]; } && interactive_mode_preview="${interactive_mode_local}"
 
     [[ "${interactive_mode_preview}" == "0" ]] && runningSilentlyOption="TRUE"
+}
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Pre/Post patch hooks (#156) - managed absolute paths under ${aapHooksFolder} only
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+ensure_aap_hooks_folder() {
+    if [[ ! -d "${aapHooksFolder}" ]]; then
+        mkdir -p "${aapHooksFolder}"
+        chown root:wheel "${aapHooksFolder}"
+        chmod 755 "${aapHooksFolder}"
+    fi
+}
+
+# Returns 0 if $1 is safe to execute as an AAP patch hook. Logs the specific failure otherwise.
+validate_aap_hook_script() {
+    local script_path="$1"
+    local hook_label="${2:-Hook}"
+
+    if [[ -z "${script_path}" ]]; then
+        log_error "${hook_label}: path is empty."
+        return 1
+    fi
+    if [[ "${script_path}" != /* ]]; then
+        log_error "${hook_label}: path must be absolute (${script_path})."
+        return 1
+    fi
+    if [[ "${script_path}" == *..* ]]; then
+        log_error "${hook_label}: path must not contain '..' (${script_path})."
+        return 1
+    fi
+    if [[ "${script_path}" != "${aapHooksFolder}/"* ]]; then
+        log_error "${hook_label}: path must be under ${aapHooksFolder} (${script_path})."
+        return 1
+    fi
+    if [[ -L "${script_path}" ]]; then
+        log_error "${hook_label}: symlinks are not allowed (${script_path})."
+        return 1
+    fi
+    if [[ ! -f "${script_path}" ]]; then
+        log_error "${hook_label}: not a regular file or does not exist (${script_path})."
+        return 1
+    fi
+    if [[ ! -x "${script_path}" ]]; then
+        log_error "${hook_label}: file is not executable (${script_path})."
+        return 1
+    fi
+
+    local owner mode dir owner_dir mode_dir
+    owner=$(stat -f %u "${script_path}" 2>/dev/null)
+    mode=$(stat -f %Lp "${script_path}" 2>/dev/null)
+    if [[ "${owner}" != "0" ]]; then
+        log_error "${hook_label}: file must be owned by root (uid ${owner}: ${script_path})."
+        return 1
+    fi
+    if [[ ! "${mode}" =~ ^[0-9]+$ ]] || (( (8#${mode} & 8#022) != 0 )); then
+        log_error "${hook_label}: file must not be group/world-writable (mode ${mode}: ${script_path})."
+        return 1
+    fi
+
+    dir=$(dirname "${script_path}")
+    if [[ -L "${dir}" ]]; then
+        log_error "${hook_label}: parent directory must not be a symlink (${dir})."
+        return 1
+    fi
+    owner_dir=$(stat -f %u "${dir}" 2>/dev/null)
+    mode_dir=$(stat -f %Lp "${dir}" 2>/dev/null)
+    if [[ "${owner_dir}" != "0" ]]; then
+        log_error "${hook_label}: parent directory must be owned by root (${dir})."
+        return 1
+    fi
+    if [[ ! "${mode_dir}" =~ ^[0-9]+$ ]] || (( (8#${mode_dir} & 8#022) != 0 )); then
+        log_error "${hook_label}: parent directory must not be group/world-writable (mode ${mode_dir}: ${dir})."
+        return 1
+    fi
+
+    # Final allowlist check after resolving the directory (blocks unexpected bind/mount tricks).
+    local resolved_dir hooks_resolved
+    resolved_dir=$(cd "${dir}" && pwd -P 2>/dev/null) || {
+        log_error "${hook_label}: unable to resolve parent directory (${dir})."
+        return 1
+    }
+    ensure_aap_hooks_folder
+    hooks_resolved=$(cd "${aapHooksFolder}" && pwd -P 2>/dev/null) || {
+        log_error "${hook_label}: unable to resolve hooks directory (${aapHooksFolder})."
+        return 1
+    }
+    if [[ "${resolved_dir}" != "${hooks_resolved}" && "${resolved_dir}" != "${hooks_resolved}/"* ]]; then
+        log_error "${hook_label}: resolved path escapes ${aapHooksFolder} (${resolved_dir})."
+        return 1
+    fi
+
+    return 0
+}
+
+# Run $1 for up to $2 seconds; returns the command exit status, or 124 on timeout.
+run_aap_hook_with_timeout() {
+    local timeout_secs="$1"
+    shift
+    "$@" &
+    local pid=$!
+    local waited=0
+    while kill -0 "${pid}" 2>/dev/null; do
+        if (( waited >= timeout_secs )); then
+            log_error "Hook timed out after ${timeout_secs}s (pid ${pid}); sending TERM."
+            kill -TERM "${pid}" 2>/dev/null
+            sleep 2
+            kill -KILL "${pid}" 2>/dev/null
+            wait "${pid}" 2>/dev/null
+            return 124
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    wait "${pid}"
+    return $?
+}
+
+# Executes a validated hook script. $1 = pre|post. Returns 0 on success / skip, 1 on failure.
+run_aap_patch_hook() {
+    local hook_phase="$1"
+    local script_path fail_action hook_label
+
+    case "${hook_phase}" in
+        pre)
+            script_path="${pre_patch_script_option}"
+            fail_action="${pre_patch_script_fail_action}"
+            hook_label="PrePatchScript"
+            ;;
+        post)
+            script_path="${post_patch_script_option}"
+            fail_action="${post_patch_script_fail_action}"
+            hook_label="PostPatchScript"
+            ;;
+        *)
+            log_error "Unknown patch hook phase: ${hook_phase}"
+            return 1
+            ;;
+    esac
+
+    [[ -z "${script_path}" ]] && return 0
+
+    if ! validate_aap_hook_script "${script_path}" "${hook_label}"; then
+        if [[ "${fail_action}" == "ABORT" ]]; then
+            return 1
+        fi
+        log_warning "${hook_label}: validation failed; continuing because FailAction=CONTINUE."
+        return 0
+    fi
+
+    log_notice "Running ${hook_label}: ${script_path}"
+    export AAP_HOOK="${hook_phase}"
+    export AAP_VERSION="${scriptVersion}"
+    export AAP_BUILD="${scriptBuild}"
+    export AAP_SERIAL="${serialNumber}"
+    export AAP_COMPUTER_NAME="${computerName}"
+    export AAP_QUEUED_LABELS="${queuedLabelsArray[*]}"
+    export AAP_ERROR_COUNT="${errorCount:-0}"
+    export AAP_HOOKS_DIR="${aapHooksFolder}"
+
+    local hook_exit=0
+    # Direct exec (honours shebang). Never eval / never bash -c with the path as a shell string.
+    run_aap_hook_with_timeout "${patch_script_timeout_seconds}" "${script_path}" || hook_exit=$?
+
+    unset AAP_HOOK AAP_VERSION AAP_BUILD AAP_SERIAL AAP_COMPUTER_NAME AAP_QUEUED_LABELS AAP_ERROR_COUNT AAP_HOOKS_DIR
+
+    if [[ ${hook_exit} -eq 0 ]]; then
+        log_notice "${hook_label} completed successfully."
+        return 0
+    fi
+
+    log_error "${hook_label} exited with status ${hook_exit}."
+    if [[ "${fail_action}" == "ABORT" ]]; then
+        return 1
+    fi
+    log_warning "${hook_label}: continuing because FailAction=CONTINUE."
+    return 0
+}
+
+run_pre_patch_hook_once() {
+    [[ "${patch_hooks_pre_ran}" == "TRUE" ]] && return 0
+    patch_hooks_pre_ran="TRUE"
+    patch_hooks_need_post="TRUE"
+    if ! run_aap_patch_hook "pre"; then
+        log_error "Pre-patch hook failed with FailAction=ABORT; skipping installations."
+        write_status "Inactive Error: PrePatchScript failed."
+        exit_error
+    fi
+    return 0
+}
+
+run_post_patch_hook_if_needed() {
+    [[ "${patch_hooks_need_post}" == "TRUE" ]] || return 0
+    patch_hooks_need_post="FALSE"
+    if ! run_aap_patch_hook "post"; then
+        log_error "Post-patch hook failed with FailAction=ABORT."
+        write_status "Inactive Error: PostPatchScript failed."
+        exit_error
+    fi
+    return 0
 }
 
 resolve_github_api_auth() {

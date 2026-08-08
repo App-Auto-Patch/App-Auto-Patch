@@ -3,6 +3,15 @@
 # Version 3
 
 ## Version 3.7.0
+### 08-Aug-2026 (2) - Build 3.7.0.2608081108
+- [#156](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/156): optional pre/post patch script hooks for workflows like `jamf recon` or fixing `.app` ownership after Installomator installs. Security-hardened by design:
+	- Managed preferences only (`PrePatchScript` / `PostPatchScript`) - never CLI, never written to / read from the local preference plist, never `eval`'d or run via `bash -c`
+	- Script path must be absolute, under `/Library/Management/AppAutoPatch/Hooks/` (created root:wheel `755` on install), must not contain `..`, must not be a symlink, must be a regular executable file owned by root, and must not be group/world-writable (parent directory checked the same way)
+	- Direct exec of the validated path with a timeout (`PatchScriptTimeoutSeconds`, default 300); env context exported as `AAP_HOOK`, `AAP_QUEUED_LABELS`, `AAP_SERIAL`, `AAP_ERROR_COUNT`, etc.
+	- `PrePatchScriptFailAction` default `ABORT` (skip installs / exit); `PostPatchScriptFailAction` default `CONTINUE`
+	- Pre runs once per patch run (shared across Background Patch Closed Apps + `workflow_do_Installations`); post runs once after the last install pass for that run
+	- iMazing + Jamf manifests and All-Options examples updated
+
 ### 08-Aug-2026 (1) - Build 3.7.0.2608081041
 - [#240](https://github.com/App-Auto-Patch/App-Auto-Patch/pull/240): Mosyle MDM support (based on @salzstreuer89's PR, with maintainer adjustments):
 	- `get_mdm()` recognizes `*mosyle*` enrollment ServerURLs and sets `mdmName="Mosyle"`

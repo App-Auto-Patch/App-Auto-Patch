@@ -67,6 +67,16 @@
 			<string>FALSE</string>
 			<key>GitHubAPIToken</key>
 			<string>github_pat_REPLACE_ME</string>
+			<key>PrePatchScript</key>
+			<string>/Library/Management/AppAutoPatch/Hooks/pre.sh</string>
+			<key>PostPatchScript</key>
+			<string>/Library/Management/AppAutoPatch/Hooks/post.sh</string>
+			<key>PrePatchScriptFailAction</key>
+			<string>ABORT</string>
+			<key>PostPatchScriptFailAction</key>
+			<string>CONTINUE</string>
+			<key>PatchScriptTimeoutSeconds</key>
+			<integer>300</integer>
 			<key>InteractiveMode</key>
 			<integer>1</integer>
 			<key>MonthlyPatchingCadenceEnabled</key>

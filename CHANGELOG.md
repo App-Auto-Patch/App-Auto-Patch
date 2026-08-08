@@ -9,6 +9,12 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 **New Features**
 
+- **Pre/Post Patch Scripts** — Run a managed, root-owned script once before and/or after Installomator installations (e.g. `jamf recon`). Scripts must live under `/Library/Management/AppAutoPatch/Hooks/`, cannot be symlinks, and must not be group/world-writable. Managed preferences only — never CLI or local prefs, never `eval`'d. (#156)
+	- Managed Preference Key: `<key>PrePatchScript</key>` `<string>/Library/Management/AppAutoPatch/Hooks/pre.sh</string>`
+	- Managed Preference Key: `<key>PostPatchScript</key>` `<string>/Library/Management/AppAutoPatch/Hooks/post.sh</string>`
+	- Managed Preference Key: `<key>PrePatchScriptFailAction</key>` `<string>ABORT,CONTINUE</string>` — default: `ABORT`
+	- Managed Preference Key: `<key>PostPatchScriptFailAction</key>` `<string>ABORT,CONTINUE</string>` — default: `CONTINUE`
+	- Managed Preference Key: `<key>PatchScriptTimeoutSeconds</key>` `<integer>300</integer>`
 - **Mosyle MDM support** — Detect Mosyle from the enrollment ServerURL, include a “View in Mosyle” device deep-link in Slack/Teams webhooks, and prefer the Mosyle Self Service overlay icon when present. Webhook console host prefers the enrolled MDM URL, with a fallback to `https://business.mosyle.com`. (#240)
 - **GitHub API Authentication** — Optionally authenticate `api.github.com` requests with a GitHub personal access token so AAP stays under GitHub's rate limits in large fleets (60 → 5,000 requests/hour). Managed preferences only; the token is never written to the local preference file and is never logged. If auth is enabled without a token, startup validation fails. (#249)
 	- Managed Preference Key: `<key>GitHubAPIAuthEnabled</key>` `<string>TRUE,FALSE</string>` — default: `FALSE`

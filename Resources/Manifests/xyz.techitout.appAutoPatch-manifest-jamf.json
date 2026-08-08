@@ -736,6 +736,81 @@
             ],
             "property_order": 127
         },
+        "PrePatchScript": {
+            "type": "string",
+            "title": "Pre Patch Script",
+            "description": "Absolute path to a root-owned executable script run once before Installomator installations in a patch run. Must live under /Library/Management/AppAutoPatch/Hooks/, must not be a symlink, and must not be group/world-writable. Managed preferences only - never accepted from CLI or the local preference file.",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "/Library/Management/AppAutoPatch/Hooks/pre.sh"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/156"
+                }
+            ],
+            "property_order": 128
+        },
+        "PostPatchScript": {
+            "type": "string",
+            "title": "Post Patch Script",
+            "description": "Absolute path to a root-owned executable script run once after Installomator installations complete (for example jamf recon). Same security requirements as PrePatchScript. Managed preferences only.",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "/Library/Management/AppAutoPatch/Hooks/post.sh"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/156"
+                }
+            ],
+            "property_order": 129
+        },
+        "PrePatchScriptFailAction": {
+            "type": "string",
+            "title": "Pre Patch Script Fail Action",
+            "default": "ABORT",
+            "description": "What to do if PrePatchScript is missing/invalid or exits non-zero. ABORT stops the install run; CONTINUE logs the failure and proceeds with patching.",
+            "enum": [
+                "ABORT",
+                "CONTINUE"
+            ],
+            "options": {
+                "enum_titles": [
+                    "ABORT",
+                    "CONTINUE"
+                ]
+            },
+            "property_order": 1291
+        },
+        "PostPatchScriptFailAction": {
+            "type": "string",
+            "title": "Post Patch Script Fail Action",
+            "default": "CONTINUE",
+            "description": "What to do if PostPatchScript is missing/invalid or exits non-zero. ABORT exits AAP with an error after installs; CONTINUE (default) logs the failure and proceeds with webhook/relaunch.",
+            "enum": [
+                "ABORT",
+                "CONTINUE"
+            ],
+            "options": {
+                "enum_titles": [
+                    "ABORT",
+                    "CONTINUE"
+                ]
+            },
+            "property_order": 1292
+        },
+        "PatchScriptTimeoutSeconds": {
+            "type": "integer",
+            "title": "Patch Script Timeout Seconds",
+            "default": 300,
+            "description": "Maximum seconds allowed for a PrePatchScript or PostPatchScript run before AAP terminates it (treated as failure).",
+            "property_order": 1293
+        },
         "InstallomatorVersion": {
             "type": "string",
             "title": "Installomator Version",
