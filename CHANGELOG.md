@@ -31,6 +31,14 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 - Changed: if no user is logged in, AAP no longer exits after waiting for the Dock — it waits up to 20 seconds, then continues without an active user session and skips the swiftDialog install/update check (since dialogs can't be shown without a user session). Fully-silent runs still skip the Dock wait entirely
 - Fixed: Teams webhooks now resolve Workspace One device links the same way Slack webhooks already did
 
+**Fixes**
+
+- Fixed: ignored labels could be silently disregarded on any run where app discovery actually executed, so apps you had ignored were queued and patched anyway. Discovery sets `IFS` to a newline in order to parse Installomator label fragments and never restored it, which broke the ignored-label membership checks and the array subtraction that removes ignored labels from the install queue. Runs that skipped discovery (via `DiscoveryFrequency`) were unaffected, which is why the problem looked intermittent. `IFS` is now restored as soon as label parsing finishes, and all label membership checks use exact-element matching that does not depend on `IFS` (#254)
+- Fixed: `IgnoredLabels="*"` is no longer expanded into one local preference entry per Installomator label. That expansion issued roughly 1,200 `PlistBuddy` writes on every run, which left the preferences cache out of sync with the file on disk and made unrelated keys read back blank — most visibly `AAPPatchingStartDate` and `AAPPatchingCompletionStatus`, which produced a "Days Since Patching Start Date" in the tens of thousands and reset the patching cadence unexpectedly. The wildcard is now stored as a single `*` entry and evaluated in memory. No configuration change is required; `IgnoredLabels="*"` keeps its documented meaning of "ignore every label except those in `RequiredLabels` and `OptionalLabels`" (#254)
+- Fixed: labels listed in `RequiredLabels` could be swept into the ignored list by a wildcard in `IgnoredLabels` and then dropped from the install queue, so required apps were never patched. Required labels are now always excluded from wildcard ignore matching (#254)
+- Fixed: reads of the local preference file now fall back to reading the file directly when `defaults` returns an empty value for a key that is present on disk, and an unreadable `AAPPatchingStartDate` now falls back to the current patch week start date instead of being fed to a date conversion that silently produced the Unix epoch (#254)
+- Fixed: label lists read back from an array-typed preference brought the surrounding parentheses, quotes, and trailing commas along as label names of their own — visible in logs as entries like `Required labels: ( )`. These are now stripped when the lists are parsed (#254)
+
 ## Version 3.6.2
 ### 01-Aug-2026
 

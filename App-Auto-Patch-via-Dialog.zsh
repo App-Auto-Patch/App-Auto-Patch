@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.0"
 scriptDate="2026/08/08"
-scriptBuild="3.7.0.2608081108"
+scriptBuild="3.7.0.2608081505"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -450,6 +450,10 @@ set_defaults() {
     bannerImageOption="" # MDM Enabled
     bannerTitleOption="" # MDM Enabled
     bannerHeightOption="" # MDM Enabled
+
+    # Set to TRUE by get_preferences when IgnoredLabels contains a bare "*", meaning "ignore every
+    # Installomator label except those listed in RequiredLabels and OptionalLabels".
+    ignore_all_labels="FALSE"
 }
 
 # Set language strings for dialogs and notifications.
@@ -1044,6 +1048,24 @@ get_options() {
 
     [[ -n "${unrecognized_options_array[*]}" ]] && show_usage
 
+}
+
+# Normalise a labels preference into an array of bare label names, returned in
+# ${parsed_labels_option}. The source string is either a space-separated list (string-typed
+# preference) or the raw `defaults read` rendering of an array-typed preference, which carries
+# parentheses, quotes and trailing commas that would otherwise become array elements in their own
+# right (#254). Results are returned via a global because the caller needs an array, and a command
+# substitution would flatten it.
+parse_labels_option() {
+    local raw="${1}"
+    local token
+    parsed_labels_option=()
+    for token in ${=raw}; do
+        token="${token%,}"
+        token="${token//\"/}"
+        [[ -z "${token}" || "${token}" == "(" || "${token}" == ")" ]] && continue
+        parsed_labels_option+=("${token}")
+    done
 }
 
 get_preferences() {
@@ -1657,11 +1679,11 @@ get_preferences() {
     get_installomator
     
     # Write App Labels to PLIST
-    ignoredLabelsArray=($(echo ${ignored_labels_option}))
-    requiredLabelsArray=($(echo ${required_labels_option}))
-    optionalLabelsArray=($(echo ${optional_labels_option}))
-    excludedBackgroundLabelsArray=($(echo ${excluded_background_labels_option}))
-    convertedLabelsArray=($(echo ${convertedLabels}))
+    parse_labels_option "${ignored_labels_option}"; ignoredLabelsArray=("${parsed_labels_option[@]}")
+    parse_labels_option "${required_labels_option}"; requiredLabelsArray=("${parsed_labels_option[@]}")
+    parse_labels_option "${optional_labels_option}"; optionalLabelsArray=("${parsed_labels_option[@]}")
+    parse_labels_option "${excluded_background_labels_option}"; excludedBackgroundLabelsArray=("${parsed_labels_option[@]}")
+    parse_labels_option "${convertedLabels}"; convertedLabelsArray=("${parsed_labels_option[@]}")
 
     log_status "Clearing previously set labels"
     defaults delete "${appAutoPatchLocalPLIST}" ConvertedLabels 2> /dev/null
@@ -1699,6 +1721,29 @@ get_preferences() {
     
     # Attempt to populate the Ignored Labels
     log_info "Attempting to populate ignored labels"
+
+    # A bare "*" is handled as an in-memory mode flag rather than being expanded into one plist
+    # entry per Installomator label. The old expansion issued ~1200 PlistBuddy writes on every run,
+    # which left cfprefsd's cache out of sync with the file on disk and made unrelated keys such as
+    # AAPPatchingStartDate read back blank (#254). It also swept RequiredLabels into IgnoredLabels,
+    # so required apps were then removed again by the ${labelsArray:|ignoredLabelsArray} subtraction.
+    ignore_all_labels="FALSE"
+    local -a explicitIgnoredLabels=()
+    for ignoredLabel in "${ignoredLabelsArray[@]}"; do
+        if [[ "${ignoredLabel}" == "*" ]]; then
+            ignore_all_labels="TRUE"
+        else
+            explicitIgnoredLabels+=("${ignoredLabel}")
+        fi
+    done
+    if [[ "${ignore_all_labels}" == "TRUE" ]]; then
+        log_notice "IgnoredLabels contains '*': ignoring every Installomator label except those listed in RequiredLabels and OptionalLabels."
+        /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"*\"" "${appAutoPatchLocalPLIST}.plist"
+        # Drop the wildcard token from the in-memory list so the exact-match membership tests and the
+        # array subtraction performed later never have to reason about a glob character.
+        ignoredLabelsArray=("${explicitIgnoredLabels[@]}")
+    fi
+
     for ignoredLabel in "${ignoredLabelsArray[@]}"; do
         if [[ -f "${fragmentsPath}/labels/${ignoredLabel}.sh" ]]; then
             # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
@@ -1724,6 +1769,11 @@ get_preferences() {
                         # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
                         elif /usr/libexec/PlistBuddy -c "Print :OptionalLabels:" "${appAutoPatchLocalPLIST}".plist | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$ignored"; then
                             log_verbose "$ignored is listed as Optional, skip adding to IgnoredLabels"
+                        # RequiredLabels has not been written to the plist yet at this point, so check
+                        # the in-memory list. A wildcard the admin did not name explicitly must not
+                        # ignore a label they explicitly required (#254).
+                        elif (( ${requiredLabelsArray[(Ie)${ignored}]} )); then
+                            log_verbose "$ignored is listed as Required, skip adding to IgnoredLabels"
                         else
                             log_verbose "Writing ignored label $ignored to configuration plist"
                             ignored=$(echo $ignored | sed "s/[\"]//g" )
@@ -3594,6 +3644,31 @@ get_mdm(){
 
 }
 
+# Read a key from the local preference plist, falling back to PlistBuddy when `defaults` returns
+# nothing. A high volume of PlistBuddy writes elsewhere in the workflow can leave cfprefsd's cache
+# transiently out of sync with the file on disk, in which case `defaults read` returns an empty
+# string for keys that are demonstrably present in the file (#254).
+read_local_preference() {
+    local key="${1}"
+    local value
+    value=$(defaults read "${appAutoPatchLocalPLIST}" "${key}" 2> /dev/null)
+    if [[ -z "${value}" ]]; then
+        value=$(/usr/libexec/PlistBuddy -c "Print :${key}" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null)
+        if [[ -n "${value}" ]]; then
+            # log_aap tees to stdout, which this function is called through a command substitution
+            # to capture. Discard that copy; both log files are still written to directly.
+            log_warning "Preference ${key} read back empty via defaults but is present on disk; using the on-disk value." > /dev/null
+        fi
+    fi
+    # PlistBuddy prints booleans as true/false where `defaults` prints 1/0. Normalise so callers
+    # can keep comparing against 1/0 regardless of which reader supplied the value.
+    case "${value:l}" in
+        true) value="1" ;;
+        false) value="0" ;;
+    esac
+    printf '%s' "${value}"
+}
+
 #Evaluate if patching cadence has been completed or not
 check_completion_status() {
     
@@ -3616,16 +3691,27 @@ check_completion_status() {
         Patch_Week_Start_Date=$CurrentDate
     fi 
     
-    PatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus 2> /dev/null)
-    PatchingStartDate=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingStartDate 2> /dev/null)
+    PatchingComplete=$(read_local_preference AAPPatchingCompletionStatus)
+    PatchingStartDate=$(read_local_preference AAPPatchingStartDate)
     
     if [[ -z $PatchingComplete || -z $PatchingStartDate ]]; then
         log_info "Patching Completion Status or Start Date not set, setting values"
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool false
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingStartDate "$Patch_Week_Start_Date"
         
-        PatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus 2> /dev/null)
-        PatchingStartDate=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingStartDate 2> /dev/null)
+        PatchingComplete=$(read_local_preference AAPPatchingCompletionStatus)
+        PatchingStartDate=$(read_local_preference AAPPatchingStartDate)
+    fi
+
+    # Never hand an unparseable value to strftime below: it yields epoch 0 and a nonsensical
+    # "Days Since Patching Start Date" in the tens of thousands, which then trips every deadline
+    # and reset calculation downstream (#254).
+    if [[ "${PatchingStartDate}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+        PatchingStartDate="${PatchingStartDate[1,10]}"
+    else
+        log_error "Could not read a usable AAPPatchingStartDate from ${appAutoPatchLocalPLIST}.plist (got '${PatchingStartDate}'). Falling back to ${Patch_Week_Start_Date} and rewriting the value."
+        PatchingStartDate="${Patch_Week_Start_Date}"
+        defaults write "${appAutoPatchLocalPLIST}" AAPPatchingStartDate "$Patch_Week_Start_Date"
     fi
 
     zmodload zsh/datetime
@@ -3652,8 +3738,10 @@ check_completion_status() {
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool false
         log_info "Setting Patch Week Start Date as $Patch_Week_Start_Date"
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingStartDate "$Patch_Week_Start_Date"
-        PatchingStartDate=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingStartDate 2> /dev/null)
-        PatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus 2> /dev/null)
+        PatchingStartDate=$(read_local_preference AAPPatchingStartDate)
+        [[ -n "${PatchingStartDate}" ]] || PatchingStartDate="${Patch_Week_Start_Date}"
+        PatchingComplete=$(read_local_preference AAPPatchingCompletionStatus)
+        [[ -n "${PatchingComplete}" ]] || PatchingComplete="0"
         defaults delete "${appAutoPatchLocalPLIST}" DeadlineCounterFocus 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" DeadlineCounterHard 2> /dev/null
     fi
@@ -3697,7 +3785,8 @@ check_completion_status() {
         log_info "Unknown Status... Setting status to False"
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool false
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingStartDate "$Patch_Week_Start_Date"
-        PatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus 2> /dev/null)
+        PatchingComplete=$(read_local_preference AAPPatchingCompletionStatus)
+        [[ -n "${PatchingComplete}" ]] || PatchingComplete="0"
         log_info "Continuing App Auto-Patch Workflow"
     fi
     
@@ -4987,7 +5076,9 @@ function verifyApp() {
         eval $caseStatement
         
         if [[ -n $name ]]; then
-            if [[ ! " ${ignoredLabelsArray[@]} " =~ " ${label_name} " ]]; then
+            # Exact-element membership; a "${array[@]}" substring match depends on IFS and can also
+            # match partial label names (#254).
+            if (( ! ${ignoredLabelsArray[(Ie)${label_name}]} )); then
                 if [[ -n "$configArray[$appPath]" ]]; then
                     exists="$configArray[$appPath]"
                     
@@ -5312,7 +5403,9 @@ is_excluded_background_label() {
     # Interactive Install Now / hard-deadline installs still update them.
     local label="$1"
     [[ -z "${label}" ]] && return 1
-    [[ " ${excludedBackgroundLabelsArray[*]} " == *" ${label} "* ]]
+    # Exact-element membership; a "${array[*]}" substring match depends on IFS and can also match
+    # partial label names (#254).
+    (( ${excludedBackgroundLabelsArray[(Ie)${label}]} ))
 }
 
 filter_excluded_background_labels_from_silent_install() {
@@ -6887,6 +6980,10 @@ main() {
         defaultVersionKey="CFBundleShortVersionString"
         versionKey="$defaultVersionKey"
 
+        # Label fragment parsing needs IFS=$'\n', but it must be restored once discovery finishes.
+        # Leaving it set corrupts every later "${array[*]}" join, command substitution word split,
+        # and the ${labelsArray:|ignoredLabelsArray} subtraction that drops ignored labels (#254).
+        discovery_saved_IFS=$IFS
         IFS=$'\n'
         in_label=0
         current_label=""
@@ -6977,9 +7074,18 @@ main() {
             labelFile="${labelFile%.*}"
             
             # Issue 142 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/142
-            #if [[ $ignoredLabelsArray =~ ${labelFile} ]]; then
-            if [[ " ${ignoredLabelsArray[*]} " == *" ${labelFile} "* ]]; then
+            # Exact-element membership rather than a "${array[*]}" substring match: the latter joins
+            # on the first character of IFS, so it silently matched nothing while IFS was $'\n'.
+            if (( ${ignoredLabelsArray[(Ie)${labelFile}]} )); then
                 log_verbose "Ignoring label $labelFile."
+                continue
+            fi
+            
+            # IgnoredLabels="*" means ignore everything that is not explicitly required or optional.
+            if [[ "${ignore_all_labels}" == "TRUE" ]] \
+            && (( ! ${requiredLabelsArray[(Ie)${labelFile}]} )) \
+            && (( ! ${optionalLabelsArray[(Ie)${labelFile}]} )); then
+                log_verbose "Ignoring label $labelFile (IgnoredLabels is '*' and this label is neither required nor optional)."
                 continue
             fi
             
@@ -7040,6 +7146,9 @@ main() {
             done
         done
 
+        # Label fragment parsing is finished; everything below relies on normal word splitting.
+        IFS=$discovery_saved_IFS
+
         # Close our bouncing progress swiftDialog window
         swiftDialogCompleteDialogDiscover
         
@@ -7083,6 +7192,22 @@ main() {
     labelsArray=($(tr ' ' '\n' <<< "${labelsArray[@]}" | sort -u | tr '\n' ' '))
 
     labelsArray=${labelsArray:|ignoredLabelsArray}
+
+    # In ignore-all mode the subtraction above cannot do the work, because IgnoredLabels holds the
+    # "*" flag rather than an entry per label. Keep only required and optional labels (#254).
+    if [[ "${ignore_all_labels}" == "TRUE" ]]; then
+        local -a allowedLabels=()
+        local candidateLabel
+        for candidateLabel in ${(s/ /)labelsArray}; do
+            [[ -z "${candidateLabel}" ]] && continue
+            if (( ${requiredLabelsArray[(Ie)${candidateLabel}]} )) || (( ${optionalLabelsArray[(Ie)${candidateLabel}]} )); then
+                allowedLabels+=("${candidateLabel}")
+            else
+                log_verbose "Dropping ${candidateLabel} from the queue (IgnoredLabels is '*' and this label is neither required nor optional)."
+            fi
+        done
+        labelsArray="${allowedLabels[*]}"
+    fi
 
     appNamesArray=()
     # Get App Names for each label in labelsArray

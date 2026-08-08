@@ -532,7 +532,7 @@
         "IgnoredLabels": {
             "type": "string",
             "title": "Ignored Labels",
-            "description": "A space-separated list of Installomator labels to ignore for the AAP workflow. Supports wilddcards",
+            "description": "A space-separated list of Installomator labels to ignore for the AAP workflow. Supports wildcards, for example \"microsoft*\". A single \"*\" ignores every Installomator label except those listed in Required Labels and Optional Labels.",
             "options": {
                 "inputAttributes": {
                     "placeholder": "microsoft* googlechrome*"

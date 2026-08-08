@@ -764,7 +764,7 @@ During a profile replacement, the system updates payloads with the same `Payload
 			<key>pfm_app_min</key>
 			<string>3.0</string>
 			<key>pfm_description</key>
-			<string>A space-separated list of Installomator labels to ignore for the AAP workflow. Supports wilddcards</string>
+			<string>A space-separated list of Installomator labels to ignore for the AAP workflow. Supports wildcards, for example "microsoft*". A single "*" ignores every Installomator label except those listed in Required Labels and Optional Labels.</string>
 			<key>pfm_documentation_url</key>
 			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Populating-App-Labels#ignored</string>
 			<key>pfm_name</key>
