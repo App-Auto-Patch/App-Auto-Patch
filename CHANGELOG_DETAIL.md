@@ -3,6 +3,18 @@
 # Version 3
 
 ## Version 3.7.0
+### 09-Aug-2026 (1) - Build 3.7.0.2608091230
+- [#166](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166): `ScheduleWorkflowActive` (SUPER-compatible workflow schedule windows), including Silent Outside, brought onto the 3.7.0 release line:
+	- Managed key `ScheduleWorkflowActive` = `DAY:hh:mm-hh:mm,...` (`MON`–`SUN`, 24-hour, comma-separated). Empty/unset = always active (unchanged behavior). Local Mac timezone; same-day ranges only (overnight = two windows)
+	- Early gate after prefs/validation + install-now flags, before Jamf restart / network / discovery: outside a window → set `NextAutoLaunch` to next window start (with a small bump if &lt; ~5 minutes away) and `exit_clean` — no discovery, dialogs, Installomator, or webhooks — unless Silent Outside is enabled
+	- Bypass: `--workflow-install-now`, `--workflow-install-now-silent`, `--preview-deferral-dialog`
+	- Default: overdue hard deadline (days or count) bypasses the window via a lightweight read-only check (does not mutate deadline counters / does not sleep). Optional `ScheduleWorkflowActiveRespectHardDeadline` (`true` = even hard deadlines wait for the next window). Soft/focus deadlines still respect the window
+	- `ScheduleWorkflowActiveSilentOutside` (default `false`): when `true` and outside a window, continue with discovery and `workflow_silent_patch_closed_apps` only — no dialogs even if InteractiveMode is 1/2. Open/blocked apps remaining after that pass are deferred to the next window start. Independent of `WorkflowBackgroundPatchClosedApps` for this outside-window path
+	- All `NextAutoLaunch` writers (`set_auto_launch_deferral`, `set_auto_launch_monthly_cadence`) clamp into the next allowed window when a schedule is configured
+	- Invalid schedule string fails startup validation (`option_error`)
+	- CLI for testing: `--schedule-workflow-active=` / `--schedule-workflow-active-respect-hard-deadline` / `-off` / `--schedule-workflow-active-silent-outside` / `-off`
+	- iMazing + Jamf manifests and All-Options examples updated
+
 ### 08-Aug-2026 (3) - Build 3.7.0.2608081505
 - [#254](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/254): fixed ignored labels being disregarded, and the local preference plist intermittently reading back blank. Both were reproducible from a single verbose log in which discovery issued 1,159 `PlistBuddy` writes, logged zero ignore matches, and then queued an explicitly ignored app:
 	- **`IFS` leak out of discovery.** The label-fragment parser sets `IFS=$'\n'` and never restored it. Everything downstream in `main()` then ran with a newline `IFS`: the `" ${ignoredLabelsArray[*]} "` substring test could only ever match the first and last elements, the `$(... | tr '\n' ' ')` dedupe steps collapsed each label list into one whitespace-padded element, and `${labelsArray:|ignoredLabelsArray}` therefore compared `"firefox "` against `"firefox"` and removed nothing. Runs that skipped discovery (`DiscoveryFrequency`) never set `IFS` and behaved correctly, which is why the failure appeared to alternate between runs. `IFS` is now saved before the parser and restored the moment the fragment loops finish
@@ -12,17 +24,6 @@
 	- **Required labels are protected from wildcards.** The wildcard expansion skipped labels listed as Optional but not those listed as Required, so `IgnoredLabels="*"` (or any wildcard covering them) put required apps into the ignored list and `${labelsArray:|ignoredLabelsArray}` then dropped them from the queue - required apps were never patched. `RequiredLabels` is now checked alongside `OptionalLabels`, against the in-memory array since `RequiredLabels` hasn't been written to the plist yet at that point
 	- **Hardened local preference reads.** New `read_local_preference()` reads a key with `defaults` and falls back to `PlistBuddy` when the value comes back empty, normalising `true`/`false` to `1`/`0` so existing comparisons are unaffected. `check_completion_status()` uses it for `AAPPatchingCompletionStatus` / `AAPPatchingStartDate`, validates the start date against `^\d{4}-\d{2}-\d{2}` (trimming a full timestamp to the date), and falls back to the computed patch week start date - logging an error and rewriting the key - rather than handing an empty string to `strftime`
 	- **Label list parsing.** New `parse_labels_option()` normalises a labels preference into an array, stripping the parentheses, quotes, and trailing commas that `defaults read` emits for array-typed preferences. Previously those became label names in their own right, visible in the log as `Required labels: ( )`
-
-### 08-Aug-2026 (2b) - Build 3.7.0.2608081234
-- [#166](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166): `ScheduleWorkflowActive` (SUPER-compatible workflow schedule windows):
-	- Managed key `ScheduleWorkflowActive` = `DAY:hh:mm-hh:mm,...` (`MON`–`SUN`, 24-hour, comma-separated). Empty/unset = always active (unchanged behavior). Local Mac timezone; same-day ranges only (overnight = two windows)
-	- Early gate after prefs/validation + install-now flags, before Jamf restart / network / discovery: outside a window → set `NextAutoLaunch` to next window start (with a small bump if &lt; ~5 minutes away) and `exit_clean` — no discovery, dialogs, Installomator, or webhooks
-	- Bypass: `--workflow-install-now`, `--workflow-install-now-silent`, `--preview-deferral-dialog`
-	- Default: overdue hard deadline (days or count) bypasses the window via a lightweight read-only check (does not mutate deadline counters / does not sleep). Optional `ScheduleWorkflowActiveRespectHardDeadline` (`true` = even hard deadlines wait for the next window). Soft/focus deadlines still respect the window
-	- All `NextAutoLaunch` writers (`set_auto_launch_deferral`, `set_auto_launch_monthly_cadence`) clamp into the next allowed window when a schedule is configured
-	- Invalid schedule string fails startup validation (`option_error`)
-	- CLI for testing: `--schedule-workflow-active=` / `--schedule-workflow-active-respect-hard-deadline` / `-off`
-	- iMazing + Jamf manifests and All-Options examples updated
 
 ### 08-Aug-2026 (2) - Build 3.7.0.2608081108
 - [#156](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/156): optional pre/post patch script hooks for workflows like `jamf recon` or fixing `.app` ownership after Installomator installs. Security-hardened by design:

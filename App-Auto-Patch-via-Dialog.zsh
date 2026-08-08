@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.0"
-scriptDate="2026/08/08"
-scriptBuild="3.7.0.2608081505"
+scriptDate="2026/08/09"
+scriptBuild="3.7.0.2608091230"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -70,6 +70,8 @@ echo "
     [--schedule-workflow-active=DAY:hh:mm-hh:mm,...]
     [--schedule-workflow-active-respect-hard-deadline]
     [--schedule-workflow-active-respect-hard-deadline-off]
+    [--schedule-workflow-active-silent-outside]
+    [--schedule-workflow-active-silent-outside-off]
 
     Deferral Deadline COUNT Options:
     [--deadline-count-focus=number]
@@ -175,6 +177,7 @@ echo "
     <key>WorkflowDisableRelaunch</key> <true/> | <false/>
     <key>ScheduleWorkflowActive</key> <string>MON:17:00-23:59,TUE:17:00-23:59,...</string>
     <key>ScheduleWorkflowActiveRespectHardDeadline</key> <true/> | <false/>
+    <key>ScheduleWorkflowActiveSilentOutside</key> <true/> | <false/>
     <key>DiscoveryFrequency</key> <integer>hours</integer>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
     <key>ZoomCallActiveCheck</key> <true/> | <false/>
@@ -319,10 +322,14 @@ set_defaults() {
     workflow_install_now_patching_status_action_option="SUCCESS" # MDM Enabled - Determines what happens when  NEVER | ALWAYS | SUCCESS 
 
     # ScheduleWorkflowActive (#166) - SUPER-compatible DAY:hh:mm-hh:mm windows. Empty/unset = always active.
-    # Local Mac timezone; same-day ranges only. Outside a window: reschedule NextAutoLaunch to next window start.
+    # Local Mac timezone; same-day ranges only. Outside a window: reschedule NextAutoLaunch to next window start
+    # (or, if ScheduleWorkflowActiveSilentOutside is true, discover + silently patch closed apps only).
     schedule_workflow_active_option="" # MDM Enabled
     # Empty until prefs resolve; managed/CLI/local then normalize to FALSE (default: hard deadline bypasses window) or TRUE.
     schedule_workflow_active_respect_hard_deadline_option="" # MDM Enabled
+    # Empty until prefs resolve; default FALSE = outside window exits. TRUE = closed-apps-only silent path outside window.
+    schedule_workflow_active_silent_outside_option="" # MDM Enabled
+    schedule_workflow_active_silent_outside_active="FALSE" # runtime flag set by enforce_schedule_workflow_active
     typeset -ga schedule_workflow_active_windows # populated by manage_parameter_options: "dow:startmin:endmin"
 
     UnattendedExit="FALSE" # MDM Enabled
@@ -1010,6 +1017,12 @@ get_options() {
             --schedule-workflow-active-respect-hard-deadline-off)
                 schedule_workflow_active_respect_hard_deadline_option="FALSE"
             ;;
+            --schedule-workflow-active-silent-outside)
+                schedule_workflow_active_silent_outside_option="TRUE"
+            ;;
+            --schedule-workflow-active-silent-outside-off)
+                schedule_workflow_active_silent_outside_option="FALSE"
+            ;;
             --webhook-feature-off)
                 webhook_feature_option="FALSE"
             ;;
@@ -1183,6 +1196,8 @@ get_preferences() {
         schedule_workflow_active_managed=$(defaults read "${appAutoPatchManagedPLIST}" ScheduleWorkflowActive 2>/dev/null)
         local schedule_workflow_active_respect_hard_deadline_managed
         schedule_workflow_active_respect_hard_deadline_managed=$(defaults read "${appAutoPatchManagedPLIST}" ScheduleWorkflowActiveRespectHardDeadline 2>/dev/null)
+        local schedule_workflow_active_silent_outside_managed
+        schedule_workflow_active_silent_outside_managed=$(defaults read "${appAutoPatchManagedPLIST}" ScheduleWorkflowActiveSilentOutside 2>/dev/null)
         local webhook_feature_managed
         webhook_feature_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookFeature 2> /dev/null)
         local webhook_url_slack_managed
@@ -1325,6 +1340,8 @@ get_preferences() {
         schedule_workflow_active_local=$(defaults read "${appAutoPatchLocalPLIST}" ScheduleWorkflowActive 2>/dev/null)
         local schedule_workflow_active_respect_hard_deadline_local
         schedule_workflow_active_respect_hard_deadline_local=$(defaults read "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveRespectHardDeadline 2>/dev/null)
+        local schedule_workflow_active_silent_outside_local
+        schedule_workflow_active_silent_outside_local=$(defaults read "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveSilentOutside 2>/dev/null)
         local webhook_feature_local
         webhook_feature_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookFeature 2> /dev/null)
         local webhook_url_slack_local
@@ -1455,6 +1472,8 @@ get_preferences() {
     { [[ -z "${schedule_workflow_active_managed}" ]] && [[ -z "${schedule_workflow_active_option}" ]] && [[ -n "${schedule_workflow_active_local}" ]]; } && schedule_workflow_active_option="${schedule_workflow_active_local}"
     [[ -n "${schedule_workflow_active_respect_hard_deadline_managed}" ]] && schedule_workflow_active_respect_hard_deadline_option="${schedule_workflow_active_respect_hard_deadline_managed}"
     { [[ -z "${schedule_workflow_active_respect_hard_deadline_managed}" ]] && [[ -z "${schedule_workflow_active_respect_hard_deadline_option}" ]] && [[ -n "${schedule_workflow_active_respect_hard_deadline_local}" ]]; } && schedule_workflow_active_respect_hard_deadline_option="${schedule_workflow_active_respect_hard_deadline_local}"
+    [[ -n "${schedule_workflow_active_silent_outside_managed}" ]] && schedule_workflow_active_silent_outside_option="${schedule_workflow_active_silent_outside_managed}"
+    { [[ -z "${schedule_workflow_active_silent_outside_managed}" ]] && [[ -z "${schedule_workflow_active_silent_outside_option}" ]] && [[ -n "${schedule_workflow_active_silent_outside_local}" ]]; } && schedule_workflow_active_silent_outside_option="${schedule_workflow_active_silent_outside_local}"
     [[ -n "${webhook_feature_managed}" ]] && webhook_feature_option="${webhook_feature_managed}"
     { [[ -z "${webhook_feature_managed}" ]] && [[ -z "${webhook_feature_option}" ]] && [[ -n "${webhook_feature_local}" ]]; } && webhook_feature_option="${webhook_feature_local}"
     [[ -n "${webhook_url_slack_managed}" ]] && webhook_url_slack_option="${webhook_url_slack_managed}"
@@ -1602,6 +1621,7 @@ get_preferences() {
     log_verbose "WorkflowDisableRelaunch: $workflow_disable_relaunch_option"
     log_verbose "ScheduleWorkflowActive: ${schedule_workflow_active_option:-<unset>}"
     log_verbose "ScheduleWorkflowActiveRespectHardDeadline: ${schedule_workflow_active_respect_hard_deadline_option:-<unset>}"
+    log_verbose "ScheduleWorkflowActiveSilentOutside: ${schedule_workflow_active_silent_outside_option:-<unset>}"
     log_verbose "WebhookFeature: $webhook_feature_option"
     log_verbose "WebhookURLSlack: $webhook_url_slack_option"
     log_verbose "WebhookURLTeams: $webhook_url_teams_option"
@@ -2132,6 +2152,16 @@ manage_parameter_options() {
         defaults delete "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveRespectHardDeadline 2>/dev/null
     fi
     log_verbose "schedule_workflow_active_respect_hard_deadline_option is: ${schedule_workflow_active_respect_hard_deadline_option}"
+
+    # Manage ScheduleWorkflowActiveSilentOutside (default FALSE = outside window exits; TRUE = closed-apps-only silent path).
+    if [[ "${schedule_workflow_active_silent_outside_option}" -eq 1 ]] || [[ "${schedule_workflow_active_silent_outside_option}" == "TRUE" ]]; then
+        schedule_workflow_active_silent_outside_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveSilentOutside -bool true
+    else
+        schedule_workflow_active_silent_outside_option="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveSilentOutside 2>/dev/null
+    fi
+    log_verbose "schedule_workflow_active_silent_outside_option is: ${schedule_workflow_active_silent_outside_option}"
     
     # Manage ${zoom_call_active_check_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${zoom_call_active_check_option}" -eq 1 ]] || [[ "${zoom_call_active_check_option}" == "TRUE" ]]; then
@@ -4280,9 +4310,36 @@ is_hard_deadline_due_lightweight() {
     return 1
 }
 
-# Early gate: outside ScheduleWorkflowActive, reschedule to next window start and exit cleanly.
+# Write NextAutoLaunch to the next ScheduleWorkflowActive window start and exit cleanly.
+schedule_workflow_active_set_next_window_and_exit() {
+    local status_message="${1:-Outside ScheduleWorkflowActive}"
+    local now_epoch next_epoch next_auto_launch
+    now_epoch=$(date +%s)
+
+    if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+        log_status "Automatic relaunch is disabled; exiting without discovery/patching."
+        write_status "Inactive: ${status_message}; automatic relaunch disabled."
+        exit_clean
+    fi
+
+    next_epoch=$(next_schedule_workflow_active_start_epoch "${now_epoch}")
+    # Avoid LaunchDaemon spin if the next window is moments away.
+    if (( next_epoch - now_epoch < 300 )); then
+        next_epoch=$(clamp_epoch_to_schedule_workflow_active $(( now_epoch + 300 )))
+    fi
+    next_auto_launch=$(date -r "${next_epoch}" +"${timestamp_format}")
+    defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_auto_launch}"
+    log_status "NextAutoLaunch set to next ScheduleWorkflowActive window start: ${next_auto_launch}"
+    write_status "Pending: ${status_message}; next window ${next_auto_launch}."
+    log_exit "AAP is scheduled to automatically relaunch at: ${next_auto_launch}"
+    exit_clean
+}
+
+# Early gate: outside ScheduleWorkflowActive, either continue silent closed-app patching
+# (ScheduleWorkflowActiveSilentOutside) or reschedule to next window start and exit cleanly.
 # Bypassed by install-now / preview-deferral-dialog, and by overdue hard deadline unless RespectHardDeadline is TRUE.
 enforce_schedule_workflow_active() {
+    schedule_workflow_active_silent_outside_active="FALSE"
     if [[ ${#schedule_workflow_active_windows[@]} -eq 0 ]]; then
         return 0
     fi
@@ -4306,24 +4363,14 @@ enforce_schedule_workflow_active() {
 
     log_status "Outside ScheduleWorkflowActive window (${schedule_workflow_active_option})."
 
-    if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-        log_status "Automatic relaunch is disabled; exiting without discovery/patching."
-        write_status "Inactive: Outside ScheduleWorkflowActive; automatic relaunch disabled."
-        exit_clean
+    if [[ "${schedule_workflow_active_silent_outside_option}" == "TRUE" ]]; then
+        schedule_workflow_active_silent_outside_active="TRUE"
+        log_status "ScheduleWorkflowActiveSilentOutside enabled; continuing with discovery and closed-app silent patching only (no dialogs)."
+        write_status "Running: Outside ScheduleWorkflowActive; silent closed-app patching."
+        return 0
     fi
 
-    local next_epoch next_auto_launch
-    next_epoch=$(next_schedule_workflow_active_start_epoch "${now_epoch}")
-    # Avoid LaunchDaemon spin if the next window is moments away.
-    if (( next_epoch - now_epoch < 300 )); then
-        next_epoch=$(clamp_epoch_to_schedule_workflow_active $(( now_epoch + 300 )))
-    fi
-    next_auto_launch=$(date -r "${next_epoch}" +"${timestamp_format}")
-    defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_auto_launch}"
-    log_status "NextAutoLaunch set to next ScheduleWorkflowActive window start: ${next_auto_launch}"
-    write_status "Pending: Outside ScheduleWorkflowActive; next window ${next_auto_launch}."
-    log_exit "AAP is scheduled to automatically relaunch at: ${next_auto_launch}"
-    exit_clean
+    schedule_workflow_active_set_next_window_and_exit "Outside ScheduleWorkflowActive"
 }
 
 set_auto_launch_deferral() {
@@ -7537,6 +7584,47 @@ main() {
     for label in $queuedLabelsArray; do
         countOfElementsArray+=($label)
     done
+
+    # Outside ScheduleWorkflowActive with SilentOutside: discovery already ran; patch closed apps
+    # only with no dialogs. Remaining open/blocked apps wait for the next window.
+    if [[ "${schedule_workflow_active_silent_outside_active}" == "TRUE" ]]; then
+        if [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            workflow_stage_updates
+        fi
+        if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            log_info "ScheduleWorkflowActiveSilentOutside: silently patching closed apps only..."
+            workflow_silent_patch_closed_apps
+        fi
+        if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            log_status "Outside schedule window: ${#countOfElementsArray[@]} open/blocked app(s) remain; deferring interactive install to next ScheduleWorkflowActive window."
+            schedule_workflow_active_set_next_window_and_exit "Outside ScheduleWorkflowActive; open apps remain after silent closed-app patch"
+        fi
+        log_info "Outside schedule window: no apps remain after silent closed-app patch (or none were due)."
+        defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true
+        timestamp="$(date +$timestamp_format)"
+        defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
+        check_webhook
+        if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+            log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
+            log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
+            /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+            { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+            disown
+            exit_clean
+        else
+            if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
+            || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
+                log_aap "Monthly Patching Cadence Enabled: Calculating next launch date"
+                next_nth_weekday=$(next_nth_weekday_datetime ${monthly_patching_cadence_weekday_index} ${monthly_patching_cadence_ordinal_value} "${monthly_patching_cadence_start_time}")
+                log_notice "Will auto launch on ${next_nth_weekday}"
+                set_auto_launch_monthly_cadence
+            else
+                deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
+                log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
+                set_auto_launch_deferral
+            fi
+        fi
+    fi
 
     # Stage installers before the silent background-patch pass below, so each queued app is
     # downloaded at most once (closed apps then install from the staged copy; open/blocked apps
