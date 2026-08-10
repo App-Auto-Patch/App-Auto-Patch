@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.0"
 scriptDate="2026/08/09"
-scriptBuild="3.7.0.2608091230"
+scriptBuild="3.7.0.2608091723"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2825,7 +2825,7 @@ workflow_startup() {
 	
     # Set icon based on whether the Mac is a desktop or laptop
     if [[ ! -n "$dialog_icon_option" ]]; then
-        log_warning ":warning:  App icon not found at $dialog_icon_option, using SF symbol instead"
+        log_info "Using SF symbol for App Icon"
         if system_profiler SPPowerDataType | grep -q "Battery Power"; then
             icon="SF=laptopcomputer.and.arrow.down,weight=regular,palette=gray,red"
         else

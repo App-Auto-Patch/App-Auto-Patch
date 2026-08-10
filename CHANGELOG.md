@@ -35,6 +35,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 - Changed: if no user is logged in, AAP no longer exits after waiting for the Dock — it waits up to 20 seconds, then continues without an active user session and skips the swiftDialog install/update check (since dialogs can't be shown without a user session). Fully-silent runs still skip the Dock wait entirely
 - Fixed: Teams webhooks now resolve Workspace One device links the same way Slack webhooks already did
+- Changed: when no custom dialog icon is configured, AAP logs an info message that it is using the SF Symbol fallback instead of a warning that incorrectly said the icon was "not found"
 
 **Fixes**
 

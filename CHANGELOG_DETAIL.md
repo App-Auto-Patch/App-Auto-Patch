@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.0
+### 09-Aug-2026 (2) - Build 3.7.0.2608091723
+- Changed: when no custom dialog icon is set, the SF Symbol fallback is logged at info (`Using SF symbol for App Icon`) instead of a warning that claimed the icon was "not found" — an empty icon is expected in that path, so the warning was a false alarm
+
 ### 09-Aug-2026 (1) - Build 3.7.0.2608091230
 - [#166](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166): `ScheduleWorkflowActive` (SUPER-compatible workflow schedule windows), including Silent Outside, brought onto the 3.7.0 release line:
 	- Managed key `ScheduleWorkflowActive` = `DAY:hh:mm-hh:mm,...` (`MON`–`SUN`, 24-hour, comma-separated). Empty/unset = always active (unchanged behavior). Local Mac timezone; same-day ranges only (overnight = two windows)
