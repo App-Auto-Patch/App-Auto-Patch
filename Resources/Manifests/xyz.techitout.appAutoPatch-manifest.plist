@@ -216,6 +216,9 @@ During a profile replacement, the system updates payloads with the same `Payload
 					<string>WebhookURLTeams</string>
 					<string>WorkflowDisableAppDiscovery</string>
 					<string>WorkflowDisableRelaunch</string>
+					<string>ScheduleWorkflowActive</string>
+					<string>ScheduleWorkflowActiveRespectHardDeadline</string>
+					<string>ScheduleWorkflowActiveSilentOutside</string>
 					<string>WorkflowInstallNowPatchingStatusAction</string>
 					<string>WorkflowStageUpdates</string>
 					<string>WorkflowBackgroundPatchClosedApps</string>
@@ -1387,6 +1390,54 @@ During a profile replacement, the system updates payloads with the same `Payload
 			<string>Disable Relaunch Workflow</string>
 			<key>pfm_type</key>
 			<string>string</string>
+		</dict>
+		<dict>
+			<key>pfm_app_min</key>
+			<string>3.7.0</string>
+			<key>pfm_description</key>
+			<string>Restrict App Auto-Patch discovery/dialogs/patching to specific weekday time windows (SUPER-compatible). Format: DAY:hh:mm-hh:mm, comma-separated, no spaces (MON-SUN, 24-hour). Multiple windows per day allowed. Same-day ranges only — split overnight spans into two windows. Empty/unset = always active. Outside a window, AAP reschedules NextAutoLaunch to the next window start and exits without patching unless ScheduleWorkflowActiveSilentOutside is true. Local Mac timezone. Bypassed by --workflow-install-now / --workflow-install-now-silent / --preview-deferral-dialog. Overdue hard deadlines bypass the window by default unless ScheduleWorkflowActiveRespectHardDeadline is true.</string>
+			<key>pfm_description_reference</key>
+			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166</string>
+			<key>pfm_name</key>
+			<string>ScheduleWorkflowActive</string>
+			<key>pfm_title</key>
+			<string>Schedule Workflow Active</string>
+			<key>pfm_type</key>
+			<string>string</string>
+			<key>pfm_value_placeholder</key>
+			<string>MON:17:00-23:59,TUE:17:00-23:59,WED:17:00-23:59,THU:17:00-23:59,FRI:17:00-23:59</string>
+		</dict>
+		<dict>
+			<key>pfm_app_min</key>
+			<string>3.7.0</string>
+			<key>pfm_default</key>
+			<false/>
+			<key>pfm_description</key>
+			<string>When true, even an overdue hard deadline (days or count) waits for the next ScheduleWorkflowActive window. When false (default), an overdue hard deadline bypasses the schedule window so mandatory installs are not delayed by days.</string>
+			<key>pfm_description_reference</key>
+			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166</string>
+			<key>pfm_name</key>
+			<string>ScheduleWorkflowActiveRespectHardDeadline</string>
+			<key>pfm_title</key>
+			<string>Schedule Workflow Active Respect Hard Deadline</string>
+			<key>pfm_type</key>
+			<string>boolean</string>
+		</dict>
+		<dict>
+			<key>pfm_app_min</key>
+			<string>3.7.0</string>
+			<key>pfm_default</key>
+			<false/>
+			<key>pfm_description</key>
+			<string>When true and outside a ScheduleWorkflowActive window, AAP still runs discovery and silently patches closed apps only — no dialogs even if InteractiveMode is 1 or 2. Open or blocked apps remain queued and are deferred to the next window start. When false (default), outside a window AAP only reschedules NextAutoLaunch and exits.</string>
+			<key>pfm_description_reference</key>
+			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166</string>
+			<key>pfm_name</key>
+			<string>ScheduleWorkflowActiveSilentOutside</string>
+			<key>pfm_title</key>
+			<string>Schedule Workflow Active Silent Outside</string>
+			<key>pfm_type</key>
+			<string>boolean</string>
 		</dict>
 		<dict>
 			<key>pfm_app_min</key>

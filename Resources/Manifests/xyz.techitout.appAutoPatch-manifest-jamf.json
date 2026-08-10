@@ -1133,6 +1133,49 @@
             ],
             "property_order": 195
         },
+        "ScheduleWorkflowActive": {
+            "type": "string",
+            "title": "Schedule Workflow Active",
+            "description": "Restrict App Auto-Patch discovery/dialogs/patching to specific weekday time windows (SUPER-compatible). Format: DAY:hh:mm-hh:mm, comma-separated, no spaces (MON-SUN, 24-hour). Multiple windows per day allowed. Same-day ranges only. Empty/unset = always active. Outside a window, AAP reschedules NextAutoLaunch to the next window start and exits without patching unless ScheduleWorkflowActiveSilentOutside is true. Bypassed by install-now / preview-deferral-dialog. Overdue hard deadlines bypass the window by default unless ScheduleWorkflowActiveRespectHardDeadline is true.",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "MON:17:00-23:59,TUE:17:00-23:59,WED:17:00-23:59,THU:17:00-23:59,FRI:17:00-23:59"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166"
+                }
+            ],
+            "property_order": 196
+        },
+        "ScheduleWorkflowActiveRespectHardDeadline": {
+            "type": "boolean",
+            "title": "Schedule Workflow Active Respect Hard Deadline",
+            "description": "When true, even an overdue hard deadline (days or count) waits for the next ScheduleWorkflowActive window. When false (default), an overdue hard deadline bypasses the schedule window so mandatory installs are not delayed by days.",
+            "default": false,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166"
+                }
+            ],
+            "property_order": 197
+        },
+        "ScheduleWorkflowActiveSilentOutside": {
+            "type": "boolean",
+            "title": "Schedule Workflow Active Silent Outside",
+            "description": "When true and outside a ScheduleWorkflowActive window, AAP still runs discovery and silently patches closed apps only — no dialogs even if InteractiveMode is 1 or 2. Open or blocked apps remain queued and are deferred to the next window start. When false (default), outside a window AAP only reschedules NextAutoLaunch and exits.",
+            "default": false,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166"
+                }
+            ],
+            "property_order": 198
+        },
         "WorkflowInstallNowPatchingStatusAction": {
             "type": "string",
             "title": "Workflow Install Now Patching Status Action",

@@ -15,6 +15,11 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.7.0
+- **Schedule Workflow Active** — Restrict discovery/dialogs/patching to weekday time windows (SUPER-compatible `DAY:hh:mm-hh:mm`). Outside a window, AAP only reschedules `NextAutoLaunch` to the next window start unless Silent Outside is enabled. Deferrals and monthly cadence relaunches are clamped into the schedule. Install-now / preview bypass; overdue hard deadlines bypass by default. (#166)
+	- Managed Preference Key: `<key>ScheduleWorkflowActive</key>` `<string>MON:17:00-23:59,...</string>`
+	- Managed Preference Key: `<key>ScheduleWorkflowActiveRespectHardDeadline</key>` `<true/>` | `<false/>` (default `false`)
+	- Managed Preference Key: `<key>ScheduleWorkflowActiveSilentOutside</key>` `<true/>` | `<false/>` (default `false`) — outside window: discovery + closed-apps-only silent patch; no dialogs; open apps wait for next window
+	- CLI: `--schedule-workflow-active=` / `--schedule-workflow-active-respect-hard-deadline` / `-off` / `--schedule-workflow-active-silent-outside` / `-off`
 - **Pre/Post Patch Scripts** — Run a managed, root-owned script once before and/or after Installomator installations (e.g. `jamf recon`). Scripts must live under `/Library/Management/AppAutoPatch/Hooks/`, cannot be symlinks, and must not be group/world-writable. Managed preferences only — never CLI or local prefs, never `eval`'d. (#156)
 	- Managed Preference Key: `<key>PrePatchScript</key>` / `<key>PostPatchScript</key>`
 	- Managed Preference Key: `<key>PrePatchScriptFailAction</key>` `ABORT`|`CONTINUE` (default `ABORT`)

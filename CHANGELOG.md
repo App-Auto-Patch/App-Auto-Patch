@@ -9,6 +9,11 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 **New Features**
 
+- **Schedule Workflow Active** — Restrict discovery, dialogs, and patching to weekday time windows (SUPER-compatible `DAY:hh:mm-hh:mm` format). Outside a window, AAP only reschedules `NextAutoLaunch` to the next window start — no discovery/dialogs/Installomator — unless Silent Outside is enabled. Deferral and monthly-cadence relaunches are clamped into the next allowed window. Install-now / preview-deferral-dialog bypass the schedule. Overdue hard deadlines bypass by default; set `ScheduleWorkflowActiveRespectHardDeadline` to `true` for strict “never outside hours” mode. (#166)
+	- Managed Preference Key: `<key>ScheduleWorkflowActive</key>` `<string>MON:17:00-23:59,TUE:17:00-23:59,...</string>` — empty/unset = always active
+	- Managed Preference Key: `<key>ScheduleWorkflowActiveRespectHardDeadline</key>` `<true/>` | `<false/>` — default: `false` (hard deadline bypasses the window)
+	- Managed Preference Key: `<key>ScheduleWorkflowActiveSilentOutside</key>` `<true/>` | `<false/>` — default: `false`. When `true`, outside a window AAP still runs discovery and silently patches **closed apps only** (no dialogs, even if InteractiveMode is 1/2). Open/blocked apps stay queued and wait for the next window.
+	- CLI: `--schedule-workflow-active=...` / `--schedule-workflow-active-respect-hard-deadline` / `-off` / `--schedule-workflow-active-silent-outside` / `-off`
 - **Pre/Post Patch Scripts** — Run a managed, root-owned script once before and/or after Installomator installations (e.g. `jamf recon`). Scripts must live under `/Library/Management/AppAutoPatch/Hooks/`, cannot be symlinks, and must not be group/world-writable. Managed preferences only — never CLI or local prefs, never `eval`'d. (#156)
 	- Managed Preference Key: `<key>PrePatchScript</key>` `<string>/Library/Management/AppAutoPatch/Hooks/pre.sh</string>`
 	- Managed Preference Key: `<key>PostPatchScript</key>` `<string>/Library/Management/AppAutoPatch/Hooks/post.sh</string>`
