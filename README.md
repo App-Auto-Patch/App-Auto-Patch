@@ -16,6 +16,7 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 
 ## New features/Specific Changes in 3.6.3
 - Changed: if no user is logged in, AAP no longer exits after waiting for the Dock - it waits up to 20 seconds, then continues without an active user session and skips the swiftDialog install/update check. Fully-silent runs still skip the Dock wait entirely
+- Fixed: the `AAP-LatestPatches` Jamf Pro EA could stall `jamf recon`; it now avoids NUL-delimited reads/process substitution, always emits `<result>`, and lists receipts via a temp file
 
 ## New features/Specific Changes in 3.6.2
 - Fixed: the fully-silent Dock-wait skip (introduced in 3.6.1, below) didn't actually take effect - the check that determines whether a run is fully silent ran too late, after the Dock-wait loop it was meant to skip, so `InteractiveMode 0`/`--workflow-install-now-silent` runs still waited on the Dock (and could fail outright on a Mac with no user ever logged in). The Dock wait is now skipped correctly as well

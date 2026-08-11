@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.6.3
+### 11-Aug-2026 (1)
+- Hardened the `AAP-JamfProEAs/AAP-LatestPatches.sh` Jamf Pro extension attribute for `jamf recon`: replaced NUL-delimited `read -d ''` / process substitution with a newline `find` listing written to a temp file (avoids EA stalls when Jamf keeps stdin open), always emits `<result>` (no `set -e`), and keeps the existing Success/Failure output format
+
 ### 04-Aug-2026 (1) - Build 3.6.3.2608040922
 - Changed: the Dock-active wait in `workflow_startup()` no longer exits the script when no user session appears. It still waits briefly (now 20 seconds, down from 120) for the Dock to become active, but if it never does, AAP logs that it's continuing without an active user session and proceeds - some admins intentionally run AAP before anyone is logged in, and the previous `exit 1` after 120 seconds blocked that entirely. When the Dock is not active after that wait, `get_dialog()` is also skipped (the same as fully-silent runs), since swiftDialog can't safely present UI without an active user session. Fully-silent runs (`InteractiveMode 0`, or `--workflow-install-now-silent`) still skip the Dock wait entirely as before
 

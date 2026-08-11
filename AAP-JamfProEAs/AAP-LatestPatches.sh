@@ -1,72 +1,102 @@
 #!/bin/zsh --no-rcs
 
-# This script returns the latest patch results per app label. Example output: 
-
+# This script returns the latest patch results per app label. Example output:
+#
 # Success:
 # <label> | <version> | <timestamp> | <exitCode> | <status>
 #
 # Failure:
 # <label> | <version> | <timestamp> | <exitCode> | <status>
-
+#
+# Hardened for jamf recon: avoids NUL-delimited reads / process substitution
+# (which can stall inventory when Jamf keeps stdin open), always emits
+# <result>, and uses a temp file for the find listing.
+#
 # https://techitout.xyz/app-auto-patch
-# 12.22.2025
+# 08.11.2026
 
-set -euo pipefail
+# Do not use `set -e` here: an EA must always emit <result> or jamf recon
+# waits out the EA timeout and appears hung.
+set -u
 
-# Patch to the App Auto Patch receipts folder:
 appAutoPatchReceiptsFolder="/Library/Management/AppAutoPatch/receipts"
+max_items=300
 
-# If no receipts folder exists, exit
-[[ -d "$appAutoPatchReceiptsFolder" ]] || { echo "<result>No AAP receipts found</result>"; exit 0; }
+emit() {
+    printf '<result>%s</result>\n' "$1"
+    exit 0
+}
+
+trap 'emit "AAP LatestPatches EA error"' ERR
+
+[[ -d "$appAutoPatchReceiptsFolder" ]] || emit "No AAP receipts found"
 
 # Extract a JSON key (raw) via plutil; empty on failure
-jx() { /usr/bin/plutil -extract "$2" raw -o - "$1" 2>/dev/null || true; }
+jx() {
+    /usr/bin/plutil -extract "$2" raw -o - "$1" 2>/dev/null || true
+}
 
-# Initialize arrays to hold success and failure lines
 success_lines=()
 failure_lines=()
-
-# Cap to keep EA size reasonable (tune as needed)
-max_items=300
 count=0
 
-# Find each label's latest.json (depth: receipts/<label>/latest.json)
-while IFS= read -r -d '' f; do
-  label="$(basename "$(dirname "$f")")"
-  version="$(jx "$f" version)";     [[ -z "$version" ]] && version="unknown"
-  timestamp="$(jx "$f" timestamp)";    [[ -z "$timestamp"  ]] && timestamp="unknown"
-  exitCode="$(jx "$f" exitCode)";     [[ "$exitCode" =~ ^[0-9]+$ ]] || exitCode=0
-  patch_status="$(jx "$f" status)"; [[ -z "$patch_status" ]] && patch_status=$([[ "$exitCode" -eq 0 ]] && echo success || echo failed)
+tmp_list="$(/usr/bin/mktemp /tmp/aap-latestpatches.XXXXXX)" || emit "AAP LatestPatches EA error (mktemp)"
 
-  line="$label | $version | $timestamp | $exitCode | $patch_status"
+# Newline-delimited listing into a file — no -print0 / sort -z / process
+# substitution, and never read from the script's stdin.
+/usr/bin/find "$appAutoPatchReceiptsFolder" -maxdepth 2 -type f -name latest.json 2>/dev/null \
+    | /usr/bin/sort > "$tmp_list"
 
-  if [[ "$patch_status" == "failed" ]]; then
-    failure_lines+=("$line")
-  else
-    success_lines+=("$line")
-  fi
+while IFS= read -r f || [[ -n "${f:-}" ]]; do
+    [[ -z "${f:-}" ]] && continue
+    [[ -f "$f" ]] || continue
 
-  count=$((count+1))
-  [[ $count -ge $max_items ]] && break
-done < <(/usr/bin/find "$appAutoPatchReceiptsFolder" -type f -name latest.json -maxdepth 2 -print0 2>/dev/null | /usr/bin/sort -z)
+    label="$(/usr/bin/basename "$(/usr/bin/dirname "$f")")"
+    version="$(jx "$f" version)"
+    timestamp="$(jx "$f" timestamp)"
+    exitCode="$(jx "$f" exitCode)"
+    patch_status="$(jx "$f" status)"
 
-# Sort for stable output
-IFS=$'\n' success_sorted=($(printf "%s\n" "${success_lines[@]}" | /usr/bin/sort -f 2>/dev/null || true))
-IFS=$'\n' failure_sorted=($(printf "%s\n" "${failure_lines[@]}" | /usr/bin/sort -f 2>/dev/null || true))
+    [[ -n "$version" ]] || version="unknown"
+    [[ -n "$timestamp" ]] || timestamp="unknown"
+    [[ "$exitCode" =~ ^[0-9]+$ ]] || exitCode=0
+    if [[ -z "$patch_status" ]]; then
+        if [[ "$exitCode" -eq 0 ]]; then
+            patch_status="success"
+        else
+            patch_status="failed"
+        fi
+    fi
 
-# Build output
+    line="$label | $version | $timestamp | $exitCode | $patch_status"
+    if [[ "$patch_status" == "failed" ]]; then
+        failure_lines+=("$line")
+    else
+        success_lines+=("$line")
+    fi
+
+    count=$((count + 1))
+    (( count >= max_items )) && break
+done < "$tmp_list"
+
+/bin/rm -f "$tmp_list" 2>/dev/null || true
+
+success_sorted=()
+failure_sorted=()
+if (( ${#success_lines[@]} )); then
+    success_sorted=("${(@f)$(printf '%s\n' "${success_lines[@]}" | /usr/bin/sort -f)}")
+fi
+if (( ${#failure_lines[@]} )); then
+    failure_sorted=("${(@f)$(printf '%s\n' "${failure_lines[@]}" | /usr/bin/sort -f)}")
+fi
+
 result="Success:"
-if [[ ${#success_sorted[@]} -gt 0 ]]; then
-  result+=$'\n'"$(printf "%s\n" "${success_sorted[@]}")"
+if (( ${#success_sorted[@]} )); then
+    result+=$'\n'"${(F)success_sorted}"
+fi
+result+=$'\n\nFailure:'
+if (( ${#failure_sorted[@]} )); then
+    result+=$'\n'"${(F)failure_sorted}"
 fi
 
-result+=$'\n\n'"Failure:"
-if [[ ${#failure_sorted[@]} -gt 0 ]]; then
-  result+=$'\n'"$(printf "%s\n" "${failure_sorted[@]}")"
-fi
-
-# Trim any trailing newline
-result="$(echo -n "$result")"
-
-echo "<result>$result</result>"
-exit 0
+emit "$result"

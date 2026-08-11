@@ -10,6 +10,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 **Fixes**
 
 - Changed: if no user is logged in, AAP no longer exits after waiting for the Dock - it waits up to 20 seconds, then continues without an active user session and skips the swiftDialog install/update check (since dialogs can't be shown without a user session). Fully-silent runs still skip the Dock wait entirely
+- Fixed: the `AAP-LatestPatches` Jamf Pro extension attribute could stall `jamf recon` / inventory updates. It no longer uses NUL-delimited `read` with process substitution, always emits a `<result>` block, and discovers receipts via a temp-file listing instead
 
 ## Version 3.6.2
 ### 01-Aug-2026
