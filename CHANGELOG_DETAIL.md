@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.0
+### 11-Aug-2026 (1) - Build 3.7.0.2608091723
+- Hardened the `AAP-JamfProEAs/AAP-LatestPatches.sh` Jamf Pro extension attribute for `jamf recon`: replaced NUL-delimited `read -d ''` / process substitution with a newline `find` listing written to a temp file (avoids EA stalls when Jamf keeps stdin open), always emits `<result>` (no `set -e`), and keeps the existing Success/Failure output format
+
 ### 09-Aug-2026 (2) - Build 3.7.0.2608091723
 - Changed: when no custom dialog icon is set, the SF Symbol fallback is logged at info (`Using SF symbol for App Icon`) instead of a warning that claimed the icon was "not found" — an empty icon is expected in that path, so the warning was a false alarm
 
