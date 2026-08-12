@@ -3,6 +3,15 @@
 # Version 3
 
 ## Version 3.7.0
+### 12-Aug-2026 (2) - Build 3.7.0.2608121500
+- Show the App Auto-Patch logo as a macOS Dock icon for workflow swiftDialog windows (`--dockicon`), when swiftDialog 3.0+ is installed ([docs](https://swiftdialog.app/advanced/command-line-options/)):
+	- Managed key `ShowDockIcon` (`true`/`false`, default `true`); CLI `--show-dock-icon` / `--show-dock-icon-off`
+	- Deferral / hard-deadline dialogs badge the Dock icon with the number of pending updates (`--dockiconbadge`)
+	- Installation (patching) dialog starts with that count and counts the badge down as each update finishes
+	- Discovery, staging, Install Now confirmation, and “all apps up to date” dialogs also show the AAP Dock icon (no badge)
+	- Left gated on swiftDialog major ≥ 3 so macOS 12–14 fleets on 2.5.x keep working without unknown-flag failures
+	- iMazing + Jamf manifests and All-Options examples updated
+
 ### 12-Aug-2026 (1) - Build 3.7.0.2608120015
 - [#256](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/256): optional `SkipPreUpdateVerification` to bypass the local Gatekeeper (`spctl -a`) / Team ID check in `verifyApp()` during discovery:
 	- Some already-installed apps fail `spctl` assessment intermittently, which previously logged `Error verifying` and returned early — excluding the app from discovery/updates entirely even though Installomator would still validate post-download

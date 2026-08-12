@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.0"
 scriptDate="2026/08/12"
-scriptBuild="3.7.0.2608120015"
+scriptBuild="3.7.0.2608121500"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -73,6 +73,7 @@ echo "
     [--business-hours-silent-during]
     [--business-hours-silent-during-off]
     [--skip-pre-update-verification] [--skip-pre-update-verification-off]
+    [--show-dock-icon] [--show-dock-icon-off]
 
     Deferral Deadline COUNT Options:
     [--deadline-count-focus=number]
@@ -180,6 +181,7 @@ echo "
     <key>BusinessHoursRespectHardDeadline</key> <true/> | <false/>
     <key>BusinessHoursSilentDuring</key> <true/> | <false/>
     <key>SkipPreUpdateVerification</key> <true/> | <false/>
+    <key>ShowDockIcon</key> <true/> | <false/>
     <key>DiscoveryFrequency</key> <integer>hours</integer>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
     <key>ZoomCallActiveCheck</key> <true/> | <false/>
@@ -290,6 +292,10 @@ set_defaults() {
     # Empty until prefs resolve (managed > CLI > local > FALSE).
     SkipPreUpdateVerificationOption="" # MDM Enabled
 
+    # Show the App Auto-Patch logo in the macOS Dock for workflow dialogs (swiftDialog 3.0+).
+    # Empty until prefs resolve (managed > CLI > local > TRUE).
+    ShowDockIconOption="" # MDM Enabled
+
     installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore" # MDM Enabled
     
     installomatorVersion="Main" # MDM Enabled - Use:  Release|Main 
@@ -369,12 +375,15 @@ set_defaults() {
     jamfBinary="/usr/local/bin/jamf"
 
     dialogBinary="/usr/local/bin/dialog"
-
+    
     dialogCommandFile=$( mktemp /var/tmp/dialog.appAutoPatch.XXXXX )
-
+    
     dialogTargetVersion="2.5.5"
-
+    
     dialogOnTop="FALSE" # MDM Enabled
+    # Populated in workflow_startup when swiftDialog 3.0+ is available (--dockicon / --dockiconbadge).
+    dialogDockOptions=()
+    dialogSupportsDockIcon="FALSE"
 
     reset_defaults_option="FALSE"
 
@@ -1042,6 +1051,12 @@ get_options() {
             --skip-pre-update-verification-off)
                 SkipPreUpdateVerificationOption="FALSE"
             ;;
+            --show-dock-icon)
+                ShowDockIconOption="TRUE"
+            ;;
+            --show-dock-icon-off)
+                ShowDockIconOption="FALSE"
+            ;;
             --webhook-feature-off)
                 webhook_feature_option="FALSE"
             ;;
@@ -1239,6 +1254,8 @@ get_preferences() {
         ignore_apps_in_home_folder_managed=$(defaults read "${appAutoPatchManagedPLIST}" IgnoreAppsInHomeFolder 2> /dev/null)
         local skip_pre_update_verification_managed
         skip_pre_update_verification_managed=$(defaults read "${appAutoPatchManagedPLIST}" SkipPreUpdateVerification 2> /dev/null)
+        local show_dock_icon_managed
+        show_dock_icon_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowDockIcon 2> /dev/null)
         local installomator_options_managed
         installomator_options_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_update_disable_managed
@@ -1385,6 +1402,8 @@ get_preferences() {
         ignore_apps_in_home_folder_local=$(defaults read "${appAutoPatchLocalPLIST}" IgnoreAppsInHomeFolder 2> /dev/null)
         local skip_pre_update_verification_local
         skip_pre_update_verification_local=$(defaults read "${appAutoPatchLocalPLIST}" SkipPreUpdateVerification 2> /dev/null)
+        local show_dock_icon_local
+        show_dock_icon_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowDockIcon 2> /dev/null)
         local installomator_options_local
         installomator_options_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_update_disable_local
@@ -1551,6 +1570,8 @@ get_preferences() {
     { [[ -z "${ignore_apps_in_home_folder_managed}" ]] && [[ -n "${ignoreAppsInHomeFolder}" ]] && [[ -n "${ignore_apps_in_home_folder_local}" ]]; } && ignoreAppsInHomeFolder="${ignore_apps_in_home_folder_local}"
     [[ -n "${skip_pre_update_verification_managed}" ]] && SkipPreUpdateVerificationOption="${skip_pre_update_verification_managed}"
     { [[ -z "${skip_pre_update_verification_managed}" ]] && [[ -z "${SkipPreUpdateVerificationOption}" ]] && [[ -n "${skip_pre_update_verification_local}" ]]; } && SkipPreUpdateVerificationOption="${skip_pre_update_verification_local}"
+    [[ -n "${show_dock_icon_managed}" ]] && ShowDockIconOption="${show_dock_icon_managed}"
+    { [[ -z "${show_dock_icon_managed}" ]] && [[ -z "${ShowDockIconOption}" ]] && [[ -n "${show_dock_icon_local}" ]]; } && ShowDockIconOption="${show_dock_icon_local}"
     [[ -n "${installomator_options_managed}" ]] && installomatorOptions="${installomator_options_managed}"
     { [[ -z "${installomator_options_managed}" ]] && [[ -n "${installomatorOptions}" ]] && [[ -n "${installomator_options_local}" ]]; } && installomatorOptions="${installomator_options_local}"
     
@@ -1658,6 +1679,7 @@ get_preferences() {
     log_verbose "ConvertAppsInHomeFolder: $convertAppsInHomeFolder"
     log_verbose "IgnoreAppsInHomeFolder: $ignoreAppsInHomeFolder"
     log_verbose "SkipPreUpdateVerification: ${SkipPreUpdateVerificationOption:-<unset>}"
+    log_verbose "ShowDockIcon: ${ShowDockIconOption:-<unset>}"
     log_verbose "InstallomatorOptions: $installomatorOptions"
     log_verbose "InstallomatorUpdateDisable: $installomator_update_disable_option"
     log_verbose "InstallomatorVersion: $installomatorVersion"
@@ -2202,6 +2224,16 @@ manage_parameter_options() {
         defaults delete "${appAutoPatchLocalPLIST}" SkipPreUpdateVerification 2>/dev/null
     fi
     log_verbose "SkipPreUpdateVerificationOption is: ${SkipPreUpdateVerificationOption}"
+
+    # Manage ShowDockIcon (default TRUE = show AAP logo in Dock for workflow dialogs; requires swiftDialog 3.0+).
+    if [[ -z "${ShowDockIconOption}" ]] || [[ "${ShowDockIconOption}" -eq 1 ]] || [[ "${ShowDockIconOption}" == "TRUE" ]]; then
+        ShowDockIconOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowDockIcon -bool true
+    else
+        ShowDockIconOption="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowDockIcon -bool false
+    fi
+    log_verbose "ShowDockIconOption is: ${ShowDockIconOption}"
     
     # Manage ${zoom_call_active_check_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${zoom_call_active_check_option}" -eq 1 ]] || [[ "${zoom_call_active_check_option}" == "TRUE" ]]; then
@@ -3010,6 +3042,25 @@ workflow_startup() {
         log_verbose "Overlay icon disabled (UseOverlayIcon: ${useOverlayIcon}), continuing without an overlay icon."
         overlayicon=""
     fi
+
+    # Dock icon for workflow dialogs (swiftDialog 3.0+; see https://swiftdialog.app/advanced/command-line-options/).
+    # Uses the App Auto-Patch logo — not DialogIcon / SF symbols — so the Dock entry is consistently
+    # branded. Admins can disable via ShowDockIcon. Older swiftDialog builds don't support these
+    # flags, so also gate on major version ≥ 3.
+    dialogDockOptions=()
+    dialogSupportsDockIcon="FALSE"
+    if [[ "${ShowDockIconOption}" != "TRUE" ]]; then
+        log_verbose "ShowDockIcon disabled; skipping dock icon for workflow dialogs"
+    elif [[ -n "${dialogVersion}" ]]; then
+        dialogMajorVersion="${dialogVersion%%.*}"
+        if [[ "${dialogMajorVersion}" -ge 3 ]] 2>/dev/null; then
+            dialogSupportsDockIcon="TRUE"
+            dialogDockOptions=(--dockicon "${logoImage}")
+            log_verbose "ShowDockIcon enabled; swiftDialog ${dialogVersion} supports dock icon; using ${logoImage}"
+        else
+            log_verbose "ShowDockIcon enabled, but swiftDialog ${dialogVersion} does not support --dockicon (requires 3.0+); skipping"
+        fi
+    fi
     
     if [[ "${debug_mode_option}" == "TRUE" ]]; then
         infoTextScriptVersion="DEBUG MODE | Dialog: v${dialogVersion} • ${appTitle}: v${scriptVersion}"
@@ -3071,6 +3122,7 @@ workflow_startup() {
         --quitkey k
         --icon "$icon"
         --overlayicon "$overlayicon"
+        ${dialogDockOptions[@]}
     )
 
 	if [[ "$dialogOnTop" == "TRUE" ]]; then
@@ -3094,6 +3146,7 @@ workflow_startup() {
         --progress
         --progresstext "${display_string_discovery_progress} ..." # Scanning …
         --quitkey k
+        ${dialogDockOptions[@]}
     )
     
 	if [[ "$dialogOnTop" == "TRUE" ]]; then
@@ -3117,6 +3170,7 @@ workflow_startup() {
         --progress
         --progresstext "${display_string_staging_progress} ..." # Staging …
         --quitkey k
+        ${dialogDockOptions[@]}
     )
 
     if [[ "$dialogOnTop" == "TRUE" ]]; then
@@ -4777,6 +4831,7 @@ swiftDialogCompleteDialogPatching(){
         swiftDialogUpdate "icon: SF=checkmark.circle.fill,weight=bold,colour1=#00ff44,colour2=#075c1e"
         swiftDialogUpdate "progress: complete"
         swiftDialogUpdate "progresstext: ${display_string_complete_progress}"
+        [[ "${dialogSupportsDockIcon}" == "TRUE" ]] && swiftDialogUpdate "dockiconbadge: 0"
         
         sleep 1
         # Activate button 1
@@ -5037,6 +5092,7 @@ dialog_install_or_defer() {
 		--messagefont size=14
         --alwaysreturninput
 		--commandfile "$dialogCommandFile"
+        ${dialogDockOptions[@]}
 	)
 
 	if [[ "$dialogOnTop" == "TRUE" ]]; then
@@ -5084,6 +5140,8 @@ dialog_install_or_defer() {
                 --button1text "${display_string_deferral_button1}"
             )
         fi
+        # Badge the Dock icon with the number of pending updates (swiftDialog 3.0+).
+        [[ "${dialogSupportsDockIcon}" == "TRUE" ]] && deferralDialogContent+=(--dockiconbadge "${numberOfUpdates}")
 
         SELECTION=$("$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}")
         dialogOutput=$?
@@ -5157,6 +5215,7 @@ _dialog_confirm_install_now() {
         --position center
         --quitkey k
         --commandfile "$dialogCommandFile"
+        ${dialogDockOptions[@]}
     )
 
     if [[ "$dialogOnTop" == "TRUE" ]]; then
@@ -5224,6 +5283,7 @@ dialog_install_hard_deadline() {
         --button2text "${display_string_deferraldeadline_button2}"
         --button2disabled
 	)
+    [[ "${dialogSupportsDockIcon}" == "TRUE" ]] && deferralDialogContent+=(--dockiconbadge "${numberOfUpdates}")
 	
 	deferralDialogOptions=(
 		--position bottomright
@@ -5235,6 +5295,7 @@ dialog_install_hard_deadline() {
 		--titlefont size=18
 		--messagefont size=14
 		--commandfile "$dialogCommandFile"
+        ${dialogDockOptions[@]}
 	)
 	
 	if [[ "$dialogOnTop" == "TRUE" ]]; then
@@ -6183,6 +6244,8 @@ workflow_do_Installations() {
         sleep 1
         swiftDialogUpdate "infobox: + <br><br>"
         swiftDialogUpdate "infobox: + **${display_string_patching_infobox_updates}** $queuedLabelsArrayLength"
+        # Dock badge starts at total pending installs and counts down after each label.
+        [[ "${dialogSupportsDockIcon}" == "TRUE" ]] && swiftDialogUpdate "dockiconbadge: ${queuedLabelsArrayLength}"
     fi
     swiftDialogUpdate "progress: 1"
     i=0
@@ -6321,6 +6384,9 @@ workflow_do_Installations() {
         fi
         let i++
         swiftDialogUpdate "progress: increment ${progressIncrementValue}"
+        if [ ${InteractiveModeOption} -ge 1 ] && [[ "${dialogSupportsDockIcon}" == "TRUE" ]]; then
+            swiftDialogUpdate "dockiconbadge: $(( queuedLabelsArrayLength - i ))"
+        fi
     done
     
     log_notice "Errors: $errorCount"
@@ -7883,7 +7949,7 @@ main() {
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
         
         if [ ${InteractiveModeOption} -gt 1 ]; then
-            $dialogBinary --title "$appTitle" --message "${display_string_uptodate_message}" --windowbuttons min --icon "${icon}" --overlayicon "$overlayicon" --moveable --position topright --timer 60 --quitkey k --button1text "${display_string_uptodate_button1}" --style "mini" --hidetimerbar
+            $dialogBinary --title "$appTitle" --message "${display_string_uptodate_message}" --windowbuttons min --icon "${icon}" --overlayicon "$overlayicon" --moveable --position topright --timer 60 --quitkey k --button1text "${display_string_uptodate_button1}" --style "mini" --hidetimerbar "${dialogDockOptions[@]}"
         fi
         
         

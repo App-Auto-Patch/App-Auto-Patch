@@ -346,6 +346,19 @@
             ],
             "property_order": 61
         },
+        "ShowDockIcon": {
+            "type": "boolean",
+            "title": "Show Dock Icon",
+            "description": "When true, workflow swiftDialog windows show the App Auto-Patch logo in the macOS Dock (requires swiftDialog 3.0+). Deferral dialogs badge the pending update count; the installation dialog counts the badge down as updates finish. Default true.",
+            "default": true,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://swiftdialog.app/advanced/command-line-options/"
+                }
+            ],
+            "property_order": 62
+        },
         "DialogTimeoutDeferral": {
             "type": "string",
             "title": "Deferral Dialog Timeout",

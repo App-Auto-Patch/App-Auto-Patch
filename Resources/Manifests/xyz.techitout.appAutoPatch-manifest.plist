@@ -165,6 +165,7 @@ During a profile replacement, the system updates payloads with the same `Payload
 				<key>Dialogs and Notifications</key>
 				<array>
 					<string>DialogOnTop</string>
+					<string>ShowDockIcon</string>
 					<string>DialogTimeoutDeferral</string>
 					<string>DialogTimeoutDeferralAction</string>
 					<string>DialogTimeoutConfirmInstall</string>
@@ -579,6 +580,22 @@ During a profile replacement, the system updates payloads with the same `Payload
 			<string>Dialog On Top</string>
 			<key>pfm_type</key>
 			<string>string</string>
+		</dict>
+		<dict>
+			<key>pfm_app_min</key>
+			<string>3.7.0</string>
+			<key>pfm_default</key>
+			<true/>
+			<key>pfm_description</key>
+			<string>When true, workflow swiftDialog windows show the App Auto-Patch logo in the macOS Dock (requires swiftDialog 3.0+). Deferral dialogs badge the pending update count; the installation dialog counts the badge down as updates finish. Default true.</string>
+			<key>pfm_description_reference</key>
+			<string>https://swiftdialog.app/advanced/command-line-options/</string>
+			<key>pfm_name</key>
+			<string>ShowDockIcon</string>
+			<key>pfm_title</key>
+			<string>Show Dock Icon</string>
+			<key>pfm_type</key>
+			<string>boolean</string>
 		</dict>
 		<dict>
 			<key>pfm_app_min</key>

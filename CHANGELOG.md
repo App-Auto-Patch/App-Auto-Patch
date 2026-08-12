@@ -17,6 +17,9 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 - **Skip Pre-Update Verification** — Optionally skip the local Gatekeeper (`spctl`) / Team ID pre-update check during discovery. Some already-installed apps fail `spctl -a` intermittently and were being dropped from the update queue entirely; enabling this keeps them eligible while Installomator still validates the downloaded package. Default off. (#256)
 	- Managed Preference Key: `<key>SkipPreUpdateVerification</key>` `<true/>` | `<false/>` — default: `false`
 	- CLI: `--skip-pre-update-verification` / `--skip-pre-update-verification-off`
+- **Dock Icon** — Workflow swiftDialog windows show the App Auto-Patch logo in the macOS Dock (`--dockicon`) when swiftDialog 3.0+ is installed (default on). The deferral dialog badges the icon with the pending update count; the installation dialog counts that badge down as each update finishes. Disable with `ShowDockIcon` / `--show-dock-icon-off`.
+	- Managed Preference Key: `<key>ShowDockIcon</key>` `<true/>` | `<false/>` — default: `true`
+	- CLI: `--show-dock-icon` / `--show-dock-icon-off`
 - **Pre/Post Patch Scripts** — Run a managed, root-owned script once before and/or after Installomator installations (e.g. `jamf recon`). Scripts must live under `/Library/Management/AppAutoPatch/Hooks/`, cannot be symlinks, and must not be group/world-writable. Managed preferences only — never CLI or local prefs, never `eval`'d. (#156)
 	- Managed Preference Key: `<key>PrePatchScript</key>` `<string>/Library/Management/AppAutoPatch/Hooks/pre.sh</string>`
 	- Managed Preference Key: `<key>PostPatchScript</key>` `<string>/Library/Management/AppAutoPatch/Hooks/post.sh</string>`
