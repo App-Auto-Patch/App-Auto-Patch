@@ -3,6 +3,20 @@
 # Version 3
 
 ## Version 3.7.0
+### 11-Aug-2026 (2) - Build 3.7.0.2608112305
+- [#166](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166): replaced the allow-list `ScheduleWorkflowActive` model with **BusinessHours** blocked windows (do-not-disturb hours):
+	- Managed key `BusinessHours` = `DAY:hh:mm-hh:mm,...` (`MON`–`SUN`, 24-hour, comma-separated). Empty/unset = always allowed. Local Mac timezone; same-day ranges only (overnight = two windows)
+	- Multiple windows per day are first-class — e.g. `MON:09:00-11:59,MON:13:00-17:00` blocks morning and afternoon but leaves lunch clear for patching
+	- Early gate after prefs/validation + install-now flags, before Jamf restart / network / discovery: **during** BusinessHours → set `NextAutoLaunch` to the next clear time (with a small bump if &lt; ~5 minutes away) and `exit_clean` — no interactive discovery/dialogs/Installomator/webhooks — unless Silent During is enabled
+	- **Intentionally bypassed** by `--workflow-install-now`, `--workflow-install-now-silent`, and `--preview-deferral-dialog` so admins can force a run on demand
+	- Default: overdue hard deadline (days or count) bypasses BusinessHours via a lightweight read-only check. Optional `BusinessHoursRespectHardDeadline` (`true` = even hard deadlines wait until clear). Soft/focus deadlines still respect BusinessHours
+	- `BusinessHoursSilentDuring` (default `false`): when `true` and during BusinessHours, continue with discovery and `workflow_silent_patch_closed_apps` only — no dialogs even if InteractiveMode is 1/2. Open/blocked apps remaining after that pass are deferred until BusinessHours clear
+	- All `NextAutoLaunch` writers (`set_auto_launch_deferral`, `set_auto_launch_monthly_cadence`) clamp outside BusinessHours when configured
+	- Invalid schedule string fails startup validation (`option_error`)
+	- CLI: `--business-hours=` / `--business-hours-respect-hard-deadline` / `-off` / `--business-hours-silent-during` / `-off`
+	- Legacy local keys `ScheduleWorkflowActive*` are deleted on startup when prefs are managed
+	- iMazing + Jamf manifests and All-Options examples updated
+
 ### 11-Aug-2026 (1) - Build 3.7.0.2608091723
 - Hardened the `AAP-JamfProEAs/AAP-LatestPatches.sh` Jamf Pro extension attribute for `jamf recon`: replaced NUL-delimited `read -d ''` / process substitution with a newline `find` listing written to a temp file (avoids EA stalls when Jamf keeps stdin open), always emits `<result>` (no `set -e`), and keeps the existing Success/Failure output format
 
@@ -10,7 +24,7 @@
 - Changed: when no custom dialog icon is set, the SF Symbol fallback is logged at info (`Using SF symbol for App Icon`) instead of a warning that claimed the icon was "not found" — an empty icon is expected in that path, so the warning was a false alarm
 
 ### 09-Aug-2026 (1) - Build 3.7.0.2608091230
-- [#166](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166): `ScheduleWorkflowActive` (SUPER-compatible workflow schedule windows), including Silent Outside, brought onto the 3.7.0 release line:
+- [#166](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166): earlier allow-list `ScheduleWorkflowActive` / SilentOutside implementation (superseded by BusinessHours in build `3.7.0.2608112305`):
 	- Managed key `ScheduleWorkflowActive` = `DAY:hh:mm-hh:mm,...` (`MON`–`SUN`, 24-hour, comma-separated). Empty/unset = always active (unchanged behavior). Local Mac timezone; same-day ranges only (overnight = two windows)
 	- Early gate after prefs/validation + install-now flags, before Jamf restart / network / discovery: outside a window → set `NextAutoLaunch` to next window start (with a small bump if &lt; ~5 minutes away) and `exit_clean` — no discovery, dialogs, Installomator, or webhooks — unless Silent Outside is enabled
 	- Bypass: `--workflow-install-now`, `--workflow-install-now-silent`, `--preview-deferral-dialog`

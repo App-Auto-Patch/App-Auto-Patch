@@ -127,11 +127,11 @@
 			<string>FALSE</string>
 			<key>WorkflowDisableRelaunch</key>
 			<string>FALSE</string>
-			<key>ScheduleWorkflowActive</key>
-			<string>MON:17:00-23:59,TUE:17:00-23:59,WED:17:00-23:59,THU:17:00-23:59,FRI:17:00-23:59</string>
-			<key>ScheduleWorkflowActiveRespectHardDeadline</key>
+			<key>BusinessHours</key>
+			<string>MON:09:00-17:00,TUE:09:00-17:00,WED:09:00-17:00,THU:09:00-17:00,FRI:09:00-17:00</string>
+			<key>BusinessHoursRespectHardDeadline</key>
 			<false/>
-			<key>ScheduleWorkflowActiveSilentOutside</key>
+			<key>BusinessHoursSilentDuring</key>
 			<false/>
 			<key>WorkflowInstallNowPatchingStatusAction</key>
 			<string>SUCCESS</string>

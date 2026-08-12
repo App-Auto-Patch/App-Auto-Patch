@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.0"
-scriptDate="2026/08/09"
-scriptBuild="3.7.0.2608091723"
+scriptDate="2026/08/11"
+scriptBuild="3.7.0.2608112305"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -67,11 +67,11 @@ echo "
     [--workflow-install-now-patching-status-action-never]
     [--workflow-install-now-patching-status-action-always]
     [--workflow-install-now-patching-status-action-success]
-    [--schedule-workflow-active=DAY:hh:mm-hh:mm,...]
-    [--schedule-workflow-active-respect-hard-deadline]
-    [--schedule-workflow-active-respect-hard-deadline-off]
-    [--schedule-workflow-active-silent-outside]
-    [--schedule-workflow-active-silent-outside-off]
+    [--business-hours=DAY:hh:mm-hh:mm,...]
+    [--business-hours-respect-hard-deadline]
+    [--business-hours-respect-hard-deadline-off]
+    [--business-hours-silent-during]
+    [--business-hours-silent-during-off]
 
     Deferral Deadline COUNT Options:
     [--deadline-count-focus=number]
@@ -175,9 +175,9 @@ echo "
     <key>WorkflowStageUpdates</key> <true/> | <false/>
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
     <key>WorkflowDisableRelaunch</key> <true/> | <false/>
-    <key>ScheduleWorkflowActive</key> <string>MON:17:00-23:59,TUE:17:00-23:59,...</string>
-    <key>ScheduleWorkflowActiveRespectHardDeadline</key> <true/> | <false/>
-    <key>ScheduleWorkflowActiveSilentOutside</key> <true/> | <false/>
+    <key>BusinessHours</key> <string>MON:09:00-17:00,TUE:09:00-17:00,...</string>
+    <key>BusinessHoursRespectHardDeadline</key> <true/> | <false/>
+    <key>BusinessHoursSilentDuring</key> <true/> | <false/>
     <key>DiscoveryFrequency</key> <integer>hours</integer>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
     <key>ZoomCallActiveCheck</key> <true/> | <false/>
@@ -321,16 +321,21 @@ set_defaults() {
 
     workflow_install_now_patching_status_action_option="SUCCESS" # MDM Enabled - Determines what happens when  NEVER | ALWAYS | SUCCESS 
 
-    # ScheduleWorkflowActive (#166) - SUPER-compatible DAY:hh:mm-hh:mm windows. Empty/unset = always active.
-    # Local Mac timezone; same-day ranges only. Outside a window: reschedule NextAutoLaunch to next window start
-    # (or, if ScheduleWorkflowActiveSilentOutside is true, discover + silently patch closed apps only).
-    schedule_workflow_active_option="" # MDM Enabled
-    # Empty until prefs resolve; managed/CLI/local then normalize to FALSE (default: hard deadline bypasses window) or TRUE.
-    schedule_workflow_active_respect_hard_deadline_option="" # MDM Enabled
-    # Empty until prefs resolve; default FALSE = outside window exits. TRUE = closed-apps-only silent path outside window.
-    schedule_workflow_active_silent_outside_option="" # MDM Enabled
-    schedule_workflow_active_silent_outside_active="FALSE" # runtime flag set by enforce_schedule_workflow_active
-    typeset -ga schedule_workflow_active_windows # populated by manage_parameter_options: "dow:startmin:endmin"
+    # BusinessHours (#166) - DAY:hh:mm-hh:mm windows when interactive workflow must NOT run.
+    # Empty/unset = always allowed. Multiple windows per day supported (e.g. before/after lunch) so
+    # gaps between windows remain allowed. Local Mac timezone; same-day ranges only.
+    # During a window: reschedule NextAutoLaunch to the next clear time and exit — unless
+    # BusinessHoursSilentDuring is true (discover + silently patch closed apps only).
+    # Bypassed by --workflow-install-now / --workflow-install-now-silent / --preview-deferral-dialog.
+    business_hours_option="" # MDM Enabled
+    # Empty until prefs resolve; managed/CLI/local then normalize to FALSE (default: hard deadline
+    # bypasses business hours) or TRUE (even hard deadlines wait for a clear window).
+    business_hours_respect_hard_deadline_option="" # MDM Enabled
+    # Empty until prefs resolve; default FALSE = during business hours exit/reschedule.
+    # TRUE = closed-apps-only silent path during business hours.
+    business_hours_silent_during_option="" # MDM Enabled
+    business_hours_silent_during_active="FALSE" # runtime flag set by enforce_business_hours
+    typeset -ga business_hours_windows # populated by manage_parameter_options: "dow:startmin:endmin"
 
     UnattendedExit="FALSE" # MDM Enabled
 
@@ -1008,20 +1013,20 @@ get_options() {
             --workflow-disable-relaunch-off)
                 workflow_disable_relaunch_option="FALSE"
             ;;
-            --schedule-workflow-active=*)
-                schedule_workflow_active_option="${1##*=}"
+            --business-hours=*)
+                business_hours_option="${1##*=}"
             ;;
-            --schedule-workflow-active-respect-hard-deadline)
-                schedule_workflow_active_respect_hard_deadline_option="TRUE"
+            --business-hours-respect-hard-deadline)
+                business_hours_respect_hard_deadline_option="TRUE"
             ;;
-            --schedule-workflow-active-respect-hard-deadline-off)
-                schedule_workflow_active_respect_hard_deadline_option="FALSE"
+            --business-hours-respect-hard-deadline-off)
+                business_hours_respect_hard_deadline_option="FALSE"
             ;;
-            --schedule-workflow-active-silent-outside)
-                schedule_workflow_active_silent_outside_option="TRUE"
+            --business-hours-silent-during)
+                business_hours_silent_during_option="TRUE"
             ;;
-            --schedule-workflow-active-silent-outside-off)
-                schedule_workflow_active_silent_outside_option="FALSE"
+            --business-hours-silent-during-off)
+                business_hours_silent_during_option="FALSE"
             ;;
             --webhook-feature-off)
                 webhook_feature_option="FALSE"
@@ -1192,12 +1197,12 @@ get_preferences() {
         discovery_frequency_managed=$(defaults read "${appAutoPatchManagedPLIST}" DiscoveryFrequency 2> /dev/null)
         local workflow_disable_relaunch_managed
         workflow_disable_relaunch_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
-        local schedule_workflow_active_managed
-        schedule_workflow_active_managed=$(defaults read "${appAutoPatchManagedPLIST}" ScheduleWorkflowActive 2>/dev/null)
-        local schedule_workflow_active_respect_hard_deadline_managed
-        schedule_workflow_active_respect_hard_deadline_managed=$(defaults read "${appAutoPatchManagedPLIST}" ScheduleWorkflowActiveRespectHardDeadline 2>/dev/null)
-        local schedule_workflow_active_silent_outside_managed
-        schedule_workflow_active_silent_outside_managed=$(defaults read "${appAutoPatchManagedPLIST}" ScheduleWorkflowActiveSilentOutside 2>/dev/null)
+        local business_hours_managed
+        business_hours_managed=$(defaults read "${appAutoPatchManagedPLIST}" BusinessHours 2>/dev/null)
+        local business_hours_respect_hard_deadline_managed
+        business_hours_respect_hard_deadline_managed=$(defaults read "${appAutoPatchManagedPLIST}" BusinessHoursRespectHardDeadline 2>/dev/null)
+        local business_hours_silent_during_managed
+        business_hours_silent_during_managed=$(defaults read "${appAutoPatchManagedPLIST}" BusinessHoursSilentDuring 2>/dev/null)
         local webhook_feature_managed
         webhook_feature_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookFeature 2> /dev/null)
         local webhook_url_slack_managed
@@ -1336,12 +1341,12 @@ get_preferences() {
         discovery_frequency_local=$(defaults read "${appAutoPatchLocalPLIST}" DiscoveryFrequency 2> /dev/null)
         local workflow_disable_relaunch_local
         workflow_disable_relaunch_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
-        local schedule_workflow_active_local
-        schedule_workflow_active_local=$(defaults read "${appAutoPatchLocalPLIST}" ScheduleWorkflowActive 2>/dev/null)
-        local schedule_workflow_active_respect_hard_deadline_local
-        schedule_workflow_active_respect_hard_deadline_local=$(defaults read "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveRespectHardDeadline 2>/dev/null)
-        local schedule_workflow_active_silent_outside_local
-        schedule_workflow_active_silent_outside_local=$(defaults read "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveSilentOutside 2>/dev/null)
+        local business_hours_local
+        business_hours_local=$(defaults read "${appAutoPatchLocalPLIST}" BusinessHours 2>/dev/null)
+        local business_hours_respect_hard_deadline_local
+        business_hours_respect_hard_deadline_local=$(defaults read "${appAutoPatchLocalPLIST}" BusinessHoursRespectHardDeadline 2>/dev/null)
+        local business_hours_silent_during_local
+        business_hours_silent_during_local=$(defaults read "${appAutoPatchLocalPLIST}" BusinessHoursSilentDuring 2>/dev/null)
         local webhook_feature_local
         webhook_feature_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookFeature 2> /dev/null)
         local webhook_url_slack_local
@@ -1468,12 +1473,12 @@ get_preferences() {
     { [[ -z "${discovery_frequency_managed}" ]] && [[ -n "${discovery_frequency_local}" ]]; } && DiscoveryFrequency="${discovery_frequency_local}"
     [[ -n "${workflow_disable_relaunch_managed}" ]] && workflow_disable_relaunch_option="${workflow_disable_relaunch_managed}"
     { [[ -z "${workflow_disable_relaunch_managed}" ]] && [[ -z "${workflow_disable_relaunch_option}" ]] && [[ -n "${workflow_disable_relaunch_local}" ]]; } && workflow_disable_relaunch_option="${workflow_disable_relaunch_local}"
-    [[ -n "${schedule_workflow_active_managed}" ]] && schedule_workflow_active_option="${schedule_workflow_active_managed}"
-    { [[ -z "${schedule_workflow_active_managed}" ]] && [[ -z "${schedule_workflow_active_option}" ]] && [[ -n "${schedule_workflow_active_local}" ]]; } && schedule_workflow_active_option="${schedule_workflow_active_local}"
-    [[ -n "${schedule_workflow_active_respect_hard_deadline_managed}" ]] && schedule_workflow_active_respect_hard_deadline_option="${schedule_workflow_active_respect_hard_deadline_managed}"
-    { [[ -z "${schedule_workflow_active_respect_hard_deadline_managed}" ]] && [[ -z "${schedule_workflow_active_respect_hard_deadline_option}" ]] && [[ -n "${schedule_workflow_active_respect_hard_deadline_local}" ]]; } && schedule_workflow_active_respect_hard_deadline_option="${schedule_workflow_active_respect_hard_deadline_local}"
-    [[ -n "${schedule_workflow_active_silent_outside_managed}" ]] && schedule_workflow_active_silent_outside_option="${schedule_workflow_active_silent_outside_managed}"
-    { [[ -z "${schedule_workflow_active_silent_outside_managed}" ]] && [[ -z "${schedule_workflow_active_silent_outside_option}" ]] && [[ -n "${schedule_workflow_active_silent_outside_local}" ]]; } && schedule_workflow_active_silent_outside_option="${schedule_workflow_active_silent_outside_local}"
+    [[ -n "${business_hours_managed}" ]] && business_hours_option="${business_hours_managed}"
+    { [[ -z "${business_hours_managed}" ]] && [[ -z "${business_hours_option}" ]] && [[ -n "${business_hours_local}" ]]; } && business_hours_option="${business_hours_local}"
+    [[ -n "${business_hours_respect_hard_deadline_managed}" ]] && business_hours_respect_hard_deadline_option="${business_hours_respect_hard_deadline_managed}"
+    { [[ -z "${business_hours_respect_hard_deadline_managed}" ]] && [[ -z "${business_hours_respect_hard_deadline_option}" ]] && [[ -n "${business_hours_respect_hard_deadline_local}" ]]; } && business_hours_respect_hard_deadline_option="${business_hours_respect_hard_deadline_local}"
+    [[ -n "${business_hours_silent_during_managed}" ]] && business_hours_silent_during_option="${business_hours_silent_during_managed}"
+    { [[ -z "${business_hours_silent_during_managed}" ]] && [[ -z "${business_hours_silent_during_option}" ]] && [[ -n "${business_hours_silent_during_local}" ]]; } && business_hours_silent_during_option="${business_hours_silent_during_local}"
     [[ -n "${webhook_feature_managed}" ]] && webhook_feature_option="${webhook_feature_managed}"
     { [[ -z "${webhook_feature_managed}" ]] && [[ -z "${webhook_feature_option}" ]] && [[ -n "${webhook_feature_local}" ]]; } && webhook_feature_option="${webhook_feature_local}"
     [[ -n "${webhook_url_slack_managed}" ]] && webhook_url_slack_option="${webhook_url_slack_managed}"
@@ -1619,9 +1624,9 @@ get_preferences() {
     log_verbose "WorkflowDisableAppDiscovery: $workflow_disable_app_discovery_option"
     log_verbose "DiscoveryFrequency: $DiscoveryFrequency"
     log_verbose "WorkflowDisableRelaunch: $workflow_disable_relaunch_option"
-    log_verbose "ScheduleWorkflowActive: ${schedule_workflow_active_option:-<unset>}"
-    log_verbose "ScheduleWorkflowActiveRespectHardDeadline: ${schedule_workflow_active_respect_hard_deadline_option:-<unset>}"
-    log_verbose "ScheduleWorkflowActiveSilentOutside: ${schedule_workflow_active_silent_outside_option:-<unset>}"
+    log_verbose "BusinessHours: ${business_hours_option:-<unset>}"
+    log_verbose "BusinessHoursRespectHardDeadline: ${business_hours_respect_hard_deadline_option:-<unset>}"
+    log_verbose "BusinessHoursSilentDuring: ${business_hours_silent_during_option:-<unset>}"
     log_verbose "WebhookFeature: $webhook_feature_option"
     log_verbose "WebhookURLSlack: $webhook_url_slack_option"
     log_verbose "WebhookURLTeams: $webhook_url_teams_option"
@@ -2083,15 +2088,19 @@ manage_parameter_options() {
     fi
     { [[ -n "${workflow_disable_relaunch_option}" ]]; } && log_verbose "workflow_disable_relaunch_option is: ${workflow_disable_relaunch_option}"
 
-    # Manage ScheduleWorkflowActive (#166): parse SUPER-compatible DAY:hh:mm-hh:mm windows.
-    schedule_workflow_active_windows=()
-    if [[ -n "${schedule_workflow_active_option}" ]]; then
-        # Strip whitespace; SUPER format is comma-separated with no spaces.
+    # Manage BusinessHours (#166): parse DAY:hh:mm-hh:mm blocked windows (multiple per day allowed).
+    # Drop any leftover ScheduleWorkflowActive* keys from earlier builds of this feature.
+    defaults delete "${appAutoPatchLocalPLIST}" ScheduleWorkflowActive 2>/dev/null
+    defaults delete "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveRespectHardDeadline 2>/dev/null
+    defaults delete "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveSilentOutside 2>/dev/null
+    business_hours_windows=()
+    if [[ -n "${business_hours_option}" ]]; then
+        # Strip whitespace; format is comma-separated with no spaces.
         local schedule_cleaned
-        schedule_cleaned="${schedule_workflow_active_option//[[:space:]]/}"
+        schedule_cleaned="${business_hours_option//[[:space:]]/}"
         if [[ -z "${schedule_cleaned}" ]]; then
-            schedule_workflow_active_option=""
-            defaults delete "${appAutoPatchLocalPLIST}" ScheduleWorkflowActive 2>/dev/null
+            business_hours_option=""
+            defaults delete "${appAutoPatchLocalPLIST}" BusinessHours 2>/dev/null
         else
             local schedule_parse_error="FALSE"
             local schedule_window
@@ -2100,7 +2109,7 @@ manage_parameter_options() {
             local schedule_start_mins schedule_end_mins schedule_dow
             for schedule_window in ${(s:,:)schedule_cleaned}; do
                 if [[ ! "${schedule_window}" =~ '^(MON|TUE|WED|THU|FRI|SAT|SUN):([0-9]{2}):([0-9]{2})-([0-9]{2}):([0-9]{2})$' ]]; then
-                    log_status "Parameter Error: ScheduleWorkflowActive window '${schedule_window}' must be DAY:hh:mm-hh:mm (MON-SUN, 24-hour)."; schedule_parse_error="TRUE"
+                    log_status "Parameter Error: BusinessHours window '${schedule_window}' must be DAY:hh:mm-hh:mm (MON-SUN, 24-hour)."; schedule_parse_error="TRUE"
                     continue
                 fi
                 schedule_day="${match[1]}"
@@ -2109,13 +2118,13 @@ manage_parameter_options() {
                 schedule_end_h="${match[4]}"
                 schedule_end_m="${match[5]}"
                 if (( 10#${schedule_start_h} > 23 || 10#${schedule_end_h} > 23 || 10#${schedule_start_m} > 59 || 10#${schedule_end_m} > 59 )); then
-                    log_status "Parameter Error: ScheduleWorkflowActive window '${schedule_window}' has an invalid time."; schedule_parse_error="TRUE"
+                    log_status "Parameter Error: BusinessHours window '${schedule_window}' has an invalid time."; schedule_parse_error="TRUE"
                     continue
                 fi
                 schedule_start_mins=$(( 10#${schedule_start_h} * 60 + 10#${schedule_start_m} ))
                 schedule_end_mins=$(( 10#${schedule_end_h} * 60 + 10#${schedule_end_m} ))
                 if (( schedule_start_mins > schedule_end_mins )); then
-                    log_status "Parameter Error: ScheduleWorkflowActive window '${schedule_window}' must be same-day with start <= end (split overnight ranges into two windows)."; schedule_parse_error="TRUE"
+                    log_status "Parameter Error: BusinessHours window '${schedule_window}' must be same-day with start <= end (split overnight ranges into two windows)."; schedule_parse_error="TRUE"
                     continue
                 fi
                 case "${schedule_day}" in
@@ -2127,41 +2136,41 @@ manage_parameter_options() {
                     SAT) schedule_dow=6 ;;
                     SUN) schedule_dow=7 ;;
                 esac
-                schedule_workflow_active_windows+=("${schedule_dow}:${schedule_start_mins}:${schedule_end_mins}")
+                business_hours_windows+=("${schedule_dow}:${schedule_start_mins}:${schedule_end_mins}")
             done
-            if [[ "${schedule_parse_error}" == "TRUE" ]] || [[ ${#schedule_workflow_active_windows[@]} -eq 0 ]]; then
-                log_status "Parameter Error: ScheduleWorkflowActive value is invalid: ${schedule_workflow_active_option}"; option_error="TRUE"
-                schedule_workflow_active_windows=()
+            if [[ "${schedule_parse_error}" == "TRUE" ]] || [[ ${#business_hours_windows[@]} -eq 0 ]]; then
+                log_status "Parameter Error: BusinessHours value is invalid: ${business_hours_option}"; option_error="TRUE"
+                business_hours_windows=()
             else
-                schedule_workflow_active_option="${schedule_cleaned}"
-                defaults write "${appAutoPatchLocalPLIST}" ScheduleWorkflowActive -string "${schedule_workflow_active_option}"
-                log_verbose "schedule_workflow_active_windows: ${schedule_workflow_active_windows[*]}"
+                business_hours_option="${schedule_cleaned}"
+                defaults write "${appAutoPatchLocalPLIST}" BusinessHours -string "${business_hours_option}"
+                log_verbose "business_hours_windows: ${business_hours_windows[*]}"
             fi
         fi
     else
-        defaults delete "${appAutoPatchLocalPLIST}" ScheduleWorkflowActive 2>/dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" BusinessHours 2>/dev/null
     fi
-    { [[ -n "${schedule_workflow_active_option}" ]]; } && log_verbose "schedule_workflow_active_option is: ${schedule_workflow_active_option}"
+    { [[ -n "${business_hours_option}" ]]; } && log_verbose "business_hours_option is: ${business_hours_option}"
 
-    # Manage ScheduleWorkflowActiveRespectHardDeadline (default FALSE = overdue hard deadline bypasses the window).
-    if [[ "${schedule_workflow_active_respect_hard_deadline_option}" -eq 1 ]] || [[ "${schedule_workflow_active_respect_hard_deadline_option}" == "TRUE" ]]; then
-        schedule_workflow_active_respect_hard_deadline_option="TRUE"
-        defaults write "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveRespectHardDeadline -bool true
+    # Manage BusinessHoursRespectHardDeadline (default FALSE = overdue hard deadline bypasses business hours).
+    if [[ "${business_hours_respect_hard_deadline_option}" -eq 1 ]] || [[ "${business_hours_respect_hard_deadline_option}" == "TRUE" ]]; then
+        business_hours_respect_hard_deadline_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" BusinessHoursRespectHardDeadline -bool true
     else
-        schedule_workflow_active_respect_hard_deadline_option="FALSE"
-        defaults delete "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveRespectHardDeadline 2>/dev/null
+        business_hours_respect_hard_deadline_option="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" BusinessHoursRespectHardDeadline 2>/dev/null
     fi
-    log_verbose "schedule_workflow_active_respect_hard_deadline_option is: ${schedule_workflow_active_respect_hard_deadline_option}"
+    log_verbose "business_hours_respect_hard_deadline_option is: ${business_hours_respect_hard_deadline_option}"
 
-    # Manage ScheduleWorkflowActiveSilentOutside (default FALSE = outside window exits; TRUE = closed-apps-only silent path).
-    if [[ "${schedule_workflow_active_silent_outside_option}" -eq 1 ]] || [[ "${schedule_workflow_active_silent_outside_option}" == "TRUE" ]]; then
-        schedule_workflow_active_silent_outside_option="TRUE"
-        defaults write "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveSilentOutside -bool true
+    # Manage BusinessHoursSilentDuring (default FALSE = during business hours exit; TRUE = closed-apps-only silent path).
+    if [[ "${business_hours_silent_during_option}" -eq 1 ]] || [[ "${business_hours_silent_during_option}" == "TRUE" ]]; then
+        business_hours_silent_during_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" BusinessHoursSilentDuring -bool true
     else
-        schedule_workflow_active_silent_outside_option="FALSE"
-        defaults delete "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveSilentOutside 2>/dev/null
+        business_hours_silent_during_option="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" BusinessHoursSilentDuring 2>/dev/null
     fi
-    log_verbose "schedule_workflow_active_silent_outside_option is: ${schedule_workflow_active_silent_outside_option}"
+    log_verbose "business_hours_silent_during_option is: ${business_hours_silent_during_option}"
     
     # Manage ${zoom_call_active_check_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${zoom_call_active_check_option}" -eq 1 ]] || [[ "${zoom_call_active_check_option}" == "TRUE" ]]; then
@@ -2790,9 +2799,9 @@ workflow_startup() {
 		exit_error
 	fi
 
-	# ScheduleWorkflowActive early gate (#166): after prefs/validation and install-now flags resolve,
-	# before Jamf restart / network wait / discovery. Option B lightweight hard-deadline read may bypass.
-	enforce_schedule_workflow_active
+	# BusinessHours early gate (#166): after prefs/validation and install-now flags resolve,
+	# before Jamf restart / network wait / discovery. Overdue hard deadline may bypass unless RespectHardDeadline.
+	enforce_business_hours
 	
 	# If aap is running via Jamf, then restart via LaunchDaemon to release the jamf parent process.
 	if [[ "${parent_process_is_jamf}" == "TRUE" ]]; then
@@ -4192,19 +4201,20 @@ check_deadlines_count() {
     log_verbose  "user_focus_active is: ${user_focus_active}"
 }
 
-# Evaluate ScheduleWorkflowActive windows (#166). Windows are stored as "dow:startmin:endmin"
+# Evaluate BusinessHours blocked windows (#166). Windows are stored as "dow:startmin:endmin"
 # where dow matches `date +%u` (1=Mon ... 7=Sun) and minutes are inclusive on both ends.
+# Empty/unset BusinessHours means nothing is blocked (always allowed).
 
-is_epoch_in_schedule_workflow_active() {
+is_epoch_in_business_hours() {
     local target_epoch="${1}"
-    if [[ ${#schedule_workflow_active_windows[@]} -eq 0 ]]; then
-        return 0
+    if [[ ${#business_hours_windows[@]} -eq 0 ]]; then
+        return 1
     fi
     local target_dow target_mins
     target_dow=$(date -r "${target_epoch}" +%u)
     target_mins=$(( 10#$(date -r "${target_epoch}" +%H) * 60 + 10#$(date -r "${target_epoch}" +%M) ))
     local window window_dow window_start window_end window_rest
-    for window in "${schedule_workflow_active_windows[@]}"; do
+    for window in "${business_hours_windows[@]}"; do
         window_dow="${window%%:*}"
         window_rest="${window#*:}"
         window_start="${window_rest%%:*}"
@@ -4216,62 +4226,73 @@ is_epoch_in_schedule_workflow_active() {
     return 1
 }
 
-# Earliest window-start epoch at or after ${1}. Echoes epoch to stdout only (safe for $(...)).
-next_schedule_workflow_active_start_epoch() {
+# Earliest epoch at or after ${1} that is NOT inside any BusinessHours window.
+# Echoes epoch to stdout only (safe for $(...)). Gaps between multiple same-day windows
+# (e.g. lunch) are treated as clear/allowed.
+next_business_hours_clear_epoch() {
     local after_epoch="${1}"
-    local day_offset=0
-    local day_midnight day_dow candidate
+    if [[ ${#business_hours_windows[@]} -eq 0 ]]; then
+        echo "${after_epoch}"
+        return 0
+    fi
+    local candidate="${after_epoch}"
+    local attempts=0
+    local day_midnight target_dow target_mins
     local window window_dow window_start window_end window_rest
-    local best_epoch=""
-    # Search up to 8 days ahead so a schedule with only future weekdays still resolves.
-    while (( day_offset <= 7 )); do
-        day_midnight=$(date -j -v+"${day_offset}"d -f "%Y-%m-%d %H:%M:%S" "$(date -r "${after_epoch}" +%Y-%m-%d) 00:00:00" +%s 2>/dev/null)
+    local covering_end
+    while (( attempts < 500 )); do
+        if ! is_epoch_in_business_hours "${candidate}"; then
+            echo "${candidate}"
+            return 0
+        fi
+        day_midnight=$(date -j -f "%Y-%m-%d %H:%M:%S" "$(date -r "${candidate}" +%Y-%m-%d) 00:00:00" +%s 2>/dev/null)
         if [[ -z "${day_midnight}" ]]; then
-            day_offset=$((day_offset + 1))
+            candidate=$(( candidate + 60 ))
+            attempts=$(( attempts + 1 ))
             continue
         fi
-        day_dow=$(date -r "${day_midnight}" +%u)
-        for window in "${schedule_workflow_active_windows[@]}"; do
+        target_dow=$(date -r "${candidate}" +%u)
+        target_mins=$(( 10#$(date -r "${candidate}" +%H) * 60 + 10#$(date -r "${candidate}" +%M) ))
+        covering_end=""
+        for window in "${business_hours_windows[@]}"; do
             window_dow="${window%%:*}"
             window_rest="${window#*:}"
             window_start="${window_rest%%:*}"
             window_end="${window_rest#*:}"
-            if [[ "${window_dow}" != "${day_dow}" ]]; then
-                continue
-            fi
-            candidate=$(( day_midnight + window_start * 60 ))
-            if (( candidate >= after_epoch )); then
-                if [[ -z "${best_epoch}" ]] || (( candidate < best_epoch )); then
-                    best_epoch="${candidate}"
+            if [[ "${window_dow}" == "${target_dow}" ]] && (( target_mins >= window_start && target_mins <= window_end )); then
+                if [[ -z "${covering_end}" ]] || (( window_end < covering_end )); then
+                    covering_end="${window_end}"
                 fi
             fi
         done
-        if [[ -n "${best_epoch}" ]]; then
-            echo "${best_epoch}"
-            return 0
+        if [[ -z "${covering_end}" ]]; then
+            candidate=$(( candidate + 60 ))
+        elif (( covering_end >= 23 * 60 + 59 )); then
+            candidate=$(( day_midnight + 86400 ))
+        else
+            candidate=$(( day_midnight + (covering_end + 1) * 60 ))
         fi
-        day_offset=$((day_offset + 1))
+        attempts=$(( attempts + 1 ))
     done
-    # Fallback: after_epoch + 24h if somehow no window matched (should not happen after validation).
     echo $(( after_epoch + 86400 ))
 }
 
-# If epoch is inside a configured window (or no schedule), return it unchanged; otherwise next window start.
+# If epoch is outside BusinessHours (or none configured), return it unchanged; otherwise the next clear time.
 # Echoes epoch only — callers log when the value changes.
-clamp_epoch_to_schedule_workflow_active() {
+clamp_epoch_outside_business_hours() {
     local target_epoch="${1}"
-    if [[ ${#schedule_workflow_active_windows[@]} -eq 0 ]]; then
+    if [[ ${#business_hours_windows[@]} -eq 0 ]]; then
         echo "${target_epoch}"
         return 0
     fi
-    if is_epoch_in_schedule_workflow_active "${target_epoch}"; then
+    if ! is_epoch_in_business_hours "${target_epoch}"; then
         echo "${target_epoch}"
         return 0
     fi
-    next_schedule_workflow_active_start_epoch "${target_epoch}"
+    next_business_hours_clear_epoch "${target_epoch}"
 }
 
-# Lightweight hard-deadline check for the early ScheduleWorkflowActive gate (option B).
+# Lightweight hard-deadline check for the early BusinessHours gate.
 # Read-only: does not mutate DeadlineCounter* and does not sleep near a days deadline.
 # Returns 0 when a hard days/count deadline is already due (or within 120s for days).
 is_hard_deadline_due_lightweight() {
@@ -4310,9 +4331,9 @@ is_hard_deadline_due_lightweight() {
     return 1
 }
 
-# Write NextAutoLaunch to the next ScheduleWorkflowActive window start and exit cleanly.
-schedule_workflow_active_set_next_window_and_exit() {
-    local status_message="${1:-Outside ScheduleWorkflowActive}"
+# Write NextAutoLaunch to the next clear (non-BusinessHours) time and exit cleanly.
+business_hours_defer_until_clear_and_exit() {
+    local status_message="${1:-During BusinessHours}"
     local now_epoch next_epoch next_auto_launch
     now_epoch=$(date +%s)
 
@@ -4322,55 +4343,56 @@ schedule_workflow_active_set_next_window_and_exit() {
         exit_clean
     fi
 
-    next_epoch=$(next_schedule_workflow_active_start_epoch "${now_epoch}")
-    # Avoid LaunchDaemon spin if the next window is moments away.
+    next_epoch=$(next_business_hours_clear_epoch "${now_epoch}")
+    # Avoid LaunchDaemon spin if the next clear time is moments away.
     if (( next_epoch - now_epoch < 300 )); then
-        next_epoch=$(clamp_epoch_to_schedule_workflow_active $(( now_epoch + 300 )))
+        next_epoch=$(clamp_epoch_outside_business_hours $(( now_epoch + 300 )))
     fi
     next_auto_launch=$(date -r "${next_epoch}" +"${timestamp_format}")
     defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_auto_launch}"
-    log_status "NextAutoLaunch set to next ScheduleWorkflowActive window start: ${next_auto_launch}"
-    write_status "Pending: ${status_message}; next window ${next_auto_launch}."
+    log_status "NextAutoLaunch set to next clear time after BusinessHours: ${next_auto_launch}"
+    write_status "Pending: ${status_message}; next clear window ${next_auto_launch}."
     log_exit "AAP is scheduled to automatically relaunch at: ${next_auto_launch}"
     exit_clean
 }
 
-# Early gate: outside ScheduleWorkflowActive, either continue silent closed-app patching
-# (ScheduleWorkflowActiveSilentOutside) or reschedule to next window start and exit cleanly.
-# Bypassed by install-now / preview-deferral-dialog, and by overdue hard deadline unless RespectHardDeadline is TRUE.
-enforce_schedule_workflow_active() {
-    schedule_workflow_active_silent_outside_active="FALSE"
-    if [[ ${#schedule_workflow_active_windows[@]} -eq 0 ]]; then
+# Early gate: during BusinessHours, either continue silent closed-app patching
+# (BusinessHoursSilentDuring) or reschedule to the next clear time and exit cleanly.
+# Bypassed by --workflow-install-now / --workflow-install-now-silent / --preview-deferral-dialog,
+# and by overdue hard deadline unless BusinessHoursRespectHardDeadline is TRUE.
+enforce_business_hours() {
+    business_hours_silent_during_active="FALSE"
+    if [[ ${#business_hours_windows[@]} -eq 0 ]]; then
         return 0
     fi
 
     if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ "${workflow_install_now_silent_option}" == "TRUE" ]] || [[ "${preview_deferral_dialog_option}" == "TRUE" ]]; then
-        log_status "ScheduleWorkflowActive bypassed (install-now or preview-deferral-dialog)."
+        log_status "BusinessHours bypassed (install-now or preview-deferral-dialog)."
         return 0
     fi
 
-    if [[ "${schedule_workflow_active_respect_hard_deadline_option}" != "TRUE" ]] && is_hard_deadline_due_lightweight; then
-        log_status "Hard deadline due; bypassing ScheduleWorkflowActive."
+    if [[ "${business_hours_respect_hard_deadline_option}" != "TRUE" ]] && is_hard_deadline_due_lightweight; then
+        log_status "Hard deadline due; bypassing BusinessHours."
         return 0
     fi
 
     local now_epoch
     now_epoch=$(date +%s)
-    if is_epoch_in_schedule_workflow_active "${now_epoch}"; then
-        log_verbose "Within ScheduleWorkflowActive window; continuing workflow."
+    if ! is_epoch_in_business_hours "${now_epoch}"; then
+        log_verbose "Outside BusinessHours; workflow allowed."
         return 0
     fi
 
-    log_status "Outside ScheduleWorkflowActive window (${schedule_workflow_active_option})."
+    log_status "During BusinessHours (${business_hours_option})."
 
-    if [[ "${schedule_workflow_active_silent_outside_option}" == "TRUE" ]]; then
-        schedule_workflow_active_silent_outside_active="TRUE"
-        log_status "ScheduleWorkflowActiveSilentOutside enabled; continuing with discovery and closed-app silent patching only (no dialogs)."
-        write_status "Running: Outside ScheduleWorkflowActive; silent closed-app patching."
+    if [[ "${business_hours_silent_during_option}" == "TRUE" ]]; then
+        business_hours_silent_during_active="TRUE"
+        log_status "BusinessHoursSilentDuring enabled; continuing with discovery and closed-app silent patching only (no dialogs)."
+        write_status "Running: During BusinessHours; silent closed-app patching."
         return 0
     fi
 
-    schedule_workflow_active_set_next_window_and_exit "Outside ScheduleWorkflowActive"
+    business_hours_defer_until_clear_and_exit "During BusinessHours"
 }
 
 set_auto_launch_deferral() {
@@ -4378,9 +4400,9 @@ set_auto_launch_deferral() {
     local deferral_timestamp
     deferral_timestamp=$(( $(date +%s) + deferral_timer_minutes * 60 ))
     local original_deferral_timestamp="${deferral_timestamp}"
-    deferral_timestamp=$(clamp_epoch_to_schedule_workflow_active "${deferral_timestamp}")
+    deferral_timestamp=$(clamp_epoch_outside_business_hours "${deferral_timestamp}")
     if [[ "${deferral_timestamp}" != "${original_deferral_timestamp}" ]]; then
-        log_notice "Deferral relaunch clamped into ScheduleWorkflowActive (was $(date -r "${original_deferral_timestamp}" +"${timestamp_format}"))."
+        log_notice "Deferral relaunch clamped outside BusinessHours (was $(date -r "${original_deferral_timestamp}" +"${timestamp_format}"))."
     fi
     local next_auto_launch
     next_auto_launch=$(date -r $deferral_timestamp +"$timestamp_format")
@@ -4395,9 +4417,9 @@ set_auto_launch_monthly_cadence() {
     local cadence_epoch original_cadence_epoch
     cadence_epoch=$(date -j -f "%Y-%m-%d %H:%M:%S" "$fixed_input" +%s)
     original_cadence_epoch="${cadence_epoch}"
-    cadence_epoch=$(clamp_epoch_to_schedule_workflow_active "${cadence_epoch}")
+    cadence_epoch=$(clamp_epoch_outside_business_hours "${cadence_epoch}")
     if [[ "${cadence_epoch}" != "${original_cadence_epoch}" ]]; then
-        log_notice "Monthly cadence relaunch clamped into ScheduleWorkflowActive (was $(date -r "${original_cadence_epoch}" +"${timestamp_format}"))."
+        log_notice "Monthly cadence relaunch clamped outside BusinessHours (was $(date -r "${original_cadence_epoch}" +"${timestamp_format}"))."
     fi
     next_nth_weekday_for_defaults="$(date -r "${cadence_epoch}" +"$timestamp_format")"
     defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_nth_weekday_for_defaults}"
@@ -7585,21 +7607,21 @@ main() {
         countOfElementsArray+=($label)
     done
 
-    # Outside ScheduleWorkflowActive with SilentOutside: discovery already ran; patch closed apps
-    # only with no dialogs. Remaining open/blocked apps wait for the next window.
-    if [[ "${schedule_workflow_active_silent_outside_active}" == "TRUE" ]]; then
+    # During BusinessHours with SilentDuring: discovery already ran; patch closed apps
+    # only with no dialogs. Remaining open/blocked apps wait until BusinessHours clear.
+    if [[ "${business_hours_silent_during_active}" == "TRUE" ]]; then
         if [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
             workflow_stage_updates
         fi
         if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
-            log_info "ScheduleWorkflowActiveSilentOutside: silently patching closed apps only..."
+            log_info "BusinessHoursSilentDuring: silently patching closed apps only..."
             workflow_silent_patch_closed_apps
         fi
         if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
-            log_status "Outside schedule window: ${#countOfElementsArray[@]} open/blocked app(s) remain; deferring interactive install to next ScheduleWorkflowActive window."
-            schedule_workflow_active_set_next_window_and_exit "Outside ScheduleWorkflowActive; open apps remain after silent closed-app patch"
+            log_status "During BusinessHours: ${#countOfElementsArray[@]} open/blocked app(s) remain; deferring interactive install until BusinessHours clear."
+            business_hours_defer_until_clear_and_exit "During BusinessHours; open apps remain after silent closed-app patch"
         fi
-        log_info "Outside schedule window: no apps remain after silent closed-app patch (or none were due)."
+        log_info "During BusinessHours: no apps remain after silent closed-app patch (or none were due)."
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true
         timestamp="$(date +$timestamp_format)"
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
