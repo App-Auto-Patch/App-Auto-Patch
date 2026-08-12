@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.0"
 scriptDate="2026/08/12"
-scriptBuild="3.7.0.2608121500"
+scriptBuild="3.7.0.2608121613"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -384,6 +384,14 @@ set_defaults() {
     # Populated in workflow_startup when swiftDialog 3.0+ is available (--dockicon / --dockiconbadge).
     dialogDockOptions=()
     dialogSupportsDockIcon="FALSE"
+    # Patching-dialog Dock Quit / ⌘Q handling (backgrounded progress window).
+    dialogPatchingPID=""
+    dialogPatchingContinueBackground="FALSE"
+    dialogPatchingIntentionalQuit="FALSE"
+    dialogDiscoverPID=""
+    dialogStagingPID=""
+    typeset -gA patchingItemStatus
+    patchingItemStatus=()
 
     reset_defaults_option="FALSE"
 
@@ -551,6 +559,11 @@ set_display_strings_language() {
     display_string_confirminstall_button2="No, Go Back"
     display_string_confirminstall_countdown="Continuing automatically in"
     display_string_confirminstall_countdown_suffix="seconds…"
+
+    #### Language for the dialog-dismissed prompt (Dock Quit / ⌘Q during patching)
+    display_string_dialogdismissed_message="The App Auto-Patch window was closed, but updates are still running in the background."
+    display_string_dialogdismissed_button1="Show Progress"
+    display_string_dialogdismissed_button2="Continue in Background"
     
     #### Language for the Deferral Dialog with NO deferrals remaining
     display_string_deferraldeadline_button1="Install Now"
@@ -672,6 +685,9 @@ set_display_strings_language() {
             display_string_confirminstall_countdown_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_confirminstall_countdown" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_confirminstall_countdown_suffix_managed
             display_string_confirminstall_countdown_suffix_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_confirminstall_countdown_suffix" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_dialogdismissed_message_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_dialogdismissed_message" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_dialogdismissed_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_dialogdismissed_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_dialogdismissed_button2_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_dialogdismissed_button2" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferraldeadline_button1_managed
             display_string_deferraldeadline_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferraldeadline_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferraldeadline_button2_managed
@@ -762,6 +778,9 @@ set_display_strings_language() {
     [[ -n "${display_string_confirminstall_button2_managed}" ]] && display_string_confirminstall_button2="${display_string_confirminstall_button2_managed}"
     [[ -n "${display_string_confirminstall_countdown_managed}" ]] && display_string_confirminstall_countdown="${display_string_confirminstall_countdown_managed}"
     [[ -n "${display_string_confirminstall_countdown_suffix_managed}" ]] && display_string_confirminstall_countdown_suffix="${display_string_confirminstall_countdown_suffix_managed}"
+    [[ -n "${display_string_dialogdismissed_message_managed}" ]] && display_string_dialogdismissed_message="${display_string_dialogdismissed_message_managed}"
+    [[ -n "${display_string_dialogdismissed_button1_managed}" ]] && display_string_dialogdismissed_button1="${display_string_dialogdismissed_button1_managed}"
+    [[ -n "${display_string_dialogdismissed_button2_managed}" ]] && display_string_dialogdismissed_button2="${display_string_dialogdismissed_button2_managed}"
     [[ -n "${display_string_deferraldeadline_button1_managed}" ]] && display_string_deferraldeadline_button1="${display_string_deferraldeadline_button1_managed}"
     [[ -n "${display_string_deferraldeadline_button2_managed}" ]] && display_string_deferraldeadline_button2="${display_string_deferraldeadline_button2_managed}"
     [[ -n "${display_string_deferraldeadline_infobox_managed}" ]] && display_string_deferraldeadline_infobox="${display_string_deferraldeadline_infobox_managed}"
@@ -821,6 +840,9 @@ set_display_strings_language() {
     log_verbose "display_string_confirminstall_button2: $display_string_confirminstall_button2"
     log_verbose "display_string_confirminstall_countdown: $display_string_confirminstall_countdown"
     log_verbose "display_string_confirminstall_countdown_suffix: $display_string_confirminstall_countdown_suffix"
+    log_verbose "display_string_dialogdismissed_message: $display_string_dialogdismissed_message"
+    log_verbose "display_string_dialogdismissed_button1: $display_string_dialogdismissed_button1"
+    log_verbose "display_string_dialogdismissed_button2: $display_string_dialogdismissed_button2"
     log_verbose "display_string_deferraldeadline_button1: $display_string_deferraldeadline_button1"
     log_verbose "display_string_deferraldeadline_button2: $display_string_deferraldeadline_button2"
     log_verbose "display_string_deferraldeadline_infobox: $display_string_deferraldeadline_infobox"
@@ -4790,6 +4812,7 @@ swiftDialogPatchingWindow(){
         fi
         
         # Build our list of Display Names for the SwiftDialog list
+        displayNames=()
         for label in $queuedLabelsArray; do
             # Get display name from label fragment
             currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
@@ -4802,14 +4825,136 @@ swiftDialogPatchingWindow(){
         done
         
         _prepare_dialog_command_file
+        : > "$dialogCommandFile"
+        chmod 644 "$dialogCommandFile" 2>/dev/null
+        
+        dialogPatchingContinueBackground="FALSE"
+        dialogPatchingIntentionalQuit="FALSE"
         
         # Create our running swiftDialog window
         $dialogBinary \
         ${dialogPatchingConfigurationOptions[@]} \
         ${displayNames[@]} \
         &
+        dialogPatchingPID=$!
+        log_verbose "Patching dialog PID: ${dialogPatchingPID}"
     fi
     
+}
+
+# Relaunch the patching progress dialog after Dock Quit / ⌘Q, preserving completed-item status.
+_relaunch_patching_dialog() {
+    [[ ${InteractiveModeOption} -lt 1 ]] && return 0
+
+    currentUser=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
+    if [ "$currentUser" = "root" ] || [ "$currentUser" = "loginwindow" ] || [ "$currentUser" = "_mbsetupuser" ] || [ -z "$currentUser" ]; then
+        return 0
+    fi
+
+    local -a relaunchDisplayNames
+    local idx=0
+    local label currentDisplay_name iconPath
+
+    for label in $queuedLabelsArray; do
+        currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        iconPath=$(resolve_app_icon_path "$label")
+        relaunchDisplayNames+=("--listitem")
+        if [[ -n "${patchingItemStatus[$idx]}" ]]; then
+            relaunchDisplayNames+=(${currentDisplay_name},icon="${iconPath}",status="${patchingItemStatus[$idx]}")
+        else
+            relaunchDisplayNames+=(${currentDisplay_name},icon="${iconPath}")
+        fi
+        (( idx++ ))
+    done
+
+    sleep 1
+    _prepare_dialog_command_file
+    : > "$dialogCommandFile"
+    chmod 644 "$dialogCommandFile" 2>/dev/null
+
+    dialogPatchingContinueBackground="FALSE"
+    dialogPatchingIntentionalQuit="FALSE"
+
+    $dialogBinary \
+    ${dialogPatchingConfigurationOptions[@]} \
+    ${relaunchDisplayNames[@]} \
+    &
+    dialogPatchingPID=$!
+    log_notice "Relaunched patching dialog (PID ${dialogPatchingPID}) after user quit."
+
+    sleep 0.5
+    swiftDialogUpdate "infobox: + <br><br>"
+    swiftDialogUpdate "infobox: + **${display_string_patching_infobox_updates}** ${queuedLabelsArrayLength}"
+    # Restore progress roughly to completed count.
+    if (( queuedLabelsArrayLength > 0 )); then
+        swiftDialogUpdate "progress: $(( (100 * i) / queuedLabelsArrayLength ))"
+    fi
+    if [[ "${dialogSupportsDockIcon}" == "TRUE" ]]; then
+        swiftDialogUpdate "dockiconbadge: $(( queuedLabelsArrayLength - i ))"
+    fi
+}
+
+# Prompt shown when the backgrounded patching dialog disappears unexpectedly (Dock ▸ Quit, menu bar
+# Quit, or cmd+quitkey). Button 1 = Show Progress (relaunch). Button 2 / Quit / timeout = continue headless.
+_dialog_patching_dismissed_prompt() {
+    local dismissedContent dismissedOutput
+    # Quitting from the Dock terminates Dialog.app, so give it a moment to fully exit before
+    # launching another window.
+    sleep 1
+    _prepare_dialog_command_file
+
+    dismissedContent=(
+        --title "$appTitle"
+        --message "${display_string_dialogdismissed_message}"
+        --messagefont size=12
+        --icon "$icon"
+        --button1text "${display_string_dialogdismissed_button1}"
+        --button2text "${display_string_dialogdismissed_button2}"
+        --style "mini"
+        --moveable
+        --position center
+        --quitkey k
+        --timer 30
+        --hidetimerbar
+        ${dialogDockOptions[@]}
+    )
+    if [[ "$dialogOnTop" == "TRUE" ]]; then
+        dismissedContent+=(--ontop)
+    fi
+
+    "$dialogBinary" "${dismissedContent[@]}"
+    dismissedOutput=$?
+    log_aap "patchingDismissedDialogOutput: $dismissedOutput"
+
+    case "${dismissedOutput}" in
+        0)
+            log_status "User chose Show Progress after dismissing the patching dialog."
+            _relaunch_patching_dialog
+        ;;
+        *)
+            log_status "User chose to continue patching in the background (or dismissed the prompt)."
+            dialogPatchingContinueBackground="TRUE"
+            dialogPatchingPID=""
+        ;;
+    esac
+}
+
+# Called during the install loop: if the patching dialog was Quit'd via Dock/⌘Q, offer relaunch.
+_ensure_patching_dialog() {
+    [[ ${InteractiveModeOption} -lt 1 ]] && return 0
+    [[ "${dialogPatchingContinueBackground}" == "TRUE" ]] && return 0
+    [[ "${dialogPatchingIntentionalQuit}" == "TRUE" ]] && return 0
+    [[ -z "${dialogPatchingPID}" ]] && return 0
+
+    if kill -0 "${dialogPatchingPID}" 2>/dev/null; then
+        return 0
+    fi
+
+    wait "${dialogPatchingPID}" 2>/dev/null
+    local dialogExit=$?
+    log_warning "Patching dialog is no longer running (PID ${dialogPatchingPID}, exit ${dialogExit})."
+    dialogPatchingPID=""
+    _dialog_patching_dismissed_prompt
 }
 
 swiftDialogDiscoverWindow(){
@@ -4820,6 +4965,8 @@ swiftDialogDiscoverWindow(){
         $dialogBinary \
         ${dialogDiscoverConfigurationOptions[@]} \
         &
+        dialogDiscoverPID=$!
+        log_verbose "Discovery dialog PID: ${dialogDiscoverPID}"
     fi
     
 }
@@ -4827,6 +4974,12 @@ swiftDialogDiscoverWindow(){
 swiftDialogCompleteDialogPatching(){
     
     if [ ${InteractiveModeOption} -ge 1 ]; then
+        if [[ "${dialogPatchingContinueBackground}" == "TRUE" ]] || [[ -z "${dialogPatchingPID}" ]] || ! kill -0 "${dialogPatchingPID}" 2>/dev/null; then
+            log_verbose "Patching dialog already closed or running in background; skipping completion UI updates."
+            rm -f "$dialogCommandFile" 2>/dev/null
+            dialogPatchingPID=""
+            return
+        fi
         # swiftDialogCommand "listitem: add, title: Updates Complete!,status: success"
         swiftDialogUpdate "icon: SF=checkmark.circle.fill,weight=bold,colour1=#00ff44,colour2=#075c1e"
         swiftDialogUpdate "progress: complete"
@@ -4841,8 +4994,10 @@ swiftDialogCompleteDialogPatching(){
     if [ ${UnattendedExit} = "TRUE" ]; then
         log_info "Unattended Exit set to TRUE, sleeping for $UnattendedExitSeconds"
         sleep $UnattendedExitSeconds
+        dialogPatchingIntentionalQuit="TRUE"
         swiftDialogUpdate "quit:"
         rm "$dialogCommandFile"
+        dialogPatchingPID=""
     else
     # Delete the tmp command file
     rm "$dialogCommandFile"
@@ -4853,8 +5008,16 @@ swiftDialogCompleteDialogPatching(){
 swiftDialogCompleteDialogDiscover(){
     
     if [ ${InteractiveModeOption} -gt 1 ]; then
+        if [[ -n "${dialogDiscoverPID}" ]] && ! kill -0 "${dialogDiscoverPID}" 2>/dev/null; then
+            log_info "Discovery dialog was already closed (Dock Quit / ⌘Q); continuing without UI."
+            wait "${dialogDiscoverPID}" 2>/dev/null
+            dialogDiscoverPID=""
+            rm -f "$dialogCommandFile" 2>/dev/null
+            return
+        fi
         swiftDialogCommand "quit:"
         rm "$dialogCommandFile"
+        dialogDiscoverPID=""
     fi
     
 }
@@ -4870,6 +5033,8 @@ swiftDialogStagingWindow(){
         $dialogBinary \
         ${dialogStagingConfigurationOptions[@]} \
         &
+        dialogStagingPID=$!
+        log_verbose "Staging dialog PID: ${dialogStagingPID}"
     fi
 
 }
@@ -4877,8 +5042,16 @@ swiftDialogStagingWindow(){
 swiftDialogCompleteDialogStaging(){
 
     if [[ ${InteractiveModeOption} == 2 ]]; then
+        if [[ -n "${dialogStagingPID}" ]] && ! kill -0 "${dialogStagingPID}" 2>/dev/null; then
+            log_info "Staging dialog was already closed (Dock Quit / ⌘Q); continuing without UI."
+            wait "${dialogStagingPID}" 2>/dev/null
+            dialogStagingPID=""
+            rm -f "$dialogCommandFile" 2>/dev/null
+            return
+        fi
         swiftDialogCommand "quit:"
         rm -f "$dialogCommandFile"
+        dialogStagingPID=""
     fi
 
 }
@@ -4892,7 +5065,8 @@ _prepare_dialog_command_file() {
 }
 
 swiftDialogUpdate(){
-    
+    # Skip writes when the user chose to continue patching headless after dismissing the dialog.
+    [[ "${dialogPatchingContinueBackground}" == "TRUE" ]] && return 0
     log_verbose "Update swiftDialog: $1" 
     echo "$1" >> "$dialogCommandFile"
     
@@ -5175,6 +5349,16 @@ dialog_install_or_defer() {
                 fi
                 break
             ;;
+            9|10|15|137|143)
+                # User dismissed the window rather than choosing an action, so reopen it instead of
+                # falling through to Install Now below. swiftDialog documents 10 for cmd+quitkey, but
+                # Dock ▸ Quit and the menu bar Quit terminate Dialog.app itself, so dialogcli reports
+                # the raw signal instead: 15 (quit) or 9 (Force Quit); 143/137 cover 128+signal.
+                log_status "User quit the deferral dialog (exit ${dialogOutput}); reopening."
+                # Let Dialog.app finish terminating before relaunching, and keep a quit-spam loop
+                # from spinning until the deferral timer expires.
+                sleep 1
+            ;;
             *)
                 log_status "User selected install now, presenting confirmation dialog."
                 _dialog_confirm_install_now
@@ -5249,7 +5433,8 @@ _dialog_confirm_install_now() {
         confirmDialogOutput=$?
         log_aap "confirmDialogOutput: $confirmDialogOutput"
         case "${confirmDialogOutput}" in
-            2)
+            2|9|10|15|137|143)
+                # Button 2 ("Go Back"), or the user quit the window - return to the deferral dialog.
                 log_status "User declined the install now confirmation."
                 dialog_user_choice_install="FALSE"
             ;;
@@ -5270,51 +5455,66 @@ dialog_install_hard_deadline() {
     fi
 	
 	height=480
-	
-	deferralDialogContent=(
-		${dialogTitleOptions[@]}
-		--message "$message"
-		--helpmessage "$helpMessage"
-		--icon "$icon"
-		--overlayicon "$overlayicon"
-		--infobox "${display_string_deferraldeadline_infobox}"
-		--timer $DialogTimeoutDeferral
-		--button1text "${display_string_deferraldeadline_button1}"
-        --button2text "${display_string_deferraldeadline_button2}"
-        --button2disabled
-	)
-    [[ "${dialogSupportsDockIcon}" == "TRUE" ]] && deferralDialogContent+=(--dockiconbadge "${numberOfUpdates}")
-	
-	deferralDialogOptions=(
-		--position bottomright
-        --height 500
-        --width 600
-		--quitoninfo
-		--moveable
-		--quitkey k
-		--titlefont size=18
-		--messagefont size=14
-		--commandfile "$dialogCommandFile"
-        ${dialogDockOptions[@]}
-	)
-	
-	if [[ "$dialogOnTop" == "TRUE" ]]; then
-		deferralDialogOptions+=(--ontop)
-	fi
 
-	"$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}"
-	dialogOutput=$?
-	log_aap "dialogOutput: $dialogOutput"
-	case "${dialogOutput}" in
-		4)
-			log_status "Display timeout, proceed with installation"
-			write_status "Pending: Display timeout, proceed with installation"
-		;;
-		*)
-			log_status "User chose to install now."
-			dialog_user_choice_install="TRUE"
-		;;
-	esac
+    local hard_deadline_start_epoch hard_deadline_timer_total_seconds remaining_seconds
+    hard_deadline_start_epoch=$(date +%s)
+    hard_deadline_timer_total_seconds="$DialogTimeoutDeferral"
+
+    while true; do
+        remaining_seconds=$(( hard_deadline_timer_total_seconds - ( $(date +%s) - hard_deadline_start_epoch ) ))
+        (( remaining_seconds < 1 )) && remaining_seconds=1
+
+        deferralDialogContent=(
+            ${dialogTitleOptions[@]}
+            --message "$message"
+            --helpmessage "$helpMessage"
+            --icon "$icon"
+            --overlayicon "$overlayicon"
+            --infobox "${display_string_deferraldeadline_infobox}"
+            --timer $remaining_seconds
+            --button1text "${display_string_deferraldeadline_button1}"
+            --button2text "${display_string_deferraldeadline_button2}"
+            --button2disabled
+        )
+        [[ "${dialogSupportsDockIcon}" == "TRUE" ]] && deferralDialogContent+=(--dockiconbadge "${numberOfUpdates}")
+        
+        deferralDialogOptions=(
+            --position bottomright
+            --height 500
+            --width 600
+            --quitoninfo
+            --moveable
+            --quitkey k
+            --titlefont size=18
+            --messagefont size=14
+            --commandfile "$dialogCommandFile"
+            ${dialogDockOptions[@]}
+        )
+        
+        if [[ "$dialogOnTop" == "TRUE" ]]; then
+            deferralDialogOptions+=(--ontop)
+        fi
+
+        "$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}"
+        dialogOutput=$?
+        log_aap "dialogOutput: $dialogOutput"
+        case "${dialogOutput}" in
+            9|10|15|137|143)
+                log_status "User quit the hard-deadline dialog (exit ${dialogOutput}); reopening."
+                sleep 1
+            ;;
+            4)
+                log_status "Display timeout, proceed with installation"
+                write_status "Pending: Display timeout, proceed with installation"
+                break
+            ;;
+            *)
+                log_status "User chose to install now."
+                dialog_user_choice_install="TRUE"
+                break
+            ;;
+        esac
+    done
 }
 
 function write_aap_receipt() {
@@ -6234,6 +6434,7 @@ workflow_do_Installations() {
     
     # Count errors
     errorCount=0
+    patchingItemStatus=()
     
     swiftDialogPatchingWindow # Create our main "list" swiftDialog Window
     
@@ -6250,11 +6451,13 @@ workflow_do_Installations() {
     swiftDialogUpdate "progress: 1"
     i=0
     for label in $queuedLabelsArray; do
+        _ensure_patching_dialog
         log_info "Installing ${label}..."
+        local itemStatus="success"
         
         # Use built-in swiftDialog Installomator integration options (if swiftDialog is being used)
         swiftDialogOptions=()
-        if [ ${InteractiveModeOption} -ge 1 ]; then
+        if [ ${InteractiveModeOption} -ge 1 ] && [[ "${dialogPatchingContinueBackground}" != "TRUE" ]]; then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
             currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplay_name}"\')
@@ -6293,6 +6496,7 @@ workflow_do_Installations() {
 	        if [[ -n "$CPTHOSTPID" || -n "$AOMHOSTPID" ]]; then
 		        log_error "Zoom Meeting in progress. Skipping Update"
                 let errorCount++
+                itemStatus="fail"
                 swiftDialogUpdate "listitem: index: $i, status: fail, statustext: Zoom Active…"
             else
                 # Run Installomator (use staged installer if available)
@@ -6300,6 +6504,7 @@ workflow_do_Installations() {
                 installomatorExitCode=$?
                 if [ $installomatorExitCode != 0 ]; then
                     log_error "Error installing ${label}. Exit code $installomatorExitCode"
+                    itemStatus="fail"
                     swiftDialogUpdate "listitem: index: $i, status: fail"
                     let errorCount++
                 fi
@@ -6344,6 +6549,7 @@ workflow_do_Installations() {
             installomatorExitCode=$?
             if [ $installomatorExitCode != 0 ]; then
                 log_error "Error installing ${label}. Exit code $installomatorExitCode"
+                itemStatus="fail"
                 swiftDialogUpdate "listitem: index: $i, status: fail"
                 let errorCount++
             fi
@@ -6382,6 +6588,7 @@ workflow_do_Installations() {
             fi
             write_aap_receipt "$label" "$newVersion" "$installomatorExitCode"
         fi
+        patchingItemStatus[$i]="${itemStatus}"
         let i++
         swiftDialogUpdate "progress: increment ${progressIncrementValue}"
         if [ ${InteractiveModeOption} -ge 1 ] && [[ "${dialogSupportsDockIcon}" == "TRUE" ]]; then

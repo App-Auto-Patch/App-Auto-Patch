@@ -1984,6 +1984,54 @@ During a profile replacement, the system updates payloads with the same `Payload
 								</dict>
 								<dict>
 									<key>pfm_app_min</key>
+									<string>3.7.0</string>
+									<key>pfm_description</key>
+									<string>Language for the message on the dialog shown when the patching progress window was closed (Dock Quit / menu Quit) while updates are still running</string>
+									<key>pfm_documentation_url</key>
+									<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support</string>
+									<key>pfm_name</key>
+									<string>display_string_dialogdismissed_message</string>
+									<key>pfm_title</key>
+									<string>Dialog Dismissed Message</string>
+									<key>pfm_type</key>
+									<string>string</string>
+									<key>pfm_value_placeholder</key>
+									<string>The App Auto-Patch window was closed, but updates are still running in the background.</string>
+								</dict>
+								<dict>
+									<key>pfm_app_min</key>
+									<string>3.7.0</string>
+									<key>pfm_description</key>
+									<string>Language for Button1 (Show Progress) on the dialog shown when the patching progress window was closed while updates are still running</string>
+									<key>pfm_documentation_url</key>
+									<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support</string>
+									<key>pfm_name</key>
+									<string>display_string_dialogdismissed_button1</string>
+									<key>pfm_title</key>
+									<string>Dialog Dismissed Button1</string>
+									<key>pfm_type</key>
+									<string>string</string>
+									<key>pfm_value_placeholder</key>
+									<string>Show Progress</string>
+								</dict>
+								<dict>
+									<key>pfm_app_min</key>
+									<string>3.7.0</string>
+									<key>pfm_description</key>
+									<string>Language for Button2 (Continue in Background) on the dialog shown when the patching progress window was closed while updates are still running</string>
+									<key>pfm_documentation_url</key>
+									<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support</string>
+									<key>pfm_name</key>
+									<string>display_string_dialogdismissed_button2</string>
+									<key>pfm_title</key>
+									<string>Dialog Dismissed Button2</string>
+									<key>pfm_type</key>
+									<string>string</string>
+									<key>pfm_value_placeholder</key>
+									<string>Continue in Background</string>
+								</dict>
+								<dict>
+									<key>pfm_app_min</key>
 									<string>3.2</string>
 									<key>pfm_description</key>
 									<string>Langauge for part 1 of the infobox on the Deferral Dialog</string>

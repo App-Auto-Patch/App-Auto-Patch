@@ -3,6 +3,14 @@
 # Version 3
 
 ## Version 3.7.0
+### 12-Aug-2026 (3) - Build 3.7.0.2608121613
+- Handle the user quitting a dialog window so dismissing it no longer has unexpected side effects. swiftDialog documents exit code `10` for cmd+quitkey, but Dock ▸ Quit and the menu bar Quit terminate `Dialog.app` itself, so `dialogcli` returns the raw signal instead — `15` for Quit and `9` for Force Quit. AAP now treats `9`, `10`, `15`, `137`, and `143` as a user dismissal:
+	- Deferral and hard-deadline dialogs reopen instead of treating Quit as Install Now
+	- Install Now confirmation treats Quit as “Go Back”
+	- If the backgrounded patching progress dialog is Quit’d, prompt with **Show Progress** (relaunches the list, preserving completed item status) or **Continue in Background**
+	- Discovery/staging dialogs that were already Quit’d are logged and skipped cleanly on completion
+	- New localizable strings (config profile / dialogElements): `display_string_dialogdismissed_message`, `display_string_dialogdismissed_button1`, `display_string_dialogdismissed_button2` — added to iMazing + Jamf manifests
+
 ### 12-Aug-2026 (2) - Build 3.7.0.2608121500
 - Show the App Auto-Patch logo as a macOS Dock icon for workflow swiftDialog windows (`--dockicon`), when swiftDialog 3.0+ is installed ([docs](https://swiftdialog.app/advanced/command-line-options/)):
 	- Managed key `ShowDockIcon` (`true`/`false`, default `true`); CLI `--show-dock-icon` / `--show-dock-icon-off`

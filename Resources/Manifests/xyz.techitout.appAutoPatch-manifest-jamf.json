@@ -1574,6 +1574,39 @@
                                     }
                                 ]
                             },
+                            "display_string_dialogdismissed_message": {
+                                "type": "string",
+                                "title": "Dialog Dismissed Message",
+                                "description": "Language for the message on the dialog shown when the patching progress window was closed (Dock Quit / menu Quit) while updates are still running",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_dialogdismissed_button1": {
+                                "type": "string",
+                                "title": "Dialog Dismissed Button1",
+                                "description": "Language for Button1 (Show Progress) on the dialog shown when the patching progress window was closed while updates are still running",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_dialogdismissed_button2": {
+                                "type": "string",
+                                "title": "Dialog Dismissed Button2",
+                                "description": "Language for Button2 (Continue in Background) on the dialog shown when the patching progress window was closed while updates are still running",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
                             "display_string_deferral_infobox1": {
                                 "type": "string",
                                 "title": "Deferral Dialog Infobox part1",
