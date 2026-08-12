@@ -20,6 +20,9 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 	- Managed Preference Key: `<key>BusinessHoursRespectHardDeadline</key>` `<true/>` | `<false/>` (default `false`)
 	- Managed Preference Key: `<key>BusinessHoursSilentDuring</key>` `<true/>` | `<false/>` (default `false`) — during Business Hours: discovery + closed-apps-only silent patch; no dialogs; open apps wait until clear
 	- CLI: `--business-hours=` / `--business-hours-respect-hard-deadline` / `-off` / `--business-hours-silent-during` / `-off`
+- **Skip Pre-Update Verification** — Optionally skip the local Gatekeeper (`spctl`) / Team ID check during discovery when it intermittently fails for a valid installed app and would otherwise exclude that app from updates. Installomator still validates after download. Default off. (#256)
+	- Managed Preference Key: `<key>SkipPreUpdateVerification</key>` `<true/>` | `<false/>` (default `false`)
+	- CLI: `--skip-pre-update-verification` / `--skip-pre-update-verification-off`
 - **Pre/Post Patch Scripts** — Run a managed, root-owned script once before and/or after Installomator installations (e.g. `jamf recon`). Scripts must live under `/Library/Management/AppAutoPatch/Hooks/`, cannot be symlinks, and must not be group/world-writable. Managed preferences only — never CLI or local prefs, never `eval`'d. (#156)
 	- Managed Preference Key: `<key>PrePatchScript</key>` / `<key>PostPatchScript</key>`
 	- Managed Preference Key: `<key>PrePatchScriptFailAction</key>` `ABORT`|`CONTINUE` (default `ABORT`)

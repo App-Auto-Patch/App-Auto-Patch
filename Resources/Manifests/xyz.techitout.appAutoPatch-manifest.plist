@@ -193,6 +193,7 @@ During a profile replacement, the system updates payloads with the same `Payload
 					<string>AppTitle</string>
 					<string>ConvertAppsInHomeFolder</string>
 					<string>IgnoreAppsInHomeFolder</string>
+					<string>SkipPreUpdateVerification</string>
 					<string>InstallomatorOptions</string>
 					<string>InstallomatorUpdateDisable</string>
 					<string>InstallomatorVersion</string>
@@ -894,6 +895,22 @@ During a profile replacement, the system updates payloads with the same `Payload
 			<string>Ignore Apps In Home Folder</string>
 			<key>pfm_type</key>
 			<string>string</string>
+		</dict>
+		<dict>
+			<key>pfm_app_min</key>
+			<string>3.7.0</string>
+			<key>pfm_default</key>
+			<false/>
+			<key>pfm_description</key>
+			<string>When true, discovery skips the local Gatekeeper (spctl) / Team ID pre-update check for already-installed apps. Use this when spctl assessment intermittently fails for a valid app and would otherwise exclude it from discovery/updates. Installomator still validates the downloaded package after download. Default false.</string>
+			<key>pfm_description_reference</key>
+			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/issues/256</string>
+			<key>pfm_name</key>
+			<string>SkipPreUpdateVerification</string>
+			<key>pfm_title</key>
+			<string>Skip Pre-Update Verification</string>
+			<key>pfm_type</key>
+			<string>boolean</string>
 		</dict>
 		<dict>
 			<key>pfm_app_min</key>

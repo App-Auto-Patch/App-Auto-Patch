@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.0"
-scriptDate="2026/08/11"
-scriptBuild="3.7.0.2608112305"
+scriptDate="2026/08/12"
+scriptBuild="3.7.0.2608120015"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -72,6 +72,7 @@ echo "
     [--business-hours-respect-hard-deadline-off]
     [--business-hours-silent-during]
     [--business-hours-silent-during-off]
+    [--skip-pre-update-verification] [--skip-pre-update-verification-off]
 
     Deferral Deadline COUNT Options:
     [--deadline-count-focus=number]
@@ -178,6 +179,7 @@ echo "
     <key>BusinessHours</key> <string>MON:09:00-17:00,TUE:09:00-17:00,...</string>
     <key>BusinessHoursRespectHardDeadline</key> <true/> | <false/>
     <key>BusinessHoursSilentDuring</key> <true/> | <false/>
+    <key>SkipPreUpdateVerification</key> <true/> | <false/>
     <key>DiscoveryFrequency</key> <integer>hours</integer>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
     <key>ZoomCallActiveCheck</key> <true/> | <false/>
@@ -281,6 +283,12 @@ set_defaults() {
     convertAppsInHomeFolder="TRUE" # MDM Enabled
 
     ignoreAppsInHomeFolder="FALSE" # MDM Enabled
+
+    # When TRUE, discovery skips the local spctl/Team ID pre-update check in verifyApp() that can
+    # otherwise drop an already-installed app from the queue if Gatekeeper assessment fails.
+    # Installomator still validates the downloaded package after download. Default FALSE (#256).
+    # Empty until prefs resolve (managed > CLI > local > FALSE).
+    SkipPreUpdateVerificationOption="" # MDM Enabled
 
     installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore" # MDM Enabled
     
@@ -1028,6 +1036,12 @@ get_options() {
             --business-hours-silent-during-off)
                 business_hours_silent_during_option="FALSE"
             ;;
+            --skip-pre-update-verification)
+                SkipPreUpdateVerificationOption="TRUE"
+            ;;
+            --skip-pre-update-verification-off)
+                SkipPreUpdateVerificationOption="FALSE"
+            ;;
             --webhook-feature-off)
                 webhook_feature_option="FALSE"
             ;;
@@ -1223,6 +1237,8 @@ get_preferences() {
         convert_apps_in_home_folder_managed=$(defaults read "${appAutoPatchManagedPLIST}" ConvertAppsInHomeFolder 2> /dev/null)
         local ignore_apps_in_home_folder_managed
         ignore_apps_in_home_folder_managed=$(defaults read "${appAutoPatchManagedPLIST}" IgnoreAppsInHomeFolder 2> /dev/null)
+        local skip_pre_update_verification_managed
+        skip_pre_update_verification_managed=$(defaults read "${appAutoPatchManagedPLIST}" SkipPreUpdateVerification 2> /dev/null)
         local installomator_options_managed
         installomator_options_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_update_disable_managed
@@ -1367,6 +1383,8 @@ get_preferences() {
         convert_apps_in_home_folder_local=$(defaults read "${appAutoPatchLocalPLIST}" ConvertAppsInHomeFolder 2> /dev/null)
         local ignore_apps_in_home_folder_local
         ignore_apps_in_home_folder_local=$(defaults read "${appAutoPatchLocalPLIST}" IgnoreAppsInHomeFolder 2> /dev/null)
+        local skip_pre_update_verification_local
+        skip_pre_update_verification_local=$(defaults read "${appAutoPatchLocalPLIST}" SkipPreUpdateVerification 2> /dev/null)
         local installomator_options_local
         installomator_options_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_update_disable_local
@@ -1531,6 +1549,8 @@ get_preferences() {
     { [[ -z "${convert_apps_in_home_folder_managed}" ]] && [[ -n "${convertAppsInHomeFolder}" ]] && [[ -n "${convert_apps_in_home_folder_local}" ]]; } && convertAppsInHomeFolder="${convert_apps_in_home_folder_local}"
     [[ -n "${ignore_apps_in_home_folder_managed}" ]] && ignoreAppsInHomeFolder="${ignore_apps_in_home_folder_managed}"
     { [[ -z "${ignore_apps_in_home_folder_managed}" ]] && [[ -n "${ignoreAppsInHomeFolder}" ]] && [[ -n "${ignore_apps_in_home_folder_local}" ]]; } && ignoreAppsInHomeFolder="${ignore_apps_in_home_folder_local}"
+    [[ -n "${skip_pre_update_verification_managed}" ]] && SkipPreUpdateVerificationOption="${skip_pre_update_verification_managed}"
+    { [[ -z "${skip_pre_update_verification_managed}" ]] && [[ -z "${SkipPreUpdateVerificationOption}" ]] && [[ -n "${skip_pre_update_verification_local}" ]]; } && SkipPreUpdateVerificationOption="${skip_pre_update_verification_local}"
     [[ -n "${installomator_options_managed}" ]] && installomatorOptions="${installomator_options_managed}"
     { [[ -z "${installomator_options_managed}" ]] && [[ -n "${installomatorOptions}" ]] && [[ -n "${installomator_options_local}" ]]; } && installomatorOptions="${installomator_options_local}"
     
@@ -1637,6 +1657,7 @@ get_preferences() {
     log_verbose "AppTitle: $appTitle"
     log_verbose "ConvertAppsInHomeFolder: $convertAppsInHomeFolder"
     log_verbose "IgnoreAppsInHomeFolder: $ignoreAppsInHomeFolder"
+    log_verbose "SkipPreUpdateVerification: ${SkipPreUpdateVerificationOption:-<unset>}"
     log_verbose "InstallomatorOptions: $installomatorOptions"
     log_verbose "InstallomatorUpdateDisable: $installomator_update_disable_option"
     log_verbose "InstallomatorVersion: $installomatorVersion"
@@ -2171,6 +2192,16 @@ manage_parameter_options() {
         defaults delete "${appAutoPatchLocalPLIST}" BusinessHoursSilentDuring 2>/dev/null
     fi
     log_verbose "business_hours_silent_during_option is: ${business_hours_silent_during_option}"
+
+    # Manage SkipPreUpdateVerification (default FALSE = keep spctl/Team ID discovery checks).
+    if [[ "${SkipPreUpdateVerificationOption}" -eq 1 ]] || [[ "${SkipPreUpdateVerificationOption}" == "TRUE" ]]; then
+        SkipPreUpdateVerificationOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" SkipPreUpdateVerification -bool true
+    else
+        SkipPreUpdateVerificationOption="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" SkipPreUpdateVerification 2>/dev/null
+    fi
+    log_verbose "SkipPreUpdateVerificationOption is: ${SkipPreUpdateVerificationOption}"
     
     # Manage ${zoom_call_active_check_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${zoom_call_active_check_option}" -eq 1 ]] || [[ "${zoom_call_active_check_option}" == "TRUE" ]]; then
@@ -5386,27 +5417,31 @@ function verifyApp() {
     swiftDialogUpdate "progresstext: $(get_localized_path $appPath)"
     swiftDialogUpdate "icon: $appPath"
     
-    # verify with spctl
-    appVerify=$(spctl -a -vv "$appPath" 2>&1 )
-    appVerifyStatus=$(echo $?)
-    teamID=$(echo $appVerify | awk '/origin=/ {print $NF }' | tr -d '()' )
-    
-    log_verbose "expectedTeamID: $expectedTeamID"
-    if [[ "$expectedTeamID" == *"Software Update"* ]];  then
-        log_warning "Team ID not available for Apple apps... Skipping pre-update validation (Validation will still occur post-download via Installomator)"
-    elif [[ $appVerifyStatus -ne 0 ]]; then
-        error "Error verifying $appPath"
-        log_error "Returned $appVerifyStatus"
-        return
-    fi
-    
-    if [[ "$expectedTeamID" != *"Software Update"* ]] && [[ "$expectedTeamID" != "$teamID" ]]; then
-        error "Error verifying $appPath"
-        log_warning "Team IDs do not match: expected: $expectedTeamID, found $teamID"
-        return
+    # verify with spctl / Team ID (can be skipped via SkipPreUpdateVerification — #256)
+    if [[ "${SkipPreUpdateVerificationOption}" == "TRUE" ]]; then
+        log_warning "SkipPreUpdateVerification enabled; skipping spctl/Team ID pre-update validation for $appPath (Installomator will still validate post-download)"
     else
-        
-        typeset -gA levels
+        appVerify=$(spctl -a -vv "$appPath" 2>&1 )
+        appVerifyStatus=$(echo $?)
+        teamID=$(echo $appVerify | awk '/origin=/ {print $NF }' | tr -d '()' )
+
+        log_verbose "expectedTeamID: $expectedTeamID"
+        if [[ "$expectedTeamID" == *"Software Update"* ]];  then
+            log_warning "Team ID not available for Apple apps... Skipping pre-update validation (Validation will still occur post-download via Installomator)"
+        elif [[ $appVerifyStatus -ne 0 ]]; then
+            error "Error verifying $appPath"
+            log_error "Returned $appVerifyStatus"
+            return
+        fi
+
+        if [[ "$expectedTeamID" != *"Software Update"* ]] && [[ "$expectedTeamID" != "$teamID" ]]; then
+            error "Error verifying $appPath"
+            log_warning "Team IDs do not match: expected: $expectedTeamID, found $teamID"
+            return
+        fi
+    fi
+
+    typeset -gA levels
         levels=(DEBUG 0 INFO 1 WARN 2 ERROR 3 REQ 4)
         LOGGING="${LOGGING:-INFO}"
         label="${label_name}"
@@ -5557,8 +5592,6 @@ function verifyApp() {
         unset appNewVersion
         unset name
         unset previousVersion
-        
-    fi
 }
 
 function clear_aap_report() {

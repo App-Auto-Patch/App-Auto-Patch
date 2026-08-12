@@ -14,6 +14,9 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 	- Managed Preference Key: `<key>BusinessHoursRespectHardDeadline</key>` `<true/>` | `<false/>` — default: `false` (hard deadline bypasses Business Hours)
 	- Managed Preference Key: `<key>BusinessHoursSilentDuring</key>` `<true/>` | `<false/>` — default: `false`. When `true`, during Business Hours AAP still runs discovery and silently patches **closed apps only** (no dialogs, even if InteractiveMode is 1/2). Open/blocked apps stay queued until Business Hours clear.
 	- CLI: `--business-hours=...` / `--business-hours-respect-hard-deadline` / `-off` / `--business-hours-silent-during` / `-off`
+- **Skip Pre-Update Verification** — Optionally skip the local Gatekeeper (`spctl`) / Team ID pre-update check during discovery. Some already-installed apps fail `spctl -a` intermittently and were being dropped from the update queue entirely; enabling this keeps them eligible while Installomator still validates the downloaded package. Default off. (#256)
+	- Managed Preference Key: `<key>SkipPreUpdateVerification</key>` `<true/>` | `<false/>` — default: `false`
+	- CLI: `--skip-pre-update-verification` / `--skip-pre-update-verification-off`
 - **Pre/Post Patch Scripts** — Run a managed, root-owned script once before and/or after Installomator installations (e.g. `jamf recon`). Scripts must live under `/Library/Management/AppAutoPatch/Hooks/`, cannot be symlinks, and must not be group/world-writable. Managed preferences only — never CLI or local prefs, never `eval`'d. (#156)
 	- Managed Preference Key: `<key>PrePatchScript</key>` `<string>/Library/Management/AppAutoPatch/Hooks/pre.sh</string>`
 	- Managed Preference Key: `<key>PostPatchScript</key>` `<string>/Library/Management/AppAutoPatch/Hooks/post.sh</string>`

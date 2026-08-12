@@ -36,6 +36,8 @@
 	<string>Defer</string>
 	<key>IgnoreAppsInHomeFolder</key>
 	<string>FALSE</string>
+	<key>SkipPreUpdateVerification</key>
+	<false/>
 	<key>IgnoredLabels</key>
 	<string>1password* androidstudio microsoft*</string>
 	<key>ExcludedBackgroundLabels</key>

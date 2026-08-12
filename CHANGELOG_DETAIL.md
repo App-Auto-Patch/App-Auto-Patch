@@ -3,6 +3,13 @@
 # Version 3
 
 ## Version 3.7.0
+### 12-Aug-2026 (1) - Build 3.7.0.2608120015
+- [#256](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/256): optional `SkipPreUpdateVerification` to bypass the local Gatekeeper (`spctl -a`) / Team ID check in `verifyApp()` during discovery:
+	- Some already-installed apps fail `spctl` assessment intermittently, which previously logged `Error verifying` and returned early — excluding the app from discovery/updates entirely even though Installomator would still validate post-download
+	- Managed key `SkipPreUpdateVerification` (`true`/`false`, default `false`); CLI `--skip-pre-update-verification` / `--skip-pre-update-verification-off`
+	- When enabled, discovery logs a warning and continues to version comparison / queueing; Installomator validation after download is unchanged
+	- iMazing + Jamf manifests and All-Options examples updated
+
 ### 11-Aug-2026 (2) - Build 3.7.0.2608112305
 - [#166](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166): replaced the allow-list `ScheduleWorkflowActive` model with **BusinessHours** blocked windows (do-not-disturb hours):
 	- Managed key `BusinessHours` = `DAY:hh:mm-hh:mm,...` (`MON`–`SUN`, 24-hour, comma-separated). Empty/unset = always allowed. Local Mac timezone; same-day ranges only (overnight = two windows)

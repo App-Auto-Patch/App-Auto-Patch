@@ -661,6 +661,19 @@
             ],
             "property_order": 115
         },
+        "SkipPreUpdateVerification": {
+            "type": "boolean",
+            "title": "Skip Pre-Update Verification",
+            "description": "When true, discovery skips the local Gatekeeper (spctl) / Team ID pre-update check for already-installed apps. Use this when spctl assessment intermittently fails for a valid app and would otherwise exclude it from discovery/updates. Installomator still validates the downloaded package after download. Default false.",
+            "default": false,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/256"
+                }
+            ],
+            "property_order": 116
+        },
         "InstallomatorOptions": {
             "type": "string",
             "title": "Installomator Options",
