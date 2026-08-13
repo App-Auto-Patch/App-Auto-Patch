@@ -32,6 +32,8 @@
 	<string>TRUE</string>
 	<key>ShowDockIcon</key>
 	<true/>
+	<key>ShowNotifications</key>
+	<true/>
 	<key>DialogTimeoutDeferral</key>
 	<integer>300</integer>
 	<key>DialogTimeoutDeferralAction</key>
@@ -123,6 +125,8 @@
 	<key>BusinessHoursRespectHardDeadline</key>
 	<false/>
 	<key>BusinessHoursSilentDuring</key>
+	<false/>
+	<key>BusinessHoursAllowDiscovery</key>
 	<false/>
 	<key>WorkflowInstallNowPatchingStatusAction</key>
 	<string>SUCCESS</string>

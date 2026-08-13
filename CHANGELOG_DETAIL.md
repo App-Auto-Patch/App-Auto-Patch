@@ -3,6 +3,28 @@
 # Version 3
 
 ## Version 3.7.0
+### 12-Aug-2026 (6) - Build 3.7.0.2608121710
+- Fixed banner notifications never appearing when AAP runs from its LaunchDaemon. swiftDialog 3.1 delivers notifications through helper apps (`Dialog Banner.app` / `Dialog Alert.app`) that run in the **calling** context — unlike dialog windows, which `dialogcli` relaunches as the console user. Launched as root the helper cannot reach the user's notification service (`Getting notification settings failed … com.apple.usernotifications.listener was invalidated`) and silently displays nothing:
+	- `send_aap_notification` now hands off to the console user's GUI session via `launchctl asuser "${currentUserID}" sudo -u "${currentUserAccountName}"` when running as root
+	- swiftDialog output is appended to the verbose log instead of `/dev/null`, so errors like `Notifications are not available: Couldn't communicate with a helper application` are visible
+	- Notification approval is per helper bundle ID on swiftDialog 3.1+: `au.csiro.dialog.notifier.banner` (banner) and `au.csiro.dialog.notifier.alert` (alert); `au.csiro.dialog` covers 2.3–3.0
+
+### 12-Aug-2026 (5) - Build 3.7.0.2608121636
+- Separated Business Hours discovery from notifications: new `BusinessHoursAllowDiscovery` (default `false`) controls whether discovery runs during Business Hours when `BusinessHoursSilentDuring` is off. `ShowNotifications` only controls banners.
+	- Default `false` restores historical immediate defer (no discovery) during Business Hours
+	- When `true`: run discovery then defer; banner pending apps only if `ShowNotifications` is also on
+	- Managed key `BusinessHoursAllowDiscovery`; CLI `--business-hours-allow-discovery` / `--business-hours-allow-discovery-off`
+	- iMazing + Jamf manifests and All-Options examples updated
+
+### 12-Aug-2026 (4) - Build 3.7.0.2608121628
+- Banner-style swiftDialog notifications (`--notification --style banner`), enabled by default via `ShowNotifications`:
+	- After successful silent closed-app patching: notify that `{count}` apps were updated in the background
+	- During Business Hours without `BusinessHoursSilentDuring`: when `BusinessHoursAllowDiscovery` and `ShowNotifications` are both on, notify that `{count}` apps require updates with **Install Now** / **Dismiss**
+	- During Business Hours with SilentDuring after silent patch: notify `{count}` updated and `{remaining}` still queued (Install Now when remaining &gt; 0)
+	- Install Now uses a user-writable Triggers WatchPaths LaunchDaemon (`xyz.techitout.aap.installNowTrigger`) to start `--workflow-install-now` as root
+	- Managed key `ShowNotifications`; CLI `--show-notifications` / `--show-notifications-off`
+	- Localizable `dialogElements` keys added to iMazing + Jamf manifests: `display_string_notification_silent_updated`, `display_string_notification_apps_queued`, `display_string_notification_silent_and_queued`, `display_string_notification_button_install`, `display_string_notification_button_dismiss`
+
 ### 12-Aug-2026 (3) - Build 3.7.0.2608121613
 - Handle the user quitting a dialog window so dismissing it no longer has unexpected side effects. swiftDialog documents exit code `10` for cmd+quitkey, but Dock ▸ Quit and the menu bar Quit terminate `Dialog.app` itself, so `dialogcli` returns the raw signal instead — `15` for Quit and `9` for Force Quit. AAP now treats `9`, `10`, `15`, `137`, and `143` as a user dismissal:
 	- Deferral and hard-deadline dialogs reopen instead of treating Quit as Install Now

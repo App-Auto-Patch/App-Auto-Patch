@@ -359,6 +359,19 @@
             ],
             "property_order": 62
         },
+        "ShowNotifications": {
+            "type": "boolean",
+            "title": "Show Notifications",
+            "description": "When true, App Auto-Patch sends non-persistent banner-style swiftDialog notifications for silent background updates and for pending updates (including when BusinessHoursAllowDiscovery discovers apps during Business Hours). Does not itself enable discovery during Business Hours. Default true.",
+            "default": true,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://swiftdialog.app/"
+                }
+            ],
+            "property_order": 63
+        },
         "DialogTimeoutDeferral": {
             "type": "string",
             "title": "Deferral Dialog Timeout",
@@ -1162,7 +1175,7 @@
         "BusinessHours": {
             "type": "string",
             "title": "Business Hours",
-            "description": "Weekday time windows when interactive App Auto-Patch must NOT run (blocked / do-not-disturb hours). Format: DAY:hh:mm-hh:mm, comma-separated, no spaces (MON-SUN, 24-hour). Multiple windows per day are allowed — for example MON:09:00-11:59,MON:13:00-17:00 blocks morning and afternoon but leaves lunch clear. Same-day ranges only. Empty/unset = always allowed. During a window, AAP reschedules NextAutoLaunch to the next clear time and exits unless BusinessHoursSilentDuring is true. Intentionally bypassed by --workflow-install-now / --workflow-install-now-silent / --preview-deferral-dialog. Overdue hard deadlines bypass BusinessHours by default unless BusinessHoursRespectHardDeadline is true.",
+            "description": "Weekday time windows when interactive App Auto-Patch must NOT run (blocked / do-not-disturb hours). Format: DAY:hh:mm-hh:mm, comma-separated, no spaces (MON-SUN, 24-hour). Multiple windows per day are allowed — for example MON:09:00-11:59,MON:13:00-17:00 blocks morning and afternoon but leaves lunch clear. Same-day ranges only. Empty/unset = always allowed. During a window, AAP reschedules NextAutoLaunch to the next clear time and exits unless BusinessHoursSilentDuring or BusinessHoursAllowDiscovery is true. Intentionally bypassed by --workflow-install-now / --workflow-install-now-silent / --preview-deferral-dialog. Overdue hard deadlines bypass BusinessHours by default unless BusinessHoursRespectHardDeadline is true.",
             "options": {
                 "inputAttributes": {
                     "placeholder": "MON:09:00-17:00,TUE:09:00-17:00,WED:09:00-17:00,THU:09:00-17:00,FRI:09:00-17:00"
@@ -1192,7 +1205,7 @@
         "BusinessHoursSilentDuring": {
             "type": "boolean",
             "title": "Business Hours Silent During",
-            "description": "When true and during BusinessHours, AAP still runs discovery and silently patches closed apps only — no dialogs even if InteractiveMode is 1 or 2. Open or blocked apps remain queued and are deferred until BusinessHours clear. When false (default), during BusinessHours AAP only reschedules NextAutoLaunch and exits.",
+            "description": "When true and during BusinessHours, AAP still runs discovery and silently patches closed apps only — no dialogs even if InteractiveMode is 1 or 2. Open or blocked apps remain queued and are deferred until BusinessHours clear. When false (default), during BusinessHours AAP only reschedules NextAutoLaunch and exits — unless BusinessHoursAllowDiscovery is true.",
             "default": false,
             "links": [
                 {
@@ -1201,6 +1214,19 @@
                 }
             ],
             "property_order": 198
+        },
+        "BusinessHoursAllowDiscovery": {
+            "type": "boolean",
+            "title": "Business Hours Allow Discovery",
+            "description": "When true and during BusinessHours without BusinessHoursSilentDuring, AAP runs discovery then defers until the window clears (no interactive dialogs or silent patching). ShowNotifications independently controls whether pending apps get a banner with Install Now. When false (default), AAP exits immediately during BusinessHours without discovery — matching historical behavior.",
+            "default": false,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166"
+                }
+            ],
+            "property_order": 199
         },
         "WorkflowInstallNowPatchingStatusAction": {
             "type": "string",
@@ -1600,6 +1626,61 @@
                                 "type": "string",
                                 "title": "Dialog Dismissed Button2",
                                 "description": "Language for Button2 (Continue in Background) on the dialog shown when the patching progress window was closed while updates are still running",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_notification_silent_updated": {
+                                "type": "string",
+                                "title": "Notification Silent Updated Message",
+                                "description": "Banner notification message when silent background patching updates apps. Use {count} for the number of apps updated.",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_notification_apps_queued": {
+                                "type": "string",
+                                "title": "Notification Apps Queued Message",
+                                "description": "Banner notification message when apps require updates (e.g. during Business Hours). Use {count} for the number of apps queued. Includes Install Now / Dismiss actions.",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_notification_silent_and_queued": {
+                                "type": "string",
+                                "title": "Notification Silent And Queued Message",
+                                "description": "Banner notification message when silent patching updated some apps and others remain queued. Use {count} for updated and {remaining} for still-queued apps.",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_notification_button_install": {
+                                "type": "string",
+                                "title": "Notification Install Now Button",
+                                "description": "Label for the Install Now action on banner notifications that offer starting --workflow-install-now",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_notification_button_dismiss": {
+                                "type": "string",
+                                "title": "Notification Dismiss Button",
+                                "description": "Label for the Dismiss action on banner notifications",
                                 "links": [
                                     {
                                         "rel": "More information",

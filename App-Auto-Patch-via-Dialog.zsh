@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.0"
 scriptDate="2026/08/12"
-scriptBuild="3.7.0.2608121613"
+scriptBuild="3.7.0.2608121710"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -72,8 +72,11 @@ echo "
     [--business-hours-respect-hard-deadline-off]
     [--business-hours-silent-during]
     [--business-hours-silent-during-off]
+    [--business-hours-allow-discovery]
+    [--business-hours-allow-discovery-off]
     [--skip-pre-update-verification] [--skip-pre-update-verification-off]
     [--show-dock-icon] [--show-dock-icon-off]
+    [--show-notifications] [--show-notifications-off]
 
     Deferral Deadline COUNT Options:
     [--deadline-count-focus=number]
@@ -180,8 +183,10 @@ echo "
     <key>BusinessHours</key> <string>MON:09:00-17:00,TUE:09:00-17:00,...</string>
     <key>BusinessHoursRespectHardDeadline</key> <true/> | <false/>
     <key>BusinessHoursSilentDuring</key> <true/> | <false/>
+    <key>BusinessHoursAllowDiscovery</key> <true/> | <false/>
     <key>SkipPreUpdateVerification</key> <true/> | <false/>
     <key>ShowDockIcon</key> <true/> | <false/>
+    <key>ShowNotifications</key> <true/> | <false/>
     <key>DiscoveryFrequency</key> <integer>hours</integer>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
     <key>ZoomCallActiveCheck</key> <true/> | <false/>
@@ -296,6 +301,10 @@ set_defaults() {
     # Empty until prefs resolve (managed > CLI > local > TRUE).
     ShowDockIconOption="" # MDM Enabled
 
+    # Banner-style swiftDialog notifications for silent/background update events. Default TRUE.
+    # Empty until prefs resolve (managed > CLI > local > TRUE).
+    ShowNotificationsOption="" # MDM Enabled
+
     installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore" # MDM Enabled
     
     installomatorVersion="Main" # MDM Enabled - Use:  Release|Main 
@@ -339,7 +348,8 @@ set_defaults() {
     # Empty/unset = always allowed. Multiple windows per day supported (e.g. before/after lunch) so
     # gaps between windows remain allowed. Local Mac timezone; same-day ranges only.
     # During a window: reschedule NextAutoLaunch to the next clear time and exit — unless
-    # BusinessHoursSilentDuring is true (discover + silently patch closed apps only).
+    # BusinessHoursSilentDuring is true (discover + silently patch closed apps only), or
+    # BusinessHoursAllowDiscovery is true (discover then defer; ShowNotifications may banner).
     # Bypassed by --workflow-install-now / --workflow-install-now-silent / --preview-deferral-dialog.
     business_hours_option="" # MDM Enabled
     # Empty until prefs resolve; managed/CLI/local then normalize to FALSE (default: hard deadline
@@ -349,6 +359,11 @@ set_defaults() {
     # TRUE = closed-apps-only silent path during business hours.
     business_hours_silent_during_option="" # MDM Enabled
     business_hours_silent_during_active="FALSE" # runtime flag set by enforce_business_hours
+    # When TRUE during BusinessHours without SilentDuring: run discovery then defer (no interactive
+    # dialogs / silent patch). Default FALSE = historical immediate defer before discovery.
+    # ShowNotifications independently controls whether queued apps get a banner after discovery.
+    business_hours_allow_discovery_option="" # MDM Enabled
+    business_hours_discovery_only_active="FALSE"
     typeset -ga business_hours_windows # populated by manage_parameter_options: "dow:startmin:endmin"
 
     UnattendedExit="FALSE" # MDM Enabled
@@ -365,10 +380,18 @@ set_defaults() {
     appAutoPatchReportPLIST="${appAutoPatchFolder}/xyz.techitout.appAutoPatchReport"
 
     appAutoPatchLaunchDaemonLabel="xyz.techitout.aap"
+    silent_patch_success_count=0
 
     WORKFLOW_INSTALL_NOW_FILE="${appAutoPatchFolder}/.WorkflowInstallNow"
     
     WORKFLOW_INSTALL_NOW_SILENT_FILE="${appAutoPatchFolder}/.WorkflowInstallNowSilent"
+
+    # User-writable trigger watched by xyz.techitout.aap.installNowTrigger so banner notification
+    # actions (which run as the console user) can request --workflow-install-now as root.
+    aapInstallNowTriggerDir="${appAutoPatchFolder}/Triggers"
+    aapInstallNowTriggerFile="${aapInstallNowTriggerDir}/InstallNow"
+    aapInstallNowTriggerScript="${appAutoPatchFolder}/aap-install-now-trigger"
+    aapInstallNowTriggerLaunchDaemonLabel="xyz.techitout.aap.installNowTrigger"
 
     FORCE_DISCOVERY_FILE="${appAutoPatchFolder}/.ForceDiscovery"
 
@@ -564,6 +587,14 @@ set_display_strings_language() {
     display_string_dialogdismissed_message="The App Auto-Patch window was closed, but updates are still running in the background."
     display_string_dialogdismissed_button1="Show Progress"
     display_string_dialogdismissed_button2="Continue in Background"
+
+    #### Language for banner-style swiftDialog notifications
+    # Placeholders: {count} = number of apps updated or queued; {remaining} = open apps still queued.
+    display_string_notification_silent_updated="App Auto-Patch has updated {count} application(s) in the background."
+    display_string_notification_apps_queued="{count} application(s) require updates."
+    display_string_notification_silent_and_queued="{count} application(s) were updated in the background. {remaining} open application(s) remain queued."
+    display_string_notification_button_install="Install Now"
+    display_string_notification_button_dismiss="Dismiss"
     
     #### Language for the Deferral Dialog with NO deferrals remaining
     display_string_deferraldeadline_button1="Install Now"
@@ -688,6 +719,11 @@ set_display_strings_language() {
             display_string_dialogdismissed_message_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_dialogdismissed_message" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             display_string_dialogdismissed_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_dialogdismissed_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             display_string_dialogdismissed_button2_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_dialogdismissed_button2" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_notification_silent_updated_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_notification_silent_updated" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_notification_apps_queued_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_notification_apps_queued" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_notification_silent_and_queued_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_notification_silent_and_queued" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_notification_button_install_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_notification_button_install" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_notification_button_dismiss_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_notification_button_dismiss" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferraldeadline_button1_managed
             display_string_deferraldeadline_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferraldeadline_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferraldeadline_button2_managed
@@ -781,6 +817,11 @@ set_display_strings_language() {
     [[ -n "${display_string_dialogdismissed_message_managed}" ]] && display_string_dialogdismissed_message="${display_string_dialogdismissed_message_managed}"
     [[ -n "${display_string_dialogdismissed_button1_managed}" ]] && display_string_dialogdismissed_button1="${display_string_dialogdismissed_button1_managed}"
     [[ -n "${display_string_dialogdismissed_button2_managed}" ]] && display_string_dialogdismissed_button2="${display_string_dialogdismissed_button2_managed}"
+    [[ -n "${display_string_notification_silent_updated_managed}" ]] && display_string_notification_silent_updated="${display_string_notification_silent_updated_managed}"
+    [[ -n "${display_string_notification_apps_queued_managed}" ]] && display_string_notification_apps_queued="${display_string_notification_apps_queued_managed}"
+    [[ -n "${display_string_notification_silent_and_queued_managed}" ]] && display_string_notification_silent_and_queued="${display_string_notification_silent_and_queued_managed}"
+    [[ -n "${display_string_notification_button_install_managed}" ]] && display_string_notification_button_install="${display_string_notification_button_install_managed}"
+    [[ -n "${display_string_notification_button_dismiss_managed}" ]] && display_string_notification_button_dismiss="${display_string_notification_button_dismiss_managed}"
     [[ -n "${display_string_deferraldeadline_button1_managed}" ]] && display_string_deferraldeadline_button1="${display_string_deferraldeadline_button1_managed}"
     [[ -n "${display_string_deferraldeadline_button2_managed}" ]] && display_string_deferraldeadline_button2="${display_string_deferraldeadline_button2_managed}"
     [[ -n "${display_string_deferraldeadline_infobox_managed}" ]] && display_string_deferraldeadline_infobox="${display_string_deferraldeadline_infobox_managed}"
@@ -843,6 +884,11 @@ set_display_strings_language() {
     log_verbose "display_string_dialogdismissed_message: $display_string_dialogdismissed_message"
     log_verbose "display_string_dialogdismissed_button1: $display_string_dialogdismissed_button1"
     log_verbose "display_string_dialogdismissed_button2: $display_string_dialogdismissed_button2"
+    log_verbose "display_string_notification_silent_updated: $display_string_notification_silent_updated"
+    log_verbose "display_string_notification_apps_queued: $display_string_notification_apps_queued"
+    log_verbose "display_string_notification_silent_and_queued: $display_string_notification_silent_and_queued"
+    log_verbose "display_string_notification_button_install: $display_string_notification_button_install"
+    log_verbose "display_string_notification_button_dismiss: $display_string_notification_button_dismiss"
     log_verbose "display_string_deferraldeadline_button1: $display_string_deferraldeadline_button1"
     log_verbose "display_string_deferraldeadline_button2: $display_string_deferraldeadline_button2"
     log_verbose "display_string_deferraldeadline_infobox: $display_string_deferraldeadline_infobox"
@@ -1067,6 +1113,12 @@ get_options() {
             --business-hours-silent-during-off)
                 business_hours_silent_during_option="FALSE"
             ;;
+            --business-hours-allow-discovery)
+                business_hours_allow_discovery_option="TRUE"
+            ;;
+            --business-hours-allow-discovery-off)
+                business_hours_allow_discovery_option="FALSE"
+            ;;
             --skip-pre-update-verification)
                 SkipPreUpdateVerificationOption="TRUE"
             ;;
@@ -1078,6 +1130,12 @@ get_options() {
             ;;
             --show-dock-icon-off)
                 ShowDockIconOption="FALSE"
+            ;;
+            --show-notifications)
+                ShowNotificationsOption="TRUE"
+            ;;
+            --show-notifications-off)
+                ShowNotificationsOption="FALSE"
             ;;
             --webhook-feature-off)
                 webhook_feature_option="FALSE"
@@ -1254,6 +1312,8 @@ get_preferences() {
         business_hours_respect_hard_deadline_managed=$(defaults read "${appAutoPatchManagedPLIST}" BusinessHoursRespectHardDeadline 2>/dev/null)
         local business_hours_silent_during_managed
         business_hours_silent_during_managed=$(defaults read "${appAutoPatchManagedPLIST}" BusinessHoursSilentDuring 2>/dev/null)
+        local business_hours_allow_discovery_managed
+        business_hours_allow_discovery_managed=$(defaults read "${appAutoPatchManagedPLIST}" BusinessHoursAllowDiscovery 2>/dev/null)
         local webhook_feature_managed
         webhook_feature_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookFeature 2> /dev/null)
         local webhook_url_slack_managed
@@ -1278,6 +1338,8 @@ get_preferences() {
         skip_pre_update_verification_managed=$(defaults read "${appAutoPatchManagedPLIST}" SkipPreUpdateVerification 2> /dev/null)
         local show_dock_icon_managed
         show_dock_icon_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowDockIcon 2> /dev/null)
+        local show_notifications_managed
+        show_notifications_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowNotifications 2> /dev/null)
         local installomator_options_managed
         installomator_options_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_update_disable_managed
@@ -1402,6 +1464,8 @@ get_preferences() {
         business_hours_respect_hard_deadline_local=$(defaults read "${appAutoPatchLocalPLIST}" BusinessHoursRespectHardDeadline 2>/dev/null)
         local business_hours_silent_during_local
         business_hours_silent_during_local=$(defaults read "${appAutoPatchLocalPLIST}" BusinessHoursSilentDuring 2>/dev/null)
+        local business_hours_allow_discovery_local
+        business_hours_allow_discovery_local=$(defaults read "${appAutoPatchLocalPLIST}" BusinessHoursAllowDiscovery 2>/dev/null)
         local webhook_feature_local
         webhook_feature_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookFeature 2> /dev/null)
         local webhook_url_slack_local
@@ -1426,6 +1490,8 @@ get_preferences() {
         skip_pre_update_verification_local=$(defaults read "${appAutoPatchLocalPLIST}" SkipPreUpdateVerification 2> /dev/null)
         local show_dock_icon_local
         show_dock_icon_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowDockIcon 2> /dev/null)
+        local show_notifications_local
+        show_notifications_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowNotifications 2> /dev/null)
         local installomator_options_local
         installomator_options_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_update_disable_local
@@ -1538,6 +1604,8 @@ get_preferences() {
     { [[ -z "${business_hours_respect_hard_deadline_managed}" ]] && [[ -z "${business_hours_respect_hard_deadline_option}" ]] && [[ -n "${business_hours_respect_hard_deadline_local}" ]]; } && business_hours_respect_hard_deadline_option="${business_hours_respect_hard_deadline_local}"
     [[ -n "${business_hours_silent_during_managed}" ]] && business_hours_silent_during_option="${business_hours_silent_during_managed}"
     { [[ -z "${business_hours_silent_during_managed}" ]] && [[ -z "${business_hours_silent_during_option}" ]] && [[ -n "${business_hours_silent_during_local}" ]]; } && business_hours_silent_during_option="${business_hours_silent_during_local}"
+    [[ -n "${business_hours_allow_discovery_managed}" ]] && business_hours_allow_discovery_option="${business_hours_allow_discovery_managed}"
+    { [[ -z "${business_hours_allow_discovery_managed}" ]] && [[ -z "${business_hours_allow_discovery_option}" ]] && [[ -n "${business_hours_allow_discovery_local}" ]]; } && business_hours_allow_discovery_option="${business_hours_allow_discovery_local}"
     [[ -n "${webhook_feature_managed}" ]] && webhook_feature_option="${webhook_feature_managed}"
     { [[ -z "${webhook_feature_managed}" ]] && [[ -z "${webhook_feature_option}" ]] && [[ -n "${webhook_feature_local}" ]]; } && webhook_feature_option="${webhook_feature_local}"
     [[ -n "${webhook_url_slack_managed}" ]] && webhook_url_slack_option="${webhook_url_slack_managed}"
@@ -1594,6 +1662,8 @@ get_preferences() {
     { [[ -z "${skip_pre_update_verification_managed}" ]] && [[ -z "${SkipPreUpdateVerificationOption}" ]] && [[ -n "${skip_pre_update_verification_local}" ]]; } && SkipPreUpdateVerificationOption="${skip_pre_update_verification_local}"
     [[ -n "${show_dock_icon_managed}" ]] && ShowDockIconOption="${show_dock_icon_managed}"
     { [[ -z "${show_dock_icon_managed}" ]] && [[ -z "${ShowDockIconOption}" ]] && [[ -n "${show_dock_icon_local}" ]]; } && ShowDockIconOption="${show_dock_icon_local}"
+    [[ -n "${show_notifications_managed}" ]] && ShowNotificationsOption="${show_notifications_managed}"
+    { [[ -z "${show_notifications_managed}" ]] && [[ -z "${ShowNotificationsOption}" ]] && [[ -n "${show_notifications_local}" ]]; } && ShowNotificationsOption="${show_notifications_local}"
     [[ -n "${installomator_options_managed}" ]] && installomatorOptions="${installomator_options_managed}"
     { [[ -z "${installomator_options_managed}" ]] && [[ -n "${installomatorOptions}" ]] && [[ -n "${installomator_options_local}" ]]; } && installomatorOptions="${installomator_options_local}"
     
@@ -1690,6 +1760,7 @@ get_preferences() {
     log_verbose "BusinessHours: ${business_hours_option:-<unset>}"
     log_verbose "BusinessHoursRespectHardDeadline: ${business_hours_respect_hard_deadline_option:-<unset>}"
     log_verbose "BusinessHoursSilentDuring: ${business_hours_silent_during_option:-<unset>}"
+    log_verbose "BusinessHoursAllowDiscovery: ${business_hours_allow_discovery_option:-<unset>}"
     log_verbose "WebhookFeature: $webhook_feature_option"
     log_verbose "WebhookURLSlack: $webhook_url_slack_option"
     log_verbose "WebhookURLTeams: $webhook_url_teams_option"
@@ -1702,6 +1773,7 @@ get_preferences() {
     log_verbose "IgnoreAppsInHomeFolder: $ignoreAppsInHomeFolder"
     log_verbose "SkipPreUpdateVerification: ${SkipPreUpdateVerificationOption:-<unset>}"
     log_verbose "ShowDockIcon: ${ShowDockIconOption:-<unset>}"
+    log_verbose "ShowNotifications: ${ShowNotificationsOption:-<unset>}"
     log_verbose "InstallomatorOptions: $installomatorOptions"
     log_verbose "InstallomatorUpdateDisable: $installomator_update_disable_option"
     log_verbose "InstallomatorVersion: $installomatorVersion"
@@ -2237,6 +2309,17 @@ manage_parameter_options() {
     fi
     log_verbose "business_hours_silent_during_option is: ${business_hours_silent_during_option}"
 
+    # Manage BusinessHoursAllowDiscovery (default FALSE = during business hours defer before discovery;
+    # TRUE = run discovery then defer when SilentDuring is off).
+    if [[ "${business_hours_allow_discovery_option}" -eq 1 ]] || [[ "${business_hours_allow_discovery_option}" == "TRUE" ]]; then
+        business_hours_allow_discovery_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" BusinessHoursAllowDiscovery -bool true
+    else
+        business_hours_allow_discovery_option="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" BusinessHoursAllowDiscovery 2>/dev/null
+    fi
+    log_verbose "business_hours_allow_discovery_option is: ${business_hours_allow_discovery_option}"
+
     # Manage SkipPreUpdateVerification (default FALSE = keep spctl/Team ID discovery checks).
     if [[ "${SkipPreUpdateVerificationOption}" -eq 1 ]] || [[ "${SkipPreUpdateVerificationOption}" == "TRUE" ]]; then
         SkipPreUpdateVerificationOption="TRUE"
@@ -2256,6 +2339,16 @@ manage_parameter_options() {
         defaults write "${appAutoPatchLocalPLIST}" ShowDockIcon -bool false
     fi
     log_verbose "ShowDockIconOption is: ${ShowDockIconOption}"
+
+    # Manage ShowNotifications (default TRUE = banner-style swiftDialog notifications for silent/queued updates).
+    if [[ -z "${ShowNotificationsOption}" ]] || [[ "${ShowNotificationsOption}" -eq 1 ]] || [[ "${ShowNotificationsOption}" == "TRUE" ]]; then
+        ShowNotificationsOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowNotifications -bool true
+    else
+        ShowNotificationsOption="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowNotifications -bool false
+    fi
+    log_verbose "ShowNotificationsOption is: ${ShowNotificationsOption}"
     
     # Manage ${zoom_call_active_check_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${zoom_call_active_check_option}" -eq 1 ]] || [[ "${zoom_call_active_check_option}" == "TRUE" ]]; then
@@ -2887,6 +2980,10 @@ workflow_startup() {
 	# BusinessHours early gate (#166): after prefs/validation and install-now flags resolve,
 	# before Jamf restart / network wait / discovery. Overdue hard deadline may bypass unless RespectHardDeadline.
 	enforce_business_hours
+
+    # Ensure the Install Now notification trigger path/LaunchDaemon exist on upgrades and
+    # non-install runs (banner notification actions write here as the console user).
+    ensure_aap_install_now_trigger
 	
 	# If aap is running via Jamf, then restart via LaunchDaemon to release the jamf parent process.
 	if [[ "${parent_process_is_jamf}" == "TRUE" ]]; then
@@ -3519,6 +3616,9 @@ EOLD
     chmod 644 "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
     chown root:wheel "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
 
+    # User-writable Install Now trigger used by banner notification actions.
+    ensure_aap_install_now_trigger
+
     # Record installed version
     defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "${scriptVersion}"
     defaults write "${appAutoPatchLocalPLIST}" AAPBuild -string "${scriptBuild}"
@@ -3546,6 +3646,10 @@ function uninstall_app_auto_patch() {
     log_uninstall "Removing previous AAP Launch Daemon: /Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
     launchctl bootout system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" 2> /dev/null
     rm -f "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" 2> /dev/null
+
+    log_uninstall "Removing Install Now trigger Launch Daemon: /Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist"
+    launchctl bootout system "/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist" 2> /dev/null
+    rm -f "/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist" 2> /dev/null
 
     # Remove the App Auto Patch sym link
     log_uninstall "Removing ${appAutoPatchLink}"
@@ -4463,12 +4567,180 @@ business_hours_defer_until_clear_and_exit() {
     exit_clean
 }
 
+# Creates the user-writable Triggers directory + root LaunchDaemon WatchPaths helper so a
+# banner notification's Install Now action (running as the console user) can request a
+# privileged --workflow-install-now run.
+ensure_aap_install_now_trigger() {
+    [[ $(id -u) -ne 0 ]] && return 0
+
+    mkdir -p "${aapInstallNowTriggerDir}"
+    chown root:wheel "${aapInstallNowTriggerDir}"
+    # Sticky + world-writable so any console user can touch InstallNow; only the owner (root)
+    # can delete others' files — same pattern as /tmp.
+    chmod 1777 "${aapInstallNowTriggerDir}"
+
+    /bin/cat <<EOF > "${aapInstallNowTriggerScript}"
+#!/bin/zsh --no-rcs
+# Invoked by LaunchDaemon WatchPaths when a console-user notification touches InstallNow.
+trigger_file="${aapInstallNowTriggerFile}"
+aap_bin="${appAutoPatchFolder}/appautopatch"
+[[ -e "\${trigger_file}" ]] || exit 0
+rm -f "\${trigger_file}"
+[[ -x "\${aap_bin}" ]] || aap_bin="/usr/local/bin/appautopatch"
+[[ -x "\${aap_bin}" ]] || exit 0
+"\${aap_bin}" --workflow-install-now
+exit 0
+EOF
+    chown root:wheel "${aapInstallNowTriggerScript}"
+    chmod 755 "${aapInstallNowTriggerScript}"
+
+    # Thin user-context helper for notification button1action (cannot run appautopatch as root).
+    local request_script="${appAutoPatchFolder}/aap-notification-request-install-now"
+    /bin/cat <<EOF > "${request_script}"
+#!/bin/zsh --no-rcs
+/usr/bin/touch "${aapInstallNowTriggerFile}"
+EOF
+    chown root:wheel "${request_script}"
+    chmod 755 "${request_script}"
+
+    local trigger_plist="/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist"
+    /bin/cat <<EOF > "${trigger_plist}"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>${aapInstallNowTriggerLaunchDaemonLabel}</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>${aapInstallNowTriggerScript}</string>
+	</array>
+	<key>WatchPaths</key>
+	<array>
+		<string>${aapInstallNowTriggerDir}</string>
+	</array>
+	<key>UserName</key>
+	<string>root</string>
+	<key>RunAtLoad</key>
+	<false/>
+</dict>
+</plist>
+EOF
+    chown root:wheel "${trigger_plist}"
+    chmod 644 "${trigger_plist}"
+    launchctl bootout system "${trigger_plist}" >/dev/null 2>&1
+    launchctl bootstrap system "${trigger_plist}" >/dev/null 2>&1
+    log_verbose "Install Now notification trigger ready at ${aapInstallNowTriggerFile}"
+}
+
+# Replace {count}/{remaining} placeholders in notification language strings.
+_format_notification_message() {
+    local template="$1"
+    local count="${2:-0}"
+    local remaining="${3:-0}"
+    local message="${template}"
+    message="${message//\{count\}/${count}}"
+    message="${message//\{remaining\}/${remaining}}"
+    print -r -- "${message}"
+}
+
+# Send a non-persistent banner-style swiftDialog notification.
+# Usage: send_aap_notification <message> [offer_install_now]
+send_aap_notification() {
+    local message="$1"
+    local offer_install_now="${2:-FALSE}"
+
+    [[ "${ShowNotificationsOption}" == "TRUE" ]] || return 0
+    [[ -z "${message}" ]] && return 0
+    [[ "${currentUserAccountName}" == "FALSE" || -z "${currentUserAccountName}" ]] && {
+        log_verbose "No console user; skipping notification."
+        return 0
+    }
+    [[ ! -x "${dialogBinary}" ]] && {
+        log_verbose "swiftDialog not available; skipping notification."
+        return 0
+    }
+
+    ensure_aap_install_now_trigger
+
+    local notifIcon="${logoImage}"
+    [[ -s "${notifIcon}" ]] || notifIcon="${icon}"
+    # Prefer a file path for notification icons; SF symbols may not render in banner helpers.
+    if [[ "${notifIcon}" == SF=* ]]; then
+        [[ -s "${logoImage}" ]] && notifIcon="${logoImage}"
+    fi
+
+    local -a notifArgs
+    notifArgs=(
+        --notification
+        --style banner
+        --title "${appTitle}"
+        --message "${message}"
+        --identifier "xyz.techitout.appAutoPatch.notification"
+    )
+    [[ -n "${notifIcon}" && "${notifIcon}" != SF=* && -e "${notifIcon}" ]] && notifArgs+=(--icon "${notifIcon}")
+
+    if [[ "${offer_install_now}" == "TRUE" ]]; then
+        local request_script="${appAutoPatchFolder}/aap-notification-request-install-now"
+        notifArgs+=(
+            --button1text "${display_string_notification_button_install}"
+            --button1action "${request_script}"
+            --button2text "${display_string_notification_button_dismiss}"
+        )
+    fi
+
+    log_notice "Sending banner notification: ${message}"
+    # swiftDialog 3.1 delivers banner/alert notifications through helper apps that run in the
+    # calling context. Launched from a root daemon they cannot reach the user's notification
+    # service ("connection to com.apple.usernotifications.listener was invalidated") and nothing
+    # is displayed, so hand the notification off to the console user's GUI session.
+    local -a notifCommand
+    notifCommand=("${dialogBinary}")
+    if [[ $(id -u) -eq 0 ]] && [[ -n "${currentUserID}" ]] && [[ "${currentUserID}" != "FALSE" ]]; then
+        notifCommand=(launchctl asuser "${currentUserID}" sudo -u "${currentUserAccountName}" "${dialogBinary}")
+    fi
+    "${notifCommand[@]}" "${notifArgs[@]}" >> "${appAutoPatchVerboseLog:-/dev/null}" 2>&1 &
+    disown
+}
+
+send_aap_notification_silent_updated() {
+    local count="${1:-0}"
+    (( count > 0 )) || return 0
+    local message
+    message="$(_format_notification_message "${display_string_notification_silent_updated}" "${count}")"
+    send_aap_notification "${message}" "FALSE"
+}
+
+send_aap_notification_apps_queued() {
+    local count="${1:-0}"
+    (( count > 0 )) || return 0
+    local message
+    message="$(_format_notification_message "${display_string_notification_apps_queued}" "${count}")"
+    send_aap_notification "${message}" "TRUE"
+}
+
+send_aap_notification_silent_and_queued() {
+    local updated="${1:-0}"
+    local remaining="${2:-0}"
+    (( updated > 0 )) || return 0
+    local message
+    message="$(_format_notification_message "${display_string_notification_silent_and_queued}" "${updated}" "${remaining}")"
+    if (( remaining > 0 )); then
+        send_aap_notification "${message}" "TRUE"
+    else
+        send_aap_notification "${message}" "FALSE"
+    fi
+}
+
 # Early gate: during BusinessHours, either continue silent closed-app patching
-# (BusinessHoursSilentDuring) or reschedule to the next clear time and exit cleanly.
+# (BusinessHoursSilentDuring), run discovery-only when BusinessHoursAllowDiscovery is TRUE,
+# or reschedule to the next clear time and exit cleanly.
+# ShowNotifications independently controls banner notifications after discovery.
 # Bypassed by --workflow-install-now / --workflow-install-now-silent / --preview-deferral-dialog,
 # and by overdue hard deadline unless BusinessHoursRespectHardDeadline is TRUE.
 enforce_business_hours() {
     business_hours_silent_during_active="FALSE"
+    business_hours_discovery_only_active="FALSE"
     if [[ ${#business_hours_windows[@]} -eq 0 ]]; then
         return 0
     fi
@@ -4496,6 +4768,15 @@ enforce_business_hours() {
         business_hours_silent_during_active="TRUE"
         log_status "BusinessHoursSilentDuring enabled; continuing with discovery and closed-app silent patching only (no dialogs)."
         write_status "Running: During BusinessHours; silent closed-app patching."
+        return 0
+    fi
+
+    # Without SilentDuring, historically AAP exited before discovery. AllowDiscovery runs
+    # discovery then defers; ShowNotifications may banner pending apps after discovery.
+    if [[ "${business_hours_allow_discovery_option}" == "TRUE" ]]; then
+        business_hours_discovery_only_active="TRUE"
+        log_status "BusinessHoursAllowDiscovery enabled; continuing with discovery only (no interactive dialogs or silent patching)."
+        write_status "Running: During BusinessHours; discovery only."
         return 0
     fi
 
@@ -4961,6 +5242,10 @@ swiftDialogDiscoverWindow(){
     
     # If we are using SwiftDialog
     _prepare_dialog_command_file
+    # BusinessHours silent/discovery-only paths must not show interactive discovery UI.
+    if [[ "${business_hours_silent_during_active}" == "TRUE" ]] || [[ "${business_hours_discovery_only_active}" == "TRUE" ]]; then
+        return 0
+    fi
     if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ ${InteractiveModeOption} -gt 1 ]]; then
         $dialogBinary \
         ${dialogDiscoverConfigurationOptions[@]} \
@@ -6277,7 +6562,7 @@ workflow_silent_patch_closed_apps() {
 
     local remainingLabels=()
     local newAppNamesArray=()
-    local silentPatchCount=0
+    silent_patch_success_count=0
     local silentPatchErrors=0
 
     for label in $queuedLabelsArray; do
@@ -6348,7 +6633,7 @@ workflow_silent_patch_closed_apps() {
                 # Pruning both DiscoveredLabels and the report PLIST ensures that a subsequent
                 # DiscoveryFrequency-skipped run never re-queues this now-patched app.
                 log_notice "Silent background patch succeeded for: ${label} (exit 0)"
-                silentPatchCount=$((silentPatchCount + 1))
+                silent_patch_success_count=$((silent_patch_success_count + 1))
                 local _newVersion="${AAPVersionByLabel[$label]:-}"
                 write_aap_receipt "${label}" "${_newVersion}" "${silentExitCode}"
                 remove_aap_report_item "${label}"
@@ -6394,8 +6679,8 @@ workflow_silent_patch_closed_apps() {
         esac
     done
 
-    if [[ $silentPatchCount -gt 0 ]]; then
-        log_notice "Silent background patching complete: ${silentPatchCount} app(s) updated without user interaction."
+    if [[ $silent_patch_success_count -gt 0 ]]; then
+        log_notice "Silent background patching complete: ${silent_patch_success_count} app(s) updated without user interaction."
     fi
     if [[ $silentPatchErrors -gt 0 ]]; then
         log_error "Silent background patching encountered ${silentPatchErrors} error(s). Those app(s) will appear in the user dialog."
@@ -7913,6 +8198,21 @@ main() {
         countOfElementsArray+=($label)
     done
 
+    # During BusinessHours without SilentDuring, with AllowDiscovery: discovery-only path.
+    # Optionally notify about pending apps (with Install Now), then defer until clear.
+    if [[ "${business_hours_discovery_only_active}" == "TRUE" ]]; then
+        if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            if [[ "${ShowNotificationsOption}" == "TRUE" ]]; then
+                send_aap_notification_apps_queued "${#countOfElementsArray[@]}"
+            else
+                log_info "During BusinessHours (discovery-only): ${#countOfElementsArray[@]} app(s) require updates (notifications off)."
+            fi
+        else
+            log_info "During BusinessHours (discovery-only): no apps require updates."
+        fi
+        business_hours_defer_until_clear_and_exit "During BusinessHours; discovery-only complete"
+    fi
+
     # During BusinessHours with SilentDuring: discovery already ran; patch closed apps
     # only with no dialogs. Remaining open/blocked apps wait until BusinessHours clear.
     if [[ "${business_hours_silent_during_active}" == "TRUE" ]]; then
@@ -7922,6 +8222,14 @@ main() {
         if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
             log_info "BusinessHoursSilentDuring: silently patching closed apps only..."
             workflow_silent_patch_closed_apps
+        fi
+        # Banner notifications for silent/queued outcomes during BusinessHours.
+        if [[ ${silent_patch_success_count} -gt 0 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            send_aap_notification_silent_and_queued "${silent_patch_success_count}" "${#countOfElementsArray[@]}"
+        elif [[ ${silent_patch_success_count} -gt 0 ]]; then
+            send_aap_notification_silent_updated "${silent_patch_success_count}"
+        elif [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            send_aap_notification_apps_queued "${#countOfElementsArray[@]}"
         fi
         if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
             log_status "During BusinessHours: ${#countOfElementsArray[@]} open/blocked app(s) remain; deferring interactive install until BusinessHours clear."
@@ -7980,6 +8288,10 @@ main() {
     if [[ ${InteractiveModeOption} -ge 1 ]] && [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         [[ ${InteractiveModeOption} == 2 ]] && swiftDialogUpdate "progresstext: ${display_string_silent_patch_progress} ..."
         workflow_silent_patch_closed_apps
+        # Scenario 1: any successful silent closed-app patches outside the BusinessHours-only path.
+        if [[ ${silent_patch_success_count} -gt 0 ]]; then
+            send_aap_notification_silent_updated "${silent_patch_success_count}"
+        fi
     fi
 
     # Close the staging/silent-patch progress window (if opened above), checked against

@@ -13,13 +13,21 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 	- Managed Preference Key: `<key>BusinessHours</key>` `<string>MON:09:00-17:00,TUE:09:00-17:00,...</string>` — empty/unset = always allowed
 	- Managed Preference Key: `<key>BusinessHoursRespectHardDeadline</key>` `<true/>` | `<false/>` — default: `false` (hard deadline bypasses Business Hours)
 	- Managed Preference Key: `<key>BusinessHoursSilentDuring</key>` `<true/>` | `<false/>` — default: `false`. When `true`, during Business Hours AAP still runs discovery and silently patches **closed apps only** (no dialogs, even if InteractiveMode is 1/2). Open/blocked apps stay queued until Business Hours clear.
-	- CLI: `--business-hours=...` / `--business-hours-respect-hard-deadline` / `-off` / `--business-hours-silent-during` / `-off`
+	- Managed Preference Key: `<key>BusinessHoursAllowDiscovery</key>` `<true/>` | `<false/>` — default: `false`. When `true` and SilentDuring is off, run discovery during Business Hours then defer (no interactive dialogs / silent patch). Default `false` = historical immediate defer with no discovery.
+	- CLI: `--business-hours=...` / `--business-hours-respect-hard-deadline` / `-off` / `--business-hours-silent-during` / `-off` / `--business-hours-allow-discovery` / `-off`
 - **Skip Pre-Update Verification** — Optionally skip the local Gatekeeper (`spctl`) / Team ID pre-update check during discovery. Some already-installed apps fail `spctl -a` intermittently and were being dropped from the update queue entirely; enabling this keeps them eligible while Installomator still validates the downloaded package. Default off. (#256)
 	- Managed Preference Key: `<key>SkipPreUpdateVerification</key>` `<true/>` | `<false/>` — default: `false`
 	- CLI: `--skip-pre-update-verification` / `--skip-pre-update-verification-off`
 - **Dock Icon** — Workflow swiftDialog windows show the App Auto-Patch logo in the macOS Dock (`--dockicon`) when swiftDialog 3.0+ is installed (default on). The deferral dialog badges the icon with the pending update count; the installation dialog counts that badge down as each update finishes. Disable with `ShowDockIcon` / `--show-dock-icon-off`. Dock Quit / ⌘Q on deferral reopens the dialog (does not install); quitting the patching window offers Show Progress or Continue in Background.
 	- Managed Preference Key: `<key>ShowDockIcon</key>` `<true/>` | `<false/>` — default: `true`
 	- CLI: `--show-dock-icon` / `--show-dock-icon-off`
+- **Banner Notifications** — Non-persistent swiftDialog `--notification --style banner` alerts (default on):
+	- After silent closed-app patching succeeds: “updated {count} application(s) in the background”
+	- During Business Hours without SilentDuring: when `BusinessHoursAllowDiscovery` is on and apps are found, optionally notify “{count} application(s) require updates” with Install Now / Dismiss (requires `ShowNotifications`)
+	- During Business Hours with SilentDuring after silent patch: “{count} updated… {remaining} remain queued” (Install Now when remaining &gt; 0)
+	- Managed Preference Key: `<key>ShowNotifications</key>` `<true/>` | `<false/>` — default: `true`
+	- CLI: `--show-notifications` / `--show-notifications-off`
+	- Requires notifications to be approved for swiftDialog via a `com.apple.notificationsettings` profile: `au.csiro.dialog.notifier.banner` and `au.csiro.dialog.notifier.alert` (swiftDialog 3.1+ helper apps), plus `au.csiro.dialog` for 3.0 and earlier
 - **Pre/Post Patch Scripts** — Run a managed, root-owned script once before and/or after Installomator installations (e.g. `jamf recon`). Scripts must live under `/Library/Management/AppAutoPatch/Hooks/`, cannot be symlinks, and must not be group/world-writable. Managed preferences only — never CLI or local prefs, never `eval`'d. (#156)
 	- Managed Preference Key: `<key>PrePatchScript</key>` `<string>/Library/Management/AppAutoPatch/Hooks/pre.sh</string>`
 	- Managed Preference Key: `<key>PostPatchScript</key>` `<string>/Library/Management/AppAutoPatch/Hooks/post.sh</string>`
