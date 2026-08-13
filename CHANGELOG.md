@@ -23,10 +23,11 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 	- CLI: `--show-dock-icon` / `--show-dock-icon-off`
 - **Banner Notifications** — Non-persistent swiftDialog `--notification --style banner` alerts (default on):
 	- After silent closed-app patching succeeds: “updated {count} application(s) in the background”
-	- During Business Hours without SilentDuring: when `BusinessHoursAllowDiscovery` is on and apps are found, optionally notify “{count} application(s) require updates” with Install Now / Dismiss (requires `ShowNotifications`)
+	- During Business Hours without SilentDuring: when `BusinessHoursAllowDiscovery` is on and apps are found, optionally notify “{count} application(s) require updates” with Install Now / Dismiss (requires `ShowNotificationsAll` or `ShowNotificationsAppsQueued`)
 	- During Business Hours with SilentDuring after silent patch: “{count} updated… {remaining} remain queued” (Install Now when remaining &gt; 0)
-	- Managed Preference Key: `<key>ShowNotifications</key>` `<true/>` | `<false/>` — default: `true`
-	- CLI: `--show-notifications` / `--show-notifications-off`
+	- Managed Preference Key: `<key>ShowNotificationsAll</key>` `<true/>` | `<false/>` — default: `true` (master switch; wins over individual type keys)
+	- Managed Preference Key: `<key>ShowNotificationsSilentUpdated</key>` / `<key>ShowNotificationsAppsQueued</key>` / `<key>ShowNotificationsSilentAndQueued</key>` `<true/>` | `<false/>` — default: `false`; opt-in when All is false
+	- CLI: `--show-notifications-all` / `-off` (aliases `--show-notifications` / `-off`) and per-type `--show-notifications-silent-updated` / `--show-notifications-apps-queued` / `--show-notifications-silent-and-queued` (each with `-off`)
 	- Requires notifications to be approved for swiftDialog via a `com.apple.notificationsettings` profile: `au.csiro.dialog.notifier.banner` and `au.csiro.dialog.notifier.alert` (swiftDialog 3.1+ helper apps), plus `au.csiro.dialog` for 3.0 and earlier
 - **Pre/Post Patch Scripts** — Run a managed, root-owned script once before and/or after Installomator installations (e.g. `jamf recon`). Scripts must live under `/Library/Management/AppAutoPatch/Hooks/`, cannot be symlinks, and must not be group/world-writable. Managed preferences only — never CLI or local prefs, never `eval`'d. (#156)
 	- Managed Preference Key: `<key>PrePatchScript</key>` `<string>/Library/Management/AppAutoPatch/Hooks/pre.sh</string>`
@@ -47,6 +48,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 **Behavior Changes**
 
+- Changed: InteractiveMode 2 staging / background closed-app patch mini dialog now shows a determinate progress bar by queued app count, with per-app status text and icon (`Staging …` / `Installing …`) instead of an indeterminate bouncing bar. Default `display_string_silent_patch_progress` is now `Installing` (app name is appended)
 - Changed: if no user is logged in, AAP no longer exits after waiting for the Dock — it waits up to 20 seconds, then continues without an active user session and skips the swiftDialog install/update check (since dialogs can't be shown without a user session). Fully-silent runs still skip the Dock wait entirely
 - Fixed: Teams webhooks now resolve Workspace One device links the same way Slack webhooks already did
 - Changed: when no custom dialog icon is configured, AAP logs an info message that it is using the SF Symbol fallback instead of a warning that incorrectly said the icon was "not found"

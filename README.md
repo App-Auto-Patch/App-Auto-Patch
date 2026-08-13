@@ -28,8 +28,9 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 	- Managed Preference Key: `<key>ShowDockIcon</key>` `<true/>` | `<false/>` (default `true`)
 	- CLI: `--show-dock-icon` / `--show-dock-icon-off`
 - **Banner Notifications** — Non-persistent swiftDialog banner notifications (default on) for silent closed-app updates and for pending updates when discovery runs during Business Hours (`BusinessHoursAllowDiscovery` or SilentDuring). Queued-app notifications include **Install Now** (triggers `--workflow-install-now`) and **Dismiss**.
-	- Managed Preference Key: `<key>ShowNotifications</key>` `<true/>` | `<false/>` (default `true`)
-	- CLI: `--show-notifications` / `--show-notifications-off`
+	- Managed Preference Key: `<key>ShowNotificationsAll</key>` `<true/>` | `<false/>` (default `true`) — master switch; when true, every type is shown and individual keys are ignored
+	- Managed Preference Key: `<key>ShowNotificationsSilentUpdated</key>` / `<key>ShowNotificationsAppsQueued</key>` / `<key>ShowNotificationsSilentAndQueued</key>` `<true/>` | `<false/>` (default `false`) — opt-in per type when All is false
+	- CLI: `--show-notifications-all` / `-off` (aliases: `--show-notifications` / `-off`) plus `--show-notifications-silent-updated` / `--show-notifications-apps-queued` / `--show-notifications-silent-and-queued` (each with `-off`)
 	- Language keys: `display_string_notification_silent_updated`, `display_string_notification_apps_queued`, `display_string_notification_silent_and_queued`, `display_string_notification_button_install`, `display_string_notification_button_dismiss` (placeholders `{count}` / `{remaining}`)
 	- Requires notifications to be approved for swiftDialog. Deploy a `com.apple.notificationsettings` profile for `au.csiro.dialog.notifier.banner` (swiftDialog 3.1+ banner helper), `au.csiro.dialog.notifier.alert` (alert helper), and `au.csiro.dialog` (3.0 and earlier)
 - **Pre/Post Patch Scripts** — Run a managed, root-owned script once before and/or after Installomator installations (e.g. `jamf recon`). Scripts must live under `/Library/Management/AppAutoPatch/Hooks/`, cannot be symlinks, and must not be group/world-writable. Managed preferences only — never CLI or local prefs, never `eval`'d. (#156)

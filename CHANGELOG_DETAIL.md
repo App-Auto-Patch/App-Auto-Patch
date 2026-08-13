@@ -3,6 +3,23 @@
 # Version 3
 
 ## Version 3.7.0
+### 12-Aug-2026 (8) - Build 3.7.0.2608122211
+- Split banner notification prefs: renamed `ShowNotifications` → `ShowNotificationsAll` (default `true`, master switch) and added per-type opt-in keys used only when All is false:
+	- `ShowNotificationsSilentUpdated` — silent closed-app “updated {count}…” banner
+	- `ShowNotificationsAppsQueued` — pending updates with Install Now / Dismiss
+	- `ShowNotificationsSilentAndQueued` — combined Silent During “{count} updated… {remaining} queued” banner
+	- When All is true alongside any individual key, All wins and every type is shown
+	- Legacy managed/local `ShowNotifications` is still read as All; local legacy key is deleted after migration
+	- CLI: `--show-notifications-all` / `-off` (aliases `--show-notifications` / `-off`) plus per-type flags; iMazing + Jamf manifests and All-Options examples updated
+
+### 12-Aug-2026 (7) - Build 3.7.0.2608121738
+- InteractiveMode 2 staging / background closed-app patch mini dialog now shows determinate progress and per-app status (mirrors the main patching dialog):
+	- Progress bar advances by queued app count instead of bouncing indefinitely
+	- Progress text shows the current app (`Staging Google Chrome …` / `Installing Google Chrome …`) and swaps the dialog icon to that app
+	- Skipped apps (already staged, excluded, open/blocked) still advance the bar so it never stalls
+	- Default `display_string_silent_patch_progress` shortened to `Installing` so the app name fits cleanly; staging prefix remains `Staging`
+	- iMazing + Jamf language-string descriptions updated
+
 ### 12-Aug-2026 (6) - Build 3.7.0.2608121710
 - Fixed banner notifications never appearing when AAP runs from its LaunchDaemon. swiftDialog 3.1 delivers notifications through helper apps (`Dialog Banner.app` / `Dialog Alert.app`) that run in the **calling** context — unlike dialog windows, which `dialogcli` relaunches as the console user. Launched as root the helper cannot reach the user's notification service (`Getting notification settings failed … com.apple.usernotifications.listener was invalidated`) and silently displays nothing:
 	- `send_aap_notification` now hands off to the console user's GUI session via `launchctl asuser "${currentUserID}" sudo -u "${currentUserAccountName}"` when running as root

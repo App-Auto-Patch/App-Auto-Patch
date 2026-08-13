@@ -359,10 +359,10 @@
             ],
             "property_order": 62
         },
-        "ShowNotifications": {
+        "ShowNotificationsAll": {
             "type": "boolean",
-            "title": "Show Notifications",
-            "description": "When true, App Auto-Patch sends non-persistent banner-style swiftDialog notifications for silent background updates and for pending updates (including when BusinessHoursAllowDiscovery discovers apps during Business Hours). Does not itself enable discovery during Business Hours. Default true.",
+            "title": "Show Notifications (All)",
+            "description": "Master switch for banner-style swiftDialog notifications. When true (default), every notification type is shown and individual ShowNotifications* keys are ignored. When false, enable specific types with ShowNotificationsSilentUpdated, ShowNotificationsAppsQueued, and/or ShowNotificationsSilentAndQueued. Does not itself enable discovery during Business Hours.",
             "default": true,
             "links": [
                 {
@@ -371,6 +371,45 @@
                 }
             ],
             "property_order": 63
+        },
+        "ShowNotificationsSilentUpdated": {
+            "type": "boolean",
+            "title": "Show Notification: Silent Updated",
+            "description": "When ShowNotificationsAll is false, enable the banner that reports successful silent closed-app updates (e.g. “updated {count} application(s) in the background”). Ignored when ShowNotificationsAll is true.",
+            "default": false,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://swiftdialog.app/"
+                }
+            ],
+            "property_order": 64
+        },
+        "ShowNotificationsAppsQueued": {
+            "type": "boolean",
+            "title": "Show Notification: Apps Queued",
+            "description": "When ShowNotificationsAll is false, enable the banner that reports pending updates with Install Now / Dismiss (including after BusinessHoursAllowDiscovery). Ignored when ShowNotificationsAll is true.",
+            "default": false,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://swiftdialog.app/"
+                }
+            ],
+            "property_order": 65
+        },
+        "ShowNotificationsSilentAndQueued": {
+            "type": "boolean",
+            "title": "Show Notification: Silent And Queued",
+            "description": "When ShowNotificationsAll is false, enable the combined banner after Business Hours Silent During (“{count} updated… {remaining} remain queued”). Ignored when ShowNotificationsAll is true.",
+            "default": false,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://swiftdialog.app/"
+                }
+            ],
+            "property_order": 66
         },
         "DialogTimeoutDeferral": {
             "type": "string",
@@ -1218,7 +1257,7 @@
         "BusinessHoursAllowDiscovery": {
             "type": "boolean",
             "title": "Business Hours Allow Discovery",
-            "description": "When true and during BusinessHours without BusinessHoursSilentDuring, AAP runs discovery then defers until the window clears (no interactive dialogs or silent patching). ShowNotifications independently controls whether pending apps get a banner with Install Now. When false (default), AAP exits immediately during BusinessHours without discovery — matching historical behavior.",
+            "description": "When true and during BusinessHours without BusinessHoursSilentDuring, AAP runs discovery then defers until the window clears (no interactive dialogs or silent patching). Notification prefs independently control whether pending apps get a banner with Install Now. When false (default), AAP exits immediately during BusinessHours without discovery — matching historical behavior.",
             "default": false,
             "links": [
                 {
@@ -1504,7 +1543,7 @@
                             "display_string_staging_progress": {
                                 "type": "string",
                                 "title": "Staging Dialog Progress",
-                                "description": "Language for the progress text shown while updates are being staged (downloaded ahead of time)",
+                                "description": "Language for the progress text shown while an update is being staged (downloaded ahead of time). The app display name is appended (e.g. \"Staging Google Chrome …\").",
                                 "links": [
                                     {
                                         "rel": "More information",
@@ -1515,7 +1554,7 @@
                             "display_string_silent_patch_progress": {
                                 "type": "string",
                                 "title": "Silent Patch Progress",
-                                "description": "Language for the progress text shown while closed apps are being silently patched in the background",
+                                "description": "Language for the progress text shown while a closed app is being silently patched in the background. The app display name is appended (e.g. \"Installing Google Chrome …\").",
                                 "links": [
                                     {
                                         "rel": "More information",

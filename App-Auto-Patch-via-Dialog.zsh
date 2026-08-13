@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.0"
 scriptDate="2026/08/12"
-scriptBuild="3.7.0.2608121710"
+scriptBuild="3.7.0.2608122211"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -76,7 +76,10 @@ echo "
     [--business-hours-allow-discovery-off]
     [--skip-pre-update-verification] [--skip-pre-update-verification-off]
     [--show-dock-icon] [--show-dock-icon-off]
-    [--show-notifications] [--show-notifications-off]
+    [--show-notifications-all] [--show-notifications-all-off]
+    [--show-notifications-silent-updated] [--show-notifications-silent-updated-off]
+    [--show-notifications-apps-queued] [--show-notifications-apps-queued-off]
+    [--show-notifications-silent-and-queued] [--show-notifications-silent-and-queued-off]
 
     Deferral Deadline COUNT Options:
     [--deadline-count-focus=number]
@@ -186,7 +189,10 @@ echo "
     <key>BusinessHoursAllowDiscovery</key> <true/> | <false/>
     <key>SkipPreUpdateVerification</key> <true/> | <false/>
     <key>ShowDockIcon</key> <true/> | <false/>
-    <key>ShowNotifications</key> <true/> | <false/>
+    <key>ShowNotificationsAll</key> <true/> | <false/>
+    <key>ShowNotificationsSilentUpdated</key> <true/> | <false/>
+    <key>ShowNotificationsAppsQueued</key> <true/> | <false/>
+    <key>ShowNotificationsSilentAndQueued</key> <true/> | <false/>
     <key>DiscoveryFrequency</key> <integer>hours</integer>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
     <key>ZoomCallActiveCheck</key> <true/> | <false/>
@@ -303,7 +309,14 @@ set_defaults() {
 
     # Banner-style swiftDialog notifications for silent/background update events. Default TRUE.
     # Empty until prefs resolve (managed > CLI > local > TRUE).
-    ShowNotificationsOption="" # MDM Enabled
+    # Banner notifications: ShowNotificationsAll (default TRUE) enables every type.
+    # When All is FALSE, each ShowNotifications* type key is opt-in (default FALSE).
+    # If All is TRUE alongside any individual key, All wins and every type is shown.
+    # Legacy managed/local key ShowNotifications maps to ShowNotificationsAll.
+    ShowNotificationsAllOption="" # MDM Enabled
+    ShowNotificationsSilentUpdatedOption="" # MDM Enabled
+    ShowNotificationsAppsQueuedOption="" # MDM Enabled
+    ShowNotificationsSilentAndQueuedOption="" # MDM Enabled
 
     installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore" # MDM Enabled
     
@@ -349,7 +362,7 @@ set_defaults() {
     # gaps between windows remain allowed. Local Mac timezone; same-day ranges only.
     # During a window: reschedule NextAutoLaunch to the next clear time and exit — unless
     # BusinessHoursSilentDuring is true (discover + silently patch closed apps only), or
-    # BusinessHoursAllowDiscovery is true (discover then defer; ShowNotifications may banner).
+    # BusinessHoursAllowDiscovery is true (discover then defer; notifications may banner).
     # Bypassed by --workflow-install-now / --workflow-install-now-silent / --preview-deferral-dialog.
     business_hours_option="" # MDM Enabled
     # Empty until prefs resolve; managed/CLI/local then normalize to FALSE (default: hard deadline
@@ -361,7 +374,7 @@ set_defaults() {
     business_hours_silent_during_active="FALSE" # runtime flag set by enforce_business_hours
     # When TRUE during BusinessHours without SilentDuring: run discovery then defer (no interactive
     # dialogs / silent patch). Default FALSE = historical immediate defer before discovery.
-    # ShowNotifications independently controls whether queued apps get a banner after discovery.
+    # ShowNotifications* independently controls whether queued apps get a banner after discovery.
     business_hours_allow_discovery_option="" # MDM Enabled
     business_hours_discovery_only_active="FALSE"
     typeset -ga business_hours_windows # populated by manage_parameter_options: "dow:startmin:endmin"
@@ -413,6 +426,7 @@ set_defaults() {
     dialogPatchingIntentionalQuit="FALSE"
     dialogDiscoverPID=""
     dialogStagingPID=""
+    stagingWindowOpened="FALSE"
     typeset -gA patchingItemStatus
     patchingItemStatus=()
 
@@ -558,7 +572,8 @@ set_display_strings_language() {
     #### Language for the Staging / Background Patch Closed Apps dialog (InteractiveMode 2 only)
     display_string_staging_message="Preparing updates"
     display_string_staging_progress="Staging"
-    display_string_silent_patch_progress="Installing updates for closed apps"
+    # Per-app progresstext prefix during background closed-app installs (app name is appended).
+    display_string_silent_patch_progress="Installing"
     
     #### Language for the Deferral Dialog with Deferrals
     display_string_deferral_button1="Defer"
@@ -1131,11 +1146,29 @@ get_options() {
             --show-dock-icon-off)
                 ShowDockIconOption="FALSE"
             ;;
-            --show-notifications)
-                ShowNotificationsOption="TRUE"
+            --show-notifications-all|--show-notifications)
+                ShowNotificationsAllOption="TRUE"
             ;;
-            --show-notifications-off)
-                ShowNotificationsOption="FALSE"
+            --show-notifications-all-off|--show-notifications-off)
+                ShowNotificationsAllOption="FALSE"
+            ;;
+            --show-notifications-silent-updated)
+                ShowNotificationsSilentUpdatedOption="TRUE"
+            ;;
+            --show-notifications-silent-updated-off)
+                ShowNotificationsSilentUpdatedOption="FALSE"
+            ;;
+            --show-notifications-apps-queued)
+                ShowNotificationsAppsQueuedOption="TRUE"
+            ;;
+            --show-notifications-apps-queued-off)
+                ShowNotificationsAppsQueuedOption="FALSE"
+            ;;
+            --show-notifications-silent-and-queued)
+                ShowNotificationsSilentAndQueuedOption="TRUE"
+            ;;
+            --show-notifications-silent-and-queued-off)
+                ShowNotificationsSilentAndQueuedOption="FALSE"
             ;;
             --webhook-feature-off)
                 webhook_feature_option="FALSE"
@@ -1338,8 +1371,17 @@ get_preferences() {
         skip_pre_update_verification_managed=$(defaults read "${appAutoPatchManagedPLIST}" SkipPreUpdateVerification 2> /dev/null)
         local show_dock_icon_managed
         show_dock_icon_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowDockIcon 2> /dev/null)
-        local show_notifications_managed
-        show_notifications_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowNotifications 2> /dev/null)
+        local show_notifications_all_managed
+        show_notifications_all_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowNotificationsAll 2> /dev/null)
+        # Legacy key from earlier 3.7.0 builds — treat as ShowNotificationsAll when the new key is absent.
+        local show_notifications_legacy_managed
+        show_notifications_legacy_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowNotifications 2> /dev/null)
+        local show_notifications_silent_updated_managed
+        show_notifications_silent_updated_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowNotificationsSilentUpdated 2> /dev/null)
+        local show_notifications_apps_queued_managed
+        show_notifications_apps_queued_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowNotificationsAppsQueued 2> /dev/null)
+        local show_notifications_silent_and_queued_managed
+        show_notifications_silent_and_queued_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowNotificationsSilentAndQueued 2> /dev/null)
         local installomator_options_managed
         installomator_options_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_update_disable_managed
@@ -1490,8 +1532,16 @@ get_preferences() {
         skip_pre_update_verification_local=$(defaults read "${appAutoPatchLocalPLIST}" SkipPreUpdateVerification 2> /dev/null)
         local show_dock_icon_local
         show_dock_icon_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowDockIcon 2> /dev/null)
-        local show_notifications_local
-        show_notifications_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowNotifications 2> /dev/null)
+        local show_notifications_all_local
+        show_notifications_all_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowNotificationsAll 2> /dev/null)
+        local show_notifications_legacy_local
+        show_notifications_legacy_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowNotifications 2> /dev/null)
+        local show_notifications_silent_updated_local
+        show_notifications_silent_updated_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowNotificationsSilentUpdated 2> /dev/null)
+        local show_notifications_apps_queued_local
+        show_notifications_apps_queued_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowNotificationsAppsQueued 2> /dev/null)
+        local show_notifications_silent_and_queued_local
+        show_notifications_silent_and_queued_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowNotificationsSilentAndQueued 2> /dev/null)
         local installomator_options_local
         installomator_options_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_update_disable_local
@@ -1662,8 +1712,16 @@ get_preferences() {
     { [[ -z "${skip_pre_update_verification_managed}" ]] && [[ -z "${SkipPreUpdateVerificationOption}" ]] && [[ -n "${skip_pre_update_verification_local}" ]]; } && SkipPreUpdateVerificationOption="${skip_pre_update_verification_local}"
     [[ -n "${show_dock_icon_managed}" ]] && ShowDockIconOption="${show_dock_icon_managed}"
     { [[ -z "${show_dock_icon_managed}" ]] && [[ -z "${ShowDockIconOption}" ]] && [[ -n "${show_dock_icon_local}" ]]; } && ShowDockIconOption="${show_dock_icon_local}"
-    [[ -n "${show_notifications_managed}" ]] && ShowNotificationsOption="${show_notifications_managed}"
-    { [[ -z "${show_notifications_managed}" ]] && [[ -z "${ShowNotificationsOption}" ]] && [[ -n "${show_notifications_local}" ]]; } && ShowNotificationsOption="${show_notifications_local}"
+    [[ -n "${show_notifications_all_managed}" ]] && ShowNotificationsAllOption="${show_notifications_all_managed}"
+    { [[ -z "${show_notifications_all_managed}" ]] && [[ -z "${ShowNotificationsAllOption}" ]] && [[ -n "${show_notifications_legacy_managed}" ]]; } && ShowNotificationsAllOption="${show_notifications_legacy_managed}"
+    { [[ -z "${show_notifications_all_managed}" ]] && [[ -z "${show_notifications_legacy_managed}" ]] && [[ -z "${ShowNotificationsAllOption}" ]] && [[ -n "${show_notifications_all_local}" ]]; } && ShowNotificationsAllOption="${show_notifications_all_local}"
+    { [[ -z "${show_notifications_all_managed}" ]] && [[ -z "${show_notifications_legacy_managed}" ]] && [[ -z "${ShowNotificationsAllOption}" ]] && [[ -z "${show_notifications_all_local}" ]] && [[ -n "${show_notifications_legacy_local}" ]]; } && ShowNotificationsAllOption="${show_notifications_legacy_local}"
+    [[ -n "${show_notifications_silent_updated_managed}" ]] && ShowNotificationsSilentUpdatedOption="${show_notifications_silent_updated_managed}"
+    { [[ -z "${show_notifications_silent_updated_managed}" ]] && [[ -z "${ShowNotificationsSilentUpdatedOption}" ]] && [[ -n "${show_notifications_silent_updated_local}" ]]; } && ShowNotificationsSilentUpdatedOption="${show_notifications_silent_updated_local}"
+    [[ -n "${show_notifications_apps_queued_managed}" ]] && ShowNotificationsAppsQueuedOption="${show_notifications_apps_queued_managed}"
+    { [[ -z "${show_notifications_apps_queued_managed}" ]] && [[ -z "${ShowNotificationsAppsQueuedOption}" ]] && [[ -n "${show_notifications_apps_queued_local}" ]]; } && ShowNotificationsAppsQueuedOption="${show_notifications_apps_queued_local}"
+    [[ -n "${show_notifications_silent_and_queued_managed}" ]] && ShowNotificationsSilentAndQueuedOption="${show_notifications_silent_and_queued_managed}"
+    { [[ -z "${show_notifications_silent_and_queued_managed}" ]] && [[ -z "${ShowNotificationsSilentAndQueuedOption}" ]] && [[ -n "${show_notifications_silent_and_queued_local}" ]]; } && ShowNotificationsSilentAndQueuedOption="${show_notifications_silent_and_queued_local}"
     [[ -n "${installomator_options_managed}" ]] && installomatorOptions="${installomator_options_managed}"
     { [[ -z "${installomator_options_managed}" ]] && [[ -n "${installomatorOptions}" ]] && [[ -n "${installomator_options_local}" ]]; } && installomatorOptions="${installomator_options_local}"
     
@@ -1773,7 +1831,10 @@ get_preferences() {
     log_verbose "IgnoreAppsInHomeFolder: $ignoreAppsInHomeFolder"
     log_verbose "SkipPreUpdateVerification: ${SkipPreUpdateVerificationOption:-<unset>}"
     log_verbose "ShowDockIcon: ${ShowDockIconOption:-<unset>}"
-    log_verbose "ShowNotifications: ${ShowNotificationsOption:-<unset>}"
+    log_verbose "ShowNotificationsAll: ${ShowNotificationsAllOption:-<unset>}"
+    log_verbose "ShowNotificationsSilentUpdated: ${ShowNotificationsSilentUpdatedOption:-<unset>}"
+    log_verbose "ShowNotificationsAppsQueued: ${ShowNotificationsAppsQueuedOption:-<unset>}"
+    log_verbose "ShowNotificationsSilentAndQueued: ${ShowNotificationsSilentAndQueuedOption:-<unset>}"
     log_verbose "InstallomatorOptions: $installomatorOptions"
     log_verbose "InstallomatorUpdateDisable: $installomator_update_disable_option"
     log_verbose "InstallomatorVersion: $installomatorVersion"
@@ -2340,15 +2401,46 @@ manage_parameter_options() {
     fi
     log_verbose "ShowDockIconOption is: ${ShowDockIconOption}"
 
-    # Manage ShowNotifications (default TRUE = banner-style swiftDialog notifications for silent/queued updates).
-    if [[ -z "${ShowNotificationsOption}" ]] || [[ "${ShowNotificationsOption}" -eq 1 ]] || [[ "${ShowNotificationsOption}" == "TRUE" ]]; then
-        ShowNotificationsOption="TRUE"
-        defaults write "${appAutoPatchLocalPLIST}" ShowNotifications -bool true
+    # Manage ShowNotificationsAll (default TRUE = enable every banner notification type).
+    # When TRUE, individual ShowNotifications* type keys are ignored (All wins).
+    # Legacy local key ShowNotifications is migrated/removed.
+    if [[ -z "${ShowNotificationsAllOption}" ]] || [[ "${ShowNotificationsAllOption}" -eq 1 ]] || [[ "${ShowNotificationsAllOption}" == "TRUE" ]]; then
+        ShowNotificationsAllOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowNotificationsAll -bool true
     else
-        ShowNotificationsOption="FALSE"
-        defaults write "${appAutoPatchLocalPLIST}" ShowNotifications -bool false
+        ShowNotificationsAllOption="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowNotificationsAll -bool false
     fi
-    log_verbose "ShowNotificationsOption is: ${ShowNotificationsOption}"
+    defaults delete "${appAutoPatchLocalPLIST}" ShowNotifications 2>/dev/null
+    log_verbose "ShowNotificationsAllOption is: ${ShowNotificationsAllOption}"
+
+    # Per-type notification toggles (default FALSE). Only consulted when ShowNotificationsAll is FALSE.
+    if [[ "${ShowNotificationsSilentUpdatedOption}" -eq 1 ]] || [[ "${ShowNotificationsSilentUpdatedOption}" == "TRUE" ]]; then
+        ShowNotificationsSilentUpdatedOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowNotificationsSilentUpdated -bool true
+    else
+        ShowNotificationsSilentUpdatedOption="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" ShowNotificationsSilentUpdated 2>/dev/null
+    fi
+    log_verbose "ShowNotificationsSilentUpdatedOption is: ${ShowNotificationsSilentUpdatedOption}"
+
+    if [[ "${ShowNotificationsAppsQueuedOption}" -eq 1 ]] || [[ "${ShowNotificationsAppsQueuedOption}" == "TRUE" ]]; then
+        ShowNotificationsAppsQueuedOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowNotificationsAppsQueued -bool true
+    else
+        ShowNotificationsAppsQueuedOption="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" ShowNotificationsAppsQueued 2>/dev/null
+    fi
+    log_verbose "ShowNotificationsAppsQueuedOption is: ${ShowNotificationsAppsQueuedOption}"
+
+    if [[ "${ShowNotificationsSilentAndQueuedOption}" -eq 1 ]] || [[ "${ShowNotificationsSilentAndQueuedOption}" == "TRUE" ]]; then
+        ShowNotificationsSilentAndQueuedOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowNotificationsSilentAndQueued -bool true
+    else
+        ShowNotificationsSilentAndQueuedOption="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" ShowNotificationsSilentAndQueued 2>/dev/null
+    fi
+    log_verbose "ShowNotificationsSilentAndQueuedOption is: ${ShowNotificationsSilentAndQueuedOption}"
     
     # Manage ${zoom_call_active_check_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${zoom_call_active_check_option}" -eq 1 ]] || [[ "${zoom_call_active_check_option}" == "TRUE" ]]; then
@@ -4644,13 +4736,36 @@ _format_notification_message() {
     print -r -- "${message}"
 }
 
+# Returns 0 when the given banner notification type should be shown.
+# ShowNotificationsAll=TRUE enables every type and wins over individual keys.
+# When All is FALSE, only types with their individual key TRUE are shown.
+# Usage: aap_notification_enabled silent_updated|apps_queued|silent_and_queued
+aap_notification_enabled() {
+    local notif_type="$1"
+    if [[ "${ShowNotificationsAllOption}" == "TRUE" ]]; then
+        return 0
+    fi
+    case "${notif_type}" in
+        silent_updated)
+            [[ "${ShowNotificationsSilentUpdatedOption}" == "TRUE" ]] && return 0
+            ;;
+        apps_queued)
+            [[ "${ShowNotificationsAppsQueuedOption}" == "TRUE" ]] && return 0
+            ;;
+        silent_and_queued)
+            [[ "${ShowNotificationsSilentAndQueuedOption}" == "TRUE" ]] && return 0
+            ;;
+    esac
+    return 1
+}
+
 # Send a non-persistent banner-style swiftDialog notification.
 # Usage: send_aap_notification <message> [offer_install_now]
+# Callers must gate with aap_notification_enabled <type> first.
 send_aap_notification() {
     local message="$1"
     local offer_install_now="${2:-FALSE}"
 
-    [[ "${ShowNotificationsOption}" == "TRUE" ]] || return 0
     [[ -z "${message}" ]] && return 0
     [[ "${currentUserAccountName}" == "FALSE" || -z "${currentUserAccountName}" ]] && {
         log_verbose "No console user; skipping notification."
@@ -4706,6 +4821,10 @@ send_aap_notification() {
 send_aap_notification_silent_updated() {
     local count="${1:-0}"
     (( count > 0 )) || return 0
+    aap_notification_enabled silent_updated || {
+        log_verbose "Skipping silent-updated notification (disabled by preference)."
+        return 0
+    }
     local message
     message="$(_format_notification_message "${display_string_notification_silent_updated}" "${count}")"
     send_aap_notification "${message}" "FALSE"
@@ -4714,6 +4833,10 @@ send_aap_notification_silent_updated() {
 send_aap_notification_apps_queued() {
     local count="${1:-0}"
     (( count > 0 )) || return 0
+    aap_notification_enabled apps_queued || {
+        log_verbose "Skipping apps-queued notification (disabled by preference)."
+        return 0
+    }
     local message
     message="$(_format_notification_message "${display_string_notification_apps_queued}" "${count}")"
     send_aap_notification "${message}" "TRUE"
@@ -4723,6 +4846,10 @@ send_aap_notification_silent_and_queued() {
     local updated="${1:-0}"
     local remaining="${2:-0}"
     (( updated > 0 )) || return 0
+    aap_notification_enabled silent_and_queued || {
+        log_verbose "Skipping silent-and-queued notification (disabled by preference)."
+        return 0
+    }
     local message
     message="$(_format_notification_message "${display_string_notification_silent_and_queued}" "${updated}" "${remaining}")"
     if (( remaining > 0 )); then
@@ -4735,7 +4862,7 @@ send_aap_notification_silent_and_queued() {
 # Early gate: during BusinessHours, either continue silent closed-app patching
 # (BusinessHoursSilentDuring), run discovery-only when BusinessHoursAllowDiscovery is TRUE,
 # or reschedule to the next clear time and exit cleanly.
-# ShowNotifications independently controls banner notifications after discovery.
+# ShowNotifications* independently controls banner notifications after discovery.
 # Bypassed by --workflow-install-now / --workflow-install-now-silent / --preview-deferral-dialog,
 # and by overdue hard deadline unless BusinessHoursRespectHardDeadline is TRUE.
 enforce_business_hours() {
@@ -4772,7 +4899,7 @@ enforce_business_hours() {
     fi
 
     # Without SilentDuring, historically AAP exited before discovery. AllowDiscovery runs
-    # discovery then defers; ShowNotifications may banner pending apps after discovery.
+    # discovery then defers; notifications may banner pending apps after discovery.
     if [[ "${business_hours_allow_discovery_option}" == "TRUE" ]]; then
         business_hours_discovery_only_active="TRUE"
         log_status "BusinessHoursAllowDiscovery enabled; continuing with discovery only (no interactive dialogs or silent patching)."
@@ -5355,6 +5482,59 @@ swiftDialogUpdate(){
     log_verbose "Update swiftDialog: $1" 
     echo "$1" >> "$dialogCommandFile"
     
+}
+
+# InteractiveMode 2 mini dialog (staging / silent closed-app patch): reset to a determinate bar.
+# Usage: _aap_mini_progress_begin <total_items> <progresstext_prefix> [optional_message]
+_aap_mini_progress_begin() {
+    [[ ${InteractiveModeOption} != 2 ]] && return 0
+    [[ "${stagingWindowOpened}" != "TRUE" ]] && return 0
+    local total="${1:-0}"
+    local progress_prefix="${2:-}"
+    local phase_message="${3:-}"
+    [[ -n "${phase_message}" ]] && swiftDialogUpdate "message: ${phase_message} ..."
+    [[ -n "${progress_prefix}" ]] && swiftDialogUpdate "progresstext: ${progress_prefix} ..."
+    if (( total > 0 )); then
+        swiftDialogUpdate "progress: reset"
+        swiftDialogUpdate "progress: 0"
+    fi
+}
+
+# Show the current app under the progress bar and set absolute progress for completed items.
+# Usage: _aap_mini_progress_item <label> <progresstext_prefix> <completed_count> <total>
+_aap_mini_progress_item() {
+    [[ ${InteractiveModeOption} != 2 ]] && return 0
+    [[ "${stagingWindowOpened}" != "TRUE" ]] && return 0
+    local label="$1"
+    local progress_prefix="$2"
+    local completed="${3:-0}"
+    local total="${4:-0}"
+    local display_name icon_path
+
+    display_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh" 2>/dev/null)"
+    [[ -z "${display_name}" ]] && display_name="${label}"
+    icon_path=$(resolve_app_icon_path "${label}")
+    [[ -n "${icon_path}" ]] && swiftDialogUpdate "icon: ${icon_path}"
+    swiftDialogUpdate "progresstext: ${progress_prefix} ${display_name} …"
+    _aap_mini_progress_advance "${completed}" "${total}"
+}
+
+# Advance the determinate mini progress bar after an item finishes (or is skipped).
+# Usage: _aap_mini_progress_advance <completed_count> <total>
+_aap_mini_progress_advance() {
+    [[ ${InteractiveModeOption} != 2 ]] && return 0
+    [[ "${stagingWindowOpened}" != "TRUE" ]] && return 0
+    local completed="${1:-0}"
+    local total="${2:-0}"
+    local pct
+    if (( total > 0 )); then
+        if (( completed >= total )); then
+            swiftDialogUpdate "progress: complete"
+        else
+            pct=$(( (100 * completed) / total ))
+            swiftDialogUpdate "progress: ${pct}"
+        fi
+    fi
 }
 
 set_deferral_menu() {
@@ -6434,13 +6614,21 @@ workflow_stage_updates() {
     local stagedCount=0
     local stageSkipCount=0
     local stageErrorCount=0
+    local progressTotal=${#queuedLabelsArray[@]}
+    local progressCompleted=0
+
+    _aap_mini_progress_begin "${progressTotal}" "${display_string_staging_progress}" "${display_string_staging_message}"
 
     for label in $queuedLabelsArray; do
+        _aap_mini_progress_item "${label}" "${display_string_staging_progress}" "${progressCompleted}" "${progressTotal}"
+
         # On fully-silent runs, don't waste a download on labels we will never silently install.
         # Interactive runs still stage them so Install Now / hard-deadline is fast.
         if { [[ ${InteractiveModeOption} == 0 ]] || [[ "${workflow_install_now_silent_option}" == "TRUE" ]]; } && is_excluded_background_label "${label}"; then
             log_info "Skipping staging of '${label}' (ExcludedBackgroundLabels on a silent run)."
             stageSkipCount=$((stageSkipCount + 1))
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
             continue
         fi
 
@@ -6452,6 +6640,8 @@ workflow_stage_updates() {
         if [[ $? -ne 0 ]] || [[ -z "$labelInfo" ]]; then
             log_error "Could not resolve download info for '${label}'. Skipping staging."
             stageErrorCount=$((stageErrorCount + 1))
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
             continue
         fi
 
@@ -6467,12 +6657,16 @@ workflow_stage_updates() {
         if [[ "$stagingType" == "updateronly" ]]; then
             log_info "'${label}' uses an in-app updater (updateronly). Skipping staging."
             stageSkipCount=$((stageSkipCount + 1))
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
             continue
         fi
 
         if [[ -z "$stagingURL" ]]; then
             log_error "Empty downloadURL for '${label}'. Skipping staging."
             stageErrorCount=$((stageErrorCount + 1))
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
             continue
         fi
 
@@ -6497,6 +6691,8 @@ workflow_stage_updates() {
             if [[ -n "$stagingVersion" && "$existingVersion" == "$stagingVersion" ]]; then
                 log_notice "Already staged: '${label}' at version ${stagingVersion}. Skipping download."
                 stageSkipCount=$((stageSkipCount + 1))
+                progressCompleted=$((progressCompleted + 1))
+                _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
                 continue
             else
                 log_info "Version mismatch for staged '${label}' (cached=${existingVersion}, available=${stagingVersion:-unknown}). Re-staging."
@@ -6506,6 +6702,8 @@ workflow_stage_updates() {
             # Staged file exists but label has no version string — assume it is still current
             log_notice "Staged file for '${label}' exists with no version info. Using existing staged file."
             stageSkipCount=$((stageSkipCount + 1))
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
             continue
         elif [[ -f "$stagedFile" ]]; then
             # File without version sidecar — remove and re-stage
@@ -6531,6 +6729,9 @@ workflow_stage_updates() {
             rm -f "$stagedFile" "$stagedVersionFile" "$stagedTypeFile"
             stageErrorCount=$((stageErrorCount + 1))
         fi
+
+        progressCompleted=$((progressCompleted + 1))
+        _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
     done
 
     log_notice "Staging complete: ${stagedCount} downloaded, ${stageSkipCount} already current/skipped, ${stageErrorCount} error(s)"
@@ -6564,8 +6765,13 @@ workflow_silent_patch_closed_apps() {
     local newAppNamesArray=()
     silent_patch_success_count=0
     local silentPatchErrors=0
+    local progressTotal=${#queuedLabelsArray[@]}
+    local progressCompleted=0
+
+    _aap_mini_progress_begin "${progressTotal}" "${display_string_silent_patch_progress}" "${display_string_staging_message}"
 
     for label in $queuedLabelsArray; do
+        _aap_mini_progress_item "${label}" "${display_string_silent_patch_progress}" "${progressCompleted}" "${progressTotal}"
 
         # ExcludedBackgroundLabels: discover/report but do not silently patch. Leave in the
         # remaining queue so InteractiveMode 1/2 can still offer Install Now / hard-deadline.
@@ -6582,6 +6788,8 @@ workflow_silent_patch_closed_apps() {
             else
                 newAppNamesArray+=(${_dname},icon="${_ipath}")
             fi
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
             continue
         fi
 
@@ -6603,6 +6811,8 @@ workflow_silent_patch_closed_apps() {
                 else
                     newAppNamesArray+=(${_dname},icon="${_ipath}")
                 fi
+                progressCompleted=$((progressCompleted + 1))
+                _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
                 continue
             fi
         fi
@@ -6677,6 +6887,9 @@ workflow_silent_patch_closed_apps() {
                 fi
                 ;;
         esac
+
+        progressCompleted=$((progressCompleted + 1))
+        _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
     done
 
     if [[ $silent_patch_success_count -gt 0 ]]; then
@@ -8202,10 +8415,10 @@ main() {
     # Optionally notify about pending apps (with Install Now), then defer until clear.
     if [[ "${business_hours_discovery_only_active}" == "TRUE" ]]; then
         if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
-            if [[ "${ShowNotificationsOption}" == "TRUE" ]]; then
+            if aap_notification_enabled apps_queued; then
                 send_aap_notification_apps_queued "${#countOfElementsArray[@]}"
             else
-                log_info "During BusinessHours (discovery-only): ${#countOfElementsArray[@]} app(s) require updates (notifications off)."
+                log_info "During BusinessHours (discovery-only): ${#countOfElementsArray[@]} app(s) require updates (apps-queued notification off)."
             fi
         else
             log_info "During BusinessHours (discovery-only): no apps require updates."
@@ -8264,10 +8477,10 @@ main() {
 
     # Stage installers before the silent background-patch pass below, so each queued app is
     # downloaded at most once (closed apps then install from the staged copy; open/blocked apps
-    # keep it ready for the later user-approved install). InteractiveMode 2 only: show a bouncing
-    # progress window over both steps. stagingWindowOpened tracks whether it was opened, since
-    # countOfElementsArray can end up empty afterward (all apps patched silently) even though the
-    # window still needs closing.
+    # keep it ready for the later user-approved install). InteractiveMode 2 only: show a mini
+    # progress window over both steps with per-app status and a determinate progress bar.
+    # stagingWindowOpened tracks whether it was opened, since countOfElementsArray can end up
+    # empty afterward (all apps patched silently) even though the window still needs closing.
     stagingWindowOpened="FALSE"
     if [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         swiftDialogStagingWindow
@@ -8276,7 +8489,6 @@ main() {
 
     # Controlled by WorkflowStageUpdatesOption (managed key: WorkflowStageUpdates).
     if [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
-        [[ ${InteractiveModeOption} == 2 ]] && swiftDialogUpdate "progresstext: ${display_string_staging_progress} ..."
         workflow_stage_updates
     fi
 
@@ -8286,7 +8498,6 @@ main() {
     # dialog. Controlled by WorkflowBackgroundPatchClosedAppsOption (managed key: WorkflowBackgroundPatchClosedApps).
     # ExcludedBackgroundLabels are also skipped here and left for the interactive dialog.
     if [[ ${InteractiveModeOption} -ge 1 ]] && [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
-        [[ ${InteractiveModeOption} == 2 ]] && swiftDialogUpdate "progresstext: ${display_string_silent_patch_progress} ..."
         workflow_silent_patch_closed_apps
         # Scenario 1: any successful silent closed-app patches outside the BusinessHours-only path.
         if [[ ${silent_patch_success_count} -gt 0 ]]; then
