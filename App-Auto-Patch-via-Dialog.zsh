@@ -1389,6 +1389,29 @@ get_preferences() {
     { [[ -z "${convert_apps_in_home_folder_managed}" ]] && [[ -n "${convertAppsInHomeFolder}" ]] && [[ -n "${convert_apps_in_home_folder_local}" ]]; } && convertAppsInHomeFolder="${convert_apps_in_home_folder_local}"
     [[ -n "${ignore_apps_in_home_folder_managed}" ]] && ignoreAppsInHomeFolder="${ignore_apps_in_home_folder_managed}"
     { [[ -z "${ignore_apps_in_home_folder_managed}" ]] && [[ -n "${ignoreAppsInHomeFolder}" ]] && [[ -n "${ignore_apps_in_home_folder_local}" ]]; } && ignoreAppsInHomeFolder="${ignore_apps_in_home_folder_local}"
+
+    # Normalize the home-folder booleans. A configuration profile can deliver these as real
+    # booleans (<true/>), which `defaults read` returns as 1/0 - never the literal "TRUE" the
+    # discovery workflow compares against. Without this, a managed IgnoreAppsInHomeFolder=<true/>
+    # was silently ignored and ConvertAppsInHomeFolder kept deleting apps out of ~/Applications.
+    if [[ "${convertAppsInHomeFolder}" -eq 1 ]] || [[ "${convertAppsInHomeFolder:u}" == "TRUE" ]]; then
+        convertAppsInHomeFolder="TRUE"
+    else
+        convertAppsInHomeFolder="FALSE"
+    fi
+    if [[ "${ignoreAppsInHomeFolder}" -eq 1 ]] || [[ "${ignoreAppsInHomeFolder:u}" == "TRUE" ]]; then
+        ignoreAppsInHomeFolder="TRUE"
+    else
+        ignoreAppsInHomeFolder="FALSE"
+    fi
+
+    # Ignoring wins over converting: leaving a user-installed app alone is always recoverable,
+    # deleting it is not.
+    if [[ "${ignoreAppsInHomeFolder}" == "TRUE" ]] && [[ "${convertAppsInHomeFolder}" == "TRUE" ]]; then
+        log_verbose "Both IgnoreAppsInHomeFolder and ConvertAppsInHomeFolder are enabled, honoring Ignore and disabling Convert"
+        convertAppsInHomeFolder="FALSE"
+    fi
+
     [[ -n "${installomator_options_managed}" ]] && installomatorOptions="${installomator_options_managed}"
     { [[ -z "${installomator_options_managed}" ]] && [[ -n "${installomatorOptions}" ]] && [[ -n "${installomator_options_local}" ]]; } && installomatorOptions="${installomator_options_local}"
     
@@ -4622,14 +4645,14 @@ function PgetAppVersion() {
         elif ([[ "$applist" == *"/Applications/Edge Apps.localized/"* ]]); then
             log_info "App found in the Edge PWA app folder: $applist, ignoring"
             applist=""
+        elif ([[ "$applist" == *"/Users/"* && "$ignoreAppsInHomeFolder" == "TRUE" ]]); then
+            log_verbose "Ignoring user installed application: $applist"
+            applist=""
         elif ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "TRUE" ]]); then
             log_verbose "App found in User directory: $applist, coverting to default directory"
             # Adding the label to the converted labels
             /usr/libexec/PlistBuddy -c "add \":ConvertedLabels:\" string \"${label_name}\"" "${appAutoPatchLocalPLIST}.plist"
             rm -rf $applist
-        elif ([[ "$applist" == *"/Users/"* && "$ignoreAppsInHomeFolder" == "TRUE" ]]); then
-            log_verbose "Ignoring user installed application: $applist"
-            applist=""
         fi
     fi
     
