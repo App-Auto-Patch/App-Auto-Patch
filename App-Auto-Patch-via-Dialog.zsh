@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.0"
-scriptDate="2026/08/12"
-scriptBuild="3.7.0.2608122211"
+scriptDate="2026/08/14"
+scriptBuild="3.7.0.2608141655"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -106,6 +106,7 @@ echo "
     Dialog Options
     [--dialog-icon-option=filepath|URL]
     [--preview-deferral-dialog]
+    [--pending-apps-dialog]
     
     Webhook Options:
     [--webhook-feature-all] [--webhook-feature-failures] [--webhook-feature-off]
@@ -174,6 +175,7 @@ echo "
     <key>UnattendedExit</key> <string>TRUE,FALSE</string>
     <key>UnattendedExitSeconds</key> <integer>seconds</integer>
     <key>UseOverlayIcon</key> <string>TRUE,FALSE</string>
+    <key>VerboseMode</key> <true/> | <false/>
     <key>VersionComparisonInstallomatorFallback</key> <true/> | <false/>
     <key>VersionComparisonMethod</key> <string>IS_AT_LEAST,EQUAL_TO</string>
     <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
@@ -399,9 +401,23 @@ set_defaults() {
     
     WORKFLOW_INSTALL_NOW_SILENT_FILE="${appAutoPatchFolder}/.WorkflowInstallNowSilent"
 
-    # User-writable trigger watched by xyz.techitout.aap.installNowTrigger so banner notification
-    # actions (which run as the console user) can request --workflow-install-now as root.
-    aapInstallNowTriggerDir="${appAutoPatchFolder}/Triggers"
+    # Survives restart/network defer so pending-apps Install Now keeps skipping discovery and
+    # locks the install queue to the report PLIST the user confirmed (not DiscoveredLabels extras).
+    PENDING_APPS_INSTALL_NOW_FILE="${appAutoPatchFolder}/.PendingAppsInstallNow"
+
+    # One-shot flag so --pending-apps-dialog survives restart_aap (Jamf policy / out-of-folder
+    # install relaunches without CLI args). Consumed when the dialog is shown in main().
+    PENDING_APPS_DIALOG_FILE="${appAutoPatchFolder}/.PendingAppsDialog"
+
+    # User-writable trigger watched by xyz.techitout.aap.pendingAppsDialogTrigger so banner
+    # notification Install Now actions (which run as the console user) can open the pending-apps
+    # dialog as root. Choosing Install Now inside that dialog continues in-process as install-now.
+    aapPendingAppsTriggerDir="${appAutoPatchFolder}/Triggers"
+    aapPendingAppsTriggerFile="${aapPendingAppsTriggerDir}/PendingAppsDialog"
+    aapPendingAppsTriggerScript="${appAutoPatchFolder}/aap-pending-apps-dialog-trigger"
+    aapPendingAppsTriggerLaunchDaemonLabel="xyz.techitout.aap.pendingAppsDialogTrigger"
+    # Legacy Install Now WatchPaths label/paths from earlier 3.7.0 builds — removed by ensure_*.
+    aapInstallNowTriggerDir="${aapPendingAppsTriggerDir}"
     aapInstallNowTriggerFile="${aapInstallNowTriggerDir}/InstallNow"
     aapInstallNowTriggerScript="${appAutoPatchFolder}/aap-install-now-trigger"
     aapInstallNowTriggerLaunchDaemonLabel="xyz.techitout.aap.installNowTrigger"
@@ -578,6 +594,7 @@ set_display_strings_language() {
     #### Language for the Deferral Dialog with Deferrals
     display_string_deferral_button1="Defer"
     display_string_deferral_button2="Install Now"
+    display_string_pendingapps_button_later="Later"
     display_string_deferral_infobox1="Deferral available until"
     display_string_deferral_infobox2="out of"
     display_string_deferral_infobox3="deferrals remaining\n"
@@ -703,6 +720,7 @@ set_display_strings_language() {
             display_string_deferral_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferral_button2_managed
             display_string_deferral_button2_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_button2" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_pendingapps_button_later_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_pendingapps_button_later" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferral_infobox1_managed
             display_string_deferral_infobox1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_infobox1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferral_infobox2_managed
@@ -815,6 +833,7 @@ set_display_strings_language() {
     [[ -n "${display_string_silent_patch_progress_managed}" ]] && display_string_silent_patch_progress="${display_string_silent_patch_progress_managed}"
     [[ -n "${display_string_deferral_button1_managed}" ]] && display_string_deferral_button1="${display_string_deferral_button1_managed}"
     [[ -n "${display_string_deferral_button2_managed}" ]] && display_string_deferral_button2="${display_string_deferral_button2_managed}"
+    [[ -n "${display_string_pendingapps_button_later_managed}" ]] && display_string_pendingapps_button_later="${display_string_pendingapps_button_later_managed}"
     [[ -n "${display_string_deferral_infobox1_managed}" ]] && display_string_deferral_infobox1="${display_string_deferral_infobox1_managed}"
     [[ -n "${display_string_deferral_infobox2_managed}" ]] && display_string_deferral_infobox2="${display_string_deferral_infobox2_managed}"
     [[ -n "${display_string_deferral_infobox3_managed}" ]] && display_string_deferral_infobox3="${display_string_deferral_infobox3_managed}"
@@ -882,6 +901,7 @@ set_display_strings_language() {
     log_verbose "display_string_silent_patch_progress: $display_string_silent_patch_progress"
     log_verbose "display_string_deferral_button1: $display_string_deferral_button1"
     log_verbose "display_string_deferral_button2: $display_string_deferral_button2"
+    log_verbose "display_string_pendingapps_button_later: $display_string_pendingapps_button_later"
     log_verbose "display_string_deferral_infobox1: $display_string_deferral_infobox1"
     log_verbose "display_string_deferral_infobox2: $display_string_deferral_infobox2"
     log_verbose "display_string_deferral_infobox3: $display_string_deferral_infobox3"
@@ -1061,6 +1081,9 @@ get_options() {
             ;;
             --preview-deferral-dialog)
                 preview_deferral_dialog_option="TRUE"
+            ;;
+            --pending-apps-dialog)
+                pending_apps_dialog_option="TRUE"
             ;;
             --patch-week-start-day=*)
                 patch_week_start_day_option="${1##*=}"
@@ -1271,7 +1294,16 @@ get_preferences() {
         [[ "${debug_mode_option}" == "TRUE" ]] && defaults write "${appAutoPatchLocalPLIST}" DebugMode -bool true
         rm -f "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
         rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
+        rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" 2> /dev/null
+        rm -f "${PENDING_APPS_DIALOG_FILE}" 2> /dev/null
         rm -f "${FORCE_DISCOVERY_FILE}" 2> /dev/null
+        # Also clear the matching in-memory one-shot flags so a reset run can't still act on them
+        # (some are armed at the top of workflow_startup, before this reset block runs).
+        pending_apps_dialog_option="FALSE"
+        pending_apps_install_now_option="FALSE"
+        workflow_install_now_option="FALSE"
+        workflow_install_now_silent_option="FALSE"
+        force_discovery_option="FALSE"
         
     else
         if [[ "${reset_labels_option}" == "TRUE" ]]; then
@@ -1933,8 +1965,13 @@ get_preferences() {
         fi
     fi
 
-    # Check for Installomator
-    get_installomator
+    # Check for Installomator — skip for pending-apps dialog when fragments already exist so
+    # notification / CLI triggers stay near-instant (icons only need local label files).
+    if [[ "${pending_apps_dialog_option}" == "TRUE" ]] && [[ -d "${fragmentsPath}/labels" ]]; then
+        log_verbose "Pending-apps dialog: skipping Installomator update check (fragments present)."
+    else
+        get_installomator
+    fi
     
     # Write App Labels to PLIST
     parse_labels_option "${ignored_labels_option}"; ignoredLabelsArray=("${parsed_labels_option[@]}")
@@ -2831,6 +2868,26 @@ workflow_startup() {
 		exit 1
 	fi
 
+    # Resolve VerboseMode before any log_aap / log_verbose traffic so aap_verbose.log is gated for
+    # the entire run (including self_update, get_dialog, get_preferences preference dumps, etc.).
+    # Managed → CLI → local precedence matches the historical late-startup block.
+    resolve_verbose_mode
+
+    # --pending-apps-dialog is a one-shot trigger. The flag file lets the request survive a
+    # restart_aap relaunch (Jamf policy or out-of-folder install) which bootstraps the LaunchDaemon
+    # without the original CLI arguments. Restored here, before get_preferences() /
+    # manage_parameter_options(), so the dialog's Installomator/network fast paths still apply on a
+    # relaunched run. Consumed in main() when the dialog is shown. --reset-defaults wipes all
+    # one-shot state, so never (re)arm the dialog on a reset run.
+    if [[ "${reset_defaults_option}" == "TRUE" ]]; then
+        pending_apps_dialog_option="FALSE"
+        rm -f "${PENDING_APPS_DIALOG_FILE}" 2> /dev/null
+    elif [[ "${pending_apps_dialog_option}" == "TRUE" ]] || [[ -f "${PENDING_APPS_DIALOG_FILE}" ]]; then
+        log_status "Pending-apps dialog alternate workflow enabled."
+        pending_apps_dialog_option="TRUE"
+        touch "${PENDING_APPS_DIALOG_FILE}"
+    fi
+
     # One-shot override
     if [[ "${force_self_update_check_option:-}" == "TRUE" ]]; then
         forceSelfUpdateCheck="true"
@@ -2966,27 +3023,8 @@ workflow_startup() {
     get_mdm
 
 	
-	# Manage the ${verbose_mode_option} and if enabled start additional logging.
-	[[ "${reset_defaults_option}" == "TRUE" ]] && defaults delete "${appAutoPatchLocalPLIST}" VerboseMode 2> /dev/null
-    if [[ -f ${appAutoPatchManagedPLIST}.plist ]]; then
-		local verbose_mode_managed
-		verbose_mode_managed=$(defaults read "${appAutoPatchManagedPLIST}" VerboseMode 2> /dev/null)
-    fi
-
-	if [[ -f ${appAutoPatchLocalPLIST}.plist ]]; then
-		local verbose_mode_local
-		verbose_mode_local=$(defaults read "${appAutoPatchLocalPLIST}" VerboseMode 2> /dev/null)
-	fi
-
-	[[ -n "${verbose_mode_managed}" ]] && verbose_mode_option="${verbose_mode_managed}"
-	{ [[ -z "${verbose_mode_managed}" ]] && [[ -z "${verbose_mode_option}" ]] && [[ -n "${verbose_mode_local}" ]]; } && verbose_mode_option="${verbose_mode_local}"
-    if [[ "${verbose_mode_option}" -eq 1 ]] || [[ "${verbose_mode_option}" == "TRUE" ]]; then
-		verbose_mode_option="TRUE"
-		defaults write "${appAutoPatchLocalPLIST}" VerboseMode -bool true
-	else
-		verbose_mode_option="FALSE"
-		defaults delete "${appAutoPatchLocalPLIST}" VerboseMode 2> /dev/null
-	fi
+	# VerboseMode was already resolved at the top of workflow_startup (resolve_verbose_mode).
+	# Log the enablement banner here once the AAP STARTUP WORKFLOW header and computer stats are out.
 	if [[ "${verbose_mode_option}" == "TRUE" ]]; then
 		log_verbose "Verbose mode enabled."
 		log_verbose "aapCurrentFolder is: ${aapCurrentFolder}"
@@ -3051,6 +3089,21 @@ workflow_startup() {
         touch "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" # This is created in case the script restarts.
     fi
 
+    # Pending-apps dialog Install Now: restore after restart/network defer so discovery stays
+    # skipped and the install queue stays locked to the report PLIST the user confirmed.
+    # This is an interactive Install Now escape hatch — clear any stale silent install-now intent
+    # so ExcludedBackgroundLabels the user just confirmed are not dropped by the silent filter.
+    if [[ "${pending_apps_install_now_option}" == "TRUE" ]] || [[ -f "${PENDING_APPS_INSTALL_NOW_FILE}" ]]; then
+        log_status "Pending-apps Install Now alternate workflow enabled (locked report queue; no re-discovery)."
+        pending_apps_install_now_option="TRUE"
+        workflow_install_now_option="TRUE"
+        workflow_install_now_silent_option="FALSE"
+        InteractiveModeOption=2
+        rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
+        touch "${PENDING_APPS_INSTALL_NOW_FILE}"
+        touch "${WORKFLOW_INSTALL_NOW_FILE}"
+    fi
+
     # Check if a forced discovery (--force-discovery) was triggered. This is a one-shot trigger
     # that bypasses the DiscoveryFrequency window for this run only. The flag file lets the
     # request survive a restart_aap relaunch (e.g. when triggered via Jamf, which bootstraps the
@@ -3073,9 +3126,9 @@ workflow_startup() {
 	# before Jamf restart / network wait / discovery. Overdue hard deadline may bypass unless RespectHardDeadline.
 	enforce_business_hours
 
-    # Ensure the Install Now notification trigger path/LaunchDaemon exist on upgrades and
-    # non-install runs (banner notification actions write here as the console user).
-    ensure_aap_install_now_trigger
+    # Ensure the pending-apps dialog notification trigger path/LaunchDaemon exist on upgrades and
+    # non-install runs (banner notification Install Now actions write here as the console user).
+    ensure_aap_pending_apps_dialog_trigger
 	
 	# If aap is running via Jamf, then restart via LaunchDaemon to release the jamf parent process.
 	if [[ "${parent_process_is_jamf}" == "TRUE" ]]; then
@@ -3092,19 +3145,17 @@ workflow_startup() {
 	fi
 	
 	# Wait for a valid network connection. If there is still no network after two minutes, an automatic deferral is started.
-	local network_timeout
-	network_timeout=0
-	while [[ $(ifconfig -a inet 2>/dev/null | sed -n -e '/127.0.0.1/d' -e '/0.0.0.0/d' -e '/inet/p' | wc -l) -le 0 ]] && [[ "${network_timeout}" -lt 120 ]]; do
-		log_status "Waiting for network..."
-		sleep 5
-		network_timeout=$((network_timeout + 5))
-	done
-    if [[ $(ifconfig -a inet 2>/dev/null | sed -n -e '/127.0.0.1/d' -e '/0.0.0.0/d' -e '/inet/p' | wc -l) -le 0 ]]; then
-        deferral_timer_minutes="${deferral_timer_error_minutes}"
-        log_error "Network unavailable, trying again in ${deferral_timer_minutes} minutes."
-        write_status "Pending: Network unavailable, trying again in ${deferral_timer_minutes} minutes."
-        set_auto_launch_deferral
-    fi
+	# Pending-apps dialog only reads the local report PLIST — skip the network wait so notification /
+	# CLI triggers stay near-instant. (If the user then chooses Install Now, workflow_pending_apps_dialog
+	# performs this same network wait in-process before installing.)
+	if [[ "${pending_apps_dialog_option}" != "TRUE" ]]; then
+		if ! workflow_wait_for_network; then
+			deferral_timer_minutes="${deferral_timer_error_minutes}"
+			log_error "Network unavailable, trying again in ${deferral_timer_minutes} minutes."
+			write_status "Pending: Network unavailable, trying again in ${deferral_timer_minutes} minutes."
+			set_auto_launch_deferral
+		fi
+	fi
 	
     # Set icon based on whether the Mac is a desktop or laptop
     if [[ ! -n "$dialog_icon_option" ]]; then
@@ -4660,56 +4711,58 @@ business_hours_defer_until_clear_and_exit() {
 }
 
 # Creates the user-writable Triggers directory + root LaunchDaemon WatchPaths helper so a
-# banner notification's Install Now action (running as the console user) can request a
-# privileged --workflow-install-now run.
-ensure_aap_install_now_trigger() {
+# banner notification's Install Now action (running as the console user) can open the
+# pending-apps dialog as root. Choosing Install Now inside that dialog starts
+# --workflow-install-now. Also removes the legacy InstallNow WatchPaths daemon from earlier
+# 3.7.0 builds that jumped straight to --workflow-install-now.
+ensure_aap_pending_apps_dialog_trigger() {
     [[ $(id -u) -ne 0 ]] && return 0
 
-    mkdir -p "${aapInstallNowTriggerDir}"
-    chown root:wheel "${aapInstallNowTriggerDir}"
-    # Sticky + world-writable so any console user can touch InstallNow; only the owner (root)
+    mkdir -p "${aapPendingAppsTriggerDir}"
+    chown root:wheel "${aapPendingAppsTriggerDir}"
+    # Sticky + world-writable so any console user can touch the trigger; only the owner (root)
     # can delete others' files — same pattern as /tmp.
-    chmod 1777 "${aapInstallNowTriggerDir}"
+    chmod 1777 "${aapPendingAppsTriggerDir}"
 
-    /bin/cat <<EOF > "${aapInstallNowTriggerScript}"
+    /bin/cat <<EOF > "${aapPendingAppsTriggerScript}"
 #!/bin/zsh --no-rcs
-# Invoked by LaunchDaemon WatchPaths when a console-user notification touches InstallNow.
-trigger_file="${aapInstallNowTriggerFile}"
+# Invoked by LaunchDaemon WatchPaths when a console-user notification touches PendingAppsDialog.
+trigger_file="${aapPendingAppsTriggerFile}"
 aap_bin="${appAutoPatchFolder}/appautopatch"
 [[ -e "\${trigger_file}" ]] || exit 0
 rm -f "\${trigger_file}"
 [[ -x "\${aap_bin}" ]] || aap_bin="/usr/local/bin/appautopatch"
 [[ -x "\${aap_bin}" ]] || exit 0
-"\${aap_bin}" --workflow-install-now
+"\${aap_bin}" --pending-apps-dialog
 exit 0
 EOF
-    chown root:wheel "${aapInstallNowTriggerScript}"
-    chmod 755 "${aapInstallNowTriggerScript}"
+    chown root:wheel "${aapPendingAppsTriggerScript}"
+    chmod 755 "${aapPendingAppsTriggerScript}"
 
     # Thin user-context helper for notification button1action (cannot run appautopatch as root).
-    local request_script="${appAutoPatchFolder}/aap-notification-request-install-now"
+    local request_script="${appAutoPatchFolder}/aap-notification-request-pending-apps"
     /bin/cat <<EOF > "${request_script}"
 #!/bin/zsh --no-rcs
-/usr/bin/touch "${aapInstallNowTriggerFile}"
+/usr/bin/touch "${aapPendingAppsTriggerFile}"
 EOF
     chown root:wheel "${request_script}"
     chmod 755 "${request_script}"
 
-    local trigger_plist="/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist"
+    local trigger_plist="/Library/LaunchDaemons/${aapPendingAppsTriggerLaunchDaemonLabel}.plist"
     /bin/cat <<EOF > "${trigger_plist}"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>${aapInstallNowTriggerLaunchDaemonLabel}</string>
+	<string>${aapPendingAppsTriggerLaunchDaemonLabel}</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>${aapInstallNowTriggerScript}</string>
+		<string>${aapPendingAppsTriggerScript}</string>
 	</array>
 	<key>WatchPaths</key>
 	<array>
-		<string>${aapInstallNowTriggerDir}</string>
+		<string>${aapPendingAppsTriggerDir}</string>
 	</array>
 	<key>UserName</key>
 	<string>root</string>
@@ -4722,7 +4775,20 @@ EOF
     chmod 644 "${trigger_plist}"
     launchctl bootout system "${trigger_plist}" >/dev/null 2>&1
     launchctl bootstrap system "${trigger_plist}" >/dev/null 2>&1
-    log_verbose "Install Now notification trigger ready at ${aapInstallNowTriggerFile}"
+    log_verbose "Pending-apps dialog notification trigger ready at ${aapPendingAppsTriggerFile}"
+
+    # Remove legacy Install Now WatchPaths daemon/helper from earlier 3.7.0 builds.
+    local legacy_plist="/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist"
+    launchctl bootout system "${legacy_plist}" >/dev/null 2>&1
+    rm -f "${legacy_plist}" \
+          "${aapInstallNowTriggerScript}" \
+          "${aapInstallNowTriggerFile}" \
+          "${appAutoPatchFolder}/aap-notification-request-install-now" 2>/dev/null
+}
+
+# Back-compat name used by older call sites / mental model; forwards to the pending-apps trigger.
+ensure_aap_install_now_trigger() {
+    ensure_aap_pending_apps_dialog_trigger
 }
 
 # Replace {count}/{remaining} placeholders in notification language strings.
@@ -4776,7 +4842,7 @@ send_aap_notification() {
         return 0
     }
 
-    ensure_aap_install_now_trigger
+    ensure_aap_pending_apps_dialog_trigger
 
     local notifIcon="${logoImage}"
     [[ -s "${notifIcon}" ]] || notifIcon="${icon}"
@@ -4796,7 +4862,9 @@ send_aap_notification() {
     [[ -n "${notifIcon}" && "${notifIcon}" != SF=* && -e "${notifIcon}" ]] && notifArgs+=(--icon "${notifIcon}")
 
     if [[ "${offer_install_now}" == "TRUE" ]]; then
-        local request_script="${appAutoPatchFolder}/aap-notification-request-install-now"
+        # Opens the pending-apps dialog (not a silent --workflow-install-now). Install Now inside
+        # that dialog is what starts the privileged install workflow.
+        local request_script="${appAutoPatchFolder}/aap-notification-request-pending-apps"
         notifArgs+=(
             --button1text "${display_string_notification_button_install}"
             --button1action "${request_script}"
@@ -4814,7 +4882,11 @@ send_aap_notification() {
     if [[ $(id -u) -eq 0 ]] && [[ -n "${currentUserID}" ]] && [[ "${currentUserID}" != "FALSE" ]]; then
         notifCommand=(launchctl asuser "${currentUserID}" sudo -u "${currentUserAccountName}" "${dialogBinary}")
     fi
-    "${notifCommand[@]}" "${notifArgs[@]}" >> "${appAutoPatchVerboseLog:-/dev/null}" 2>&1 &
+    if [[ "${verbose_mode_option}" == "TRUE" ]]; then
+        "${notifCommand[@]}" "${notifArgs[@]}" >> "${appAutoPatchVerboseLog}" 2>&1 &
+    else
+        "${notifCommand[@]}" "${notifArgs[@]}" >/dev/null 2>&1 &
+    fi
     disown
 }
 
@@ -4872,8 +4944,8 @@ enforce_business_hours() {
         return 0
     fi
 
-    if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ "${workflow_install_now_silent_option}" == "TRUE" ]] || [[ "${preview_deferral_dialog_option}" == "TRUE" ]]; then
-        log_status "BusinessHours bypassed (install-now or preview-deferral-dialog)."
+    if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ "${workflow_install_now_silent_option}" == "TRUE" ]] || [[ "${preview_deferral_dialog_option}" == "TRUE" ]] || [[ "${pending_apps_dialog_option}" == "TRUE" ]]; then
+        log_status "BusinessHours bypassed (install-now, preview-deferral-dialog, or pending-apps-dialog)."
         return 0
     fi
 
@@ -4989,9 +5061,117 @@ exit_error() {
 # Logging Related Functions
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+# Cached identity + open append FDs (H3). Avoids per-line hostname/basename/open syscalls.
+# Verbose FD is only opened when VerboseMode is TRUE; aap_verbose.log is otherwise untouched.
+typeset -g _aap_log_host=""
+typeset -g _aap_log_script=""
+typeset -g _aap_log_fd=0
+typeset -g _aap_verbose_log_fd=0
+
+_aap_init_log_identity() {
+    [[ -n "${_aap_log_host}" ]] && return 0
+    _aap_log_host=$(hostname -s 2>/dev/null)
+    [[ -z "${_aap_log_host}" ]] && _aap_log_host="localhost"
+    # ZSH_ARGZERO is the invoked script path. Plain $0 can't be used here: inside a zsh function
+    # it expands to the function name (which is why log lines historically read "log_aap[pid]").
+    _aap_log_script="${${ZSH_ARGZERO:-${(%):-%x}}:t}"
+    [[ -z "${_aap_log_script}" ]] && _aap_log_script="App-Auto-Patch-via-Dialog.zsh"
+}
+
+_aap_close_log_fds() {
+    if [[ ${_aap_log_fd:-0} -gt 2 ]]; then
+        exec {_aap_log_fd}>&-
+    fi
+    _aap_log_fd=0
+    if [[ ${_aap_verbose_log_fd:-0} -gt 2 ]]; then
+        exec {_aap_verbose_log_fd}>&-
+    fi
+    _aap_verbose_log_fd=0
+}
+
+# Open (or re-open) append FDs for the main log and, when VerboseMode is on, the verbose log.
+# Called after archive_logs moves a log file so subsequent writes recreate the live path.
+_aap_ensure_log_fds() {
+    _aap_init_log_identity
+    mkdir -p "${appAutoPatchLogFolder}" 2>/dev/null
+    if [[ ${_aap_log_fd:-0} -le 2 ]]; then
+        exec {_aap_log_fd}>>"${appAutoPatchLog}" 2>/dev/null || _aap_log_fd=0
+    fi
+    if [[ "${verbose_mode_option}" == "TRUE" ]]; then
+        if [[ ${_aap_verbose_log_fd:-0} -le 2 ]]; then
+            exec {_aap_verbose_log_fd}>>"${appAutoPatchVerboseLog}" 2>/dev/null || _aap_verbose_log_fd=0
+        fi
+    elif [[ ${_aap_verbose_log_fd:-0} -gt 2 ]]; then
+        # VerboseMode flipped off mid-run (shouldn't happen after early resolve) — close verbose FD.
+        exec {_aap_verbose_log_fd}>&-
+        _aap_verbose_log_fd=0
+    fi
+}
+
+_aap_reopen_log_fds() {
+    _aap_close_log_fds
+    _aap_ensure_log_fds
+}
+
+# Format one log line. Uses zsh's built-in %D strftime (no date(1) subprocess) plus cached host/script.
+_aap_format_log_line() {
+    print -r -- "$(print -P '%D{%a %b %d %T}') ${_aap_log_host} ${_aap_log_script}[$$]: $*"
+}
+
+# Resolve VerboseMode from managed → CLI → local (same precedence as before), early enough that
+# every subsequent log_aap / log_verbose call honors the gate for aap_verbose.log.
+resolve_verbose_mode() {
+    [[ "${reset_defaults_option}" == "TRUE" ]] && defaults delete "${appAutoPatchLocalPLIST}" VerboseMode 2> /dev/null
+
+    local verbose_mode_managed=""
+    local verbose_mode_local=""
+    if [[ -f "${appAutoPatchManagedPLIST}.plist" ]]; then
+        verbose_mode_managed=$(defaults read "${appAutoPatchManagedPLIST}" VerboseMode 2> /dev/null)
+    fi
+    if [[ -f "${appAutoPatchLocalPLIST}.plist" ]]; then
+        verbose_mode_local=$(defaults read "${appAutoPatchLocalPLIST}" VerboseMode 2> /dev/null)
+    fi
+
+    [[ -n "${verbose_mode_managed}" ]] && verbose_mode_option="${verbose_mode_managed}"
+    { [[ -z "${verbose_mode_managed}" ]] && [[ -z "${verbose_mode_option}" ]] && [[ -n "${verbose_mode_local}" ]]; } && verbose_mode_option="${verbose_mode_local}"
+
+    # Ensure the AAP folder exists so defaults write succeeds even on a first-run install
+    # (resolve_verbose_mode now runs before install_app_auto_patch).
+    mkdir -p "${appAutoPatchFolder}" 2>/dev/null
+
+    if [[ "${verbose_mode_option}" -eq 1 ]] || [[ "${verbose_mode_option}" == "TRUE" ]]; then
+        verbose_mode_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" VerboseMode -bool true
+    else
+        verbose_mode_option="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" VerboseMode 2> /dev/null
+    fi
+
+    # Ensure FDs match the resolved mode (opens verbose FD only when TRUE).
+    _aap_ensure_log_fds
+}
+
+# Core log writer. Scope decides which files the line lands in:
+#   main    - stdout + aap.log, mirrored into aap_verbose.log when VerboseMode is on
+#   verbose - stdout + aap_verbose.log only; VERBOSE lines never pollute aap.log
+# stdout is always written to preserve the historical tee -a behavior for Jamf/CLI output.
+_aap_write_log() {
+    local scope="$1"
+    shift
+    _aap_ensure_log_fds
+    local line
+    line="$(_aap_format_log_line "$*")"
+    echo -e "${line}"
+    if [[ "${scope}" != "verbose" ]] && [[ ${_aap_log_fd:-0} -gt 2 ]]; then
+        echo -e "${line}" >&${_aap_log_fd}
+    fi
+    if [[ "${verbose_mode_option}" == "TRUE" ]] && [[ ${_aap_verbose_log_fd:-0} -gt 2 ]]; then
+        echo -e "${line}" >&${_aap_verbose_log_fd}
+    fi
+}
+
 function log_aap() {
-    echo -e "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: $*" | tee -a "${appAutoPatchLog}"
-    echo -e "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: $*" >> "${appAutoPatchVerboseLog}"
+    _aap_write_log main "$*"
 }
 
 function log_notice () {
@@ -5007,9 +5187,11 @@ function log_uninstall () {
 }
 
 function log_verbose() {
-	local caller_line="${funcfiletrace[1]##*:}"
-	[[ "${verbose_mode_option}" == "TRUE" ]] && log_aap "[VERBOSE] Function ${funcstack[2]} (line ${caller_line}): $1"
-	echo -e "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: [VERBOSE] Function ${funcstack[2]} (line ${caller_line}): $1" >> "${appAutoPatchVerboseLog}"
+    # VerboseMode off: no work and no aap_verbose.log I/O. On: written once, to aap_verbose.log
+    # only - aap.log stays free of VERBOSE noise.
+    [[ "${verbose_mode_option}" == "TRUE" ]] || return 0
+    local caller_line="${funcfiletrace[1]##*:}"
+    _aap_write_log verbose "[VERBOSE] Function ${funcstack[2]} (line ${caller_line}): $1"
 }
 
 function log_debug () {
@@ -5056,7 +5238,8 @@ write_status() {
 }
 
 log_echo() {
-    echo -e "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: Not Logged: $*"
+    _aap_init_log_identity
+    echo -e "$(_aap_format_log_line "Not Logged: $*")"
 }
 
 archive_logs() {
@@ -5073,6 +5256,8 @@ archive_logs() {
         log_notice "**** App Auto-Patch ${scriptVersion} - LOGS ARCHIVAL ****"
         mkdir -p "${appAutoPatchLogArchiveFolder}/${log_archive_name}"
         mv "${appAutoPatchLog}" "${appAutoPatchLogArchiveFolder}/${log_archive_name}/$(basename ${appAutoPatchLog})"
+        # Live path moved; reopen append FD so the next write recreates aap.log (tee -a used to).
+        _aap_reopen_log_fds
         log_notice "**** App Auto-Patch ${scriptVersion} - LOGS ARCHIVAL ****"
         log_status "An App Auto-Patch log was larger than ${appAutoPatchLogArchiveSize} KB, previous logs archived to: ${appAutoPatchLogArchiveFolder}/${log_archive_name}.zip"
         zip -r -j "${appAutoPatchLogArchiveFolder}/${log_archive_name}.zip" "${appAutoPatchLogArchiveFolder}/${log_archive_name}" > /dev/null 2>&1
@@ -5090,6 +5275,8 @@ archive_logs() {
         log_notice "**** App Auto-Patch ${scriptVersion} - VERBOSE LOGS ARCHIVAL ****"
         mkdir -p "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}"
         mv "${appAutoPatchVerboseLog}" "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}/$(basename ${appAutoPatchVerboseLog})"
+        # Live verbose path moved; reopen so VerboseMode mirrors recreate aap_verbose.log.
+        _aap_reopen_log_fds
         log_notice "**** App Auto-Patch ${scriptVersion} - VERBOSE LOGS ARCHIVAL ****"
         log_status "Verbose log was larger than ${appAutoPatchVerboseLogArchiveSize} KB, previous log archived to: ${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}.zip"
         zip -r -j "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}.zip" "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}" > /dev/null 2>&1
@@ -5479,9 +5666,7 @@ _prepare_dialog_command_file() {
 swiftDialogUpdate(){
     # Skip writes when the user chose to continue patching headless after dismissing the dialog.
     [[ "${dialogPatchingContinueBackground}" == "TRUE" ]] && return 0
-    log_verbose "Update swiftDialog: $1" 
     echo "$1" >> "$dialogCommandFile"
-    
 }
 
 # InteractiveMode 2 mini dialog (staging / silent closed-app patch): reset to a determinate bar.
@@ -5696,6 +5881,232 @@ workflow_preview_deferral_dialog() {
     log_notice "Preview complete - no install will be performed. Rescheduling next run using the default deferral timer (${deferral_timer_minutes} minutes)."
     write_status "Pending: Deferral dialog preview complete; next run in ${deferral_timer_minutes} minutes."
     set_auto_launch_deferral
+}
+
+# Waits up to two minutes for a non-loopback IPv4 address. Returns 0 as soon as one appears,
+# or 1 if none is present after the timeout. Callers decide what to do on failure (workflow_startup
+# and the pending-apps Install Now path both defer). Shared so both use identical detection.
+workflow_wait_for_network() {
+    local network_timeout=0
+    while [[ $(ifconfig -a inet 2>/dev/null | sed -n -e '/127.0.0.1/d' -e '/0.0.0.0/d' -e '/inet/p' | wc -l) -le 0 ]] && [[ "${network_timeout}" -lt 120 ]]; do
+        log_status "Waiting for network..."
+        sleep 5
+        network_timeout=$((network_timeout + 5))
+    done
+    if [[ $(ifconfig -a inet 2>/dev/null | sed -n -e '/127.0.0.1/d' -e '/0.0.0.0/d' -e '/inet/p' | wc -l) -le 0 ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# Builds the effective label policy used to decide whether a queued label may be patched, merging
+# the in-memory option arrays with what manage_parameter_options persisted to the local PLIST
+# (which is where wildcard IgnoredLabels patterns are expanded into individual labels). The
+# pending-apps dialog and the locked install queue both consult this, so the list the user sees is
+# exactly the list that gets patched.
+_load_effective_label_policy() {
+    typeset -ga aapPolicyIgnored=() aapPolicyRequired=() aapPolicyOptional=()
+    typeset -g aapPolicyIgnoreAll="${ignore_all_labels:-FALSE}"
+
+    aapPolicyIgnored=("${ignoredLabelsArray[@]}")
+    aapPolicyRequired=("${requiredLabelsArray[@]}")
+    aapPolicyOptional=("${optionalLabelsArray[@]}")
+
+    aapPolicyIgnored+=($(defaults read "${appAutoPatchLocalPLIST}" IgnoredLabels 2> /dev/null | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+    aapPolicyRequired+=($(defaults read "${appAutoPatchLocalPLIST}" RequiredLabels 2> /dev/null | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+    aapPolicyOptional+=($(defaults read "${appAutoPatchLocalPLIST}" OptionalLabels 2> /dev/null | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+}
+
+# Returns 0 when ${1} may be patched under the current policy: not explicitly ignored, and in
+# ignore-all mode ('*' in IgnoredLabels) only when required or optional. Mirrors the filtering the
+# normal queue path applies in main(). Requires _load_effective_label_policy to have run.
+_label_allowed_by_policy() {
+    local candidate="${1}"
+    [[ -z "${candidate}" ]] && return 1
+    (( ${aapPolicyIgnored[(Ie)${candidate}]} )) && return 1
+    if [[ "${aapPolicyIgnoreAll}" == "TRUE" ]]; then
+        { (( ${aapPolicyRequired[(Ie)${candidate}]} )) || (( ${aapPolicyOptional[(Ie)${candidate}]} )); } && return 0
+        return 1
+    fi
+    return 0
+}
+
+# User-facing pending-updates dialog (same UX as Resources/SupportApp-Extension/aap_pending_apps_dialog.zsh).
+# Reads the report PLIST (no discovery). Button1 = Later (dismiss). Button2 = Install Now.
+# Install Now continues in-process (no second appautopatch process): it adopts install-now
+# semantics and returns to main(), which patches the exact queue shown here (from the report
+# PLIST / DiscoveredLabels, without a fresh discovery scan). Used by the --pending-apps-dialog
+# CLI and by queued-app notification Install Now actions via the PendingAppsDialog WatchPaths trigger.
+workflow_pending_apps_dialog() {
+    log_notice "**** App Auto-Patch ${scriptVersion} - PENDING APPS DIALOG ****"
+
+    # This dialog is the authority for the install decision. Supersede any Install Now intent left
+    # armed by an earlier network-deferred Install Now (or a stale flag file) so re-presenting the
+    # dialog can't be bypassed, and a dialog that fails to show can't silently fall through to an
+    # unconfirmed install-now on the next cycle. Re-armed below only if the user clicks Install Now.
+    rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
+    pending_apps_install_now_option="FALSE"
+    workflow_install_now_option="FALSE"
+
+    if [[ ! -x "${dialogBinary}" ]]; then
+        log_error "swiftDialog not available; cannot show pending apps dialog."
+        write_status "Inactive Error: Pending apps dialog requested but swiftDialog is missing."
+        exit_error
+    fi
+
+    # swiftDialog is present, so the dialog can actually be presented now. Consume the one-shot
+    # .PendingAppsDialog survival flag here (not earlier) so the missing-swiftDialog exit above
+    # leaves it armed to retry on the next LaunchDaemon cycle.
+    rm -f "${PENDING_APPS_DIALOG_FILE}" 2> /dev/null
+
+    # Only list what an install would actually patch: apply the same IgnoredLabels / ignore-all
+    # policy the queue path applies, so Install Now never patches an app the dialog omitted and
+    # never silently drops one it listed.
+    _load_effective_label_policy
+
+    local -a pendingItems=()
+    local _label _disp _inst _nver
+    while IFS=$'\t' read -r _label _disp _inst _nver; do
+        [[ -z "${_label}" ]] && continue
+        if ! _label_allowed_by_policy "${_label}"; then
+            # Stale queue entry: discovery queued this label before IgnoredLabels started excluding
+            # it. Prune it from the report PLIST and DiscoveredLabels rather than just hiding it, so
+            # the Support App tile count, banner {count} text, and the report itself agree with this
+            # dialog instead of continuing to advertise an update that will never be installed.
+            log_verbose "Pending apps dialog: pruning '${_label}' from the queue (excluded by IgnoredLabels policy)."
+            remove_aap_report_item "${_label}"
+            remove_discovered_label "${_label}"
+            continue
+        fi
+        pendingItems+=("${_label}"$'\t'"${_disp}"$'\t'"${_inst}"$'\t'"${_nver}")
+    done < <(get_aap_report_entries)
+
+    if [[ ${#pendingItems[@]} -eq 0 ]]; then
+        log_info "No pending apps in report PLIST; showing up-to-date mini dialog."
+        $dialogBinary \
+            --title "${appTitle}" \
+            --message "${display_string_uptodate_message}" \
+            --icon "${logoImage:-${icon}}" \
+            --overlayicon "${overlayicon}" \
+            --button1text "${display_string_uptodate_button1}" \
+            --style mini \
+            --moveable \
+            --position topright \
+            --timer 15 \
+            --hidetimerbar \
+            --quitkey k \
+            ${dialogDockOptions[@]} \
+            >/dev/null 2>&1
+        write_status "Idle: Pending apps dialog — no updates queued."
+        # Cancel any leftover Install Now intent from a prior deferred attempt so the next
+        # scheduled run does not jump straight into install-now.
+        rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
+        exit_clean
+    fi
+
+    local -a appNamesArray=()
+    local iconPath versionSubtitle _cur _new item
+    for item in "${pendingItems[@]}"; do
+        IFS=$'\t' read -r _label _disp _inst _nver <<< "${item}"
+        [[ -z "${_disp}" ]] && _disp="${_label}"
+        iconPath=$(resolve_app_icon_path "${_label}")
+        _cur="${_inst//,/}"
+        _new="${_nver//,/}"
+        if [[ -n "${_cur}" ]] && [[ -n "${_new}" ]]; then
+            versionSubtitle="${display_string_version_current} ${_cur}  →  ${display_string_version_new} ${_new}"
+        elif [[ -n "${_new}" ]]; then
+            versionSubtitle="${display_string_version_new} ${_new}"
+        elif [[ -n "${_cur}" ]]; then
+            versionSubtitle="${display_string_version_current} ${_cur}"
+        else
+            versionSubtitle=""
+        fi
+        appNamesArray+=("--listitem")
+        if [[ -n "${versionSubtitle}" ]]; then
+            appNamesArray+=(${_disp},icon="${iconPath}",subtitle="${versionSubtitle}")
+        else
+            appNamesArray+=(${_disp},icon="${iconPath}")
+        fi
+    done
+
+    local numberOfUpdates=${#pendingItems[@]}
+    local message="${display_string_there_are} **(${numberOfUpdates})** ${display_string_deferral_message_02}"
+    log_info "Pending apps dialog will show ${numberOfUpdates} queued update(s)."
+
+    local -a pendingDialogOptions
+    pendingDialogOptions=(
+        ${dialogTitleOptions[@]}
+        --message "${message}"
+        --icon "${icon}"
+        --overlayicon "${overlayicon}"
+        --button1text "${display_string_pendingapps_button_later}"
+        --button2text "${display_string_deferral_button2}"
+        --position bottomright
+        --height 500
+        --width 600
+        --moveable
+        --titlefont size=18
+        --messagefont size=14
+        --quitkey k
+        ${dialogDockOptions[@]}
+    )
+    [[ "${dialogOnTop}" == "TRUE" ]] && pendingDialogOptions+=(--ontop)
+    [[ "${dialogSupportsDockIcon}" == "TRUE" ]] && pendingDialogOptions+=(--dockiconbadge "${numberOfUpdates}")
+
+    $dialogBinary "${pendingDialogOptions[@]}" "${appNamesArray[@]}"
+    local dialogOutput=$?
+    log_verbose "Pending apps dialog exit code: ${dialogOutput}"
+
+    if [[ ${dialogOutput} -eq 2 ]]; then
+        log_notice "Pending apps dialog: Install Now — continuing in-process via the install-now workflow (no re-discovery; patching the queue shown)."
+        write_status "Running: Pending apps dialog Install Now."
+
+        # Adopt install-now semantics in-process rather than spawning a second appautopatch:
+        #   - full dialogs (InteractiveMode 2), matching --workflow-install-now
+        #   - skip re-discovery; main() locks the queue to report PLIST ItemsToInstall
+        #     (see pending_apps_install_now_option) so we patch exactly the set the user confirmed
+        workflow_install_now_option="TRUE"
+        workflow_install_now_silent_option="FALSE"
+        InteractiveModeOption=2
+        pending_apps_dialog_option="FALSE"
+        pending_apps_install_now_option="TRUE"
+        # Persist both flags so an unexpected restart or network defer re-enters this path
+        # (install-now + locked report queue) without re-running discovery. Write the report-lock
+        # flag FIRST: if the process dies between the two touches, the next run finds only
+        # .PendingAppsInstallNow (which re-arms plain install-now anyway in workflow_startup) rather
+        # than only .WorkflowInstallNow, which would run a plain install-now merging the full
+        # discovery queue instead of the report-locked queue the user confirmed.
+        # Also clear any stale silent install-now flag so ExcludedBackgroundLabels stay in the queue.
+        rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
+        touch "${PENDING_APPS_INSTALL_NOW_FILE}" 2> /dev/null
+        touch "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
+
+        # The dialog path skipped the network wait and Installomator check for speed; both are
+        # needed before installing. Defer cleanly if the network never comes up.
+        if ! workflow_wait_for_network; then
+            deferral_timer_minutes="${deferral_timer_error_minutes}"
+            log_error "Network unavailable for Install Now, trying again in ${deferral_timer_minutes} minutes."
+            write_status "Pending: Network unavailable, trying again in ${deferral_timer_minutes} minutes."
+            set_auto_launch_deferral
+            exit_clean
+        fi
+        get_installomator
+
+        # Return to main(), which continues into the install-now branch: queue locked to the
+        # report PLIST, optional staging + silent closed-app patch, workflow_do_Installations, and
+        # the shared completion / webhook / relaunch handling.
+        return 0
+    fi
+
+    log_notice "Pending apps dialog: Later / dismissed — no install started."
+    write_status "Idle: Pending apps dialog dismissed without installing."
+    # Explicit Later/dismiss cancels any leftover Install Now intent (e.g. a prior Install Now
+    # that deferred for network and left .PendingAppsInstallNow / .WorkflowInstallNow behind).
+    # Without this, the next LaunchDaemon run would restore install-now and patch with no dialog.
+    rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
+    pending_apps_install_now_option="FALSE"
+    workflow_install_now_option="FALSE"
+    exit_clean
 }
 
 dialog_install_or_defer() {
@@ -6171,7 +6582,12 @@ function verifyApp() {
         levels=(DEBUG 0 INFO 1 WARN 2 ERROR 3 REQ 4)
         LOGGING="${LOGGING:-INFO}"
         label="${label_name}"
-        log_location="${appAutoPatchVerboseLog}"
+        # Installomator fragment logging follows VerboseMode: only touch aap_verbose.log when enabled.
+        if [[ "${verbose_mode_option}" == "TRUE" ]]; then
+            log_location="${appAutoPatchVerboseLog}"
+        else
+            log_location="/dev/null"
+        fi
         previous_log_message=""
         logrepeat=0
 
@@ -7519,9 +7935,9 @@ resolve_early_silent_mode() {
     # single source of truth for the rest of the run.
     runningSilentlyOption="FALSE"
 
-    # --preview-deferral-dialog needs the real UI (swiftDialog + the deferral dialog), so never
-    # treat that run as silent even if InteractiveMode itself is configured as 0.
-    if [[ "${preview_deferral_dialog_option:-}" == "TRUE" ]]; then
+    # --preview-deferral-dialog / --pending-apps-dialog need the real UI (swiftDialog), so never
+    # treat those runs as silent even if InteractiveMode itself is configured as 0.
+    if [[ "${preview_deferral_dialog_option:-}" == "TRUE" ]] || [[ "${pending_apps_dialog_option:-}" == "TRUE" ]]; then
         return 0
     fi
 
@@ -8028,6 +8444,16 @@ main() {
         workflow_preview_deferral_dialog
     fi
 
+    # Pending-apps dialog from CLI or queued-app notification Install Now — report PLIST only,
+    # no discovery. If the user dismisses (Later), the function exits. If they choose Install Now,
+    # it sets install-now flags (workflow_install_now_option / pending_apps_install_now_option) and
+    # returns here so the normal install-now workflow below patches the queue in-process.
+    # The one-shot .PendingAppsDialog flag is consumed inside workflow_pending_apps_dialog (only
+    # once swiftDialog is confirmed present), so a dialog that cannot be shown stays armed to retry.
+    if [[ "${pending_apps_dialog_option}" == "TRUE" ]]; then
+        workflow_pending_apps_dialog
+    fi
+
     #Run the function to check if a user has already completed patching for the set cadence, ignore if using --workflow-install-now
     if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ "${workflow_install_now_silent_option}" == "TRUE" ]]; then
         log_notice "**** App Auto-Patch ${scriptVersion} - WORKFLOW INSTALL NOW - Skipping Completion Status Check"
@@ -8053,7 +8479,13 @@ main() {
         rm -f "${FORCE_DISCOVERY_FILE}" 2> /dev/null
     fi
     
-    if [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then
+    if [[ "${pending_apps_install_now_option}" == "TRUE" ]]; then
+        # Install Now was chosen from the pending-apps dialog (or restored from
+        # PENDING_APPS_INSTALL_NOW_FILE after a restart/network defer). Patch exactly the queue
+        # the user confirmed (report PLIST ItemsToInstall) — never kick off a fresh discovery
+        # scan here, regardless of the DiscoveryFrequency window.
+        discovery_skip_reason="pending-apps Install Now (using existing report queue)"
+    elif [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then
         # Discovery explicitly disabled
         discovery_skip_reason="disabled by workflow option"
     elif [[ "${force_discovery_option}" == "TRUE" ]]; then
@@ -8329,7 +8761,6 @@ main() {
     optionalLabelsArray+=($optionalLabelsFromConfig)
     excludedBackgroundLabelsArray+=($excludedBackgroundLabelsFromConfig)
     convertedLabelsArray+=($convertedLabelsFromConfig)
-    labelsArray+=($labelsFromConfig $requiredLabels $requiredLabelsFromConfig $convertedLabelsFromConfig)
 
     # Deduplicate ignored labels
     ignoredLabelsArray=($(tr ' ' '\n' <<< "${ignoredLabelsArray[@]}" | sort -u | tr '\n' ' '))
@@ -8346,25 +8777,55 @@ main() {
     # Deduplicate converted labels
     convertedLabelsArray=($(tr ' ' '\n' <<< "${convertedLabelsArray[@]}" | sort -u | tr '\n' ' '))
 
-    # Deduplicate labels list
-    labelsArray=($(tr ' ' '\n' <<< "${labelsArray[@]}" | sort -u | tr '\n' ' '))
-
-    labelsArray=${labelsArray:|ignoredLabelsArray}
-
-    # In ignore-all mode the subtraction above cannot do the work, because IgnoredLabels holds the
-    # "*" flag rather than an entry per label. Keep only required and optional labels (#254).
-    if [[ "${ignore_all_labels}" == "TRUE" ]]; then
-        local -a allowedLabels=()
-        local candidateLabel
-        for candidateLabel in ${(s/ /)labelsArray}; do
-            [[ -z "${candidateLabel}" ]] && continue
-            if (( ${requiredLabelsArray[(Ie)${candidateLabel}]} )) || (( ${optionalLabelsArray[(Ie)${candidateLabel}]} )); then
-                allowedLabels+=("${candidateLabel}")
-            else
-                log_verbose "Dropping ${candidateLabel} from the queue (IgnoredLabels is '*' and this label is neither required nor optional)."
+    if [[ "${pending_apps_install_now_option}" == "TRUE" ]]; then
+        # Lock the install queue to the report PLIST ItemsToInstall the user just confirmed in the
+        # pending-apps dialog. Do NOT merge DiscoveredLabels / RequiredLabels / ConvertedLabels —
+        # those can add apps the dialog never listed (or omit report entries if they diverge).
+        # The same IgnoredLabels / ignore-all policy the dialog used is applied here (rather than the
+        # plain ${labelsArray:|ignoredLabelsArray} subtraction below) so the queue matches the list
+        # the user approved and still honors ignore-all mode on a flag-file-restored run.
+        _load_effective_label_policy
+        local -a reportQueueLabels=()
+        local _rqLabel _rqDisp _rqInst _rqNew
+        while IFS=$'\t' read -r _rqLabel _rqDisp _rqInst _rqNew; do
+            [[ -z "${_rqLabel}" ]] && continue
+            if ! _label_allowed_by_policy "${_rqLabel}"; then
+                # Prune rather than silently skip, so the report PLIST / Support App tile count stop
+                # advertising an update that policy will never install (see workflow_pending_apps_dialog).
+                log_verbose "Pending-apps Install Now: pruning '${_rqLabel}' from the queue (excluded by IgnoredLabels policy)."
+                remove_aap_report_item "${_rqLabel}"
+                remove_discovered_label "${_rqLabel}"
+                continue
             fi
-        done
-        labelsArray="${allowedLabels[*]}"
+            reportQueueLabels+=("${_rqLabel}")
+            AAPVersionByLabel[$_rqLabel]="${_rqNew}"
+            AAPInstalledVersionByLabel[$_rqLabel]="${_rqInst}"
+        done < <(get_aap_report_entries)
+        labelsArray=($(tr ' ' '\n' <<< "${reportQueueLabels[@]}" | sort -u | tr '\n' ' '))
+        log_notice "Pending-apps Install Now: install queue locked to report PLIST (${#reportQueueLabels[@]} label(s))."
+    else
+        labelsArray+=($labelsFromConfig $requiredLabels $requiredLabelsFromConfig $convertedLabelsFromConfig)
+
+        # Deduplicate labels list
+        labelsArray=($(tr ' ' '\n' <<< "${labelsArray[@]}" | sort -u | tr '\n' ' '))
+
+        labelsArray=${labelsArray:|ignoredLabelsArray}
+
+        # In ignore-all mode the subtraction above cannot do the work, because IgnoredLabels holds the
+        # "*" flag rather than an entry per label. Keep only required and optional labels (#254).
+        if [[ "${ignore_all_labels}" == "TRUE" ]]; then
+            local -a allowedLabels=()
+            local candidateLabel
+            for candidateLabel in ${(s/ /)labelsArray}; do
+                [[ -z "${candidateLabel}" ]] && continue
+                if (( ${requiredLabelsArray[(Ie)${candidateLabel}]} )) || (( ${optionalLabelsArray[(Ie)${candidateLabel}]} )); then
+                    allowedLabels+=("${candidateLabel}")
+                else
+                    log_verbose "Dropping ${candidateLabel} from the queue (IgnoredLabels is '*' and this label is neither required nor optional)."
+                fi
+            done
+            labelsArray="${allowedLabels[*]}"
+        fi
     fi
 
     appNamesArray=()
@@ -8475,6 +8936,17 @@ main() {
         fi
     fi
 
+    # Pending-apps Install Now: the user already reviewed the queue and asked for it to be installed
+    # right now, and these updates were staged when they were first queued. Skip the pre-staging pass
+    # and the silent background closed-app patch (both only exist to prepare for / avoid a later
+    # interactive prompt) and go straight to the patching dialog. Any already-staged installers are
+    # still reused by workflow_do_Installations; anything unstaged is downloaded during the install.
+    local skip_stage_and_background_patch="FALSE"
+    if [[ "${pending_apps_install_now_option}" == "TRUE" ]]; then
+        skip_stage_and_background_patch="TRUE"
+        log_info "Pending-apps Install Now: skipping staging and background closed-app patch; going straight to the install dialog."
+    fi
+
     # Stage installers before the silent background-patch pass below, so each queued app is
     # downloaded at most once (closed apps then install from the staged copy; open/blocked apps
     # keep it ready for the later user-approved install). InteractiveMode 2 only: show a mini
@@ -8482,13 +8954,13 @@ main() {
     # stagingWindowOpened tracks whether it was opened, since countOfElementsArray can end up
     # empty afterward (all apps patched silently) even though the window still needs closing.
     stagingWindowOpened="FALSE"
-    if [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+    if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         swiftDialogStagingWindow
         stagingWindowOpened="TRUE"
     fi
 
     # Controlled by WorkflowStageUpdatesOption (managed key: WorkflowStageUpdates).
-    if [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+    if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         workflow_stage_updates
     fi
 
@@ -8497,7 +8969,7 @@ main() {
     # Apps with a blocking process (Installomator exit 12) stay queued for the deferral/deadline
     # dialog. Controlled by WorkflowBackgroundPatchClosedAppsOption (managed key: WorkflowBackgroundPatchClosedApps).
     # ExcludedBackgroundLabels are also skipped here and left for the interactive dialog.
-    if [[ ${InteractiveModeOption} -ge 1 ]] && [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+    if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ ${InteractiveModeOption} -ge 1 ]] && [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         workflow_silent_patch_closed_apps
         # Scenario 1: any successful silent closed-app patches outside the BusinessHours-only path.
         if [[ ${silent_patch_success_count} -gt 0 ]]; then
@@ -8518,6 +8990,7 @@ main() {
         if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ "${workflow_install_now_silent_option}" == "TRUE" ]] || [[ ${InteractiveModeOption} == 0 ]]; then
             rm -f "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
             rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
+            rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" 2> /dev/null
             log_info "Install Now Workflow or Silent Mode active - Bypassing deferral workflow"
             # Fully-silent path: withhold ExcludedBackgroundLabels from the install. --workflow-install-now
             # (non-silent) deliberately does NOT filter them - that is the manual escape hatch.
@@ -8674,6 +9147,9 @@ main() {
         fi
     else
         log_info "All apps are up to date. Nothing to do."
+        rm -f "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
+        rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
+        rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" 2> /dev/null
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true #Set completion status to true
         timestamp="$(date +$timestamp_format)"
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"

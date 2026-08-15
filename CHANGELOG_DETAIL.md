@@ -3,6 +3,69 @@
 # Version 3
 
 ## Version 3.7.0
+### 14-Aug-2026 (12) - Build 3.7.0.2608141655
+- Logging overhaul (logging plumbing from the runtime deep dive):
+	- `aap_verbose.log` is now written only when `VerboseMode` is TRUE. When FALSE, nothing is appended to the verbose log (including `log_verbose` call sites that previously always wrote, the swiftDialog notification handoff, and the Installomator fragment `log_location`)
+	- `aap.log` no longer receives `[VERBOSE]` lines at all. Previously, enabling `VerboseMode` routed VERBOSE output through `log_aap` and into the main log; verbose output now goes only to `aap_verbose.log` (and stdout), keeping `aap.log` to regular workflow output regardless of `VerboseMode`
+	- When `VerboseMode` is TRUE, `aap_verbose.log` receives both the normal `log_aap` stream (INFO/NOTICE/STATUS/ERROR/…) and the `[VERBOSE]` lines, so it remains a complete troubleshooting transcript
+	- Fixed: every `log_verbose` call wrote two identical lines to `aap_verbose.log` (once via `log_aap`, once via its own direct append), which is why verbose logs contained duplicate pairs tagged `log_aap[pid]` and `log_verbose[pid]`
+	- `VerboseMode` is resolved at the start of `workflow_startup` (managed → CLI → local) so the gate applies for the whole run, including early preference dumps
+	- Cached log identity (`hostname` / script name) and kept append FDs open for `aap.log` / `aap_verbose.log`; timestamps use zsh built-in `%D` instead of spawning `date`/`hostname`/`basename` per line. `archive_logs` reopens FDs after moving a live log path
+	- Changed: the process tag in each log line is now the script name (e.g. `App-Auto-Patch-via-Dialog.zsh[pid]`) instead of the logging function name (`log_aap[pid]` / `log_verbose[pid]`). Inside a zsh function, `$0` expands to the function name, so the old prefix reported the logger rather than the script; the new tag matches the `aap-starter` LaunchDaemon line format
+	- Removed per-tick `log_verbose` from `swiftDialogUpdate` (UI command-file writes are high-frequency, low diagnostic value)
+
+### 13-Aug-2026 (11) - Build 3.7.0.2608132043
+- Changed: pending-apps Install Now now goes straight to the patching dialog, skipping the pre-staging pass (`workflow_stage_updates`), the staging/background mini progress window, and the silent background closed-app patch (`workflow_silent_patch_closed_apps`). Both passes only exist to prepare for — or avoid — a later interactive prompt, which is pointless once the user has explicitly asked for the install. Installers staged when the apps were first queued are still reused by `workflow_do_Installations`; anything unstaged is downloaded during the install as usual
+
+### 13-Aug-2026 (10) - Build 3.7.0.2608131944
+- Fixed: pending-apps Install Now now clears any stale silent install-now intent (`workflow_install_now_silent_option` / `.WorkflowInstallNowSilent`) when the interactive locked-queue path is armed or restored — so ExcludedBackgroundLabels the user confirmed in the dialog are not dropped by `filter_excluded_background_labels_from_silent_install`
+
+### 13-Aug-2026 (9) - Build 3.7.0.2608131938
+- Fixed: a pending-apps dialog that can't be shown can no longer fall through to an unconfirmed install:
+	- The one-shot `.PendingAppsDialog` flag is now consumed inside `workflow_pending_apps_dialog` only after swiftDialog is confirmed present (instead of in `main()` before the call), so a missing-swiftDialog `exit_error` leaves the request armed to retry on the next LaunchDaemon cycle
+	- The dialog now supersedes any Install Now intent left armed by an earlier network-deferred Install Now (clears `.PendingAppsInstallNow` / `.WorkflowInstallNow` and the in-memory flags at entry), re-arming only if the user actually clicks Install Now — so re-presenting the dialog can't be bypassed and a failed dialog can't silently install a locked queue with no confirmation
+
+### 13-Aug-2026 (8) - Build 3.7.0.2608131926
+- Fixed: `--reset-defaults` no longer leaves pending-apps one-shot state armed — the early `.PendingAppsDialog` restore at the top of `workflow_startup` is skipped on a reset run, and the reset block now also clears the in-memory flags (`pending_apps_dialog_option`, `pending_apps_install_now_option`, `workflow_install_now_option`, `workflow_install_now_silent_option`, `force_discovery_option`), not just the flag files
+- Fixed: pending-apps Install Now now writes `.PendingAppsInstallNow` before `.WorkflowInstallNow`, so a crash between the two touches re-arms the report-locked queue on the next run instead of a plain `--workflow-install-now` that would merge the full discovery queue
+
+### 13-Aug-2026 (7) - Build 3.7.0.2608131914
+- Fixed: report entries excluded by `IgnoredLabels` policy are now pruned from the report PLIST and `DiscoveredLabels` (via `remove_aap_report_item` / `remove_discovered_label`) instead of only being hidden from the pending-apps dialog. Previously the Support App tile count, banner `{count}` text, and the report itself kept advertising pending updates that policy would never install — so a user could see "3 pending" and then get the "all up to date" mini dialog. These are stale entries from a discovery run that predates the current IgnoredLabels configuration; pruning applies in both the dialog and the locked Install Now queue
+
+### 13-Aug-2026 (6) - Build 3.7.0.2608131905
+- Pending-apps dialog now honors the same `IgnoredLabels` policy as a normal run, so the list shown and the list patched always match:
+	- New `_load_effective_label_policy` / `_label_allowed_by_policy` helpers merge the in-memory option arrays with the persisted local PLIST values (where wildcard `IgnoredLabels` patterns are expanded), and are used by both the dialog and the locked install queue
+	- Fixed: with `IgnoredLabels` set to `*`, the dialog listed every report entry and Install Now could patch apps outside the required/optional allow-list — ignore-all mode is now applied in both places
+	- Fixed: the locked report queue no longer runs a bare `${labelsArray:|ignoredLabelsArray}` subtraction, which could silently drop apps the user had just approved (leaving AAP to report "up to date" without patching them). Excluded apps are now filtered out before the dialog is drawn instead
+- Fixed: `--pending-apps-dialog` restored from `.PendingAppsDialog` after a Jamf / out-of-folder relaunch now applies the dialog's fast paths — the flag file is read at the very start of `workflow_startup` (before `get_preferences` / `manage_parameter_options`), so the run no longer does a full `get_installomator` network pass before showing the dialog
+
+### 13-Aug-2026 (5) - Build 3.7.0.2608131852
+- Fixed: choosing **Later** (or dismissing) on the pending-apps dialog now clears leftover `.PendingAppsInstallNow` / `.WorkflowInstallNow` flags, so a prior Install Now that deferred for network cannot force an install-now run on the next LaunchDaemon launch
+
+### 13-Aug-2026 (4) - Build 3.7.0.2608131847
+- Fixed: `--pending-apps-dialog` invoked via Jamf (or any path that triggers `restart_aap`) no longer drops the dialog request — new one-shot flag file `.PendingAppsDialog` persists across the LaunchDaemon relaunch (same pattern as `--force-discovery` / `--workflow-install-now`) and is consumed when the dialog is shown
+
+### 13-Aug-2026 (3) - Build 3.7.0.2608131837
+- Pending-apps Install Now Bugbot fixes:
+	- Install queue is now locked strictly to report PLIST `ItemsToInstall` (the list shown in the dialog). RequiredLabels / ConvertedLabels / DiscoveredLabels extras are no longer merged in, so Install Now cannot patch apps the user never saw
+	- Intent survives restart/network defer via new flag file `.PendingAppsInstallNow` (restored in `workflow_startup` alongside `.WorkflowInstallNow`); cleared on install completion, all-up-to-date, and reset-defaults
+
+### 13-Aug-2026 (2) - Build 3.7.0.2608131813
+- Pending-apps dialog **Install Now** now runs the install in-process instead of spawning a second `appautopatch --workflow-install-now`:
+	- On Install Now, `workflow_pending_apps_dialog` sets install-now flags (`workflow_install_now_option`, `InteractiveMode 2`) plus a new `pending_apps_install_now_option`, then returns to `main()` so the normal install-now workflow patches the queue in-process (staging → silent closed-app patch → `workflow_do_Installations` → shared completion / webhook / relaunch)
+	- `pending_apps_install_now_option` forces `run_discovery=FALSE` in `main()`, so AAP patches exactly the queue the user saw (hydrated from the report PLIST / `DiscoveredLabels`) with no fresh discovery scan
+	- The network wait and `get_installomator` check (both skipped while the dialog is shown for speed) now run in-process before installing; if the network never comes up, AAP defers cleanly instead of installing
+	- Network detection factored into `workflow_wait_for_network` and shared with `workflow_startup` (identical behavior; no duplicated loop)
+	- Single process now handles the whole flow — no second `appautopatch` launch, and no stale report count from a detached background run
+
+### 13-Aug-2026 (1) - Build 3.7.0.2608131411
+- Queued-apps notification **Install Now** now opens the pending-apps dialog instead of jumping straight to `--workflow-install-now`:
+	- New CLI: `--pending-apps-dialog` — same dialog for manual / MDM / Support App triggers (reads report PLIST only; no discovery)
+	- Dialog lists pending apps with icons + Current/New version subtitles; **Later** dismisses; **Install Now** kicks off the install (see the 13-Aug (2)/(3) entries above — this originally backgrounded `--workflow-install-now`, later changed to an in-process install with a locked report queue)
+	- WatchPaths trigger migrated to `xyz.techitout.aap.pendingAppsDialogTrigger` / `Triggers/PendingAppsDialog` (legacy InstallNow daemon cleaned up on startup)
+	- Language key `display_string_pendingapps_button_later` (default `Later`); Support App `aap_pending_apps_dialog.zsh` is now a thin wrapper around the CLI
+	- Skips Business Hours gate, network wait, and Installomator update check (when fragments already present) so the dialog stays near-instant
+
 ### 12-Aug-2026 (8) - Build 3.7.0.2608122211
 - Split banner notification prefs: renamed `ShowNotifications` → `ShowNotificationsAll` (default `true`, master switch) and added per-type opt-in keys used only when All is false:
 	- `ShowNotificationsSilentUpdated` — silent closed-app “updated {count}…” banner

@@ -1584,6 +1584,17 @@
                                     }
                                 ]
                             },
+                            "display_string_pendingapps_button_later": {
+                                "type": "string",
+                                "title": "Pending Apps Dialog Later Button",
+                                "description": "Language for the Later / dismiss button on the pending-apps dialog (--pending-apps-dialog and queued-apps notification Install Now action)",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
                             "display_string_confirminstall_message": {
                                 "type": "string",
                                 "title": "Confirm Install Dialog Message",
