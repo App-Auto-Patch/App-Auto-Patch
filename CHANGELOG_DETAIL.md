@@ -3,6 +3,19 @@
 # Version 3
 
 ## Version 3.7.0
+### 16-Aug-2026 (15) - Build 3.7.0.2608161645
+- Changed: `--preview-deferral-dialog` no longer rewrites `NextAutoLaunch`. Like `--pending-apps-dialog` Later, it is a cosmetic one-shot UI — both Install Now and Defer remain no-ops for patching, and the existing LaunchDaemon schedule is preserved (with the same overdue/missing fallback so the 60s StartInterval cannot spin). Startup and `manage_parameter_options` now skip clearing a real `NextAutoLaunch` for both one-shot UI paths; the shared exit helper was renamed to `_exit_one_shot_ui_preserving_schedule`
+
+### 16-Aug-2026 (14) - Build 3.7.0.2608161632
+- Fixed: `--pending-apps-dialog` **Later** still lost the existing `NextAutoLaunch` — build (13) only guarded the crash-recovery delete in `workflow_startup`, but `manage_parameter_options` deletes the key again in its `WorkflowDisableRelaunch == FALSE` branch (there to clear the `FALSE` sentinel when relaunch is re-enabled). That ran after the guard, so a deferral already in place (e.g. 30-minute defer → 17:05) was wiped and Later fell through to the fallback, writing a fresh `DeferralTimerDefault` / monthly-cadence date (Business-Hours clamped) instead of keeping 17:05
+	- For pending-apps dialog runs that branch now only deletes `NextAutoLaunch` when it holds the `FALSE`/`0` disable sentinel; any real date is preserved (logged via `log_verbose`)
+
+### 16-Aug-2026 (13) - Build 3.7.0.2608161535
+- Fixed: `--pending-apps-dialog` no longer leaves `NextAutoLaunch` unset after **Later** / “all up to date”, which caused the LaunchDaemon (`StartInterval` 60s) to relaunch AAP almost immediately:
+	- Startup’s crash-recovery `defaults delete NextAutoLaunch` is skipped when `pending_apps_dialog_option` is TRUE, so an existing future schedule (Business Hours clear time, monthly cadence, normal deferral) or `WorkflowDisableRelaunch` sentinel survives the dialog
+	- Later / up-to-date dismissals now call `_exit_pending_apps_dialog_preserving_schedule`: keep a future (or disabled) `NextAutoLaunch`; if missing/overdue, reschedule via monthly cadence or `set_auto_launch_deferral`
+	- Install Now still clears `NextAutoLaunch` before continuing in-process so a mid-install crash re-arms LaunchDaemon relaunch; completion paths write a fresh schedule as usual
+
 ### 14-Aug-2026 (12) - Build 3.7.0.2608141655
 - Logging overhaul (logging plumbing from the runtime deep dive):
 	- `aap_verbose.log` is now written only when `VerboseMode` is TRUE. When FALSE, nothing is appended to the verbose log (including `log_verbose` call sites that previously always wrote, the swiftDialog notification handoff, and the Installomator fragment `log_location`)

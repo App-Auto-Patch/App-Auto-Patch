@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.0"
-scriptDate="2026/08/14"
-scriptBuild="3.7.0.2608141655"
+scriptDate="2026/08/16"
+scriptBuild="3.7.0.2608161645"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2319,7 +2319,23 @@ manage_parameter_options() {
     else
         workflow_disable_relaunch_option="FALSE"
         defaults delete "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null
-        defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
+        # Clearing NextAutoLaunch here re-enables scheduling after WorkflowDisableRelaunch stored the
+        # "FALSE" sentinel; on a normal run it also doubles as crash recovery (startup already cleared
+        # it, and completion paths rewrite it). One-shot UI paths (--pending-apps-dialog /
+        # --preview-deferral-dialog) must not lose a real schedule this way: they never reach a
+        # completion path, so deleting a valid future date here left the key unset and forced a
+        # fresh deferral/cadence write. Only drop the disable sentinel for those workflows.
+        if [[ "${pending_apps_dialog_option}" == "TRUE" ]] || [[ "${preview_deferral_dialog_option}" == "TRUE" ]]; then
+            local existing_next_auto_launch_relaunch
+            existing_next_auto_launch_relaunch=$(defaults read "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null)
+            if [[ "${existing_next_auto_launch_relaunch}" == "FALSE" ]] || [[ "${existing_next_auto_launch_relaunch}" == "0" ]]; then
+                defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
+            else
+                log_verbose "One-shot UI: preserving existing NextAutoLaunch (${existing_next_auto_launch_relaunch:-<unset>})."
+            fi
+        else
+            defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
+        fi
     fi
     { [[ -n "${workflow_disable_relaunch_option}" ]]; } && log_verbose "workflow_disable_relaunch_option is: ${workflow_disable_relaunch_option}"
 
@@ -2957,8 +2973,15 @@ workflow_startup() {
 	# Create new ${appAutoPatchPIDfile} for this instance of aap
 	echo $$ > "${appAutoPatchPIDfile}"
 	
-	# If aap crashes or the system restarts unexpectedly before aap exits, then automatically launch again.
-	defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
+	# If aap crashes or the system restarts unexpectedly before aap exits, then automatically launch
+	# again (aap-starter treats a missing NextAutoLaunch as "run now" on its 60s StartInterval).
+	# Skip for one-shot UI paths (--pending-apps-dialog / --preview-deferral-dialog): they must not
+	# tear down an existing LaunchDaemon schedule. Those workflows leave NextAutoLaunch intact on
+	# dismiss; pending-apps Install Now clears it before continuing into the install workflow so
+	# crash recovery still applies there.
+	if [[ "${pending_apps_dialog_option}" != "TRUE" ]] && [[ "${preview_deferral_dialog_option}" != "TRUE" ]]; then
+		defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
+	fi
 	
 	# Check for aap installation.
 	local aapCurrentFolder
@@ -5817,8 +5840,8 @@ set_deferral_menu() {
 # Preview-only path for --preview-deferral-dialog: show the real deferral dialog with sample
 # list items so admins can iterate on BannerImage/BannerTitle/BannerHeight (and other dialog
 # cosmetics) without running discovery or installing anything. Both Install Now and Defer are
-# no-ops for patching; the only side effect is rescheduling the next LaunchDaemon run using the
-# configured default deferral timer.
+# no-ops for patching, and NextAutoLaunch is left untouched (same preserve/fallback rules as
+# --pending-apps-dialog Later).
 workflow_preview_deferral_dialog() {
     log_notice "**** App Auto-Patch ${scriptVersion} - PREVIEW DEFERRAL DIALOG ****"
     log_info "Building a sample app list for the deferral dialog preview (no discovery, no patching)."
@@ -5869,18 +5892,14 @@ workflow_preview_deferral_dialog() {
     numberOfUpdates=$(( ${#appNamesArray[@]} / 2 ))
     log_info "Deferral dialog preview will show ${numberOfUpdates} sample apps."
 
-    # Capture the configured default deferral timer before the dialog runs - selecting a menu
-    # value (or the dialog's own deferral path) would otherwise overwrite ${deferral_timer_minutes},
-    # and this preview must always reschedule using the default regardless of which button is used.
-    local preview_deferral_minutes="${deferral_timer_minutes}"
-
     dialog_install_or_defer
 
+    # Cosmetic preview only — discard any Install Now / menu-defer choice the dialog recorded and
+    # leave the existing LaunchDaemon schedule alone.
     dialog_user_choice_install="FALSE"
-    deferral_timer_minutes="${preview_deferral_minutes}"
-    log_notice "Preview complete - no install will be performed. Rescheduling next run using the default deferral timer (${deferral_timer_minutes} minutes)."
-    write_status "Pending: Deferral dialog preview complete; next run in ${deferral_timer_minutes} minutes."
-    set_auto_launch_deferral
+    log_notice "Preview complete - no install will be performed and NextAutoLaunch is unchanged."
+    write_status "Idle: Deferral dialog preview complete."
+    _exit_one_shot_ui_preserving_schedule "Deferral dialog preview"
 }
 
 # Waits up to two minutes for a non-loopback IPv4 address. Returns 0 as soon as one appears,
@@ -5929,6 +5948,45 @@ _label_allowed_by_policy() {
         return 1
     fi
     return 0
+}
+
+# Exit path for one-shot UI workflows (--pending-apps-dialog Later/up-to-date,
+# --preview-deferral-dialog). Startup intentionally skips deleting NextAutoLaunch for these
+# paths so an existing future schedule (Business Hours clear time, monthly cadence, normal
+# deferral) survives. If somehow no usable future schedule remains — or NextAutoLaunch was
+# already overdue — write a new one; otherwise the LaunchDaemon's 60s StartInterval would
+# relaunch AAP almost immediately because aap-starter treats an unset NextAutoLaunch as "run now".
+# ${1} is a short log label identifying the caller (e.g. "Pending apps dialog").
+_exit_one_shot_ui_preserving_schedule() {
+    local context="${1:-One-shot UI}"
+    local existing existing_epoch now
+    existing=$(defaults read "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null)
+    if [[ "${existing}" == "FALSE" ]] || [[ "${existing}" == "0" ]]; then
+        log_info "${context}: Automatic Relaunch is disabled (NextAutoLaunch=${existing}) — leaving it as-is."
+        exit_clean
+    fi
+    now=$(date +%s)
+    existing_epoch=$(date -j -f "${timestamp_format}" "${existing}" +%s 2> /dev/null)
+    if [[ -n "${existing_epoch}" ]] && (( existing_epoch > now )); then
+        log_info "${context}: keeping existing future NextAutoLaunch (${existing})."
+        log_exit "AAP is scheduled to automatically relaunch at: ${existing}"
+        exit_clean
+    fi
+
+    if [[ -n "${existing}" ]]; then
+        log_notice "${context}: NextAutoLaunch (${existing}) is missing or overdue — rescheduling so LaunchDaemon does not relaunch immediately."
+    else
+        log_notice "${context}: NextAutoLaunch unset — rescheduling so LaunchDaemon does not relaunch immediately."
+    fi
+
+    if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
+    || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
+        next_nth_weekday=$(next_nth_weekday_datetime ${monthly_patching_cadence_weekday_index} ${monthly_patching_cadence_ordinal_value} "${monthly_patching_cadence_start_time}")
+        log_notice "Will auto launch on ${next_nth_weekday}"
+        set_auto_launch_monthly_cadence
+    else
+        set_auto_launch_deferral
+    fi
 }
 
 # User-facing pending-updates dialog (same UX as Resources/SupportApp-Extension/aap_pending_apps_dialog.zsh).
@@ -6001,7 +6059,7 @@ workflow_pending_apps_dialog() {
         # Cancel any leftover Install Now intent from a prior deferred attempt so the next
         # scheduled run does not jump straight into install-now.
         rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
-        exit_clean
+        _exit_one_shot_ui_preserving_schedule "Pending apps dialog"
     fi
 
     local -a appNamesArray=()
@@ -6081,6 +6139,11 @@ workflow_pending_apps_dialog() {
         touch "${PENDING_APPS_INSTALL_NOW_FILE}" 2> /dev/null
         touch "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
 
+        # Entering a real install workflow — clear NextAutoLaunch so a mid-install crash re-arms
+        # LaunchDaemon relaunch (same as a normal AAP run's startup). Completion paths will write a
+        # fresh schedule when the install finishes.
+        defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
+
         # The dialog path skipped the network wait and Installomator check for speed; both are
         # needed before installing. Defer cleanly if the network never comes up.
         if ! workflow_wait_for_network; then
@@ -6106,7 +6169,7 @@ workflow_pending_apps_dialog() {
     rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
     pending_apps_install_now_option="FALSE"
     workflow_install_now_option="FALSE"
-    exit_clean
+    _exit_one_shot_ui_preserving_schedule "Pending apps dialog"
 }
 
 dialog_install_or_defer() {
