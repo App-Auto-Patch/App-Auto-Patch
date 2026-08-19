@@ -32,6 +32,8 @@
 	<string>TRUE</string>
 	<key>ShowDockIcon</key>
 	<true/>
+	<key>DialogQuitHandlingDiscoveryStaging</key>
+	<string>PROMPT</string>
 	<key>ShowNotificationsAll</key>
 	<true/>
 	<key>ShowNotificationsSilentUpdated</key>
@@ -76,6 +78,8 @@
 	<string>CONTINUE</string>
 	<key>PatchScriptTimeoutSeconds</key>
 	<integer>300</integer>
+	<key>StaleProcessTimeoutSeconds</key>
+	<integer>3600</integer>
 	<key>InteractiveMode</key>
 	<integer>1</integer>
 	<key>MonthlyPatchingCadenceEnabled</key>

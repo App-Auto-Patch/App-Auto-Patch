@@ -3,6 +3,20 @@
 # Version 3
 
 ## Version 3.7.0
+### 19-Aug-2026 (1) - Build 3.7.0.2608191153
+- Changed: `--windowbuttons min` is now set on every interactive swiftDialog window (deferral, hard deadline, pending-apps, Install Now confirmation, up-to-date mini, and Dock Quit recovery prompts), matching discovery/staging/patching
+
+### 19-Aug-2026 (1) - Build 3.7.0.2608191132
+- Process supervision and discovery/staging Dock Quit policy:
+	- New managed/local key `StaleProcessTimeoutSeconds` (integer, default `3600`). `0` disables timeout-based stale-process killing; any other value below `300` is raised to `300`. Dead/reused PID cleanup still runs when the timeout is disabled
+	- Heartbeat file (`/var/run/aap.heartbeat`) plus PID-identity validation so `/var/run/aap.pid` cannot pin a recycled PID as a live AAP run. The record is a single tab-delimited `pid`/`epoch`/`phase` line; phase text is collapsed to one line and truncated so label-derived values cannot corrupt the format
+	- Stale-process recovery is logged graceful `TERM` then `KILL` if the process does not exit
+	- Staging `curl` downloads abort on a no-data timeout instead of hanging indefinitely
+	- New CLI `--stop` ends a live run and preserves the existing `NextAutoLaunch` schedule
+	- New managed/local key `DialogQuitHandlingDiscoveryStaging` (`PROMPT`|`CONTINUE`|`STOP`, default `PROMPT`). Discovery/staging Dock Quit / ⌘Q: **PROMPT** offers Keep Running vs Stop App Auto-Patch; **CONTINUE** keeps the workflow running with no prompt; **STOP** exits cleanly until the next scheduled run. Stop is ignored when `is_hard_deadline_due_lightweight` is true or Install Now / pending-apps Install Now is in progress — the workflow continues instead. `sudo appautopatch --stop` remains an admin escape hatch.
+	- A stop or termination during discovery restores the last complete pending-app report instead of leaving a partially rebuilt queue
+	- Localizable `dialogElements` keys: `display_string_preparationdismissed_message`, `display_string_preparationdismissed_button1` (default `Keep Running`), `display_string_preparationdismissed_button2` (default `Stop App Auto-Patch`)
+
 ### 16-Aug-2026 (15) - Build 3.7.0.2608161645
 - Changed: `--preview-deferral-dialog` no longer rewrites `NextAutoLaunch`. Like `--pending-apps-dialog` Later, it is a cosmetic one-shot UI — both Install Now and Defer remain no-ops for patching, and the existing LaunchDaemon schedule is preserved (with the same overdue/missing fallback so the 60s StartInterval cannot spin). Startup and `manage_parameter_options` now skip clearing a real `NextAutoLaunch` for both one-shot UI paths; the shared exit helper was renamed to `_exit_one_shot_ui_preserving_schedule`
 

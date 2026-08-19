@@ -469,6 +469,25 @@
             ],
             "property_order": 72
         },
+        "DialogQuitHandlingDiscoveryStaging": {
+            "type": "string",
+            "title": "Discovery/Staging Dialog Quit Handling",
+            "default": "PROMPT",
+            "description": "What happens if the user quits the discovery or staging window (Dock Quit / menu Quit / ⌘Q). PROMPT (default) asks whether to Keep Running in the background or Stop App Auto-Patch until the next scheduled run. CONTINUE keeps the workflow running with no prompt (previous implicit behavior). STOP ends the current run cleanly and preserves NextAutoLaunch. Stop is ignored when a hard deadline is already due or Install Now is running — the workflow continues instead.",
+            "enum": [
+                "PROMPT",
+                "CONTINUE",
+                "STOP"
+            ],
+            "options": {
+                "enum_titles": [
+                    "PROMPT",
+                    "CONTINUE",
+                    "STOP"
+                ]
+            },
+            "property_order": 73
+        },
         "UnattendedExit": {
             "type": "string",
             "title": "Unattended Exit",
@@ -888,6 +907,18 @@
             "default": 300,
             "description": "Maximum seconds allowed for a PrePatchScript or PostPatchScript run before AAP terminates it (treated as failure).",
             "property_order": 1293
+        },
+        "StaleProcessTimeoutSeconds": {
+            "type": "integer",
+            "title": "Stale Process Timeout Seconds",
+            "default": 3600,
+            "description": "Seconds of missing heartbeat after which a leftover App Auto-Patch process is treated as hung and recovered (graceful TERM, then KILL if needed). The PID file is also validated so a recycled PID is not mistaken for a live AAP run. Default 3600 (1 hour). 0 disables timeout-based stale-process killing (dead/reused PID cleanup still runs). Any other value below 300 is raised to 300.",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "3600"
+                        }
+                    },
+            "property_order": 1294
         },
         "InstallomatorVersion": {
             "type": "string",
@@ -1676,6 +1707,39 @@
                                 "type": "string",
                                 "title": "Dialog Dismissed Button2",
                                 "description": "Language for Button2 (Continue in Background) on the dialog shown when the patching progress window was closed while updates are still running",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_preparationdismissed_message": {
+                                "type": "string",
+                                "title": "Preparation Dismissed Message",
+                                "description": "Language for the message on the dialog shown when the discovery or staging window was closed (Dock Quit / menu Quit) while App Auto-Patch is still preparing. Default explains Keep Running vs Stop App Auto-Patch.",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_preparationdismissed_button1": {
+                                "type": "string",
+                                "title": "Preparation Dismissed Button1",
+                                "description": "Language for Button1 (Keep Running) on the discovery/staging quit prompt. Default: Keep Running",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_preparationdismissed_button2": {
+                                "type": "string",
+                                "title": "Preparation Dismissed Button2",
+                                "description": "Language for Button2 (Stop App Auto-Patch) on the discovery/staging quit prompt. Default: Stop App Auto-Patch",
                                 "links": [
                                     {
                                         "rel": "More information",

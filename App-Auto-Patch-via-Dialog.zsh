@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.0"
-scriptDate="2026/08/16"
-scriptBuild="3.7.0.2608161645"
+scriptDate="2026/08/19"
+scriptBuild="3.7.0.2608191153"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -115,6 +115,7 @@ echo "
     Troubleshooting Options:
     [--verbose-mode] [--verbose-mode-off]
     [--debug-mode] [--debug-mode-off]
+    [--stop]
     [--usage] [--help]
     [--uninstall]
     [--version]
@@ -142,6 +143,7 @@ echo "
     <key>DialogTimeoutDeferral</key> <integer>seconds</integer>
     <key>DialogTimeoutDeferralAction</key> <string>Defer,Continue</string>
     <key>DialogTimeoutConfirmInstall</key> <integer>seconds</integer>
+    <key>DialogQuitHandlingDiscoveryStaging</key> <string>PROMPT,CONTINUE,STOP</string> (Stop is ignored when a hard deadline is due or Install Now is running)
     <key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>
     <key>IgnoredLabels</key> <string>label label label etc</string>
     <key>ExcludedBackgroundLabels</key> <string>label label label etc</string>
@@ -195,6 +197,7 @@ echo "
     <key>ShowNotificationsSilentUpdated</key> <true/> | <false/>
     <key>ShowNotificationsAppsQueued</key> <true/> | <false/>
     <key>ShowNotificationsSilentAndQueued</key> <true/> | <false/>
+    <key>StaleProcessTimeoutSeconds</key> <integer>seconds (0 disables timeout recovery; otherwise minimum 300)</integer>
     <key>DiscoveryFrequency</key> <integer>hours</integer>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
     <key>ZoomCallActiveCheck</key> <true/> | <false/>
@@ -284,6 +287,10 @@ set_defaults() {
     appAutoPatchLink="/usr/local/bin/appautopatch"
 
     appAutoPatchPIDfile="/var/run/aap.pid"
+    appAutoPatchHeartbeatFile="/var/run/aap.heartbeat"
+    appAutoPatchStarterSkipLogFile="/var/run/aap-starter-last-skip"
+    stale_process_timeout_seconds=3600 # MDM Enabled; 0 disables heartbeat timeout recovery
+    stop_aap_option="FALSE"
 
     InteractiveMode="2" # MDM Enabled
 
@@ -393,6 +400,7 @@ set_defaults() {
     # Format mirrors Munki's ManagedInstallReport.plist ("ItemsToInstall" array of dicts) so the
     # same file can be ingested by third-party reporting/inventory tooling.
     appAutoPatchReportPLIST="${appAutoPatchFolder}/xyz.techitout.appAutoPatchReport"
+    aapReportPreDiscoveryBackup="/var/tmp/aap-report-pre-discovery.$$.plist"
 
     appAutoPatchLaunchDaemonLabel="xyz.techitout.aap"
     silent_patch_success_count=0
@@ -442,6 +450,9 @@ set_defaults() {
     dialogPatchingIntentionalQuit="FALSE"
     dialogDiscoverPID=""
     dialogStagingPID=""
+    dialogPreparationContinueBackground="FALSE"
+    dialogQuitHandlingDiscoveryStagingOption="PROMPT" # MDM Enabled - PROMPT|CONTINUE|STOP
+    dialogPreparationIntentionalQuit="FALSE"
     stagingWindowOpened="FALSE"
     typeset -gA patchingItemStatus
     patchingItemStatus=()
@@ -620,6 +631,11 @@ set_display_strings_language() {
     display_string_dialogdismissed_button1="Show Progress"
     display_string_dialogdismissed_button2="Continue in Background"
 
+    #### Language for Dock Quit / ⌘Q during discovery and update preparation
+    display_string_preparationdismissed_message="The App Auto-Patch preparation window was closed. You can keep the workflow running in the background or stop App Auto-Patch until its next scheduled run."
+    display_string_preparationdismissed_button1="Keep Running"
+    display_string_preparationdismissed_button2="Stop App Auto-Patch"
+
     #### Language for banner-style swiftDialog notifications
     # Placeholders: {count} = number of apps updated or queued; {remaining} = open apps still queued.
     display_string_notification_silent_updated="App Auto-Patch has updated {count} application(s) in the background."
@@ -752,6 +768,9 @@ set_display_strings_language() {
             display_string_dialogdismissed_message_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_dialogdismissed_message" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             display_string_dialogdismissed_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_dialogdismissed_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             display_string_dialogdismissed_button2_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_dialogdismissed_button2" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_preparationdismissed_message_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_preparationdismissed_message" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_preparationdismissed_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_preparationdismissed_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_preparationdismissed_button2_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_preparationdismissed_button2" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             display_string_notification_silent_updated_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_notification_silent_updated" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             display_string_notification_apps_queued_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_notification_apps_queued" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             display_string_notification_silent_and_queued_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_notification_silent_and_queued" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
@@ -851,6 +870,9 @@ set_display_strings_language() {
     [[ -n "${display_string_dialogdismissed_message_managed}" ]] && display_string_dialogdismissed_message="${display_string_dialogdismissed_message_managed}"
     [[ -n "${display_string_dialogdismissed_button1_managed}" ]] && display_string_dialogdismissed_button1="${display_string_dialogdismissed_button1_managed}"
     [[ -n "${display_string_dialogdismissed_button2_managed}" ]] && display_string_dialogdismissed_button2="${display_string_dialogdismissed_button2_managed}"
+    [[ -n "${display_string_preparationdismissed_message_managed}" ]] && display_string_preparationdismissed_message="${display_string_preparationdismissed_message_managed}"
+    [[ -n "${display_string_preparationdismissed_button1_managed}" ]] && display_string_preparationdismissed_button1="${display_string_preparationdismissed_button1_managed}"
+    [[ -n "${display_string_preparationdismissed_button2_managed}" ]] && display_string_preparationdismissed_button2="${display_string_preparationdismissed_button2_managed}"
     [[ -n "${display_string_notification_silent_updated_managed}" ]] && display_string_notification_silent_updated="${display_string_notification_silent_updated_managed}"
     [[ -n "${display_string_notification_apps_queued_managed}" ]] && display_string_notification_apps_queued="${display_string_notification_apps_queued_managed}"
     [[ -n "${display_string_notification_silent_and_queued_managed}" ]] && display_string_notification_silent_and_queued="${display_string_notification_silent_and_queued_managed}"
@@ -919,6 +941,9 @@ set_display_strings_language() {
     log_verbose "display_string_dialogdismissed_message: $display_string_dialogdismissed_message"
     log_verbose "display_string_dialogdismissed_button1: $display_string_dialogdismissed_button1"
     log_verbose "display_string_dialogdismissed_button2: $display_string_dialogdismissed_button2"
+    log_verbose "display_string_preparationdismissed_message: $display_string_preparationdismissed_message"
+    log_verbose "display_string_preparationdismissed_button1: $display_string_preparationdismissed_button1"
+    log_verbose "display_string_preparationdismissed_button2: $display_string_preparationdismissed_button2"
     log_verbose "display_string_notification_silent_updated: $display_string_notification_silent_updated"
     log_verbose "display_string_notification_apps_queued: $display_string_notification_apps_queued"
     log_verbose "display_string_notification_silent_and_queued: $display_string_notification_silent_and_queued"
@@ -1042,6 +1067,10 @@ get_options() {
             ;;
             -d|--debug-mode-off)
                 debug_mode_option="FALSE"
+            ;;
+            --stop)
+                stop_aap_option="TRUE"
+                stop_running_aap
             ;;
             --deferral-timer-menu=*)
                 deferral_timer_menu_option="${1##*=}"
@@ -1430,6 +1459,10 @@ get_preferences() {
         dialog_timeout_deferral_action_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogTimeoutDeferralAction 2> /dev/null)
         local dialog_timeout_confirm_install_managed
         dialog_timeout_confirm_install_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogTimeoutConfirmInstall 2> /dev/null)
+        local dialog_quit_handling_discovery_staging_managed
+        dialog_quit_handling_discovery_staging_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogQuitHandlingDiscoveryStaging 2> /dev/null)
+        local stale_process_timeout_seconds_managed
+        stale_process_timeout_seconds_managed=$(defaults read "${appAutoPatchManagedPLIST}" StaleProcessTimeoutSeconds 2> /dev/null)
         local days_until_reset_managed
         days_until_reset_managed=$(defaults read "${appAutoPatchManagedPLIST}" DaysUntilReset 2> /dev/null)
         local Unattended_exit_managed
@@ -1590,6 +1623,10 @@ get_preferences() {
         dialog_timeout_deferral_action_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogTimeoutDeferralAction 2> /dev/null)
         local dialog_timeout_confirm_install_local
         dialog_timeout_confirm_install_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogTimeoutConfirmInstall 2> /dev/null)
+        local dialog_quit_handling_discovery_staging_local
+        dialog_quit_handling_discovery_staging_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogQuitHandlingDiscoveryStaging 2> /dev/null)
+        local stale_process_timeout_seconds_local
+        stale_process_timeout_seconds_local=$(defaults read "${appAutoPatchLocalPLIST}" StaleProcessTimeoutSeconds 2> /dev/null)
         local days_until_reset_local
         days_until_reset_local=$(defaults read "${appAutoPatchLocalPLIST}" DaysUntilReset 2> /dev/null)
         local Unattended_exit_local
@@ -1775,6 +1812,10 @@ get_preferences() {
     { [[ -z "${dialog_timeout_deferral_action_managed}" ]] && [[ -n "${DialogTimeoutDeferralAction}" ]] && [[ -n "${dialog_timeout_deferral_action_local}" ]]; } && DialogTimeoutDeferralAction="${dialog_timeout_deferral_action_local}"
     [[ -n "${dialog_timeout_confirm_install_managed}" ]] && DialogTimeoutConfirmInstall="${dialog_timeout_confirm_install_managed}"
     { [[ -z "${dialog_timeout_confirm_install_managed}" ]] && [[ -n "${DialogTimeoutConfirmInstall}" ]] && [[ -n "${dialog_timeout_confirm_install_local}" ]]; } && DialogTimeoutConfirmInstall="${dialog_timeout_confirm_install_local}"
+    [[ -n "${dialog_quit_handling_discovery_staging_managed}" ]] && dialogQuitHandlingDiscoveryStagingOption="${dialog_quit_handling_discovery_staging_managed}"
+    { [[ -z "${dialog_quit_handling_discovery_staging_managed}" ]] && [[ -n "${dialog_quit_handling_discovery_staging_local}" ]]; } && dialogQuitHandlingDiscoveryStagingOption="${dialog_quit_handling_discovery_staging_local}"
+    [[ -n "${stale_process_timeout_seconds_managed}" ]] && stale_process_timeout_seconds="${stale_process_timeout_seconds_managed}"
+    { [[ -z "${stale_process_timeout_seconds_managed}" ]] && [[ -n "${stale_process_timeout_seconds_local}" ]]; } && stale_process_timeout_seconds="${stale_process_timeout_seconds_local}"
     [[ -n "${days_until_reset_managed}" ]] && days_until_reset_option="${days_until_reset_managed}"
     { [[ -z "${days_until_reset_managed}" ]] && [[ -z "${days_until_reset_option}" ]] && [[ -n "${days_until_reset_local}" ]]; } && days_until_reset_option="${days_until_reset_local}"
     [[ -n "${Unattended_exit_managed}" ]] && UnattendedExit="${Unattended_exit_managed}"
@@ -1875,6 +1916,8 @@ get_preferences() {
     log_verbose "DialogTimeoutDeferral: $DialogTimeoutDeferral"
     log_verbose "DialogTimeoutDeferralAction: $DialogTimeoutDeferralAction"
     log_verbose "DialogTimeoutConfirmInstall: $DialogTimeoutConfirmInstall"
+    log_verbose "DialogQuitHandlingDiscoveryStaging: ${dialogQuitHandlingDiscoveryStagingOption}"
+    log_verbose "StaleProcessTimeoutSeconds: ${stale_process_timeout_seconds}"
     log_verbose "DaysUntilReset: $days_until_reset_option"
     log_verbose "UnattendedExit: $UnattendedExit"
     log_verbose "UnattendedExitSeconds: $UnattendedExitSeconds"
@@ -2588,6 +2631,33 @@ manage_parameter_options() {
     [[ -z "${UnattendedExitSeconds}" ]] && UnattendedExitSeconds=60
     log_verbose "UnattendedExitSeconds is: ${UnattendedExitSeconds}"
 
+    # AAP process-supervision timeout. Zero disables heartbeat-age recovery, but dead/reused PID
+    # cleanup remains active. Nonzero values below five minutes are unsafe for normal operations.
+    if [[ "${stale_process_timeout_seconds}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        if (( stale_process_timeout_seconds != 0 && stale_process_timeout_seconds < 300 )); then
+            log_warning "StaleProcessTimeoutSeconds ${stale_process_timeout_seconds} is too low; using 300 seconds."
+            stale_process_timeout_seconds=300
+        fi
+    else
+        log_error "StaleProcessTimeoutSeconds must be a whole number; using 3600 seconds."
+        stale_process_timeout_seconds=3600
+        option_error="TRUE"
+    fi
+    defaults write "${appAutoPatchLocalPLIST}" StaleProcessTimeoutSeconds -int "${stale_process_timeout_seconds}"
+    log_verbose "stale_process_timeout_seconds is: ${stale_process_timeout_seconds}"
+
+    dialogQuitHandlingDiscoveryStagingOption="${dialogQuitHandlingDiscoveryStagingOption:u}"
+    case "${dialogQuitHandlingDiscoveryStagingOption}" in
+        PROMPT|CONTINUE|STOP) ;;
+        *)
+            log_error "DialogQuitHandlingDiscoveryStaging must be PROMPT, CONTINUE, or STOP; using PROMPT."
+            dialogQuitHandlingDiscoveryStagingOption="PROMPT"
+            option_error="TRUE"
+        ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" DialogQuitHandlingDiscoveryStaging -string "${dialogQuitHandlingDiscoveryStagingOption}"
+    log_verbose "dialogQuitHandlingDiscoveryStagingOption is: ${dialogQuitHandlingDiscoveryStagingOption}"
+
     { [[ -n "${deadline_count_focus}" ]]; } && log_verbose "deadline_count_focus is: ${deadline_count_focus}"
     { [[ -n "${deadline_count_hard}" ]]; } && log_verbose "deadline_count_hard is: ${deadline_count_hard}"
     { [[ -n "${patch_week_start_day}" ]]; } && log_verbose "patch_week_start_day is: ${patch_week_start_day}"
@@ -2960,18 +3030,27 @@ workflow_startup() {
 		fi
 	fi
 	
-	# Check for any previous aap processes and kill them.
+	# Check for any previous AAP process. Manual invocations historically replace the active run;
+	# do that gracefully and never signal an unrelated process that inherited a stale PID.
 	local aapPreviousPID
 	aapPreviousPID=$(pgrep -F "${appAutoPatchPIDfile}" 2> /dev/null)
 	if [[ -n "${aapPreviousPID}" ]]; then
-		[[ -d "${appAutoPatchLogFolder}" ]] && log_status "Found previous aap instance running with PID ${aapPreviousPID}, killing processes..."
-		[[ ! -d "${appAutoPatchLogFolder}" ]] && log_echo "Status: Found previous aap instance running with PID ${aapPreviousPID}, killing processes..."
-		kill -9 "${aapPreviousPID}" > /dev/null 2>&1
-        killProcess "Dialog"
+        if _aap_pid_is_expected_process "${aapPreviousPID}"; then
+            [[ -d "${appAutoPatchLogFolder}" ]] && log_status "Found previous AAP instance PID ${aapPreviousPID}; terminating it gracefully..."
+            [[ ! -d "${appAutoPatchLogFolder}" ]] && log_echo "Status: Found previous AAP instance PID ${aapPreviousPID}; terminating it gracefully..."
+            _aap_terminate_process_tree "${aapPreviousPID}" 10
+            _aap_restore_pre_discovery_report "/var/tmp/aap-report-pre-discovery.${aapPreviousPID}.plist"
+            rm -f /var/tmp/dialog.appAutoPatch.*(N) 2>/dev/null
+        else
+            log_warning "PID file points to live non-AAP process ${aapPreviousPID}; removing stale runtime markers without signaling it."
+        fi
+        rm -f "${appAutoPatchPIDfile}" "${appAutoPatchHeartbeatFile}" 2>/dev/null
 	fi
 	
-	# Create new ${appAutoPatchPIDfile} for this instance of aap
-	echo $$ > "${appAutoPatchPIDfile}"
+	# Create runtime ownership markers for this instance.
+	printf '%s\n' "$$" > "${appAutoPatchPIDfile}"
+    _aap_heartbeat "startup"
+    trap '_aap_signal_cleanup' HUP INT TERM
 	
 	# If aap crashes or the system restarts unexpectedly before aap exits, then automatically launch
 	# again (aap-starter treats a missing NextAutoLaunch as "run now" on its 60s StartInterval).
@@ -3605,7 +3684,7 @@ restart_aap() {
 	disown
 	log_verbose "Local preference file at restart exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2>/dev/null)"
 	log_aap "**** App Auto-Patch ${scriptVersion} - EXIT AND RESTART WORKFLOW ****"
-	rm -f "${appAutoPatchPIDfile}" 2>/dev/null
+	rm -f "${appAutoPatchPIDfile}" "${appAutoPatchHeartbeatFile}" 2>/dev/null
 	exit 0
 }
 
@@ -3663,8 +3742,124 @@ install_app_auto_patch() {
 # App Auto-Patch LaunchDaemon helper
 #
 
-# Exit if App Auto Patch is already running.
-[[ "$(pgrep -F "__APP_AUTOPATCH_PIDFILE__" 2>/dev/null)" ]] && exit 0
+log_line() {
+    echo "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: $*" >> "__AAP_LOG__"
+}
+
+is_expected_aap_process() {
+    local pid="$1"
+    [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+    kill -0 "$pid" 2>/dev/null || return 1
+    local command
+    command="$(ps -p "$pid" -o command= 2>/dev/null)"
+    [[ "$command" == *"__AAP_FOLDER__/App-Auto-Patch-via-Dialog.zsh"* ]] \
+        || [[ "$command" == *"__AAP_FOLDER__/appautopatch"* ]] \
+        || { [[ "$(ps -p "$pid" -o uid= 2>/dev/null | tr -d ' ')" == "0" ]] \
+            && [[ "$command" == *"App-Auto-Patch-via-Dialog.zsh"* ]]; }
+}
+
+collect_tree() {
+    local pid="$1" child
+    for child in $(pgrep -P "$pid" 2>/dev/null); do
+        collect_tree "$child"
+    done
+    printf '%s\n' "$pid"
+}
+
+terminate_tree() {
+    local pid="$1" waited=0 tree_pid any_alive
+    local tree_pids
+    tree_pids="$(collect_tree "$pid")"
+    for tree_pid in $tree_pids; do
+        kill -TERM "$tree_pid" 2>/dev/null
+    done
+    while (( waited < 10 )); do
+        any_alive=0
+        for tree_pid in $tree_pids; do
+            kill -0 "$tree_pid" 2>/dev/null && any_alive=1
+        done
+        (( any_alive == 0 )) && break
+        sleep 1
+        (( waited++ ))
+    done
+    for tree_pid in $tree_pids; do
+        kill -0 "$tree_pid" 2>/dev/null && kill -KILL "$tree_pid" 2>/dev/null
+    done
+}
+
+restore_pre_discovery_report() {
+    local pid="$1"
+    local backup="/var/tmp/aap-report-pre-discovery.${pid}.plist"
+    local restore_tmp="__AAP_REPORT_PLIST__.restore.$$"
+    [[ -f "$backup" ]] || return 0
+    if cp -p "$backup" "$restore_tmp" 2>/dev/null && mv -f "$restore_tmp" "__AAP_REPORT_PLIST__" 2>/dev/null; then
+        rm -f "$backup"
+        log_line "Restored the pre-discovery pending-app report for interrupted PID $pid."
+    else
+        rm -f "$restore_tmp"
+        log_line "[WARNING] Unable to restore the pre-discovery pending-app report for PID $pid."
+    fi
+}
+
+log_running_skip_throttled() {
+    local now last=0
+    now="$(date +%s)"
+    [[ -f "__AAP_STARTER_SKIP_LOG_FILE__" ]] && read -r last < "__AAP_STARTER_SKIP_LOG_FILE__"
+    [[ "$last" =~ ^[0-9]+$ ]] || last=0
+    if (( now - last >= 900 )); then
+        log_line "$*"
+        printf '%s\n' "$now" > "__AAP_STARTER_SKIP_LOG_FILE__"
+    fi
+}
+
+# Validate the PID owner and heartbeat instead of treating any live PID as healthy forever.
+force_launch=0
+recorded_pid=""
+[[ -f "__APP_AUTOPATCH_PIDFILE__" ]] && read -r recorded_pid < "__APP_AUTOPATCH_PIDFILE__"
+if [[ -n "$recorded_pid" ]] && kill -0 "$recorded_pid" 2>/dev/null; then
+    if ! is_expected_aap_process "$recorded_pid"; then
+        log_line "[WARNING] aap.pid points to live non-AAP PID $recorded_pid; removing stale runtime markers without signaling it."
+        rm -f "__APP_AUTOPATCH_PIDFILE__" "__AAP_HEARTBEAT_FILE__"
+    else
+        timeout="$(defaults read "__AAP_MANAGED_PLIST__" StaleProcessTimeoutSeconds 2>/dev/null)"
+        [[ -z "$timeout" ]] && timeout="$(defaults read "__AAP_LOCAL_PLIST__" StaleProcessTimeoutSeconds 2>/dev/null)"
+        [[ "$timeout" =~ ^[0-9]+$ ]] || timeout=3600
+        if (( timeout != 0 && timeout < 300 )); then timeout=300; fi
+
+        heartbeat_pid=""
+        heartbeat_epoch=""
+        heartbeat_phase=""
+        if [[ -f "__AAP_HEARTBEAT_FILE__" ]]; then
+            IFS=$'\t' read -r heartbeat_pid heartbeat_epoch heartbeat_phase < "__AAP_HEARTBEAT_FILE__"
+        fi
+        if [[ "$heartbeat_pid" != "$recorded_pid" ]] || ! [[ "$heartbeat_epoch" =~ ^[0-9]+$ ]]; then
+            heartbeat_epoch="$(stat -f '%m' "__APP_AUTOPATCH_PIDFILE__" 2>/dev/null)"
+            heartbeat_phase="startup"
+        fi
+        [[ "$heartbeat_epoch" =~ ^[0-9]+$ ]] || heartbeat_epoch="$(date +%s)"
+        now="$(date +%s)"
+        heartbeat_age=$(( now - heartbeat_epoch ))
+
+        if (( timeout == 0 || heartbeat_age <= timeout )); then
+            log_running_skip_throttled "AAP PID $recorded_pid is active (phase=${heartbeat_phase:-unknown}, heartbeat age=${heartbeat_age}s); skipping duplicate launch."
+            exit 0
+        fi
+
+        log_line "[WARNING] AAP PID $recorded_pid is stale (phase=${heartbeat_phase:-unknown}, heartbeat age=${heartbeat_age}s, timeout=${timeout}s); restarting."
+        terminate_tree "$recorded_pid"
+        restore_pre_discovery_report "$recorded_pid"
+        rm -f "__APP_AUTOPATCH_PIDFILE__" "__AAP_HEARTBEAT_FILE__"
+        rm -f /var/tmp/dialog.appAutoPatch.* 2>/dev/null
+        force_launch=1
+    fi
+elif [[ -n "$recorded_pid" ]]; then
+    log_line "Removing dead AAP PID $recorded_pid runtime markers."
+    restore_pre_discovery_report "$recorded_pid"
+    rm -f "__APP_AUTOPATCH_PIDFILE__" "__AAP_HEARTBEAT_FILE__"
+    rm -f /var/tmp/dialog.appAutoPatch.* 2>/dev/null
+elif [[ -f "__AAP_HEARTBEAT_FILE__" ]]; then
+    rm -f "__AAP_HEARTBEAT_FILE__"
+fi
 
 # Read NextAutoLaunch — may be:
 #   - "FALSE"    (string disable)
@@ -3679,7 +3874,7 @@ if [[ "$next_auto_launch" == "FALSE" ]] || [[ "$next_auto_launch" == "0" ]]; the
 fi
 
 # Unset case (no NextAutoLaunch key)
-if [[ -z "$next_auto_launch" ]]; then
+if (( force_launch == 0 )) && [[ -z "$next_auto_launch" ]]; then
     # Read last saved startup timestamp
     saved="$(defaults read "__AAP_LOCAL_PLIST__" MacLastStartup 2>/dev/null)"
     saved_epoch="$(date -j -f "__TIMESTAMP_FORMAT__" "$saved" +%s 2>/dev/null)"
@@ -3697,7 +3892,7 @@ fi
 next_epoch="$(date -j -f "__TIMESTAMP_FORMAT__" "$next_auto_launch" +%s 2>/dev/null)"
 
 # If date parsed successfully and next_epoch > now → not time yet
-if [[ -n "$next_epoch" ]]; then
+if (( force_launch == 0 )) && [[ -n "$next_epoch" ]]; then
     now="$(date +%s)"
     if (( now < next_epoch )); then
         exit 0
@@ -3716,6 +3911,10 @@ EOAS
     # Replace placeholders in the starter
     /usr/bin/sed -i "" \
     -e "s|__APP_AUTOPATCH_PIDFILE__|${appAutoPatchPIDfile}|g" \
+    -e "s|__AAP_HEARTBEAT_FILE__|${appAutoPatchHeartbeatFile}|g" \
+    -e "s|__AAP_STARTER_SKIP_LOG_FILE__|${appAutoPatchStarterSkipLogFile}|g" \
+    -e "s|__AAP_REPORT_PLIST__|${appAutoPatchReportPLIST}.plist|g" \
+    -e "s|__AAP_MANAGED_PLIST__|${appAutoPatchManagedPLIST}|g" \
     -e "s|__AAP_LOCAL_PLIST__|${appAutoPatchLocalPLIST}|g" \
     -e "s|__TIMESTAMP_FORMAT__|${timestamp_format}|g" \
     -e "s|__SCRIPT_VERSION__|${scriptVersion}|g" \
@@ -3802,11 +4001,16 @@ function uninstall_app_auto_patch() {
     local aapPreviousPID
     aapPreviousPID=$(pgrep -F "${appAutoPatchPIDfile}" 2> /dev/null)
     if [[ -n "${aapPreviousPID}" ]]; then
-        [[ -d "${appAutoPatchLogFolder}" ]] && log_status "Found previous aap instance running with PID ${aapPreviousPID}, killing processes..."
-        [[ ! -d "${appAutoPatchLogFolder}" ]] && log_echo "Status: Found previous aap instance running with PID ${aapPreviousPID}, killing processes..."
-        kill -9 "${aapPreviousPID}" > /dev/null 2>&1
-        killProcess "Dialog"
+        if _aap_pid_is_expected_process "${aapPreviousPID}"; then
+            log_status "Found previous AAP instance PID ${aapPreviousPID}; terminating it before uninstall."
+            _aap_terminate_process_tree "${aapPreviousPID}" 10
+            _aap_restore_pre_discovery_report "/var/tmp/aap-report-pre-discovery.${aapPreviousPID}.plist"
+            rm -f /var/tmp/dialog.appAutoPatch.*(N) 2>/dev/null
+        else
+            log_warning "PID file points to non-AAP process ${aapPreviousPID}; leaving it untouched."
+        fi
     fi
+    rm -f "${appAutoPatchPIDfile}" "${appAutoPatchHeartbeatFile}" "${appAutoPatchStarterSkipLogFile}" 2>/dev/null
 
     # Boot out launch daemon and remove
     log_uninstall "Removing previous AAP Launch Daemon: /Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
@@ -5056,6 +5260,196 @@ function killProcess() {
     fi
 }
 
+# Return success only when ${1} is the installed AAP zsh process. A live unrelated process can
+# inherit a stale PID after PID reuse; it must never be terminated merely because aap.pid points to it.
+_aap_pid_is_expected_process() {
+    local pid="$1"
+    [[ "${pid}" =~ '^[0-9]+$' ]] || return 1
+    kill -0 "${pid}" 2>/dev/null || return 1
+    local command
+    command=$(ps -p "${pid}" -o command= 2>/dev/null)
+    [[ "${command}" == *"${appAutoPatchFolder}/App-Auto-Patch-via-Dialog.zsh"* ]] \
+        || [[ "${command}" == *"${appAutoPatchFolder}/appautopatch"* ]] \
+        || [[ "${command}" == *"${appAutoPatchLink}"* ]] \
+        || { [[ "$(ps -p "${pid}" -o uid= 2>/dev/null | tr -d ' ')" == "0" ]] \
+            && [[ "${command}" == *"App-Auto-Patch-via-Dialog.zsh"* ]]; }
+}
+
+_aap_process_tree_pids() {
+    local pid="$1"
+    local child
+    for child in $(pgrep -P "${pid}" 2>/dev/null); do
+        _aap_process_tree_pids "${child}"
+    done
+    print -r -- "${pid}"
+}
+
+_aap_terminate_process_tree() {
+    local pid="$1"
+    local grace_seconds="${2:-10}"
+    [[ "${pid}" =~ '^[0-9]+$' ]] || return 0
+    kill -0 "${pid}" 2>/dev/null || return 0
+
+    local -a tree_pids
+    tree_pids=("${(@f)$(_aap_process_tree_pids "${pid}")}")
+    local tree_pid
+    for tree_pid in "${tree_pids[@]}"; do
+        kill -TERM "${tree_pid}" 2>/dev/null
+    done
+    local waited=0
+    while (( waited < grace_seconds )); do
+        local any_alive="FALSE"
+        for tree_pid in "${tree_pids[@]}"; do
+            kill -0 "${tree_pid}" 2>/dev/null && any_alive="TRUE"
+        done
+        [[ "${any_alive}" == "FALSE" ]] && break
+        sleep 1
+        (( waited++ ))
+    done
+    for tree_pid in "${tree_pids[@]}"; do
+        kill -0 "${tree_pid}" 2>/dev/null && kill -KILL "${tree_pid}" 2>/dev/null
+    done
+}
+
+_aap_heartbeat() {
+    setopt localoptions extended_glob
+    local phase="${1:-running}"
+    # The record must stay one tab-delimited line: callers pass label-derived text that can contain
+    # newlines/tabs, which would truncate the phase and leave aap-starter parsing a partial record.
+    phase="${phase//[[:space:]]##/ }"
+    phase="${phase##[[:space:]]#}"
+    phase="${phase%%[[:space:]]#}"
+    phase="${phase[1,80]}"
+    [[ -z "${phase}" ]] && phase="running"
+    local owner_pid=""
+    [[ -f "${appAutoPatchPIDfile}" ]] && owner_pid=$(<"${appAutoPatchPIDfile}")
+    [[ "${owner_pid}" == "$$" ]] || return 0
+    local heartbeat_tmp="${appAutoPatchHeartbeatFile}.$$"
+    printf '%s\t%s\t%s\n' "$$" "$(date +%s)" "${phase}" > "${heartbeat_tmp}" 2>/dev/null \
+        && mv -f "${heartbeat_tmp}" "${appAutoPatchHeartbeatFile}" 2>/dev/null
+}
+
+# Keep the supervisor heartbeat fresh while AAP is intentionally blocked on a foreground user
+# dialog. Unlike staging/install work, waiting for a user's choice is not a lack of progress.
+_aap_wait_for_dialog_with_heartbeat() {
+    local pid="$1"
+    local phase="${2:-dialog}"
+    local ticks=0
+    while kill -0 "${pid}" 2>/dev/null; do
+        if (( ticks % 30 == 0 )); then
+            _aap_heartbeat "dialog:${phase}"
+        fi
+        sleep 1
+        (( ticks++ ))
+    done
+    wait "${pid}" 2>/dev/null
+    return $?
+}
+
+_aap_restore_pre_discovery_report() {
+    local backup_path="${1:-${aapReportPreDiscoveryBackup}}"
+    [[ -f "${backup_path}" ]] || return 0
+    local restore_tmp="${appAutoPatchReportPLIST}.plist.restore.$$"
+    if cp -p "${backup_path}" "${restore_tmp}" 2>/dev/null \
+        && mv -f "${restore_tmp}" "${appAutoPatchReportPLIST}.plist" 2>/dev/null; then
+        rm -f "${backup_path}" 2>/dev/null
+        log_notice "Restored the pre-discovery pending-app report after an interrupted discovery."
+    else
+        rm -f "${restore_tmp}" 2>/dev/null
+        log_warning "Unable to restore the pre-discovery pending-app report from ${backup_path}."
+    fi
+}
+
+_aap_discard_pre_discovery_report_backup() {
+    rm -f "${aapReportPreDiscoveryBackup}" 2>/dev/null
+}
+
+_aap_clear_runtime_files() {
+    local recorded_pid=""
+    [[ -f "${appAutoPatchPIDfile}" ]] && recorded_pid=$(<"${appAutoPatchPIDfile}")
+    if [[ -z "${recorded_pid}" ]] || [[ "${recorded_pid}" == "$$" ]]; then
+        rm -f "${appAutoPatchPIDfile}" "${appAutoPatchHeartbeatFile}" 2>/dev/null
+    fi
+    rm -f "${dialogCommandFile}" "${dialogCommandFile}.selection.$$" 2>/dev/null
+}
+
+# TERM/INT/HUP are crash-recovery exits: clear runtime locks, but deliberately leave
+# NextAutoLaunch untouched/unset so aap-starter can relaunch after an unexpected termination.
+_aap_signal_cleanup() {
+    trap - HUP INT TERM
+    _aap_restore_pre_discovery_report
+    _aap_clear_runtime_files
+    exit 143
+}
+
+_aap_ensure_future_schedule_for_stop() {
+    local context="${1:-App Auto-Patch stopped}"
+    local existing existing_epoch now relaunch_minutes next_epoch next_date disable_relaunch
+    existing=$(defaults read "${appAutoPatchLocalPLIST}" NextAutoLaunch 2>/dev/null)
+    if [[ "${existing}" == "FALSE" ]] || [[ "${existing}" == "0" ]]; then
+        return 0
+    fi
+    disable_relaunch=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+    [[ -z "${disable_relaunch}" ]] && disable_relaunch=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+    if [[ "${disable_relaunch}" == "TRUE" ]] || [[ "${disable_relaunch}" == "1" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -string FALSE
+        return 0
+    fi
+    now=$(date +%s)
+    existing_epoch=$(date -j -f "${timestamp_format}" "${existing}" +%s 2>/dev/null)
+    if [[ -n "${existing_epoch}" ]] && (( existing_epoch > now )); then
+        return 0
+    fi
+
+    relaunch_minutes=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerWorkflowRelaunch 2>/dev/null)
+    [[ -z "${relaunch_minutes}" ]] && relaunch_minutes=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerWorkflowRelaunch 2>/dev/null)
+    [[ "${relaunch_minutes}" =~ '^[0-9]+$' ]] || relaunch_minutes="${DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES}"
+    (( relaunch_minutes < 2 )) && relaunch_minutes=2
+    next_epoch=$(( now + relaunch_minutes * 60 ))
+    # In-process stops have already parsed BusinessHours; the CLI --stop path safely leaves this
+    # unchanged because business_hours_windows is still empty.
+    next_epoch=$(clamp_epoch_outside_business_hours "${next_epoch}")
+    next_date=$(date -r "${next_epoch}" +"${timestamp_format}")
+    defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_date}"
+    log_notice "${context}; scheduled the next run for ${next_date}."
+}
+
+# Administrative escape hatch. This is called while parsing --stop, before workflow_startup can
+# replace the PID file or clear NextAutoLaunch.
+stop_running_aap() {
+    [[ $(id -u) -eq 0 ]] || { log_echo "Error: --stop must be run as root."; exit 1; }
+    local pid=""
+    [[ -f "${appAutoPatchPIDfile}" ]] && pid=$(<"${appAutoPatchPIDfile}")
+
+    _aap_ensure_future_schedule_for_stop "Administrative stop"
+    if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+        if _aap_pid_is_expected_process "${pid}"; then
+            log_echo "[STATUS] Stopping App Auto-Patch PID ${pid} and its child processes."
+            _aap_terminate_process_tree "${pid}" 10
+            _aap_restore_pre_discovery_report "/var/tmp/aap-report-pre-discovery.${pid}.plist"
+            rm -f /var/tmp/dialog.appAutoPatch.*(N) 2>/dev/null
+        else
+            log_echo "[WARNING] PID file points to non-AAP process ${pid}; leaving that process untouched."
+        fi
+    else
+        log_echo "[STATUS] No running App Auto-Patch process was found."
+    fi
+    rm -f "${appAutoPatchPIDfile}" "${appAutoPatchHeartbeatFile}" 2>/dev/null
+    _aap_clear_runtime_files
+    write_status "Pending: App Auto-Patch stopped by administrator."
+    exit 0
+}
+
+_exit_user_stop_preserving_schedule() {
+    local context="${1:-User stopped App Auto-Patch}"
+    dialogPreparationIntentionalQuit="TRUE"
+    _aap_restore_pre_discovery_report
+    _aap_ensure_future_schedule_for_stop "${context}"
+    write_status "Pending: ${context}; queued updates remain pending."
+    log_notice "${context}; stopping cleanly with queued updates preserved."
+    exit_clean
+}
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Quit Script
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -5066,17 +5460,19 @@ exit_clean() {
     { [[ "${InteractiveModeOption}" == 0 ]]; } && defaults write $appAutoPatchLocalPLIST AAPLastSilentRunDate -date "$timestamp"
     defaults write $appAutoPatchLocalPLIST AAPLastRunDate -date "$timestamp"
     
+    _aap_restore_pre_discovery_report
     log_verbose  "Local preference file at clean exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
     log_aap "**** App Auto-Patch ${scriptVersion} - CLEAN EXIT ****"
-    rm -f "${appAutoPatchPIDfile}" 2> /dev/null
+    _aap_clear_runtime_files
     exit 0
 }
 
 exit_error() {
 
+    _aap_restore_pre_discovery_report
     log_verbose "Local preference file at error exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
     log_aap "**** App Auto-Patch ${scriptVersion} - ERROR EXIT ****"
-    rm -f "${appAutoPatchPIDfile}" 2> /dev/null
+    _aap_clear_runtime_files
     exit 1
 }
 
@@ -5258,6 +5654,7 @@ function log_exit() {
 
 write_status() {
     defaults write "${appAutoPatchLocalPLIST}" AAPStatus -string "$(date +$timestamp_format): $*"
+    _aap_heartbeat "status"
 }
 
 log_echo() {
@@ -5531,6 +5928,7 @@ _dialog_patching_dismissed_prompt() {
         --style "mini"
         --moveable
         --position center
+        --windowbuttons min
         --quitkey k
         --timer 30
         --hidetimerbar
@@ -5575,6 +5973,111 @@ _ensure_patching_dialog() {
     _dialog_patching_dismissed_prompt
 }
 
+# Stop is a user deferral-equivalent. It must not be available after a hard deadline (discovery
+# runs before check_deadlines_* in main) or during Install Now. Admin `appautopatch --stop` is
+# unaffected.
+_aap_preparation_stop_disallowed_reason() {
+    if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ "${pending_apps_install_now_option}" == "TRUE" ]]; then
+        echo "Install Now is in progress"
+        return 0
+    fi
+    if is_hard_deadline_due_lightweight; then
+        echo "a hard deadline is due"
+        return 0
+    fi
+    return 1
+}
+
+_dialog_preparation_dismissed_prompt() {
+    local stop_block_reason
+    if stop_block_reason=$(_aap_preparation_stop_disallowed_reason); then
+        log_status "Preparation window dismissed; continuing because ${stop_block_reason}."
+        dialogPreparationContinueBackground="TRUE"
+        return 0
+    fi
+
+    sleep 1
+    _prepare_dialog_command_file
+
+    local -a promptOptions
+    promptOptions=(
+        --title "$appTitle"
+        --message "${display_string_preparationdismissed_message}"
+        --messagefont size=12
+        --icon "$icon"
+        --button1text "${display_string_preparationdismissed_button1}"
+        --button2text "${display_string_preparationdismissed_button2}"
+        --style "mini"
+        --moveable
+        --position center
+        --windowbuttons min
+        --quitkey k
+        --timer 30
+        --hidetimerbar
+        ${dialogDockOptions[@]}
+    )
+    [[ "$dialogOnTop" == "TRUE" ]] && promptOptions+=(--ontop)
+
+    "$dialogBinary" "${promptOptions[@]}"
+    local promptExit=$?
+    if [[ "${promptExit}" == "2" ]]; then
+        if stop_block_reason=$(_aap_preparation_stop_disallowed_reason); then
+            log_status "Stop is unavailable because ${stop_block_reason}; continuing App Auto-Patch."
+        else
+            log_status "User chose to stop App Auto-Patch after closing the preparation window."
+            _exit_user_stop_preserving_schedule "User stopped App Auto-Patch during update preparation"
+        fi
+    fi
+
+    # Button 1, timeout, Quit, and any unexpected result all choose the safe non-destructive path.
+    log_status "Preparation window dismissed; continuing App Auto-Patch in the background."
+    dialogPreparationContinueBackground="TRUE"
+}
+
+# Detect discovery/staging Dock Quit only between labels. This avoids interrupting an active
+# Installomator operation; a staging curl is likewise allowed to return/fail before policy runs.
+_ensure_preparation_dialog() {
+    local phase="$1"
+    [[ "${dialogPreparationContinueBackground}" == "TRUE" ]] && return 0
+    [[ "${dialogPreparationIntentionalQuit}" == "TRUE" ]] && return 0
+
+    local pid=""
+    case "${phase}" in
+        discovery) pid="${dialogDiscoverPID}" ;;
+        staging) pid="${dialogStagingPID}" ;;
+        *) return 0 ;;
+    esac
+    [[ -z "${pid}" ]] && return 0
+    kill -0 "${pid}" 2>/dev/null && return 0
+
+    wait "${pid}" 2>/dev/null
+    log_warning "${phase} dialog is no longer running (PID ${pid})."
+    case "${phase}" in
+        discovery) dialogDiscoverPID="" ;;
+        staging) dialogStagingPID="" ;;
+    esac
+
+    local stop_block_reason
+    if stop_block_reason=$(_aap_preparation_stop_disallowed_reason); then
+        log_status "Dock Quit during ${phase}; continuing because ${stop_block_reason}."
+        dialogPreparationContinueBackground="TRUE"
+        return 0
+    fi
+
+    case "${dialogQuitHandlingDiscoveryStagingOption}" in
+        STOP)
+            _exit_user_stop_preserving_schedule "Dock Quit stopped App Auto-Patch during ${phase}"
+        ;;
+        CONTINUE)
+            log_status "Dock Quit during ${phase}; managed policy CONTINUE is keeping AAP running headless."
+            dialogPreparationContinueBackground="TRUE"
+        ;;
+        *)
+            _dialog_preparation_dismissed_prompt
+        ;;
+    esac
+}
+
 swiftDialogDiscoverWindow(){
     
     # If we are using SwiftDialog
@@ -5584,6 +6087,8 @@ swiftDialogDiscoverWindow(){
         return 0
     fi
     if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ ${InteractiveModeOption} -gt 1 ]]; then
+        dialogPreparationContinueBackground="FALSE"
+        dialogPreparationIntentionalQuit="FALSE"
         $dialogBinary \
         ${dialogDiscoverConfigurationOptions[@]} \
         &
@@ -5630,6 +6135,11 @@ swiftDialogCompleteDialogPatching(){
 swiftDialogCompleteDialogDiscover(){
     
     if [ ${InteractiveModeOption} -gt 1 ]; then
+        _ensure_preparation_dialog "discovery"
+        if [[ "${dialogPreparationContinueBackground}" == "TRUE" ]]; then
+            rm -f "$dialogCommandFile" 2>/dev/null
+            return
+        fi
         if [[ -n "${dialogDiscoverPID}" ]] && ! kill -0 "${dialogDiscoverPID}" 2>/dev/null; then
             log_info "Discovery dialog was already closed (Dock Quit / ⌘Q); continuing without UI."
             wait "${dialogDiscoverPID}" 2>/dev/null
@@ -5652,6 +6162,8 @@ swiftDialogStagingWindow(){
 
     _prepare_dialog_command_file
     if [[ ${InteractiveModeOption} == 2 ]]; then
+        dialogPreparationContinueBackground="FALSE"
+        dialogPreparationIntentionalQuit="FALSE"
         $dialogBinary \
         ${dialogStagingConfigurationOptions[@]} \
         &
@@ -5664,6 +6176,11 @@ swiftDialogStagingWindow(){
 swiftDialogCompleteDialogStaging(){
 
     if [[ ${InteractiveModeOption} == 2 ]]; then
+        _ensure_preparation_dialog "staging"
+        if [[ "${dialogPreparationContinueBackground}" == "TRUE" ]]; then
+            rm -f "$dialogCommandFile" 2>/dev/null
+            return
+        fi
         if [[ -n "${dialogStagingPID}" ]] && ! kill -0 "${dialogStagingPID}" 2>/dev/null; then
             log_info "Staging dialog was already closed (Dock Quit / ⌘Q); continuing without UI."
             wait "${dialogStagingPID}" 2>/dev/null
@@ -6050,6 +6567,7 @@ workflow_pending_apps_dialog() {
             --style mini \
             --moveable \
             --position topright \
+            --windowbuttons min \
             --timer 15 \
             --hidetimerbar \
             --quitkey k \
@@ -6103,6 +6621,7 @@ workflow_pending_apps_dialog() {
         --height 500
         --width 600
         --moveable
+        --windowbuttons min
         --titlefont size=18
         --messagefont size=14
         --quitkey k
@@ -6111,7 +6630,9 @@ workflow_pending_apps_dialog() {
     [[ "${dialogOnTop}" == "TRUE" ]] && pendingDialogOptions+=(--ontop)
     [[ "${dialogSupportsDockIcon}" == "TRUE" ]] && pendingDialogOptions+=(--dockiconbadge "${numberOfUpdates}")
 
-    $dialogBinary "${pendingDialogOptions[@]}" "${appNamesArray[@]}"
+    $dialogBinary "${pendingDialogOptions[@]}" "${appNamesArray[@]}" &
+    local pendingDialogPID=$!
+    _aap_wait_for_dialog_with_heartbeat "${pendingDialogPID}" "pending-apps"
     local dialogOutput=$?
     log_verbose "Pending apps dialog exit code: ${dialogOutput}"
 
@@ -6200,6 +6721,7 @@ dialog_install_or_defer() {
         --width 600
 		--quitoninfo
 		--moveable
+		--windowbuttons min
 		--quitkey k
 		--titlefont size=18
 		--messagefont size=14
@@ -6256,8 +6778,14 @@ dialog_install_or_defer() {
         # Badge the Dock icon with the number of pending updates (swiftDialog 3.0+).
         [[ "${dialogSupportsDockIcon}" == "TRUE" ]] && deferralDialogContent+=(--dockiconbadge "${numberOfUpdates}")
 
-        SELECTION=$("$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}")
+        local selectionFile="${dialogCommandFile}.selection.$$"
+        "$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}" > "${selectionFile}" &
+        local deferralDialogPID=$!
+        _aap_wait_for_dialog_with_heartbeat "${deferralDialogPID}" "deferral"
         dialogOutput=$?
+        SELECTION=""
+        [[ -f "${selectionFile}" ]] && SELECTION=$(<"${selectionFile}")
+        rm -f "${selectionFile}" 2>/dev/null
         log_aap "dialogOutput: $dialogOutput"
         case "${dialogOutput}" in
             0)
@@ -6336,6 +6864,7 @@ _dialog_confirm_install_now() {
         --style "mini"
         --moveable
         --position center
+        --windowbuttons min
         --quitkey k
         --commandfile "$dialogCommandFile"
         ${dialogDockOptions[@]}
@@ -6351,6 +6880,7 @@ _dialog_confirm_install_now() {
     remaining_seconds="${DialogTimeoutConfirmInstall}"
     while (( remaining_seconds > 0 )); do
         kill -0 "${confirmDialogPID}" 2>/dev/null || break
+        (( remaining_seconds % 30 == 0 )) && _aap_heartbeat "dialog:confirm-install"
         sleep 1
         remaining_seconds=$(( remaining_seconds - 1 ))
         kill -0 "${confirmDialogPID}" 2>/dev/null || break
@@ -6423,6 +6953,7 @@ dialog_install_hard_deadline() {
             --width 600
             --quitoninfo
             --moveable
+            --windowbuttons min
             --quitkey k
             --titlefont size=18
             --messagefont size=14
@@ -6434,7 +6965,9 @@ dialog_install_hard_deadline() {
             deferralDialogOptions+=(--ontop)
         fi
 
-        "$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}"
+        "$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}" &
+        local hardDeadlineDialogPID=$!
+        _aap_wait_for_dialog_with_heartbeat "${hardDeadlineDialogPID}" "hard-deadline"
         dialogOutput=$?
         log_aap "dialogOutput: $dialogOutput"
         case "${dialogOutput}" in
@@ -7099,6 +7632,8 @@ workflow_stage_updates() {
     _aap_mini_progress_begin "${progressTotal}" "${display_string_staging_progress}" "${display_string_staging_message}"
 
     for label in $queuedLabelsArray; do
+        _aap_heartbeat "staging:${label}"
+        _ensure_preparation_dialog "staging"
         _aap_mini_progress_item "${label}" "${display_string_staging_progress}" "${progressCompleted}" "${progressTotal}"
 
         # On fully-silent runs, don't waste a download on labels we will never silently install.
@@ -7191,7 +7726,10 @@ workflow_stage_updates() {
         fi
 
         # Build curl arguments, honouring any curlOptions the label declares
-        local curlArgs=("--location" "--silent" "--fail" "--show-error")
+        # Fail a connection attempt promptly and abort a transfer that receives no data for five
+        # minutes. Active downloads are unrestricted; this only prevents a dead socket from holding
+        # the entire AAP workflow indefinitely.
+        local curlArgs=("--location" "--silent" "--fail" "--show-error" "--connect-timeout" "30" "--speed-limit" "1" "--speed-time" "300")
         [[ -n "$stagingCurlOpts" ]] && curlArgs+=($=stagingCurlOpts)
         curlArgs+=("-o" "$stagedFile" "$stagingURL")
 
@@ -7208,6 +7746,7 @@ workflow_stage_updates() {
             rm -f "$stagedFile" "$stagedVersionFile" "$stagedTypeFile"
             stageErrorCount=$((stageErrorCount + 1))
         fi
+        _aap_heartbeat "staging-complete:${label}"
 
         progressCompleted=$((progressCompleted + 1))
         _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
@@ -7250,6 +7789,8 @@ workflow_silent_patch_closed_apps() {
     _aap_mini_progress_begin "${progressTotal}" "${display_string_silent_patch_progress}" "${display_string_staging_message}"
 
     for label in $queuedLabelsArray; do
+        _aap_heartbeat "silent-patch:${label}"
+        _ensure_preparation_dialog "staging"
         _aap_mini_progress_item "${label}" "${display_string_silent_patch_progress}" "${progressCompleted}" "${progressTotal}"
 
         # ExcludedBackgroundLabels: discover/report but do not silently patch. Leave in the
@@ -7369,6 +7910,7 @@ workflow_silent_patch_closed_apps() {
 
         progressCompleted=$((progressCompleted + 1))
         _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
+        _aap_heartbeat "silent-patch-complete:${label}"
     done
 
     if [[ $silent_patch_success_count -gt 0 ]]; then
@@ -7428,6 +7970,7 @@ workflow_do_Installations() {
     swiftDialogUpdate "progress: 1"
     i=0
     for label in $queuedLabelsArray; do
+        _aap_heartbeat "install:${label}"
         _ensure_patching_dialog
         log_info "Installing ${label}..."
         local itemStatus="success"
@@ -7566,6 +8109,7 @@ workflow_do_Installations() {
             write_aap_receipt "$label" "$newVersion" "$installomatorExitCode"
         fi
         patchingItemStatus[$i]="${itemStatus}"
+        _aap_heartbeat "install-complete:${label}"
         let i++
         swiftDialogUpdate "progress: increment ${progressIncrementValue}"
         if [ ${InteractiveModeOption} -ge 1 ] && [[ "${dialogSupportsDockIcon}" == "TRUE" ]]; then
@@ -8614,6 +9158,14 @@ main() {
             /usr/libexec/PlistBuddy -c 'add ":DiscoveredLabels" array' "${appAutoPatchLocalPLIST}.plist"
         fi
 
+        # Preserve the last complete report until discovery reaches a safe completion boundary.
+        # If the user chooses STOP (or the process is terminated) mid-discovery, restore this
+        # snapshot so Support App / pending-app state is not replaced by a partial scan.
+        _aap_discard_pre_discovery_report_backup
+        if [[ -f "${appAutoPatchReportPLIST}.plist" ]]; then
+            cp -p "${appAutoPatchReportPLIST}.plist" "${aapReportPreDiscoveryBackup}" 2>/dev/null
+        fi
+
         # Reset the persisted report (ItemsToInstall) so it reflects only this run's findings
         clear_aap_report
         
@@ -8766,6 +9318,8 @@ main() {
                     
                     if [[ $in_label -eq 1 && "$scrubbedLine" =~ $endlabel_re ]]; then 
                         # label complete. A valid label includes a Team ID. If we have one, we can check for installed
+                        _aap_heartbeat "discovery:${label_name:-${labelFile:-label}}"
+                        _ensure_preparation_dialog "discovery"
                         [[ -n $expectedTeamID ]] && PgetAppVersion
                         
                         in_label=0
@@ -8934,6 +9488,8 @@ main() {
     for label in $queuedLabelsArray; do
         countOfElementsArray+=($label)
     done
+    # Discovery and queue reconstruction are now complete; the new report is authoritative.
+    _aap_discard_pre_discovery_report_backup
 
     # During BusinessHours without SilentDuring, with AllowDiscovery: discovery-only path.
     # Optionally notify about pending apps (with Install Now), then defer until clear.
