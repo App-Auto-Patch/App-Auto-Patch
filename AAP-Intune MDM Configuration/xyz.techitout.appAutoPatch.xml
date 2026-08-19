@@ -54,6 +54,10 @@
 <string>TRUE</string>
 <key>WorkflowDisableAppDiscovery</key>
 <string>FALSE</string>
+<key>WorkflowScheduledDiscovery</key>
+<false/>
+<key>WorkflowDisableRelaunch</key>
+<string>FALSE</string>
 <key>WebhookFeature</key>
 <string>FALSE</string>
 <key>WebhookURLSlack</key>

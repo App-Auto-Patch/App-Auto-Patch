@@ -1219,6 +1219,19 @@
             ],
             "property_order": 193
         },
+        "WorkflowScheduledDiscovery": {
+            "type": "boolean",
+            "title": "Scheduled Discovery Only",
+            "default": false,
+            "description": "When WorkflowDisableRelaunch is also enabled, keep periodic headless discovery runs active using DiscoveryFrequency. These runs refresh the pending-app report, optionally stage updates, and can notify users, but never silently patch, show deferral or deadline dialogs, or install apps. Users initiate installation from the pending-apps dialog, Support App, notification action, or another explicit Install Now trigger",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/258"
+                }
+            ],
+            "property_order": 194
+        },
         "WorkflowDisableRelaunch": {
             "type": "string",
             "title": "Disable Relaunch Workflow",
@@ -1245,7 +1258,7 @@
         "BusinessHours": {
             "type": "string",
             "title": "Business Hours",
-            "description": "Weekday time windows when interactive App Auto-Patch must NOT run (blocked / do-not-disturb hours). Format: DAY:hh:mm-hh:mm, comma-separated, no spaces (MON-SUN, 24-hour). Multiple windows per day are allowed — for example MON:09:00-11:59,MON:13:00-17:00 blocks morning and afternoon but leaves lunch clear. Same-day ranges only. Empty/unset = always allowed. During a window, AAP reschedules NextAutoLaunch to the next clear time and exits unless BusinessHoursSilentDuring or BusinessHoursAllowDiscovery is true. Intentionally bypassed by --workflow-install-now / --workflow-install-now-silent / --preview-deferral-dialog. Overdue hard deadlines bypass BusinessHours by default unless BusinessHoursRespectHardDeadline is true.",
+            "description": "Weekday time windows when interactive App Auto-Patch must NOT run (blocked / do-not-disturb hours). Format: DAY:hh:mm-hh:mm, comma-separated, no spaces (MON-SUN, 24-hour). Multiple windows per day are allowed — for example MON:09:00-11:59,MON:13:00-17:00 blocks morning and afternoon but leaves lunch clear. Same-day ranges only. Empty/unset = always allowed. During a window, AAP reschedules NextAutoLaunch to the next clear time and exits unless BusinessHoursSilentDuring or BusinessHoursAllowDiscovery is true. Intentionally bypassed by --workflow-install-now / --workflow-install-now-silent / --preview-deferral-dialog / --pending-apps-dialog and headless discovery-only workflows. Overdue hard deadlines bypass BusinessHours by default unless BusinessHoursRespectHardDeadline is true.",
             "options": {
                 "inputAttributes": {
                     "placeholder": "MON:09:00-17:00,TUE:09:00-17:00,WED:09:00-17:00,THU:09:00-17:00,FRI:09:00-17:00"

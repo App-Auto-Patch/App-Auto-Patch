@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.0"
 scriptDate="2026/08/19"
-scriptBuild="3.7.0.2608191153"
+scriptBuild="3.7.0.2608191542"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -61,6 +61,7 @@ echo "
     Workflow Options:
     [--workflow-disable-relaunch] [--workflow-disable-relaunch-off]
     [--workflow-disable-app-discovery] [--workflow-disable-app-discovery-off]
+    [--workflow-discovery-only]
     [--discovery-frequency=hours]
     [--force-discovery]
     [--workflow-install-now] [--workflow-install-now-silent]
@@ -186,6 +187,7 @@ echo "
     <key>WorkflowBackgroundPatchClosedApps</key> <true/> | <false/>
     <key>WorkflowStageUpdates</key> <true/> | <false/>
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
+    <key>WorkflowScheduledDiscovery</key> <true/> | <false/>
     <key>WorkflowDisableRelaunch</key> <true/> | <false/>
     <key>BusinessHours</key> <string>MON:09:00-17:00,TUE:09:00-17:00,...</string>
     <key>BusinessHoursRespectHardDeadline</key> <true/> | <false/>
@@ -388,6 +390,12 @@ set_defaults() {
     business_hours_discovery_only_active="FALSE"
     typeset -ga business_hours_windows # populated by manage_parameter_options: "dow:startmin:endmin"
 
+    # User-driven patching mode (#258): when paired with WorkflowDisableRelaunch, keep periodic
+    # headless discovery/report refreshes scheduled without showing deferral UI or patching apps.
+    WorkflowScheduledDiscoveryOption="" # MDM Enabled; default FALSE
+    workflow_discovery_only_option="FALSE" # one-shot CLI --workflow-discovery-only
+    workflow_discovery_only_active="FALSE" # effective runtime mode
+
     UnattendedExit="FALSE" # MDM Enabled
 
     UnattendedExitSeconds="60" # MDM Enabled
@@ -431,6 +439,13 @@ set_defaults() {
     aapInstallNowTriggerLaunchDaemonLabel="xyz.techitout.aap.installNowTrigger"
 
     FORCE_DISCOVERY_FILE="${appAutoPatchFolder}/.ForceDiscovery"
+
+    # One-shot flag so --workflow-discovery-only survives an out-of-folder / Jamf restart.
+    WORKFLOW_DISCOVERY_ONLY_FILE="${appAutoPatchFolder}/.WorkflowDiscoveryOnly"
+    # Original NextAutoLaunch value interrupted by the one-shot; restored on completion/error.
+    WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE="${appAutoPatchFolder}/.WorkflowDiscoveryOnlyNextAutoLaunch"
+    # Suppresses immediate crash-resume while a transient network error deferral is pending.
+    WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE="${appAutoPatchFolder}/.WorkflowDiscoveryOnlyDeferred"
 
     jamfBinary="/usr/local/bin/jamf"
 
@@ -1144,6 +1159,9 @@ get_options() {
             --force-discovery)
                 force_discovery_option="TRUE"
             ;;
+            --workflow-discovery-only)
+                workflow_discovery_only_option="TRUE"
+            ;;
             --workflow-install-now)
                 workflow_install_now_option="TRUE"
             ;;
@@ -1326,6 +1344,7 @@ get_preferences() {
         rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" 2> /dev/null
         rm -f "${PENDING_APPS_DIALOG_FILE}" 2> /dev/null
         rm -f "${FORCE_DISCOVERY_FILE}" 2> /dev/null
+        rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2> /dev/null
         # Also clear the matching in-memory one-shot flags so a reset run can't still act on them
         # (some are armed at the top of workflow_startup, before this reset block runs).
         pending_apps_dialog_option="FALSE"
@@ -1333,6 +1352,7 @@ get_preferences() {
         workflow_install_now_option="FALSE"
         workflow_install_now_silent_option="FALSE"
         force_discovery_option="FALSE"
+        workflow_discovery_only_option="FALSE"
         
     else
         if [[ "${reset_labels_option}" == "TRUE" ]]; then
@@ -1400,6 +1420,8 @@ get_preferences() {
         discovery_frequency_managed=$(defaults read "${appAutoPatchManagedPLIST}" DiscoveryFrequency 2> /dev/null)
         local workflow_disable_relaunch_managed
         workflow_disable_relaunch_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+        local workflow_scheduled_discovery_managed
+        workflow_scheduled_discovery_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
         local business_hours_managed
         business_hours_managed=$(defaults read "${appAutoPatchManagedPLIST}" BusinessHours 2>/dev/null)
         local business_hours_respect_hard_deadline_managed
@@ -1565,6 +1587,8 @@ get_preferences() {
         discovery_frequency_local=$(defaults read "${appAutoPatchLocalPLIST}" DiscoveryFrequency 2> /dev/null)
         local workflow_disable_relaunch_local
         workflow_disable_relaunch_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+        local workflow_scheduled_discovery_local
+        workflow_scheduled_discovery_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
         local business_hours_local
         business_hours_local=$(defaults read "${appAutoPatchLocalPLIST}" BusinessHours 2>/dev/null)
         local business_hours_respect_hard_deadline_local
@@ -1717,6 +1741,8 @@ get_preferences() {
     { [[ -z "${discovery_frequency_managed}" ]] && [[ -n "${discovery_frequency_local}" ]]; } && DiscoveryFrequency="${discovery_frequency_local}"
     [[ -n "${workflow_disable_relaunch_managed}" ]] && workflow_disable_relaunch_option="${workflow_disable_relaunch_managed}"
     { [[ -z "${workflow_disable_relaunch_managed}" ]] && [[ -z "${workflow_disable_relaunch_option}" ]] && [[ -n "${workflow_disable_relaunch_local}" ]]; } && workflow_disable_relaunch_option="${workflow_disable_relaunch_local}"
+    [[ -n "${workflow_scheduled_discovery_managed}" ]] && WorkflowScheduledDiscoveryOption="${workflow_scheduled_discovery_managed}"
+    { [[ -z "${workflow_scheduled_discovery_managed}" ]] && [[ -z "${WorkflowScheduledDiscoveryOption}" ]] && [[ -n "${workflow_scheduled_discovery_local}" ]]; } && WorkflowScheduledDiscoveryOption="${workflow_scheduled_discovery_local}"
     [[ -n "${business_hours_managed}" ]] && business_hours_option="${business_hours_managed}"
     { [[ -z "${business_hours_managed}" ]] && [[ -z "${business_hours_option}" ]] && [[ -n "${business_hours_local}" ]]; } && business_hours_option="${business_hours_local}"
     [[ -n "${business_hours_respect_hard_deadline_managed}" ]] && business_hours_respect_hard_deadline_option="${business_hours_respect_hard_deadline_managed}"
@@ -1888,6 +1914,7 @@ get_preferences() {
     log_verbose "WorkflowDisableAppDiscovery: $workflow_disable_app_discovery_option"
     log_verbose "DiscoveryFrequency: $DiscoveryFrequency"
     log_verbose "WorkflowDisableRelaunch: $workflow_disable_relaunch_option"
+    log_verbose "WorkflowScheduledDiscovery: ${WorkflowScheduledDiscoveryOption:-<unset>}"
     log_verbose "BusinessHours: ${business_hours_option:-<unset>}"
     log_verbose "BusinessHoursRespectHardDeadline: ${business_hours_respect_hard_deadline_option:-<unset>}"
     log_verbose "BusinessHoursSilentDuring: ${business_hours_silent_during_option:-<unset>}"
@@ -2353,12 +2380,34 @@ manage_parameter_options() {
         defaults write "${appAutoPatchLocalPLIST}" DiscoveryFrequency -int "${DiscoveryFrequency}"
         log_info "Discovery frequency set to: ${DiscoveryFrequency} hours"
     fi
+
+    # Keep scheduled discovery alive even when the interactive/install relaunch workflow is
+    # disabled (#258). This preference has no effect unless WorkflowDisableRelaunch is also TRUE.
+    if [[ "${WorkflowScheduledDiscoveryOption}" -eq 1 ]] || [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]]; then
+        WorkflowScheduledDiscoveryOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery -bool true
+    else
+        WorkflowScheduledDiscoveryOption="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery 2>/dev/null
+    fi
+    if [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]] && [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then
+        log_warning "WorkflowScheduledDiscovery is enabled, but WorkflowDisableAppDiscovery takes priority; scheduled runs will retain the existing report without scanning."
+    fi
+    log_verbose "WorkflowScheduledDiscoveryOption is: ${WorkflowScheduledDiscoveryOption}"
     
     # Manage ${workflow_disable_relaunch_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
         workflow_disable_relaunch_option="TRUE"
         defaults write "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch -bool true
-        /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+        if [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]] || [[ "${workflow_discovery_only_option}" == "TRUE" ]]; then
+            # Leave the key absent while this run is active for crash recovery. The discovery-only
+            # completion path writes the next discovery date before exiting.
+            if [[ "${pending_apps_dialog_option}" != "TRUE" ]] && [[ "${preview_deferral_dialog_option}" != "TRUE" ]]; then
+                defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2>/dev/null
+            fi
+        else
+            /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+        fi
     else
         workflow_disable_relaunch_option="FALSE"
         defaults delete "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null
@@ -2368,7 +2417,7 @@ manage_parameter_options() {
         # --preview-deferral-dialog) must not lose a real schedule this way: they never reach a
         # completion path, so deleting a valid future date here left the key unset and forced a
         # fresh deferral/cadence write. Only drop the disable sentinel for those workflows.
-        if [[ "${pending_apps_dialog_option}" == "TRUE" ]] || [[ "${preview_deferral_dialog_option}" == "TRUE" ]]; then
+        if [[ "${pending_apps_dialog_option}" == "TRUE" ]] || [[ "${preview_deferral_dialog_option}" == "TRUE" ]] || [[ "${workflow_discovery_only_option}" == "TRUE" ]]; then
             local existing_next_auto_launch_relaunch
             existing_next_auto_launch_relaunch=$(defaults read "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null)
             if [[ "${existing_next_auto_launch_relaunch}" == "FALSE" ]] || [[ "${existing_next_auto_launch_relaunch}" == "0" ]]; then
@@ -2974,6 +3023,21 @@ workflow_startup() {
         touch "${PENDING_APPS_DIALOG_FILE}"
     fi
 
+    # --workflow-discovery-only is a one-shot trigger that must survive an out-of-folder install
+    # or Jamf-parent restart. It is consumed only after the report refresh path completes.
+    if [[ "${reset_defaults_option}" == "TRUE" ]]; then
+        workflow_discovery_only_option="FALSE"
+        rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2> /dev/null
+    elif [[ "${workflow_discovery_only_option}" == "TRUE" ]] || [[ -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" ]]; then
+        log_status "Discovery-only alternate workflow enabled."
+        if [[ "${workflow_discovery_only_option}" == "TRUE" ]] && [[ ! -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" ]]; then
+            _snapshot_discovery_only_schedule
+        fi
+        workflow_discovery_only_option="TRUE"
+        touch "${WORKFLOW_DISCOVERY_ONLY_FILE}"
+        rm -f "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2>/dev/null
+    fi
+
     # One-shot override
     if [[ "${force_self_update_check_option:-}" == "TRUE" ]]; then
         forceSelfUpdateCheck="true"
@@ -3035,17 +3099,18 @@ workflow_startup() {
 	local aapPreviousPID
 	aapPreviousPID=$(pgrep -F "${appAutoPatchPIDfile}" 2> /dev/null)
 	if [[ -n "${aapPreviousPID}" ]]; then
-        if _aap_pid_is_expected_process "${aapPreviousPID}"; then
+        if _aap_pid_is_expected_process "${aapPreviousPID}" || _aap_heartbeat_claims_pid "${aapPreviousPID}"; then
             [[ -d "${appAutoPatchLogFolder}" ]] && log_status "Found previous AAP instance PID ${aapPreviousPID}; terminating it gracefully..."
             [[ ! -d "${appAutoPatchLogFolder}" ]] && log_echo "Status: Found previous AAP instance PID ${aapPreviousPID}; terminating it gracefully..."
             _aap_terminate_process_tree "${aapPreviousPID}" 10
             _aap_restore_pre_discovery_report "/var/tmp/aap-report-pre-discovery.${aapPreviousPID}.plist"
-            rm -f /var/tmp/dialog.appAutoPatch.*(N) 2>/dev/null
+            _aap_clear_foreign_dialog_command_files
         else
             log_warning "PID file points to live non-AAP process ${aapPreviousPID}; removing stale runtime markers without signaling it."
         fi
         rm -f "${appAutoPatchPIDfile}" "${appAutoPatchHeartbeatFile}" 2>/dev/null
 	fi
+	_aap_terminate_orphaned_instances
 	
 	# Create runtime ownership markers for this instance.
 	printf '%s\n' "$$" > "${appAutoPatchPIDfile}"
@@ -3058,7 +3123,7 @@ workflow_startup() {
 	# tear down an existing LaunchDaemon schedule. Those workflows leave NextAutoLaunch intact on
 	# dismiss; pending-apps Install Now clears it before continuing into the install workflow so
 	# crash recovery still applies there.
-	if [[ "${pending_apps_dialog_option}" != "TRUE" ]] && [[ "${preview_deferral_dialog_option}" != "TRUE" ]]; then
+	if [[ "${pending_apps_dialog_option}" != "TRUE" ]] && [[ "${preview_deferral_dialog_option}" != "TRUE" ]] && [[ "${workflow_discovery_only_option}" != "TRUE" ]]; then
 		defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
 	fi
 	
@@ -3217,6 +3282,26 @@ workflow_startup() {
         touch "${FORCE_DISCOVERY_FILE}" # This is created in case the script restarts.
     fi
 
+    # Resolve the effective discovery-only mode after managed/local preferences and explicit
+    # install/dialog flags are known. Install Now and one-shot UI requests always take priority.
+    workflow_discovery_only_active="FALSE"
+    if [[ "${workflow_install_now_option}" == "TRUE" ]] \
+    || [[ "${workflow_install_now_silent_option}" == "TRUE" ]] \
+    || [[ "${pending_apps_install_now_option}" == "TRUE" ]] \
+    || [[ "${pending_apps_dialog_option}" == "TRUE" ]] \
+    || [[ "${preview_deferral_dialog_option}" == "TRUE" ]]; then
+        if [[ "${workflow_discovery_only_option}" == "TRUE" ]]; then
+            log_warning "Ignoring --workflow-discovery-only because an Install Now or one-shot dialog workflow is active."
+            workflow_discovery_only_option="FALSE"
+            _restore_discovery_only_schedule
+            rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2>/dev/null
+        fi
+    elif [[ "${workflow_discovery_only_option}" == "TRUE" ]] \
+    || { [[ "${workflow_disable_relaunch_option}" == "TRUE" ]] && [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]]; }; then
+        workflow_discovery_only_active="TRUE"
+        log_status "Discovery-only workflow active: report/staging/notification refresh only; no patching or deferral UI."
+    fi
+
     
 	if [[ "${check_error}" == "TRUE" ]] || [[ "${option_error}" == "TRUE" ]] || [[ "${helper_error}" == "TRUE" ]]; then
 		log_exit "Initial startup validation failed."
@@ -3255,6 +3340,7 @@ workflow_startup() {
 			deferral_timer_minutes="${deferral_timer_error_minutes}"
 			log_error "Network unavailable, trying again in ${deferral_timer_minutes} minutes."
 			write_status "Pending: Network unavailable, trying again in ${deferral_timer_minutes} minutes."
+            [[ "${workflow_discovery_only_option}" == "TRUE" ]] && touch "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}"
 			set_auto_launch_deferral
 		fi
 	fi
@@ -3671,8 +3757,13 @@ interactive_interrupt() {
 # Restart AAP via the LaunchDaemon after waiting for ${restart_aap_sleep_seconds} seconds.
 restart_aap() {
 	if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-        log_aap "Automatic Relaunch is disabled... Setting NextAutoLaunch to FALSE"
-        /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+        if [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]] || [[ "${workflow_discovery_only_option}" == "TRUE" ]]; then
+            log_aap "Interactive relaunch is disabled, but discovery-only must survive restart; leaving NextAutoLaunch unset."
+            defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2>/dev/null
+        else
+            log_aap "Automatic Relaunch is disabled... Setting NextAutoLaunch to FALSE"
+            /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+        fi
     else
         /usr/libexec/PlistBuddy -c "Delete :NextAutoLaunch" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
     fi
@@ -3746,16 +3837,45 @@ log_line() {
     echo "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: $*" >> "__AAP_LOG__"
 }
 
+# Match the program AAP was launched as, skipping any privilege wrapper or interpreter in front of
+# it. `sudo appautopatch …` records a PID whose argv names the entrypoint symlink rather than the
+# canonical script, which previously made this helper disown a live AAP run.
+command_invokes_aap() {
+    local command="$1" token base index=0 result=1
+    set -f
+    for token in $command; do
+        index=$(( index + 1 ))
+        (( index > 4 )) && break
+        case "$token" in
+            sudo|*/sudo|-*) continue ;;
+            zsh|*/zsh|bash|*/bash|sh|*/sh) continue ;;
+        esac
+        base="${token##*/}"
+        if [[ "$base" == "appautopatch" ]] || [[ "$base" == "App-Auto-Patch-via-Dialog.zsh" ]]; then
+            result=0
+        fi
+        break
+    done
+    set +f
+    return $result
+}
+
+process_start_epoch() {
+    local lstart
+    lstart="$(ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')"
+    [[ -n "$lstart" ]] || return 1
+    date -j -f "%a %b %d %T %Y" "$lstart" +%s 2>/dev/null
+}
+
 is_expected_aap_process() {
     local pid="$1"
     [[ "$pid" =~ ^[0-9]+$ ]] || return 1
     kill -0 "$pid" 2>/dev/null || return 1
+    [[ "$(ps -p "$pid" -o uid= 2>/dev/null | tr -d ' ')" == "0" ]] || return 1
     local command
     command="$(ps -p "$pid" -o command= 2>/dev/null)"
-    [[ "$command" == *"__AAP_FOLDER__/App-Auto-Patch-via-Dialog.zsh"* ]] \
-        || [[ "$command" == *"__AAP_FOLDER__/appautopatch"* ]] \
-        || { [[ "$(ps -p "$pid" -o uid= 2>/dev/null | tr -d ' ')" == "0" ]] \
-            && [[ "$command" == *"App-Auto-Patch-via-Dialog.zsh"* ]]; }
+    [[ -n "$command" ]] || return 1
+    command_invokes_aap "$command"
 }
 
 collect_tree() {
@@ -3817,7 +3937,27 @@ force_launch=0
 recorded_pid=""
 [[ -f "__APP_AUTOPATCH_PIDFILE__" ]] && read -r recorded_pid < "__APP_AUTOPATCH_PIDFILE__"
 if [[ -n "$recorded_pid" ]] && kill -0 "$recorded_pid" 2>/dev/null; then
-    if ! is_expected_aap_process "$recorded_pid"; then
+    heartbeat_pid=""
+    heartbeat_epoch=""
+    heartbeat_phase=""
+    if [[ -f "__AAP_HEARTBEAT_FILE__" ]]; then
+        IFS=$'\t' read -r heartbeat_pid heartbeat_epoch heartbeat_phase < "__AAP_HEARTBEAT_FILE__"
+    fi
+
+    # Only AAP writes the heartbeat, and only for its own PID, so a record naming this live PID
+    # proves ownership even when the argv check cannot recognize how the run was invoked. Without
+    # this, a misjudged PID was released and a second instance launched alongside the first
+    # (duplicate deferral dialogs). A process that started after the record was written cannot be
+    # the run that wrote it, so a reused PID is not mistaken for the run that has since exited.
+    heartbeat_owns_pid=0
+    if [[ "$heartbeat_pid" == "$recorded_pid" ]] && [[ "$heartbeat_epoch" =~ ^[0-9]+$ ]]; then
+        start_epoch="$(process_start_epoch "$recorded_pid")"
+        if [[ "$start_epoch" =~ ^[0-9]+$ ]] && (( start_epoch <= heartbeat_epoch )); then
+            heartbeat_owns_pid=1
+        fi
+    fi
+
+    if ! is_expected_aap_process "$recorded_pid" && (( heartbeat_owns_pid == 0 )); then
         log_line "[WARNING] aap.pid points to live non-AAP PID $recorded_pid; removing stale runtime markers without signaling it."
         rm -f "__APP_AUTOPATCH_PIDFILE__" "__AAP_HEARTBEAT_FILE__"
     else
@@ -3826,13 +3966,7 @@ if [[ -n "$recorded_pid" ]] && kill -0 "$recorded_pid" 2>/dev/null; then
         [[ "$timeout" =~ ^[0-9]+$ ]] || timeout=3600
         if (( timeout != 0 && timeout < 300 )); then timeout=300; fi
 
-        heartbeat_pid=""
-        heartbeat_epoch=""
-        heartbeat_phase=""
-        if [[ -f "__AAP_HEARTBEAT_FILE__" ]]; then
-            IFS=$'\t' read -r heartbeat_pid heartbeat_epoch heartbeat_phase < "__AAP_HEARTBEAT_FILE__"
-        fi
-        if [[ "$heartbeat_pid" != "$recorded_pid" ]] || ! [[ "$heartbeat_epoch" =~ ^[0-9]+$ ]]; then
+        if (( heartbeat_owns_pid == 0 )); then
             heartbeat_epoch="$(stat -f '%m' "__APP_AUTOPATCH_PIDFILE__" 2>/dev/null)"
             heartbeat_phase="startup"
         fi
@@ -3845,8 +3979,15 @@ if [[ -n "$recorded_pid" ]] && kill -0 "$recorded_pid" 2>/dev/null; then
             exit 0
         fi
 
-        log_line "[WARNING] AAP PID $recorded_pid is stale (phase=${heartbeat_phase:-unknown}, heartbeat age=${heartbeat_age}s, timeout=${timeout}s); restarting."
-        terminate_tree "$recorded_pid"
+        # An expired heartbeat no longer proves the PID still belongs to AAP, so only signal a
+        # process whose command line confirms it. Otherwise release the markers and let the fresh
+        # run take over without touching a PID that may have been reused by something unrelated.
+        if is_expected_aap_process "$recorded_pid"; then
+            log_line "[WARNING] AAP PID $recorded_pid is stale (phase=${heartbeat_phase:-unknown}, heartbeat age=${heartbeat_age}s, timeout=${timeout}s); restarting."
+            terminate_tree "$recorded_pid"
+        else
+            log_line "[WARNING] aap.pid points to live PID $recorded_pid with an expired heartbeat (phase=${heartbeat_phase:-unknown}, age=${heartbeat_age}s) that is no longer identifiable as AAP; removing runtime markers without signaling it."
+        fi
         restore_pre_discovery_report "$recorded_pid"
         rm -f "__APP_AUTOPATCH_PIDFILE__" "__AAP_HEARTBEAT_FILE__"
         rm -f /var/tmp/dialog.appAutoPatch.* 2>/dev/null
@@ -3861,6 +4002,12 @@ elif [[ -f "__AAP_HEARTBEAT_FILE__" ]]; then
     rm -f "__AAP_HEARTBEAT_FILE__"
 fi
 
+# A one-shot discovery request survives process replacement/crash and must resume immediately,
+# independent of the ordinary NextAutoLaunch date it has saved for later restoration.
+if [[ -f "__AAP_DISCOVERY_ONLY_FILE__" ]] && [[ ! -f "__AAP_DISCOVERY_ONLY_DEFERRED_FILE__" ]]; then
+    force_launch=1
+fi
+
 # Read NextAutoLaunch — may be:
 #   - "FALSE"    (string disable)
 #   - "0"        (boolean false → defaults prints "0")
@@ -3868,13 +4015,49 @@ fi
 #   - date stamp (formatted per __TIMESTAMP_FORMAT__)
 next_auto_launch="$(defaults read "__AAP_LOCAL_PLIST__" NextAutoLaunch 2>/dev/null)"
 
-# Explicit disable states
+# WorkflowScheduledDiscovery keeps discovery/report refreshes alive while interactive relaunch is
+# disabled. Read managed first (including an explicit false), then local.
+disable_relaunch="$(defaults read "__AAP_MANAGED_PLIST__" WorkflowDisableRelaunch 2>/dev/null)"
+[[ -z "$disable_relaunch" ]] && disable_relaunch="$(defaults read "__AAP_LOCAL_PLIST__" WorkflowDisableRelaunch 2>/dev/null)"
+scheduled_discovery="$(defaults read "__AAP_MANAGED_PLIST__" WorkflowScheduledDiscovery 2>/dev/null)"
+[[ -z "$scheduled_discovery" ]] && scheduled_discovery="$(defaults read "__AAP_LOCAL_PLIST__" WorkflowScheduledDiscovery 2>/dev/null)"
+scheduled_discovery_mode=0
+if { [[ "$disable_relaunch" == "1" ]] || [[ "$disable_relaunch" == "TRUE" ]]; } \
+&& { [[ "$scheduled_discovery" == "1" ]] || [[ "$scheduled_discovery" == "TRUE" ]]; }; then
+    scheduled_discovery_mode=1
+fi
+
+# FALSE remains a hard disable unless scheduled discovery has explicitly been paired with it.
 if [[ "$next_auto_launch" == "FALSE" ]] || [[ "$next_auto_launch" == "0" ]]; then
-    exit 0
+    if (( force_launch == 1 )); then
+        :
+    elif (( scheduled_discovery_mode == 0 )); then
+        exit 0
+    else
+        discovery_frequency="$(defaults read "__AAP_MANAGED_PLIST__" DiscoveryFrequency 2>/dev/null)"
+        [[ -z "$discovery_frequency" ]] && discovery_frequency="$(defaults read "__AAP_LOCAL_PLIST__" DiscoveryFrequency 2>/dev/null)"
+        [[ "$discovery_frequency" =~ ^[0-9]+$ ]] || discovery_frequency=24
+        now="$(date +%s)"
+        last_discovery="$(defaults read "__AAP_LOCAL_PLIST__" LastDiscoveryEpoch 2>/dev/null)"
+        [[ "$last_discovery" =~ ^[0-9]+$ ]] || last_discovery=0
+        if (( discovery_frequency > 0 )); then
+            interval=$(( discovery_frequency * 3600 ))
+        else
+            relaunch_minutes="$(defaults read "__AAP_MANAGED_PLIST__" DeferralTimerWorkflowRelaunch 2>/dev/null)"
+            [[ -z "$relaunch_minutes" ]] && relaunch_minutes="$(defaults read "__AAP_LOCAL_PLIST__" DeferralTimerWorkflowRelaunch 2>/dev/null)"
+            [[ "$relaunch_minutes" =~ ^[0-9]+$ ]] || relaunch_minutes=1440
+            (( relaunch_minutes < 2 )) && relaunch_minutes=2
+            interval=$(( relaunch_minutes * 60 ))
+        fi
+        if (( last_discovery > 0 && now < last_discovery + interval )); then
+            exit 0
+        fi
+        force_launch=1
+    fi
 fi
 
 # Unset case (no NextAutoLaunch key)
-if (( force_launch == 0 )) && [[ -z "$next_auto_launch" ]]; then
+if (( force_launch == 0 && scheduled_discovery_mode == 0 )) && [[ -z "$next_auto_launch" ]]; then
     # Read last saved startup timestamp
     saved="$(defaults read "__AAP_LOCAL_PLIST__" MacLastStartup 2>/dev/null)"
     saved_epoch="$(date -j -f "__TIMESTAMP_FORMAT__" "$saved" +%s 2>/dev/null)"
@@ -3913,6 +4096,8 @@ EOAS
     -e "s|__APP_AUTOPATCH_PIDFILE__|${appAutoPatchPIDfile}|g" \
     -e "s|__AAP_HEARTBEAT_FILE__|${appAutoPatchHeartbeatFile}|g" \
     -e "s|__AAP_STARTER_SKIP_LOG_FILE__|${appAutoPatchStarterSkipLogFile}|g" \
+    -e "s|__AAP_DISCOVERY_ONLY_FILE__|${WORKFLOW_DISCOVERY_ONLY_FILE}|g" \
+    -e "s|__AAP_DISCOVERY_ONLY_DEFERRED_FILE__|${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}|g" \
     -e "s|__AAP_REPORT_PLIST__|${appAutoPatchReportPLIST}.plist|g" \
     -e "s|__AAP_MANAGED_PLIST__|${appAutoPatchManagedPLIST}|g" \
     -e "s|__AAP_LOCAL_PLIST__|${appAutoPatchLocalPLIST}|g" \
@@ -4001,11 +4186,11 @@ function uninstall_app_auto_patch() {
     local aapPreviousPID
     aapPreviousPID=$(pgrep -F "${appAutoPatchPIDfile}" 2> /dev/null)
     if [[ -n "${aapPreviousPID}" ]]; then
-        if _aap_pid_is_expected_process "${aapPreviousPID}"; then
+        if _aap_pid_is_expected_process "${aapPreviousPID}" || _aap_heartbeat_claims_pid "${aapPreviousPID}"; then
             log_status "Found previous AAP instance PID ${aapPreviousPID}; terminating it before uninstall."
             _aap_terminate_process_tree "${aapPreviousPID}" 10
             _aap_restore_pre_discovery_report "/var/tmp/aap-report-pre-discovery.${aapPreviousPID}.plist"
-            rm -f /var/tmp/dialog.appAutoPatch.*(N) 2>/dev/null
+            _aap_clear_foreign_dialog_command_files
         else
             log_warning "PID file points to non-AAP process ${aapPreviousPID}; leaving it untouched."
         fi
@@ -5167,6 +5352,10 @@ send_aap_notification_silent_and_queued() {
 enforce_business_hours() {
     business_hours_silent_during_active="FALSE"
     business_hours_discovery_only_active="FALSE"
+    if [[ "${workflow_discovery_only_active}" == "TRUE" ]]; then
+        log_status "BusinessHours bypassed for headless discovery-only workflow."
+        return 0
+    fi
     if [[ ${#business_hours_windows[@]} -eq 0 ]]; then
         return 0
     fi
@@ -5207,6 +5396,133 @@ enforce_business_hours() {
     fi
 
     business_hours_defer_until_clear_and_exit "During BusinessHours"
+}
+
+_snapshot_discovery_only_schedule() {
+    [[ -f "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" ]] && return 0
+    local existing
+    existing=$(defaults read "${appAutoPatchLocalPLIST}" NextAutoLaunch 2>/dev/null)
+    [[ -z "${existing}" ]] && existing="__UNSET__"
+    printf '%s\n' "${existing}" > "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}"
+    chmod 600 "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" 2>/dev/null
+    log_verbose "Discovery-only workflow saved interrupted NextAutoLaunch=${existing}."
+}
+
+_restore_discovery_only_schedule() {
+    [[ -f "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" ]] || return 1
+    local saved
+    IFS= read -r saved < "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}"
+    case "${saved}" in
+        "__UNSET__"|"")
+            defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2>/dev/null
+        ;;
+        "FALSE"|"0")
+            defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -string FALSE
+        ;;
+        *)
+            defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${saved}"
+        ;;
+    esac
+    rm -f "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" 2>/dev/null
+    log_verbose "Discovery-only workflow restored interrupted NextAutoLaunch=${saved}."
+    return 0
+}
+
+# Restore a saved schedule only when it is a real date that is still in the future, reporting the
+# value in ${discovery_only_restored_schedule}. Unset, disabled, and overdue values return 1 so the
+# caller can compute a fresh date instead of leaving a scheduled-discovery Mac without one.
+_restore_future_discovery_only_schedule() {
+    discovery_only_restored_schedule=""
+    [[ -f "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" ]] || return 1
+    local saved saved_epoch
+    IFS= read -r saved < "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}"
+    case "${saved}" in
+        "__UNSET__"|""|"FALSE"|"0") return 1 ;;
+    esac
+    saved_epoch=$(date -j -f "${timestamp_format}" "${saved}" +%s 2>/dev/null)
+    [[ "${saved_epoch}" =~ ^[0-9]+$ ]] || return 1
+    (( saved_epoch > $(date +%s) )) || return 1
+    defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${saved}"
+    rm -f "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" 2>/dev/null
+    discovery_only_restored_schedule="${saved}"
+    log_verbose "Discovery-only workflow kept the interrupted scheduled-discovery date ${saved}."
+    return 0
+}
+
+_next_scheduled_discovery_epoch() {
+    local now_epoch last_discovery_epoch interval_seconds next_epoch
+    now_epoch=$(date +%s)
+    last_discovery_epoch=$(defaults read "${appAutoPatchLocalPLIST}" LastDiscoveryEpoch 2>/dev/null)
+    [[ "${last_discovery_epoch}" =~ ^[0-9]+$ ]] || last_discovery_epoch=0
+
+    if [[ "${DiscoveryFrequency}" =~ ^[0-9]+$ ]] && (( DiscoveryFrequency > 0 )); then
+        interval_seconds=$(( DiscoveryFrequency * 3600 ))
+        if (( last_discovery_epoch > 0 )); then
+            next_epoch=$(( last_discovery_epoch + interval_seconds ))
+        else
+            next_epoch=$(( now_epoch + interval_seconds ))
+        fi
+    else
+        # DiscoveryFrequency=0 historically means "scan every workflow." A LaunchDaemon checked
+        # every 60 seconds would spin, so use the normal workflow relaunch interval as a safe floor.
+        local fallback_minutes="${deferral_timer_workflow_relaunch_minutes:-${DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES}}"
+        [[ "${fallback_minutes}" =~ ^[0-9]+$ ]] || fallback_minutes="${DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES}"
+        (( fallback_minutes < 2 )) && fallback_minutes=2
+        interval_seconds=$(( fallback_minutes * 60 ))
+        next_epoch=$(( now_epoch + interval_seconds ))
+    fi
+
+    # A manual trigger may arrive after the calculated due time. Never leave an overdue date that
+    # would make aap-starter launch discovery every 60 seconds.
+    (( next_epoch <= now_epoch )) && next_epoch=$(( now_epoch + interval_seconds ))
+    echo "${next_epoch}"
+}
+
+schedule_next_discovery_and_exit() {
+    local context="${1:-Discovery-only workflow complete}"
+    local next_epoch next_date
+    next_epoch=$(_next_scheduled_discovery_epoch)
+    next_date=$(date -r "${next_epoch}" +"${timestamp_format}")
+    defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_date}"
+    rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2>/dev/null
+    write_status "Pending: ${context}; next discovery ${next_date}."
+    log_exit "${context}; next discovery scheduled for ${next_date}."
+    exit_clean
+}
+
+exit_discovery_only_workflow() {
+    local context="${1:-Discovery-only workflow complete}"
+    if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]] && [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]]; then
+        # A one-shot that interrupted a still-future scheduled discovery keeps that date rather than
+        # resetting the fleet's cadence to this manual run.
+        if _restore_future_discovery_only_schedule; then
+            rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2>/dev/null
+            write_status "Pending: ${context}; next discovery ${discovery_only_restored_schedule}."
+            log_exit "${context}; keeping the interrupted discovery schedule ${discovery_only_restored_schedule}."
+            exit_clean
+        fi
+        schedule_next_discovery_and_exit "${context}"
+    fi
+
+    # Explicit one-shot discovery keeps the workflow schedule it interrupted. If there was no
+    # usable schedule, the shared helper creates the same safe fallback used by one-shot dialogs.
+    _restore_discovery_only_schedule
+    rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2>/dev/null
+    write_status "Idle: ${context}."
+    _exit_one_shot_ui_preserving_schedule "${context}"
+}
+
+exit_after_disabled_relaunch() {
+    local context="${1:-Workflow complete}"
+    if [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]]; then
+        schedule_next_discovery_and_exit "${context}"
+    fi
+    log_aap "Status: ${context} and Automatic Relaunch is disabled. Exiting."
+    log_status "Inactive: ${context} and Automatic Relaunch is disabled."
+    /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2>/dev/null
+    { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+    disown
+    exit_clean
 }
 
 set_auto_launch_deferral() {
@@ -5266,13 +5582,63 @@ _aap_pid_is_expected_process() {
     local pid="$1"
     [[ "${pid}" =~ '^[0-9]+$' ]] || return 1
     kill -0 "${pid}" 2>/dev/null || return 1
+    [[ "$(ps -p "${pid}" -o uid= 2>/dev/null | tr -d ' ')" == "0" ]] || return 1
     local command
     command=$(ps -p "${pid}" -o command= 2>/dev/null)
-    [[ "${command}" == *"${appAutoPatchFolder}/App-Auto-Patch-via-Dialog.zsh"* ]] \
-        || [[ "${command}" == *"${appAutoPatchFolder}/appautopatch"* ]] \
-        || [[ "${command}" == *"${appAutoPatchLink}"* ]] \
-        || { [[ "$(ps -p "${pid}" -o uid= 2>/dev/null | tr -d ' ')" == "0" ]] \
-            && [[ "${command}" == *"App-Auto-Patch-via-Dialog.zsh"* ]]; }
+    [[ -n "${command}" ]] || return 1
+    _aap_command_invokes_aap "${command}"
+}
+
+# Match the program AAP was launched as, skipping any privilege wrapper or interpreter in front of
+# it. `sudo appautopatch …` and the LaunchDaemon both record a PID whose argv names the entrypoint
+# rather than the canonical script, so matching only the script filename disowned live AAP runs.
+_aap_command_invokes_aap() {
+    local -a tokens
+    tokens=(${=1})
+    local index token
+    for (( index = 1; index <= ${#tokens} && index <= 4; index++ )); do
+        token="${tokens[index]}"
+        case "${token}" in
+            sudo|*/sudo|-*) continue ;;
+            zsh|*/zsh|bash|*/bash|sh|*/sh) continue ;;
+        esac
+        [[ "${token:t}" == "appautopatch" ]] && return 0
+        [[ "${token:t}" == "App-Auto-Patch-via-Dialog.zsh" ]] && return 0
+        return 1
+    done
+    return 1
+}
+
+_aap_process_start_epoch() {
+    local lstart
+    lstart=$(ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')
+    [[ -n "${lstart}" ]] || return 1
+    date -j -f "%a %b %d %T %Y" "${lstart}" +%s 2>/dev/null
+}
+
+# Only AAP writes the heartbeat, and only for its own PID, so a recent record naming ${1} proves
+# that live PID is an AAP run even when its argv cannot be recognized. Used as a second opinion
+# before releasing a PID as foreign. A process that started after the heartbeat was written cannot
+# be the run that wrote it, and an expired record no longer proves anything: in both cases the
+# original run may have exited and left the PID to be reused by something that must not be signaled.
+_aap_heartbeat_claims_pid() {
+    local pid="$1"
+    [[ -f "${appAutoPatchHeartbeatFile}" ]] || return 1
+    local heartbeat_pid heartbeat_epoch heartbeat_phase
+    IFS=$'\t' read -r heartbeat_pid heartbeat_epoch heartbeat_phase < "${appAutoPatchHeartbeatFile}"
+    [[ "${heartbeat_pid}" == "${pid}" ]] || return 1
+    [[ "${heartbeat_epoch}" =~ '^[0-9]+$' ]] || return 1
+
+    local start_epoch
+    start_epoch=$(_aap_process_start_epoch "${pid}")
+    [[ "${start_epoch}" =~ '^[0-9]+$' ]] || return 1
+    (( start_epoch <= heartbeat_epoch )) || return 1
+
+    local max_age="${stale_process_timeout_seconds}"
+    [[ "${max_age}" =~ '^[0-9]+$' ]] || max_age=3600
+    (( max_age == 0 )) && return 0
+    (( max_age < 300 )) && max_age=300
+    (( $(date +%s) - heartbeat_epoch <= max_age ))
 }
 
 _aap_process_tree_pids() {
@@ -5308,6 +5674,48 @@ _aap_terminate_process_tree() {
     done
     for tree_pid in "${tree_pids[@]}"; do
         kill -0 "${tree_pid}" 2>/dev/null && kill -KILL "${tree_pid}" 2>/dev/null
+    done
+}
+
+# Clear command files abandoned by other instances while keeping the one this run already created
+# in set_defaults; deleting it would break the swiftDialog window this instance is about to open.
+_aap_clear_foreign_dialog_command_files() {
+    local file
+    for file in /var/tmp/dialog.appAutoPatch.*(N); do
+        [[ "${file}" == "${dialogCommandFile}"* ]] && continue
+        rm -f "${file}" 2>/dev/null
+    done
+}
+
+_aap_ancestor_pids() {
+    local pid=$$
+    local guard=0
+    while [[ "${pid}" =~ '^[0-9]+$' ]] && (( pid > 1 )) && (( guard < 32 )); do
+        print -r -- "${pid}"
+        pid=$(ps -p "${pid}" -o ppid= 2>/dev/null | tr -d ' ')
+        (( guard++ ))
+    done
+}
+
+# AAP is single-instance, but the PID marker can be lost or released while an older run continues
+# (that run then kept working and showed a second set of dialogs). Sweep any other live AAP run so
+# ownership of the markers and the user-facing dialogs always belongs to exactly one process.
+_aap_terminate_orphaned_instances() {
+    local -a ancestors
+    ancestors=("${(@f)$(_aap_ancestor_pids)}")
+    local candidate
+    for candidate in "${(@f)$(pgrep -f 'App-Auto-Patch-via-Dialog.zsh|appautopatch' 2>/dev/null)}"; do
+        [[ "${candidate}" =~ '^[0-9]+$' ]] || continue
+        (( ${ancestors[(Ie)${candidate}]} )) && continue
+        _aap_pid_is_expected_process "${candidate}" || continue
+        if [[ -d "${appAutoPatchLogFolder}" ]]; then
+            log_warning "Found orphaned AAP instance PID ${candidate} without runtime markers; terminating it gracefully..."
+        else
+            log_echo "Warning: Found orphaned AAP instance PID ${candidate} without runtime markers; terminating it gracefully..."
+        fi
+        _aap_terminate_process_tree "${candidate}" 10
+        _aap_restore_pre_discovery_report "/var/tmp/aap-report-pre-discovery.${candidate}.plist"
+        _aap_clear_foreign_dialog_command_files
     done
 }
 
@@ -5375,28 +5783,52 @@ _aap_clear_runtime_files() {
 
 # TERM/INT/HUP are crash-recovery exits: clear runtime locks, but deliberately leave
 # NextAutoLaunch untouched/unset so aap-starter can relaunch after an unexpected termination.
+# Headless discovery is the exception — it has no schedule to fall back on while relaunch is
+# disabled, so a signaled run writes its next date rather than being retried every 60 seconds.
 _aap_signal_cleanup() {
     trap - HUP INT TERM
     _aap_restore_pre_discovery_report
+    _aap_finalize_discovery_schedule_on_error
     _aap_clear_runtime_files
     exit 143
 }
 
 _aap_ensure_future_schedule_for_stop() {
     local context="${1:-App Auto-Patch stopped}"
-    local existing existing_epoch now relaunch_minutes next_epoch next_date disable_relaunch
+    local existing existing_epoch now relaunch_minutes next_epoch next_date disable_relaunch scheduled_discovery discovery_frequency
     existing=$(defaults read "${appAutoPatchLocalPLIST}" NextAutoLaunch 2>/dev/null)
+    disable_relaunch=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+    [[ -z "${disable_relaunch}" ]] && disable_relaunch=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+    scheduled_discovery=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+    [[ -z "${scheduled_discovery}" ]] && scheduled_discovery=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+
+    now=$(date +%s)
+    existing_epoch=$(date -j -f "${timestamp_format}" "${existing}" +%s 2>/dev/null)
+    if { [[ "${disable_relaunch}" == "TRUE" ]] || [[ "${disable_relaunch}" == "1" ]]; } \
+    && { [[ "${scheduled_discovery}" == "TRUE" ]] || [[ "${scheduled_discovery}" == "1" ]]; }; then
+        if [[ -n "${existing_epoch}" ]] && (( existing_epoch > now )); then
+            return 0
+        fi
+        discovery_frequency=$(defaults read "${appAutoPatchManagedPLIST}" DiscoveryFrequency 2>/dev/null)
+        [[ -z "${discovery_frequency}" ]] && discovery_frequency=$(defaults read "${appAutoPatchLocalPLIST}" DiscoveryFrequency 2>/dev/null)
+        [[ "${discovery_frequency}" =~ ^[0-9]+$ ]] || discovery_frequency=24
+        local saved_discovery_frequency="${DiscoveryFrequency}"
+        DiscoveryFrequency="${discovery_frequency}"
+        next_epoch=$(_next_scheduled_discovery_epoch)
+        DiscoveryFrequency="${saved_discovery_frequency}"
+        next_date=$(date -r "${next_epoch}" +"${timestamp_format}")
+        defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_date}"
+        log_notice "${context}; preserved scheduled-discovery mode with next discovery ${next_date}."
+        return 0
+    fi
+
     if [[ "${existing}" == "FALSE" ]] || [[ "${existing}" == "0" ]]; then
         return 0
     fi
-    disable_relaunch=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
-    [[ -z "${disable_relaunch}" ]] && disable_relaunch=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
     if [[ "${disable_relaunch}" == "TRUE" ]] || [[ "${disable_relaunch}" == "1" ]]; then
         defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -string FALSE
         return 0
     fi
-    now=$(date +%s)
-    existing_epoch=$(date -j -f "${timestamp_format}" "${existing}" +%s 2>/dev/null)
     if [[ -n "${existing_epoch}" ]] && (( existing_epoch > now )); then
         return 0
     fi
@@ -5421,13 +5853,19 @@ stop_running_aap() {
     local pid=""
     [[ -f "${appAutoPatchPIDfile}" ]] && pid=$(<"${appAutoPatchPIDfile}")
 
+    # --stop is authoritative: cancel a pending/running one-shot discovery request and restore the
+    # schedule it interrupted before applying the normal stop schedule-preservation rules.
+    if [[ -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" ]]; then
+        _restore_discovery_only_schedule
+        rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2>/dev/null
+    fi
     _aap_ensure_future_schedule_for_stop "Administrative stop"
     if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
-        if _aap_pid_is_expected_process "${pid}"; then
+        if _aap_pid_is_expected_process "${pid}" || _aap_heartbeat_claims_pid "${pid}"; then
             log_echo "[STATUS] Stopping App Auto-Patch PID ${pid} and its child processes."
             _aap_terminate_process_tree "${pid}" 10
             _aap_restore_pre_discovery_report "/var/tmp/aap-report-pre-discovery.${pid}.plist"
-            rm -f /var/tmp/dialog.appAutoPatch.*(N) 2>/dev/null
+            _aap_clear_foreign_dialog_command_files
         else
             log_echo "[WARNING] PID file points to non-AAP process ${pid}; leaving that process untouched."
         fi
@@ -5467,9 +5905,32 @@ exit_clean() {
     exit 0
 }
 
+_aap_finalize_discovery_schedule_on_error() {
+    # A failed explicit one-shot is complete (not a transient network deferral): restore the
+    # schedule it interrupted and disarm the request so aap-starter cannot retry every minute.
+    if [[ -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" ]]; then
+        _restore_discovery_only_schedule
+        rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2>/dev/null
+        return 0
+    fi
+
+    # Scheduled-discovery startup removes NextAutoLaunch for crash recovery. A controlled error
+    # must put back a bounded future date; otherwise the 60-second LaunchDaemon would spin.
+    local disable_relaunch scheduled_discovery
+    disable_relaunch=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+    [[ -z "${disable_relaunch}" ]] && disable_relaunch=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+    scheduled_discovery=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+    [[ -z "${scheduled_discovery}" ]] && scheduled_discovery=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+    if { [[ "${disable_relaunch}" == "TRUE" ]] || [[ "${disable_relaunch}" == "1" ]]; } \
+    && { [[ "${scheduled_discovery}" == "TRUE" ]] || [[ "${scheduled_discovery}" == "1" ]]; }; then
+        _aap_ensure_future_schedule_for_stop "Discovery-only error"
+    fi
+}
+
 exit_error() {
 
     _aap_restore_pre_discovery_report
+    _aap_finalize_discovery_schedule_on_error
     log_verbose "Local preference file at error exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
     log_aap "**** App Auto-Patch ${scriptVersion} - ERROR EXIT ****"
     _aap_clear_runtime_files
@@ -6082,6 +6543,9 @@ swiftDialogDiscoverWindow(){
     
     # If we are using SwiftDialog
     _prepare_dialog_command_file
+    if [[ "${workflow_discovery_only_active}" == "TRUE" ]]; then
+        return 0
+    fi
     # BusinessHours silent/discovery-only paths must not show interactive discovery UI.
     if [[ "${business_hours_silent_during_active}" == "TRUE" ]] || [[ "${business_hours_discovery_only_active}" == "TRUE" ]]; then
         return 0
@@ -8559,6 +9023,22 @@ resolve_early_silent_mode() {
         return 0
     fi
 
+    if [[ "${workflow_discovery_only_option:-}" == "TRUE" ]] || [[ -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" ]]; then
+        runningSilentlyOption="TRUE"
+        return 0
+    fi
+
+    local disable_relaunch_preview scheduled_discovery_preview
+    disable_relaunch_preview=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+    [[ -z "${disable_relaunch_preview}" ]] && disable_relaunch_preview=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+    scheduled_discovery_preview=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+    [[ -z "${scheduled_discovery_preview}" ]] && scheduled_discovery_preview=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+    if { [[ "${disable_relaunch_preview}" == "TRUE" ]] || [[ "${disable_relaunch_preview}" == "1" ]]; } \
+    && { [[ "${scheduled_discovery_preview}" == "TRUE" ]] || [[ "${scheduled_discovery_preview}" == "1" ]]; }; then
+        runningSilentlyOption="TRUE"
+        return 0
+    fi
+
     local interactive_mode_managed interactive_mode_local interactive_mode_preview
     interactive_mode_managed=$(defaults read "${appAutoPatchManagedPLIST}" InteractiveMode 2> /dev/null)
     interactive_mode_local=$(defaults read "${appAutoPatchLocalPLIST}" InteractiveMode 2> /dev/null)
@@ -9064,8 +9544,10 @@ main() {
     #Run the function to check if a user has already completed patching for the set cadence, ignore if using --workflow-install-now
     if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ "${workflow_install_now_silent_option}" == "TRUE" ]]; then
         log_notice "**** App Auto-Patch ${scriptVersion} - WORKFLOW INSTALL NOW - Skipping Completion Status Check"
+    elif [[ "${workflow_discovery_only_active}" == "TRUE" ]]; then
+        log_notice "**** App Auto-Patch ${scriptVersion} - DISCOVERY ONLY - Skipping Completion Status Check"
     else
-    check_completion_status
+        check_completion_status
     fi
 
     declare -A configArray=()
@@ -9095,6 +9577,10 @@ main() {
     elif [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then
         # Discovery explicitly disabled
         discovery_skip_reason="disabled by workflow option"
+    elif [[ "${workflow_discovery_only_option}" == "TRUE" ]]; then
+        # Explicit one-shot discovery-only is an immediate scan, independent of DiscoveryFrequency.
+        run_discovery="TRUE"
+        log_info "Explicit discovery-only workflow triggered; ignoring DiscoveryFrequency for this run."
     elif [[ "${force_discovery_option}" == "TRUE" ]]; then
         # Forced discovery requested via --force-discovery (or a pending flag file from a prior
         # relaunch) - bypass the DiscoveryFrequency window for this run only.
@@ -9491,6 +9977,26 @@ main() {
     # Discovery and queue reconstruction are now complete; the new report is authoritative.
     _aap_discard_pre_discovery_report_backup
 
+    # User-driven patching mode (#258): refresh discovery/report state, optionally stage installers,
+    # optionally notify the user, then exit without silent patching, deferral UI, hard-deadline
+    # enforcement, or installation. Support App / pending-apps dialog remains the install trigger.
+    if [[ "${workflow_discovery_only_active}" == "TRUE" ]]; then
+        if [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            log_info "Discovery-only workflow: staging ${#countOfElementsArray[@]} queued update(s)."
+            workflow_stage_updates
+        fi
+        if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            if aap_notification_enabled apps_queued; then
+                send_aap_notification_apps_queued "${#countOfElementsArray[@]}"
+            else
+                log_info "Discovery-only workflow: ${#countOfElementsArray[@]} app(s) queued (apps-queued notification off)."
+            fi
+        else
+            log_info "Discovery-only workflow: no pending updates found."
+        fi
+        exit_discovery_only_workflow "Discovery-only workflow complete"
+    fi
+
     # During BusinessHours without SilentDuring, with AllowDiscovery: discovery-only path.
     # Optionally notify about pending apps (with Install Now), then defer until clear.
     if [[ "${business_hours_discovery_only_active}" == "TRUE" ]]; then
@@ -9534,12 +10040,7 @@ main() {
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
         check_webhook
         if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-            log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
-            log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
-            /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
-            { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
-            disown
-            exit_clean
+            exit_after_disabled_relaunch "Patching Complete"
         else
             if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
             || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
@@ -9624,12 +10125,7 @@ main() {
                 defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
                 check_webhook
                 if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-                    log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
-                    log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
-                    /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
-                    { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
-                    disown
-                    exit_clean
+                    exit_after_disabled_relaunch "Patching Complete"
                 else
                     if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
                     || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
@@ -9654,12 +10150,7 @@ main() {
             fi
             check_webhook
             if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-                log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
-                log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
-                /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
-                { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
-                disown
-                exit_clean
+                exit_after_disabled_relaunch "Patching Complete"
             else
                 if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
                 || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
@@ -9699,12 +10190,7 @@ main() {
                 check_webhook
 
                 if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-                    log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
-                    log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
-                    /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
-                    { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
-                    disown
-                    exit_clean
+                    exit_after_disabled_relaunch "Patching Complete"
                 else
                     if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
                     || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
@@ -9737,12 +10223,7 @@ main() {
                     check_webhook
                     
                     if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-                        log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
-                        log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
-                        /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
-                        { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
-                        disown
-                        exit_clean
+                        exit_after_disabled_relaunch "Patching Complete"
                     else
                         if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
                         || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
@@ -9781,9 +10262,7 @@ main() {
         
         # Logic for ${workflow_disable_relaunch_option} and ${deferral_timer_workflow_relaunch_minutes}.
         if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-            log_aap "Status: Full AAP workflow complete! Automatic relaunch is disabled."
-            log_status "Inactive: Full AAP workflow complete! Automatic relaunch is disabled."
-            /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+            exit_after_disabled_relaunch "Full AAP workflow complete"
         else # Default AAP workflow automatically relaunches.
             if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
                 || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then

@@ -128,6 +128,8 @@
 	<string>https://webhook.microsoft.com</string>
 	<key>WorkflowDisableAppDiscovery</key>
 	<string>FALSE</string>
+	<key>WorkflowScheduledDiscovery</key>
+	<false/>
 	<key>WorkflowDisableRelaunch</key>
 	<string>FALSE</string>
 	<key>BusinessHours</key>

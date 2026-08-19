@@ -3,6 +3,24 @@
 # Version 3
 
 ## Version 3.7.0
+### 19-Aug-2026 (3) - Build 3.7.0.2608191542
+- Fixed: a live AAP run started as `sudo appautopatch …` was reported by `aap-starter` as `aap.pid points to live non-AAP PID`, which released the runtime markers and launched a second instance alongside the first (duplicate deferral dialogs). PID ownership is now matched on the program AAP was invoked as (`appautopatch` entrypoint or `App-Auto-Patch-via-Dialog.zsh`) after skipping `sudo`/interpreter arguments, in both `aap-starter` and the script's own startup, uninstall, and `--stop` checks
+- Added: `aap-starter` and the script accept a heartbeat record naming the recorded live PID as proof of AAP ownership, so an unrecognized invocation path can no longer release an active run's markers. The record is only trusted when the process started at or before the record was written and the record has not expired past `StaleProcessTimeoutSeconds`, so a reused PID is never mistaken for the run that wrote it. A process with an expired heartbeat that the command-line check cannot confirm has its markers released without being signaled
+- Added: startup now terminates any other live AAP instance that is running without runtime markers (skipping itself and its own ancestors), so a lost or released PID file cannot leave two instances patching and prompting at once
+- Fixed: runtime cleanup of abandoned `dialog.appAutoPatch.*` command files no longer deletes the command file created by the current instance
+- Fixed: a one-shot `--workflow-discovery-only` run on a scheduled-discovery Mac replaced the still-future discovery date it interrupted with a freshly computed one, resetting the cadence to the manual run. The saved date is now restored when it is still in the future; missing, disabled, and overdue values still get a newly computed date
+- Fixed: a headless discovery run ended by `TERM`/`INT`/`HUP` (stale-process recovery, orphan cleanup, `--stop`) left `NextAutoLaunch` unset in scheduled-discovery mode, so the LaunchDaemon retried discovery on its next 60-second tick instead of honoring `DiscoveryFrequency`. Signal cleanup now finalizes the discovery schedule the same way a controlled error exit does. Other workflows keep the existing crash-recovery behavior of relaunching promptly
+
+### 19-Aug-2026 (2) - Build 3.7.0.2608191343
+- [#258](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/258): added a discovery-only scheduling mode for user-driven installation:
+	- New managed/local boolean `WorkflowScheduledDiscovery` (default `false`). When paired with `WorkflowDisableRelaunch=true`, `aap-starter` continues scheduled headless runs based on `DiscoveryFrequency` instead of treating `NextAutoLaunch=FALSE` as a permanent stop
+	- Discovery-only runs refresh `DiscoveredLabels` and the report PLIST, optionally stage installers via `WorkflowStageUpdates`, optionally send the queued-app notification, and schedule the next discovery
+	- Discovery-only runs bypass patch-cycle completion status, Business Hours, silent closed-app patching, deferral/focus/hard-deadline evaluation, and all installation UI. Explicit pending-apps / Install Now workflows take priority and continue to install normally
+	- New one-shot CLI `--workflow-discovery-only` forces an immediate headless discovery/report refresh, survives Jamf/out-of-folder restart via `.WorkflowDiscoveryOnly`, and preserves the schedule it interrupted in a root-only sidecar. Network-error deferrals retain the request without retrying every 60 seconds; crash recovery resumes it immediately
+	- `WorkflowDisableAppDiscovery` remains authoritative. `DiscoveryFrequency=0` uses `DeferralTimerWorkflowRelaunch` (minimum two minutes) for scheduled discovery to avoid a 60-second LaunchDaemon loop
+	- Normal install completion and `--stop` preserve scheduled-discovery mode instead of replacing its next date with the disabled `FALSE` sentinel. `--stop` also disarms a running one-shot and restores its interrupted schedule
+	- Jamf/iMazing manifests, all-options examples, Intune/migration references, Support App documentation, README, and user-facing changelog updated
+
 ### 19-Aug-2026 (1) - Build 3.7.0.2608191153
 - Changed: `--windowbuttons min` is now set on every interactive swiftDialog window (deferral, hard deadline, pending-apps, Install Now confirmation, up-to-date mini, and Dock Quit recovery prompts), matching discovery/staging/patching
 

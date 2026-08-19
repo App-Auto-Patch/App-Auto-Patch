@@ -15,7 +15,7 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.7.0
-- **Business Hours** — Block interactive discovery/dialogs/patching during configured weekday time windows (`DAY:hh:mm-hh:mm`). Multiple windows per day supported (e.g. leave lunch clear). Outside those windows the workflow is allowed. During a window AAP reschedules to the next clear time unless Silent During is enabled. `--workflow-install-now` / `--workflow-install-now-silent` / `--preview-deferral-dialog` / `--pending-apps-dialog` intentionally bypass. Overdue hard deadlines bypass by default. (#166)
+- **Business Hours** — Block interactive discovery/dialogs/patching during configured weekday time windows (`DAY:hh:mm-hh:mm`). Multiple windows per day supported (e.g. leave lunch clear). Outside those windows the workflow is allowed. During a window AAP reschedules to the next clear time unless Silent During is enabled. `--workflow-install-now` / `--workflow-install-now-silent` / `--preview-deferral-dialog` / `--pending-apps-dialog` and headless discovery-only workflows intentionally bypass. Overdue hard deadlines bypass by default. (#166)
 	- Managed Preference Key: `<key>BusinessHours</key>` `<string>MON:09:00-17:00,...</string>`
 	- Managed Preference Key: `<key>BusinessHoursRespectHardDeadline</key>` `<true/>` | `<false/>` (default `false`)
 	- Managed Preference Key: `<key>BusinessHoursSilentDuring</key>` `<true/>` | `<false/>` (default `false`) — during Business Hours: discovery + closed-apps-only silent patch; no dialogs; open apps wait until clear
@@ -91,11 +91,16 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 	- Managed Preference Key: `<key>WorkflowStageUpdates</key>` `<true/>` | `<false/>` — default: `false`
 
 - **Discovery Frequency** — Skip the app-discovery (scanning) phase on subsequent runs within a configurable time window. Useful when a user defers multiple times in a day — AAP won't re-scan every app each time, saving runtime, bandwidth, and system resources.
-	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>` — default: `0` (always run discovery)
+	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>` — default: `24`; `0` runs discovery on every workflow execution
 
 - **Force Discovery CLI trigger** — A new `--force-discovery` CLI trigger runs the app-discovery (scanning) phase immediately, even if `DiscoveryFrequency` hasn't elapsed yet. It's a one-shot trigger: it applies to the very next run only, then automatically clears itself — including when the run is relaunched via the LaunchDaemon (e.g. triggered remotely through Jamf), so it still takes effect even though the relaunched process doesn't see the original command-line flag.
 	- CLI Trigger: `--force-discovery`
 	- Note: an administrator-disabled discovery workflow (`WorkflowDisableAppDiscovery`) still takes priority — `--force-discovery` only bypasses the `DiscoveryFrequency` wait, not a hard disable.
+
+- **Scheduled Discovery Only** — Keep discovery and pending-app reporting current while leaving installation entirely user-driven. Pair `WorkflowScheduledDiscovery=true` with `WorkflowDisableRelaunch=true`: AAP wakes on `DiscoveryFrequency`, runs a headless scan, refreshes the report/Support App data, optionally stages installers (`WorkflowStageUpdates`), optionally sends the queued-app notification, and schedules the next scan. It does not silently patch closed apps, evaluate deferral/hard-deadline UI, or install anything. Explicit `--pending-apps-dialog`, notification, Support App, and Install Now triggers remain available.
+	- Managed Preference Key: `<key>WorkflowScheduledDiscovery</key>` `<true/>` | `<false/>` — default: `false`; effective only with `WorkflowDisableRelaunch=true`
+	- CLI Trigger: `--workflow-discovery-only` — one-shot immediate headless discovery/report refresh; preserves the existing automatic schedule
+	- `WorkflowDisableAppDiscovery=true` still takes priority. If `DiscoveryFrequency=0`, scheduled mode uses `DeferralTimerWorkflowRelaunch` (minimum two minutes) instead of spinning on the LaunchDaemon's 60-second interval.
 
 - **Ignore DND Apps** — Exclude specific apps from Focus/Do-Not-Disturb display-sleep-assertion detection, so background utilities that permanently hold a display assertion (e.g. Logi Options+, Amphetamine) don't indefinitely block interactive patching from proceeding. (#149)
 	- Managed Preference Key: `<key>IgnoreDNDApps</key>` `<string>App1,App2,App3</string>` — comma-separated app names, matched exactly as reported by macOS (including spaces)
