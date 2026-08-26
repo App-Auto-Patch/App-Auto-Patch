@@ -83,6 +83,14 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 - Fixed: reads of the local preference file now fall back to reading the file directly when `defaults` returns an empty value for a key that is present on disk, and an unreadable `AAPPatchingStartDate` now falls back to the current patch week start date instead of being fed to a date conversion that silently produced the Unix epoch (#254)
 - Fixed: label lists read back from an array-typed preference brought the surrounding parentheses, quotes, and trailing commas along as label names of their own — visible in logs as entries like `Required labels: ( )`. These are now stripped when the lists are parsed (#254)
 
+## Version 3.6.3
+### 04-Aug-2026
+
+**Fixes**
+
+- Changed: if no user is logged in, AAP no longer exits after waiting for the Dock - it waits up to 20 seconds, then continues without an active user session and skips the swiftDialog install/update check (since dialogs can't be shown without a user session). Fully-silent runs still skip the Dock wait entirely
+- Fixed: the `AAP-LatestPatches` Jamf Pro extension attribute could stall `jamf recon` / inventory updates. It no longer uses NUL-delimited `read` with process substitution, always emits a `<result>` block, and discovers receipts via a temp-file listing instead
+
 ## Version 3.6.2
 ### 01-Aug-2026
 
