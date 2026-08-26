@@ -2,6 +2,255 @@
 
 # Version 3
 
+## Version 3.7.0
+### 19-Aug-2026 (3) - Build 3.7.0.2608191542
+- Fixed: a live AAP run started as `sudo appautopatch …` was reported by `aap-starter` as `aap.pid points to live non-AAP PID`, which released the runtime markers and launched a second instance alongside the first (duplicate deferral dialogs). PID ownership is now matched on the program AAP was invoked as (`appautopatch` entrypoint or `App-Auto-Patch-via-Dialog.zsh`) after skipping `sudo`/interpreter arguments, in both `aap-starter` and the script's own startup, uninstall, and `--stop` checks
+- Added: `aap-starter` and the script accept a heartbeat record naming the recorded live PID as proof of AAP ownership, so an unrecognized invocation path can no longer release an active run's markers. The record is only trusted when the process started at or before the record was written and the record has not expired past `StaleProcessTimeoutSeconds`, so a reused PID is never mistaken for the run that wrote it. A process with an expired heartbeat that the command-line check cannot confirm has its markers released without being signaled
+- Added: startup now terminates any other live AAP instance that is running without runtime markers (skipping itself and its own ancestors), so a lost or released PID file cannot leave two instances patching and prompting at once
+- Fixed: runtime cleanup of abandoned `dialog.appAutoPatch.*` command files no longer deletes the command file created by the current instance
+- Fixed: a one-shot `--workflow-discovery-only` run on a scheduled-discovery Mac replaced the still-future discovery date it interrupted with a freshly computed one, resetting the cadence to the manual run. The saved date is now restored when it is still in the future; missing, disabled, and overdue values still get a newly computed date
+- Fixed: a headless discovery run ended by `TERM`/`INT`/`HUP` (stale-process recovery, orphan cleanup, `--stop`) left `NextAutoLaunch` unset in scheduled-discovery mode, so the LaunchDaemon retried discovery on its next 60-second tick instead of honoring `DiscoveryFrequency`. Signal cleanup now finalizes the discovery schedule the same way a controlled error exit does. Other workflows keep the existing crash-recovery behavior of relaunching promptly
+
+### 19-Aug-2026 (2) - Build 3.7.0.2608191343
+- [#258](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/258): added a discovery-only scheduling mode for user-driven installation:
+	- New managed/local boolean `WorkflowScheduledDiscovery` (default `false`). When paired with `WorkflowDisableRelaunch=true`, `aap-starter` continues scheduled headless runs based on `DiscoveryFrequency` instead of treating `NextAutoLaunch=FALSE` as a permanent stop
+	- Discovery-only runs refresh `DiscoveredLabels` and the report PLIST, optionally stage installers via `WorkflowStageUpdates`, optionally send the queued-app notification, and schedule the next discovery
+	- Discovery-only runs bypass patch-cycle completion status, Business Hours, silent closed-app patching, deferral/focus/hard-deadline evaluation, and all installation UI. Explicit pending-apps / Install Now workflows take priority and continue to install normally
+	- New one-shot CLI `--workflow-discovery-only` forces an immediate headless discovery/report refresh, survives Jamf/out-of-folder restart via `.WorkflowDiscoveryOnly`, and preserves the schedule it interrupted in a root-only sidecar. Network-error deferrals retain the request without retrying every 60 seconds; crash recovery resumes it immediately
+	- `WorkflowDisableAppDiscovery` remains authoritative. `DiscoveryFrequency=0` uses `DeferralTimerWorkflowRelaunch` (minimum two minutes) for scheduled discovery to avoid a 60-second LaunchDaemon loop
+	- Normal install completion and `--stop` preserve scheduled-discovery mode instead of replacing its next date with the disabled `FALSE` sentinel. `--stop` also disarms a running one-shot and restores its interrupted schedule
+	- Jamf/iMazing manifests, all-options examples, Intune/migration references, Support App documentation, README, and user-facing changelog updated
+
+### 19-Aug-2026 (1) - Build 3.7.0.2608191153
+- Changed: `--windowbuttons min` is now set on every interactive swiftDialog window (deferral, hard deadline, pending-apps, Install Now confirmation, up-to-date mini, and Dock Quit recovery prompts), matching discovery/staging/patching
+
+### 19-Aug-2026 (1) - Build 3.7.0.2608191132
+- Process supervision and discovery/staging Dock Quit policy:
+	- New managed/local key `StaleProcessTimeoutSeconds` (integer, default `3600`). `0` disables timeout-based stale-process killing; any other value below `300` is raised to `300`. Dead/reused PID cleanup still runs when the timeout is disabled
+	- Heartbeat file (`/var/run/aap.heartbeat`) plus PID-identity validation so `/var/run/aap.pid` cannot pin a recycled PID as a live AAP run. The record is a single tab-delimited `pid`/`epoch`/`phase` line; phase text is collapsed to one line and truncated so label-derived values cannot corrupt the format
+	- Stale-process recovery is logged graceful `TERM` then `KILL` if the process does not exit
+	- Staging `curl` downloads abort on a no-data timeout instead of hanging indefinitely
+	- New CLI `--stop` ends a live run and preserves the existing `NextAutoLaunch` schedule
+	- New managed/local key `DialogQuitHandlingDiscoveryStaging` (`PROMPT`|`CONTINUE`|`STOP`, default `PROMPT`). Discovery/staging Dock Quit / ⌘Q: **PROMPT** offers Keep Running vs Stop App Auto-Patch; **CONTINUE** keeps the workflow running with no prompt; **STOP** exits cleanly until the next scheduled run. Stop is ignored when `is_hard_deadline_due_lightweight` is true or Install Now / pending-apps Install Now is in progress — the workflow continues instead. `sudo appautopatch --stop` remains an admin escape hatch.
+	- A stop or termination during discovery restores the last complete pending-app report instead of leaving a partially rebuilt queue
+	- Localizable `dialogElements` keys: `display_string_preparationdismissed_message`, `display_string_preparationdismissed_button1` (default `Keep Running`), `display_string_preparationdismissed_button2` (default `Stop App Auto-Patch`)
+
+### 16-Aug-2026 (15) - Build 3.7.0.2608161645
+- Changed: `--preview-deferral-dialog` no longer rewrites `NextAutoLaunch`. Like `--pending-apps-dialog` Later, it is a cosmetic one-shot UI — both Install Now and Defer remain no-ops for patching, and the existing LaunchDaemon schedule is preserved (with the same overdue/missing fallback so the 60s StartInterval cannot spin). Startup and `manage_parameter_options` now skip clearing a real `NextAutoLaunch` for both one-shot UI paths; the shared exit helper was renamed to `_exit_one_shot_ui_preserving_schedule`
+
+### 16-Aug-2026 (14) - Build 3.7.0.2608161632
+- Fixed: `--pending-apps-dialog` **Later** still lost the existing `NextAutoLaunch` — build (13) only guarded the crash-recovery delete in `workflow_startup`, but `manage_parameter_options` deletes the key again in its `WorkflowDisableRelaunch == FALSE` branch (there to clear the `FALSE` sentinel when relaunch is re-enabled). That ran after the guard, so a deferral already in place (e.g. 30-minute defer → 17:05) was wiped and Later fell through to the fallback, writing a fresh `DeferralTimerDefault` / monthly-cadence date (Business-Hours clamped) instead of keeping 17:05
+	- For pending-apps dialog runs that branch now only deletes `NextAutoLaunch` when it holds the `FALSE`/`0` disable sentinel; any real date is preserved (logged via `log_verbose`)
+
+### 16-Aug-2026 (13) - Build 3.7.0.2608161535
+- Fixed: `--pending-apps-dialog` no longer leaves `NextAutoLaunch` unset after **Later** / “all up to date”, which caused the LaunchDaemon (`StartInterval` 60s) to relaunch AAP almost immediately:
+	- Startup’s crash-recovery `defaults delete NextAutoLaunch` is skipped when `pending_apps_dialog_option` is TRUE, so an existing future schedule (Business Hours clear time, monthly cadence, normal deferral) or `WorkflowDisableRelaunch` sentinel survives the dialog
+	- Later / up-to-date dismissals now call `_exit_pending_apps_dialog_preserving_schedule`: keep a future (or disabled) `NextAutoLaunch`; if missing/overdue, reschedule via monthly cadence or `set_auto_launch_deferral`
+	- Install Now still clears `NextAutoLaunch` before continuing in-process so a mid-install crash re-arms LaunchDaemon relaunch; completion paths write a fresh schedule as usual
+
+### 14-Aug-2026 (12) - Build 3.7.0.2608141655
+- Logging overhaul (logging plumbing from the runtime deep dive):
+	- `aap_verbose.log` is now written only when `VerboseMode` is TRUE. When FALSE, nothing is appended to the verbose log (including `log_verbose` call sites that previously always wrote, the swiftDialog notification handoff, and the Installomator fragment `log_location`)
+	- `aap.log` no longer receives `[VERBOSE]` lines at all. Previously, enabling `VerboseMode` routed VERBOSE output through `log_aap` and into the main log; verbose output now goes only to `aap_verbose.log` (and stdout), keeping `aap.log` to regular workflow output regardless of `VerboseMode`
+	- When `VerboseMode` is TRUE, `aap_verbose.log` receives both the normal `log_aap` stream (INFO/NOTICE/STATUS/ERROR/…) and the `[VERBOSE]` lines, so it remains a complete troubleshooting transcript
+	- Fixed: every `log_verbose` call wrote two identical lines to `aap_verbose.log` (once via `log_aap`, once via its own direct append), which is why verbose logs contained duplicate pairs tagged `log_aap[pid]` and `log_verbose[pid]`
+	- `VerboseMode` is resolved at the start of `workflow_startup` (managed → CLI → local) so the gate applies for the whole run, including early preference dumps
+	- Cached log identity (`hostname` / script name) and kept append FDs open for `aap.log` / `aap_verbose.log`; timestamps use zsh built-in `%D` instead of spawning `date`/`hostname`/`basename` per line. `archive_logs` reopens FDs after moving a live log path
+	- Changed: the process tag in each log line is now the script name (e.g. `App-Auto-Patch-via-Dialog.zsh[pid]`) instead of the logging function name (`log_aap[pid]` / `log_verbose[pid]`). Inside a zsh function, `$0` expands to the function name, so the old prefix reported the logger rather than the script; the new tag matches the `aap-starter` LaunchDaemon line format
+	- Removed per-tick `log_verbose` from `swiftDialogUpdate` (UI command-file writes are high-frequency, low diagnostic value)
+
+### 13-Aug-2026 (11) - Build 3.7.0.2608132043
+- Changed: pending-apps Install Now now goes straight to the patching dialog, skipping the pre-staging pass (`workflow_stage_updates`), the staging/background mini progress window, and the silent background closed-app patch (`workflow_silent_patch_closed_apps`). Both passes only exist to prepare for — or avoid — a later interactive prompt, which is pointless once the user has explicitly asked for the install. Installers staged when the apps were first queued are still reused by `workflow_do_Installations`; anything unstaged is downloaded during the install as usual
+
+### 13-Aug-2026 (10) - Build 3.7.0.2608131944
+- Fixed: pending-apps Install Now now clears any stale silent install-now intent (`workflow_install_now_silent_option` / `.WorkflowInstallNowSilent`) when the interactive locked-queue path is armed or restored — so ExcludedBackgroundLabels the user confirmed in the dialog are not dropped by `filter_excluded_background_labels_from_silent_install`
+
+### 13-Aug-2026 (9) - Build 3.7.0.2608131938
+- Fixed: a pending-apps dialog that can't be shown can no longer fall through to an unconfirmed install:
+	- The one-shot `.PendingAppsDialog` flag is now consumed inside `workflow_pending_apps_dialog` only after swiftDialog is confirmed present (instead of in `main()` before the call), so a missing-swiftDialog `exit_error` leaves the request armed to retry on the next LaunchDaemon cycle
+	- The dialog now supersedes any Install Now intent left armed by an earlier network-deferred Install Now (clears `.PendingAppsInstallNow` / `.WorkflowInstallNow` and the in-memory flags at entry), re-arming only if the user actually clicks Install Now — so re-presenting the dialog can't be bypassed and a failed dialog can't silently install a locked queue with no confirmation
+
+### 13-Aug-2026 (8) - Build 3.7.0.2608131926
+- Fixed: `--reset-defaults` no longer leaves pending-apps one-shot state armed — the early `.PendingAppsDialog` restore at the top of `workflow_startup` is skipped on a reset run, and the reset block now also clears the in-memory flags (`pending_apps_dialog_option`, `pending_apps_install_now_option`, `workflow_install_now_option`, `workflow_install_now_silent_option`, `force_discovery_option`), not just the flag files
+- Fixed: pending-apps Install Now now writes `.PendingAppsInstallNow` before `.WorkflowInstallNow`, so a crash between the two touches re-arms the report-locked queue on the next run instead of a plain `--workflow-install-now` that would merge the full discovery queue
+
+### 13-Aug-2026 (7) - Build 3.7.0.2608131914
+- Fixed: report entries excluded by `IgnoredLabels` policy are now pruned from the report PLIST and `DiscoveredLabels` (via `remove_aap_report_item` / `remove_discovered_label`) instead of only being hidden from the pending-apps dialog. Previously the Support App tile count, banner `{count}` text, and the report itself kept advertising pending updates that policy would never install — so a user could see "3 pending" and then get the "all up to date" mini dialog. These are stale entries from a discovery run that predates the current IgnoredLabels configuration; pruning applies in both the dialog and the locked Install Now queue
+
+### 13-Aug-2026 (6) - Build 3.7.0.2608131905
+- Pending-apps dialog now honors the same `IgnoredLabels` policy as a normal run, so the list shown and the list patched always match:
+	- New `_load_effective_label_policy` / `_label_allowed_by_policy` helpers merge the in-memory option arrays with the persisted local PLIST values (where wildcard `IgnoredLabels` patterns are expanded), and are used by both the dialog and the locked install queue
+	- Fixed: with `IgnoredLabels` set to `*`, the dialog listed every report entry and Install Now could patch apps outside the required/optional allow-list — ignore-all mode is now applied in both places
+	- Fixed: the locked report queue no longer runs a bare `${labelsArray:|ignoredLabelsArray}` subtraction, which could silently drop apps the user had just approved (leaving AAP to report "up to date" without patching them). Excluded apps are now filtered out before the dialog is drawn instead
+- Fixed: `--pending-apps-dialog` restored from `.PendingAppsDialog` after a Jamf / out-of-folder relaunch now applies the dialog's fast paths — the flag file is read at the very start of `workflow_startup` (before `get_preferences` / `manage_parameter_options`), so the run no longer does a full `get_installomator` network pass before showing the dialog
+
+### 13-Aug-2026 (5) - Build 3.7.0.2608131852
+- Fixed: choosing **Later** (or dismissing) on the pending-apps dialog now clears leftover `.PendingAppsInstallNow` / `.WorkflowInstallNow` flags, so a prior Install Now that deferred for network cannot force an install-now run on the next LaunchDaemon launch
+
+### 13-Aug-2026 (4) - Build 3.7.0.2608131847
+- Fixed: `--pending-apps-dialog` invoked via Jamf (or any path that triggers `restart_aap`) no longer drops the dialog request — new one-shot flag file `.PendingAppsDialog` persists across the LaunchDaemon relaunch (same pattern as `--force-discovery` / `--workflow-install-now`) and is consumed when the dialog is shown
+
+### 13-Aug-2026 (3) - Build 3.7.0.2608131837
+- Pending-apps Install Now Bugbot fixes:
+	- Install queue is now locked strictly to report PLIST `ItemsToInstall` (the list shown in the dialog). RequiredLabels / ConvertedLabels / DiscoveredLabels extras are no longer merged in, so Install Now cannot patch apps the user never saw
+	- Intent survives restart/network defer via new flag file `.PendingAppsInstallNow` (restored in `workflow_startup` alongside `.WorkflowInstallNow`); cleared on install completion, all-up-to-date, and reset-defaults
+
+### 13-Aug-2026 (2) - Build 3.7.0.2608131813
+- Pending-apps dialog **Install Now** now runs the install in-process instead of spawning a second `appautopatch --workflow-install-now`:
+	- On Install Now, `workflow_pending_apps_dialog` sets install-now flags (`workflow_install_now_option`, `InteractiveMode 2`) plus a new `pending_apps_install_now_option`, then returns to `main()` so the normal install-now workflow patches the queue in-process (staging → silent closed-app patch → `workflow_do_Installations` → shared completion / webhook / relaunch)
+	- `pending_apps_install_now_option` forces `run_discovery=FALSE` in `main()`, so AAP patches exactly the queue the user saw (hydrated from the report PLIST / `DiscoveredLabels`) with no fresh discovery scan
+	- The network wait and `get_installomator` check (both skipped while the dialog is shown for speed) now run in-process before installing; if the network never comes up, AAP defers cleanly instead of installing
+	- Network detection factored into `workflow_wait_for_network` and shared with `workflow_startup` (identical behavior; no duplicated loop)
+	- Single process now handles the whole flow — no second `appautopatch` launch, and no stale report count from a detached background run
+
+### 13-Aug-2026 (1) - Build 3.7.0.2608131411
+- Queued-apps notification **Install Now** now opens the pending-apps dialog instead of jumping straight to `--workflow-install-now`:
+	- New CLI: `--pending-apps-dialog` — same dialog for manual / MDM / Support App triggers (reads report PLIST only; no discovery)
+	- Dialog lists pending apps with icons + Current/New version subtitles; **Later** dismisses; **Install Now** kicks off the install (see the 13-Aug (2)/(3) entries above — this originally backgrounded `--workflow-install-now`, later changed to an in-process install with a locked report queue)
+	- WatchPaths trigger migrated to `xyz.techitout.aap.pendingAppsDialogTrigger` / `Triggers/PendingAppsDialog` (legacy InstallNow daemon cleaned up on startup)
+	- Language key `display_string_pendingapps_button_later` (default `Later`); Support App `aap_pending_apps_dialog.zsh` is now a thin wrapper around the CLI
+	- Skips Business Hours gate, network wait, and Installomator update check (when fragments already present) so the dialog stays near-instant
+
+### 12-Aug-2026 (8) - Build 3.7.0.2608122211
+- Split banner notification prefs: renamed `ShowNotifications` → `ShowNotificationsAll` (default `true`, master switch) and added per-type opt-in keys used only when All is false:
+	- `ShowNotificationsSilentUpdated` — silent closed-app “updated {count}…” banner
+	- `ShowNotificationsAppsQueued` — pending updates with Install Now / Dismiss
+	- `ShowNotificationsSilentAndQueued` — combined Silent During “{count} updated… {remaining} queued” banner
+	- When All is true alongside any individual key, All wins and every type is shown
+	- Legacy managed/local `ShowNotifications` is still read as All; local legacy key is deleted after migration
+	- CLI: `--show-notifications-all` / `-off` (aliases `--show-notifications` / `-off`) plus per-type flags; iMazing + Jamf manifests and All-Options examples updated
+
+### 12-Aug-2026 (7) - Build 3.7.0.2608121738
+- InteractiveMode 2 staging / background closed-app patch mini dialog now shows determinate progress and per-app status (mirrors the main patching dialog):
+	- Progress bar advances by queued app count instead of bouncing indefinitely
+	- Progress text shows the current app (`Staging Google Chrome …` / `Installing Google Chrome …`) and swaps the dialog icon to that app
+	- Skipped apps (already staged, excluded, open/blocked) still advance the bar so it never stalls
+	- Default `display_string_silent_patch_progress` shortened to `Installing` so the app name fits cleanly; staging prefix remains `Staging`
+	- iMazing + Jamf language-string descriptions updated
+
+### 12-Aug-2026 (6) - Build 3.7.0.2608121710
+- Fixed banner notifications never appearing when AAP runs from its LaunchDaemon. swiftDialog 3.1 delivers notifications through helper apps (`Dialog Banner.app` / `Dialog Alert.app`) that run in the **calling** context — unlike dialog windows, which `dialogcli` relaunches as the console user. Launched as root the helper cannot reach the user's notification service (`Getting notification settings failed … com.apple.usernotifications.listener was invalidated`) and silently displays nothing:
+	- `send_aap_notification` now hands off to the console user's GUI session via `launchctl asuser "${currentUserID}" sudo -u "${currentUserAccountName}"` when running as root
+	- swiftDialog output is appended to the verbose log instead of `/dev/null`, so errors like `Notifications are not available: Couldn't communicate with a helper application` are visible
+	- Notification approval is per helper bundle ID on swiftDialog 3.1+: `au.csiro.dialog.notifier.banner` (banner) and `au.csiro.dialog.notifier.alert` (alert); `au.csiro.dialog` covers 2.3–3.0
+
+### 12-Aug-2026 (5) - Build 3.7.0.2608121636
+- Separated Business Hours discovery from notifications: new `BusinessHoursAllowDiscovery` (default `false`) controls whether discovery runs during Business Hours when `BusinessHoursSilentDuring` is off. `ShowNotifications` only controls banners.
+	- Default `false` restores historical immediate defer (no discovery) during Business Hours
+	- When `true`: run discovery then defer; banner pending apps only if `ShowNotifications` is also on
+	- Managed key `BusinessHoursAllowDiscovery`; CLI `--business-hours-allow-discovery` / `--business-hours-allow-discovery-off`
+	- iMazing + Jamf manifests and All-Options examples updated
+
+### 12-Aug-2026 (4) - Build 3.7.0.2608121628
+- Banner-style swiftDialog notifications (`--notification --style banner`), enabled by default via `ShowNotifications`:
+	- After successful silent closed-app patching: notify that `{count}` apps were updated in the background
+	- During Business Hours without `BusinessHoursSilentDuring`: when `BusinessHoursAllowDiscovery` and `ShowNotifications` are both on, notify that `{count}` apps require updates with **Install Now** / **Dismiss**
+	- During Business Hours with SilentDuring after silent patch: notify `{count}` updated and `{remaining}` still queued (Install Now when remaining &gt; 0)
+	- Install Now uses a user-writable Triggers WatchPaths LaunchDaemon (`xyz.techitout.aap.installNowTrigger`) to start `--workflow-install-now` as root
+	- Managed key `ShowNotifications`; CLI `--show-notifications` / `--show-notifications-off`
+	- Localizable `dialogElements` keys added to iMazing + Jamf manifests: `display_string_notification_silent_updated`, `display_string_notification_apps_queued`, `display_string_notification_silent_and_queued`, `display_string_notification_button_install`, `display_string_notification_button_dismiss`
+
+### 12-Aug-2026 (3) - Build 3.7.0.2608121613
+- Handle the user quitting a dialog window so dismissing it no longer has unexpected side effects. swiftDialog documents exit code `10` for cmd+quitkey, but Dock ▸ Quit and the menu bar Quit terminate `Dialog.app` itself, so `dialogcli` returns the raw signal instead — `15` for Quit and `9` for Force Quit. AAP now treats `9`, `10`, `15`, `137`, and `143` as a user dismissal:
+	- Deferral and hard-deadline dialogs reopen instead of treating Quit as Install Now
+	- Install Now confirmation treats Quit as “Go Back”
+	- If the backgrounded patching progress dialog is Quit’d, prompt with **Show Progress** (relaunches the list, preserving completed item status) or **Continue in Background**
+	- Discovery/staging dialogs that were already Quit’d are logged and skipped cleanly on completion
+	- New localizable strings (config profile / dialogElements): `display_string_dialogdismissed_message`, `display_string_dialogdismissed_button1`, `display_string_dialogdismissed_button2` — added to iMazing + Jamf manifests
+
+### 12-Aug-2026 (2) - Build 3.7.0.2608121500
+- Show the App Auto-Patch logo as a macOS Dock icon for workflow swiftDialog windows (`--dockicon`), when swiftDialog 3.0+ is installed ([docs](https://swiftdialog.app/advanced/command-line-options/)):
+	- Managed key `ShowDockIcon` (`true`/`false`, default `true`); CLI `--show-dock-icon` / `--show-dock-icon-off`
+	- Deferral / hard-deadline dialogs badge the Dock icon with the number of pending updates (`--dockiconbadge`)
+	- Installation (patching) dialog starts with that count and counts the badge down as each update finishes
+	- Discovery, staging, Install Now confirmation, and “all apps up to date” dialogs also show the AAP Dock icon (no badge)
+	- Left gated on swiftDialog major ≥ 3 so macOS 12–14 fleets on 2.5.x keep working without unknown-flag failures
+	- iMazing + Jamf manifests and All-Options examples updated
+
+### 12-Aug-2026 (1) - Build 3.7.0.2608120015
+- [#256](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/256): optional `SkipPreUpdateVerification` to bypass the local Gatekeeper (`spctl -a`) / Team ID check in `verifyApp()` during discovery:
+	- Some already-installed apps fail `spctl` assessment intermittently, which previously logged `Error verifying` and returned early — excluding the app from discovery/updates entirely even though Installomator would still validate post-download
+	- Managed key `SkipPreUpdateVerification` (`true`/`false`, default `false`); CLI `--skip-pre-update-verification` / `--skip-pre-update-verification-off`
+	- When enabled, discovery logs a warning and continues to version comparison / queueing; Installomator validation after download is unchanged
+	- iMazing + Jamf manifests and All-Options examples updated
+
+### 11-Aug-2026 (2) - Build 3.7.0.2608112305
+- [#166](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166): replaced the allow-list `ScheduleWorkflowActive` model with **BusinessHours** blocked windows (do-not-disturb hours):
+	- Managed key `BusinessHours` = `DAY:hh:mm-hh:mm,...` (`MON`–`SUN`, 24-hour, comma-separated). Empty/unset = always allowed. Local Mac timezone; same-day ranges only (overnight = two windows)
+	- Multiple windows per day are first-class — e.g. `MON:09:00-11:59,MON:13:00-17:00` blocks morning and afternoon but leaves lunch clear for patching
+	- Early gate after prefs/validation + install-now flags, before Jamf restart / network / discovery: **during** BusinessHours → set `NextAutoLaunch` to the next clear time (with a small bump if &lt; ~5 minutes away) and `exit_clean` — no interactive discovery/dialogs/Installomator/webhooks — unless Silent During is enabled
+	- **Intentionally bypassed** by `--workflow-install-now`, `--workflow-install-now-silent`, and `--preview-deferral-dialog` so admins can force a run on demand
+	- Default: overdue hard deadline (days or count) bypasses BusinessHours via a lightweight read-only check. Optional `BusinessHoursRespectHardDeadline` (`true` = even hard deadlines wait until clear). Soft/focus deadlines still respect BusinessHours
+	- `BusinessHoursSilentDuring` (default `false`): when `true` and during BusinessHours, continue with discovery and `workflow_silent_patch_closed_apps` only — no dialogs even if InteractiveMode is 1/2. Open/blocked apps remaining after that pass are deferred until BusinessHours clear
+	- All `NextAutoLaunch` writers (`set_auto_launch_deferral`, `set_auto_launch_monthly_cadence`) clamp outside BusinessHours when configured
+	- Invalid schedule string fails startup validation (`option_error`)
+	- CLI: `--business-hours=` / `--business-hours-respect-hard-deadline` / `-off` / `--business-hours-silent-during` / `-off`
+	- Legacy local keys `ScheduleWorkflowActive*` are deleted on startup when prefs are managed
+	- iMazing + Jamf manifests and All-Options examples updated
+
+### 11-Aug-2026 (1) - Build 3.7.0.2608091723
+- Hardened the `AAP-JamfProEAs/AAP-LatestPatches.sh` Jamf Pro extension attribute for `jamf recon`: replaced NUL-delimited `read -d ''` / process substitution with a newline `find` listing written to a temp file (avoids EA stalls when Jamf keeps stdin open), always emits `<result>` (no `set -e`), and keeps the existing Success/Failure output format
+
+### 09-Aug-2026 (2) - Build 3.7.0.2608091723
+- Changed: when no custom dialog icon is set, the SF Symbol fallback is logged at info (`Using SF symbol for App Icon`) instead of a warning that claimed the icon was "not found" — an empty icon is expected in that path, so the warning was a false alarm
+
+### 09-Aug-2026 (1) - Build 3.7.0.2608091230
+- [#166](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166): earlier allow-list `ScheduleWorkflowActive` / SilentOutside implementation (superseded by BusinessHours in build `3.7.0.2608112305`):
+	- Managed key `ScheduleWorkflowActive` = `DAY:hh:mm-hh:mm,...` (`MON`–`SUN`, 24-hour, comma-separated). Empty/unset = always active (unchanged behavior). Local Mac timezone; same-day ranges only (overnight = two windows)
+	- Early gate after prefs/validation + install-now flags, before Jamf restart / network / discovery: outside a window → set `NextAutoLaunch` to next window start (with a small bump if &lt; ~5 minutes away) and `exit_clean` — no discovery, dialogs, Installomator, or webhooks — unless Silent Outside is enabled
+	- Bypass: `--workflow-install-now`, `--workflow-install-now-silent`, `--preview-deferral-dialog`
+	- Default: overdue hard deadline (days or count) bypasses the window via a lightweight read-only check (does not mutate deadline counters / does not sleep). Optional `ScheduleWorkflowActiveRespectHardDeadline` (`true` = even hard deadlines wait for the next window). Soft/focus deadlines still respect the window
+	- `ScheduleWorkflowActiveSilentOutside` (default `false`): when `true` and outside a window, continue with discovery and `workflow_silent_patch_closed_apps` only — no dialogs even if InteractiveMode is 1/2. Open/blocked apps remaining after that pass are deferred to the next window start. Independent of `WorkflowBackgroundPatchClosedApps` for this outside-window path
+	- All `NextAutoLaunch` writers (`set_auto_launch_deferral`, `set_auto_launch_monthly_cadence`) clamp into the next allowed window when a schedule is configured
+	- Invalid schedule string fails startup validation (`option_error`)
+	- CLI for testing: `--schedule-workflow-active=` / `--schedule-workflow-active-respect-hard-deadline` / `-off` / `--schedule-workflow-active-silent-outside` / `-off`
+	- iMazing + Jamf manifests and All-Options examples updated
+
+### 08-Aug-2026 (3) - Build 3.7.0.2608081505
+- [#254](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/254): fixed ignored labels being disregarded, and the local preference plist intermittently reading back blank. Both were reproducible from a single verbose log in which discovery issued 1,159 `PlistBuddy` writes, logged zero ignore matches, and then queued an explicitly ignored app:
+	- **`IFS` leak out of discovery.** The label-fragment parser sets `IFS=$'\n'` and never restored it. Everything downstream in `main()` then ran with a newline `IFS`: the `" ${ignoredLabelsArray[*]} "` substring test could only ever match the first and last elements, the `$(... | tr '\n' ' ')` dedupe steps collapsed each label list into one whitespace-padded element, and `${labelsArray:|ignoredLabelsArray}` therefore compared `"firefox "` against `"firefox"` and removed nothing. Runs that skipped discovery (`DiscoveryFrequency`) never set `IFS` and behaved correctly, which is why the failure appeared to alternate between runs. `IFS` is now saved before the parser and restored the moment the fragment loops finish
+	- **Ignore membership tests.** The two `" ${array[*]} "`/`" ${array[@]} "` substring checks (discovery loop and `queueLabel`'s caller) are replaced with zsh exact-element subscripts, `(( ${array[(Ie)$item]} ))`. These are independent of `IFS` and can't partial-match a label name
+	- **`IgnoredLabels="*"` no longer expands.** Previously `*` was globbed against `${fragmentsPath}/labels` and every resulting label was written to the local plist individually - ~1,200 `PlistBuddy add` calls per run against a file that the rest of the script reads with `defaults`. That volume left `cfprefsd`'s cache out of sync with the on-disk file, so `defaults read` returned an empty string for keys that were demonstrably present (`AAPPatchingStartDate`, `AAPPatchingCompletionStatus`), which fed an empty string to `strftime -r` and produced `Days Since Patching Start Date: 20668` - past `DaysUntilReset`, so the patching cadence reset on every affected run. A bare `*` is now recognised in `get_preferences()`, recorded as the single in-memory flag `ignore_all_labels`, and persisted as one `*` entry. **No configuration change is required** - `IgnoredLabels="*"` keeps its meaning of "ignore everything except `RequiredLabels` and `OptionalLabels`"; only the implementation changed. Partial wildcards (`microsoft*`) still expand as before
+	- **Ignore-all enforcement moved in-memory.** Discovery skips any label that isn't required or optional when `ignore_all_labels` is set, and the queue is filtered the same way after the `:|` subtraction (which can't do the work itself now that the plist holds `*` rather than an entry per label)
+	- **Required labels are protected from wildcards.** The wildcard expansion skipped labels listed as Optional but not those listed as Required, so `IgnoredLabels="*"` (or any wildcard covering them) put required apps into the ignored list and `${labelsArray:|ignoredLabelsArray}` then dropped them from the queue - required apps were never patched. `RequiredLabels` is now checked alongside `OptionalLabels`, against the in-memory array since `RequiredLabels` hasn't been written to the plist yet at that point
+	- **Hardened local preference reads.** New `read_local_preference()` reads a key with `defaults` and falls back to `PlistBuddy` when the value comes back empty, normalising `true`/`false` to `1`/`0` so existing comparisons are unaffected. `check_completion_status()` uses it for `AAPPatchingCompletionStatus` / `AAPPatchingStartDate`, validates the start date against `^\d{4}-\d{2}-\d{2}` (trimming a full timestamp to the date), and falls back to the computed patch week start date - logging an error and rewriting the key - rather than handing an empty string to `strftime`
+	- **Label list parsing.** New `parse_labels_option()` normalises a labels preference into an array, stripping the parentheses, quotes, and trailing commas that `defaults read` emits for array-typed preferences. Previously those became label names in their own right, visible in the log as `Required labels: ( )`
+
+### 08-Aug-2026 (2) - Build 3.7.0.2608081108
+- [#156](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/156): optional pre/post patch script hooks for workflows like `jamf recon` or fixing `.app` ownership after Installomator installs. Security-hardened by design:
+	- Managed preferences only (`PrePatchScript` / `PostPatchScript`) - never CLI, never written to / read from the local preference plist, never `eval`'d or run via `bash -c`
+	- Script path must be absolute, under `/Library/Management/AppAutoPatch/Hooks/` (created root:wheel `755` on install), must not contain `..`, must not be a symlink, must be a regular executable file owned by root, and must not be group/world-writable (parent directory checked the same way)
+	- Direct exec of the validated path with a timeout (`PatchScriptTimeoutSeconds`, default 300); env context exported as `AAP_HOOK`, `AAP_QUEUED_LABELS`, `AAP_SERIAL`, `AAP_ERROR_COUNT`, etc.
+	- `PrePatchScriptFailAction` default `ABORT` (skip installs / exit); `PostPatchScriptFailAction` default `CONTINUE`
+	- Pre runs once per patch run (shared across Background Patch Closed Apps + `workflow_do_Installations`); post runs once after the last install pass for that run
+	- iMazing + Jamf manifests and All-Options examples updated
+
+### 08-Aug-2026 (1) - Build 3.7.0.2608081041
+- [#240](https://github.com/App-Auto-Patch/App-Auto-Patch/pull/240): Mosyle MDM support (based on @salzstreuer89's PR, with maintainer adjustments):
+	- `get_mdm()` recognizes `*mosyle*` enrollment ServerURLs and sets `mdmName="Mosyle"`
+	- Slack and Teams webhooks include a "View in Mosyle" device deep-link using Hardware UUID (`IOPlatformUUID`) as `#device_<uuid>`
+	- Console host prefers the enrolled MDM `server_url` from `get_mdm()`, falling back to `https://business.mosyle.com` instead of the PR's org-specific `https://mybusiness.mosyle.com`
+	- Mosyle URL is resolved once at the start of `webHookMessage()` and reused for both Slack and Teams
+	- Overlay icon chain also checks `/Applications/Mosyle Self Service.app` (Self-Service.app / Manager.app were already covered for some Mosyle installs)
+	- Also fixed pre-existing Teams webhook gap: Workspace One device links now resolve on Teams the same as Slack
+
+### 04-Aug-2026 (2) - Build 3.7.0.2608040927
+- Changed: the Dock-active wait in `workflow_startup()` no longer exits the script when no user session appears (ported from 3.6.3). It still waits briefly (now 20 seconds, down from 120) for the Dock to become active, but if it never does, AAP logs that it's continuing without an active user session and proceeds - some admins intentionally run AAP before anyone is logged in, and the previous `exit 1` after 120 seconds blocked that entirely. When the Dock is not active after that wait, `get_dialog()` is also skipped (the same as fully-silent runs), since swiftDialog can't safely present UI without an active user session. Fully-silent runs (`InteractiveMode 0`, or `--workflow-install-now-silent`) still skip the Dock wait entirely as before
+
+### 04-Aug-2026 (1) - Build 3.7.0.2608040659
+- [#249](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/249): optional GitHub REST API authentication so large fleets (and custom Installomator forks) don't hit the unauthenticated 60 requests/hour rate limit when AAP looks up Installomator / swiftDialog on `api.github.com`. Managed preferences only:
+	- `GitHubAPIAuthEnabled` (`TRUE`/`FALSE`, default `FALSE`) - master switch
+	- `GitHubAPIToken` - GitHub personal access token (classic or fine-grained); sent as `Authorization: Bearer` per [GitHub's REST auth docs](https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api)
+	- When auth is enabled, `GitHubAPIToken` is required - blank/missing fails startup validation immediately (before any `api.github.com` call)
+	- Token is never written to the local preference plist, never accepted via CLI, and is redacted from verbose managed-preference dumps (only length is logged when auth is on)
+	- Applied to every existing `api.github.com` curl in `install_dialog()` / `get_installomator()`; download URLs on `codeload.github.com` / `raw.githubusercontent.com` / `github.com` are unchanged (those aren't the rate-limited REST API)
+
+### 03-Aug-2026 (2) - Build 3.7.0.2608032255
+- Added: `--preview-deferral-dialog` CLI trigger - shows the real deferral dialog populated with sample apps/icons/version subtitles so admins can iterate on `BannerImage`/`BannerTitle`/`BannerHeight` (and other dialog cosmetics) without running discovery or installing anything. Both Install Now and Defer are no-ops for patching; the only side effect is rescheduling the next LaunchDaemon run using the configured default deferral timer. Works even when `InteractiveMode` is 0 (the preview forces a non-silent path so swiftDialog is still checked/installed)
+
+### 03-Aug-2026 (1) - Build 3.7.0.2608031015
+- [#238](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/238): added `ExcludedBackgroundLabels` (CLI: `--excluded-background-labels`) - a space-separated Installomator label list (wildcards supported, same expansion model as `IgnoredLabels`) for apps that should stay in discovery/reporting/inventory but must not be auto-updated during unattended runs. Classic use case: developer runtimes like Amazon Corretto / Node / Python, where a project is pinned to a specific major version and silently bumping it breaks builds. Unlike `IgnoredLabels`, which removes the app from AAP entirely (and therefore from discovery/version reporting), excluded-background labels remain fully visible - AAP just withholds them from fully-silent installs (`InteractiveMode 0` / `--workflow-install-now-silent`) and from Background Patch Closed Apps. Interactive Install Now (deferral dialog or `--workflow-install-now`) and hard-deadline installs still update them, so there's a deliberate manual escape hatch. Cleared by `--reset-labels` alongside the other label lists. Managed preference manifests (iMazing + Jamf JSON) and the All-Options example profile updated accordingly
+
 ## Version 3.6.3
 ### 11-Aug-2026 (1)
 - Hardened the `AAP-JamfProEAs/AAP-LatestPatches.sh` Jamf Pro extension attribute for `jamf recon`: replaced NUL-delimited `read -d ''` / process substitution with a newline `find` listing written to a temp file (avoids EA stalls when Jamf keeps stdin open), always emits `<result>` (no `set -e`), and keeps the existing Success/Failure output format

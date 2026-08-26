@@ -346,6 +346,71 @@
             ],
             "property_order": 61
         },
+        "ShowDockIcon": {
+            "type": "boolean",
+            "title": "Show Dock Icon",
+            "description": "When true, workflow swiftDialog windows show the App Auto-Patch logo in the macOS Dock (requires swiftDialog 3.0+). Deferral dialogs badge the pending update count; the installation dialog counts the badge down as updates finish. Default true.",
+            "default": true,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://swiftdialog.app/advanced/command-line-options/"
+                }
+            ],
+            "property_order": 62
+        },
+        "ShowNotificationsAll": {
+            "type": "boolean",
+            "title": "Show Notifications (All)",
+            "description": "Master switch for banner-style swiftDialog notifications. When true (default), every notification type is shown and individual ShowNotifications* keys are ignored. When false, enable specific types with ShowNotificationsSilentUpdated, ShowNotificationsAppsQueued, and/or ShowNotificationsSilentAndQueued. Does not itself enable discovery during Business Hours.",
+            "default": true,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://swiftdialog.app/"
+                }
+            ],
+            "property_order": 63
+        },
+        "ShowNotificationsSilentUpdated": {
+            "type": "boolean",
+            "title": "Show Notification: Silent Updated",
+            "description": "When ShowNotificationsAll is false, enable the banner that reports successful silent closed-app updates (e.g. “updated {count} application(s) in the background”). Ignored when ShowNotificationsAll is true.",
+            "default": false,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://swiftdialog.app/"
+                }
+            ],
+            "property_order": 64
+        },
+        "ShowNotificationsAppsQueued": {
+            "type": "boolean",
+            "title": "Show Notification: Apps Queued",
+            "description": "When ShowNotificationsAll is false, enable the banner that reports pending updates with Install Now / Dismiss (including after BusinessHoursAllowDiscovery). Ignored when ShowNotificationsAll is true.",
+            "default": false,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://swiftdialog.app/"
+                }
+            ],
+            "property_order": 65
+        },
+        "ShowNotificationsSilentAndQueued": {
+            "type": "boolean",
+            "title": "Show Notification: Silent And Queued",
+            "description": "When ShowNotificationsAll is false, enable the combined banner after Business Hours Silent During (“{count} updated… {remaining} remain queued”). Ignored when ShowNotificationsAll is true.",
+            "default": false,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://swiftdialog.app/"
+                }
+            ],
+            "property_order": 66
+        },
         "DialogTimeoutDeferral": {
             "type": "string",
             "title": "Deferral Dialog Timeout",
@@ -403,6 +468,25 @@
                 }
             ],
             "property_order": 72
+        },
+        "DialogQuitHandlingDiscoveryStaging": {
+            "type": "string",
+            "title": "Discovery/Staging Dialog Quit Handling",
+            "default": "PROMPT",
+            "description": "What happens if the user quits the discovery or staging window (Dock Quit / menu Quit / ⌘Q). PROMPT (default) asks whether to Keep Running in the background or Stop App Auto-Patch until the next scheduled run. CONTINUE keeps the workflow running with no prompt (previous implicit behavior). STOP ends the current run cleanly and preserves NextAutoLaunch. Stop is ignored when a hard deadline is already due or Install Now is running — the workflow continues instead.",
+            "enum": [
+                "PROMPT",
+                "CONTINUE",
+                "STOP"
+            ],
+            "options": {
+                "enum_titles": [
+                    "PROMPT",
+                    "CONTINUE",
+                    "STOP"
+                ]
+            },
+            "property_order": 73
         },
         "UnattendedExit": {
             "type": "string",
@@ -532,7 +616,7 @@
         "IgnoredLabels": {
             "type": "string",
             "title": "Ignored Labels",
-            "description": "A space-separated list of Installomator labels to ignore for the AAP workflow. Supports wilddcards",
+            "description": "A space-separated list of Installomator labels to ignore for the AAP workflow. Supports wildcards, for example \"microsoft*\". A single \"*\" ignores every Installomator label except those listed in Required Labels and Optional Labels.",
             "options": {
                 "inputAttributes": {
                     "placeholder": "microsoft* googlechrome*"
@@ -545,6 +629,23 @@
                 }
             ],
             "property_order": 90
+        },
+        "ExcludedBackgroundLabels": {
+            "type": "string",
+            "title": "Excluded Background Labels",
+            "description": "A space-separated list of Installomator labels to discover and report, but not update during fully-silent runs (InteractiveMode 0 / --workflow-install-now-silent) or Background Patch Closed Apps. Interactive Install Now and hard-deadline installs still update them. Supports wildcards. Unlike Ignored Labels, these apps stay visible in discovery, logs, and inventory.",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "amazoncorretto* nodejs python*"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Populating-App-Labels#excluded-background"
+                }
+            ],
+            "property_order": 92
         },
         "RequiredLabels": {
             "type": "string",
@@ -644,6 +745,19 @@
             ],
             "property_order": 115
         },
+        "SkipPreUpdateVerification": {
+            "type": "boolean",
+            "title": "Skip Pre-Update Verification",
+            "description": "When true, discovery skips the local Gatekeeper (spctl) / Team ID pre-update check for already-installed apps. Use this when spctl assessment intermittently fails for a valid app and would otherwise exclude it from discovery/updates. Installomator still validates the downloaded package after download. Default false.",
+            "default": false,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/256"
+                }
+            ],
+            "property_order": 116
+        },
         "InstallomatorOptions": {
             "type": "string",
             "title": "Installomator Options",
@@ -678,6 +792,133 @@
                 ]
             },
             "property_order": 125
+        },
+        "GitHubAPIAuthEnabled": {
+            "type": "string",
+            "title": "GitHub API Auth Enabled",
+            "default": "FALSE",
+            "description": "When TRUE, App Auto-Patch authenticates GitHub REST API requests (api.github.com) with the personal access token in GitHubAPIToken, raising the rate limit from 60 to 5,000 requests per hour. Managed preferences only - the token is never written to the local preference file and is never logged. If this key is TRUE, GitHubAPIToken is required or startup validation fails.",
+            "enum": [
+                "TRUE",
+                "FALSE"
+            ],
+            "options": {
+                "enum_titles": [
+                    "TRUE",
+                    "FALSE"
+                ]
+            },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/249"
+                }
+            ],
+            "property_order": 126
+        },
+        "GitHubAPIToken": {
+            "type": "string",
+            "title": "GitHub API Token",
+            "description": "GitHub personal access token (classic or fine-grained) used when GitHubAPIAuthEnabled is TRUE. Sent as Authorization: Bearer on api.github.com requests for Installomator and swiftDialog lookups. Prefer a fine-grained token with Contents: Read on the repositories AAP queries. Managed preferences only - never stored in the local preference file or written to logs.",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "github_pat_..."
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api"
+                }
+            ],
+            "property_order": 127
+        },
+        "PrePatchScript": {
+            "type": "string",
+            "title": "Pre Patch Script",
+            "description": "Absolute path to a root-owned executable script run once before Installomator installations in a patch run. Must live under /Library/Management/AppAutoPatch/Hooks/, must not be a symlink, and must not be group/world-writable. Managed preferences only - never accepted from CLI or the local preference file.",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "/Library/Management/AppAutoPatch/Hooks/pre.sh"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/156"
+                }
+            ],
+            "property_order": 128
+        },
+        "PostPatchScript": {
+            "type": "string",
+            "title": "Post Patch Script",
+            "description": "Absolute path to a root-owned executable script run once after Installomator installations complete (for example jamf recon). Same security requirements as PrePatchScript. Managed preferences only.",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "/Library/Management/AppAutoPatch/Hooks/post.sh"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/156"
+                }
+            ],
+            "property_order": 129
+        },
+        "PrePatchScriptFailAction": {
+            "type": "string",
+            "title": "Pre Patch Script Fail Action",
+            "default": "ABORT",
+            "description": "What to do if PrePatchScript is missing/invalid or exits non-zero. ABORT stops the install run; CONTINUE logs the failure and proceeds with patching.",
+            "enum": [
+                "ABORT",
+                "CONTINUE"
+            ],
+            "options": {
+                "enum_titles": [
+                    "ABORT",
+                    "CONTINUE"
+                ]
+            },
+            "property_order": 1291
+        },
+        "PostPatchScriptFailAction": {
+            "type": "string",
+            "title": "Post Patch Script Fail Action",
+            "default": "CONTINUE",
+            "description": "What to do if PostPatchScript is missing/invalid or exits non-zero. ABORT exits AAP with an error after installs; CONTINUE (default) logs the failure and proceeds with webhook/relaunch.",
+            "enum": [
+                "ABORT",
+                "CONTINUE"
+            ],
+            "options": {
+                "enum_titles": [
+                    "ABORT",
+                    "CONTINUE"
+                ]
+            },
+            "property_order": 1292
+        },
+        "PatchScriptTimeoutSeconds": {
+            "type": "integer",
+            "title": "Patch Script Timeout Seconds",
+            "default": 300,
+            "description": "Maximum seconds allowed for a PrePatchScript or PostPatchScript run before AAP terminates it (treated as failure).",
+            "property_order": 1293
+        },
+        "StaleProcessTimeoutSeconds": {
+            "type": "integer",
+            "title": "Stale Process Timeout Seconds",
+            "default": 3600,
+            "description": "Seconds of missing heartbeat after which a leftover App Auto-Patch process is treated as hung and recovered (graceful TERM, then KILL if needed). The PID file is also validated so a recycled PID is not mistaken for a live AAP run. Default 3600 (1 hour). 0 disables timeout-based stale-process killing (dead/reused PID cleanup still runs). Any other value below 300 is raised to 300.",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "3600"
+                        }
+                    },
+            "property_order": 1294
         },
         "InstallomatorVersion": {
             "type": "string",
@@ -978,6 +1219,19 @@
             ],
             "property_order": 193
         },
+        "WorkflowScheduledDiscovery": {
+            "type": "boolean",
+            "title": "Scheduled Discovery Only",
+            "default": false,
+            "description": "When WorkflowDisableRelaunch is also enabled, keep periodic headless discovery runs active using DiscoveryFrequency. These runs refresh the pending-app report, optionally stage updates, and can notify users, but never silently patch, show deferral or deadline dialogs, or install apps. Users initiate installation from the pending-apps dialog, Support App, notification action, or another explicit Install Now trigger",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/258"
+                }
+            ],
+            "property_order": 194
+        },
         "WorkflowDisableRelaunch": {
             "type": "string",
             "title": "Disable Relaunch Workflow",
@@ -1000,6 +1254,62 @@
                 }
             ],
             "property_order": 195
+        },
+        "BusinessHours": {
+            "type": "string",
+            "title": "Business Hours",
+            "description": "Weekday time windows when interactive App Auto-Patch must NOT run (blocked / do-not-disturb hours). Format: DAY:hh:mm-hh:mm, comma-separated, no spaces (MON-SUN, 24-hour). Multiple windows per day are allowed — for example MON:09:00-11:59,MON:13:00-17:00 blocks morning and afternoon but leaves lunch clear. Same-day ranges only. Empty/unset = always allowed. During a window, AAP reschedules NextAutoLaunch to the next clear time and exits unless BusinessHoursSilentDuring or BusinessHoursAllowDiscovery is true. Intentionally bypassed by --workflow-install-now / --workflow-install-now-silent / --preview-deferral-dialog / --pending-apps-dialog and headless discovery-only workflows. Overdue hard deadlines bypass BusinessHours by default unless BusinessHoursRespectHardDeadline is true.",
+            "options": {
+                "inputAttributes": {
+                    "placeholder": "MON:09:00-17:00,TUE:09:00-17:00,WED:09:00-17:00,THU:09:00-17:00,FRI:09:00-17:00"
+                        }
+                    },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166"
+                }
+            ],
+            "property_order": 196
+        },
+        "BusinessHoursRespectHardDeadline": {
+            "type": "boolean",
+            "title": "Business Hours Respect Hard Deadline",
+            "description": "When true, even an overdue hard deadline (days or count) waits until BusinessHours clear. When false (default), an overdue hard deadline bypasses BusinessHours so mandatory installs are not delayed by days.",
+            "default": false,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166"
+                }
+            ],
+            "property_order": 197
+        },
+        "BusinessHoursSilentDuring": {
+            "type": "boolean",
+            "title": "Business Hours Silent During",
+            "description": "When true and during BusinessHours, AAP still runs discovery and silently patches closed apps only — no dialogs even if InteractiveMode is 1 or 2. Open or blocked apps remain queued and are deferred until BusinessHours clear. When false (default), during BusinessHours AAP only reschedules NextAutoLaunch and exits — unless BusinessHoursAllowDiscovery is true.",
+            "default": false,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166"
+                }
+            ],
+            "property_order": 198
+        },
+        "BusinessHoursAllowDiscovery": {
+            "type": "boolean",
+            "title": "Business Hours Allow Discovery",
+            "description": "When true and during BusinessHours without BusinessHoursSilentDuring, AAP runs discovery then defers until the window clears (no interactive dialogs or silent patching). Notification prefs independently control whether pending apps get a banner with Install Now. When false (default), AAP exits immediately during BusinessHours without discovery — matching historical behavior.",
+            "default": false,
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166"
+                }
+            ],
+            "property_order": 199
         },
         "WorkflowInstallNowPatchingStatusAction": {
             "type": "string",
@@ -1277,7 +1587,7 @@
                             "display_string_staging_progress": {
                                 "type": "string",
                                 "title": "Staging Dialog Progress",
-                                "description": "Language for the progress text shown while updates are being staged (downloaded ahead of time)",
+                                "description": "Language for the progress text shown while an update is being staged (downloaded ahead of time). The app display name is appended (e.g. \"Staging Google Chrome …\").",
                                 "links": [
                                     {
                                         "rel": "More information",
@@ -1288,7 +1598,7 @@
                             "display_string_silent_patch_progress": {
                                 "type": "string",
                                 "title": "Silent Patch Progress",
-                                "description": "Language for the progress text shown while closed apps are being silently patched in the background",
+                                "description": "Language for the progress text shown while a closed app is being silently patched in the background. The app display name is appended (e.g. \"Installing Google Chrome …\").",
                                 "links": [
                                     {
                                         "rel": "More information",
@@ -1311,6 +1621,17 @@
                                 "type": "string",
                                 "title": "Deferral Dialog Button2",
                                 "description": "Language for Button1 of the Deferral Dialog",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_pendingapps_button_later": {
+                                "type": "string",
+                                "title": "Pending Apps Dialog Later Button",
+                                "description": "Language for the Later / dismiss button on the pending-apps dialog (--pending-apps-dialog and queued-apps notification Install Now action)",
                                 "links": [
                                     {
                                         "rel": "More information",
@@ -1366,6 +1687,127 @@
                                 "type": "string",
                                 "title": "Confirm Install Dialog Countdown Suffix",
                                 "description": "Language for the suffix of the countdown text on the \"Install Now\" confirmation dialog, shown after the remaining number of seconds",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_dialogdismissed_message": {
+                                "type": "string",
+                                "title": "Dialog Dismissed Message",
+                                "description": "Language for the message on the dialog shown when the patching progress window was closed (Dock Quit / menu Quit) while updates are still running",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_dialogdismissed_button1": {
+                                "type": "string",
+                                "title": "Dialog Dismissed Button1",
+                                "description": "Language for Button1 (Show Progress) on the dialog shown when the patching progress window was closed while updates are still running",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_dialogdismissed_button2": {
+                                "type": "string",
+                                "title": "Dialog Dismissed Button2",
+                                "description": "Language for Button2 (Continue in Background) on the dialog shown when the patching progress window was closed while updates are still running",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_preparationdismissed_message": {
+                                "type": "string",
+                                "title": "Preparation Dismissed Message",
+                                "description": "Language for the message on the dialog shown when the discovery or staging window was closed (Dock Quit / menu Quit) while App Auto-Patch is still preparing. Default explains Keep Running vs Stop App Auto-Patch.",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_preparationdismissed_button1": {
+                                "type": "string",
+                                "title": "Preparation Dismissed Button1",
+                                "description": "Language for Button1 (Keep Running) on the discovery/staging quit prompt. Default: Keep Running",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_preparationdismissed_button2": {
+                                "type": "string",
+                                "title": "Preparation Dismissed Button2",
+                                "description": "Language for Button2 (Stop App Auto-Patch) on the discovery/staging quit prompt. Default: Stop App Auto-Patch",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_notification_silent_updated": {
+                                "type": "string",
+                                "title": "Notification Silent Updated Message",
+                                "description": "Banner notification message when silent background patching updates apps. Use {count} for the number of apps updated.",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_notification_apps_queued": {
+                                "type": "string",
+                                "title": "Notification Apps Queued Message",
+                                "description": "Banner notification message when apps require updates (e.g. during Business Hours). Use {count} for the number of apps queued. Includes Install Now / Dismiss actions.",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_notification_silent_and_queued": {
+                                "type": "string",
+                                "title": "Notification Silent And Queued Message",
+                                "description": "Banner notification message when silent patching updated some apps and others remain queued. Use {count} for updated and {remaining} for still-queued apps.",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_notification_button_install": {
+                                "type": "string",
+                                "title": "Notification Install Now Button",
+                                "description": "Label for the Install Now action on banner notifications that offer starting --workflow-install-now",
+                                "links": [
+                                    {
+                                        "rel": "More information",
+                                        "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/User-Interface-%7C-Multi%E2%80%90Language-Support"
+                                    }
+                                ]
+                            },
+                            "display_string_notification_button_dismiss": {
+                                "type": "string",
+                                "title": "Notification Dismiss Button",
+                                "description": "Label for the Dismiss action on banner notifications",
                                 "links": [
                                     {
                                         "rel": "More information",

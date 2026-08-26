@@ -30,14 +30,30 @@
 	<string>examplefilepath.png</string>
 	<key>DialogOnTop</key>
 	<string>TRUE</string>
+	<key>ShowDockIcon</key>
+	<true/>
+	<key>DialogQuitHandlingDiscoveryStaging</key>
+	<string>PROMPT</string>
+	<key>ShowNotificationsAll</key>
+	<true/>
+	<key>ShowNotificationsSilentUpdated</key>
+	<false/>
+	<key>ShowNotificationsAppsQueued</key>
+	<false/>
+	<key>ShowNotificationsSilentAndQueued</key>
+	<false/>
 	<key>DialogTimeoutDeferral</key>
 	<integer>300</integer>
 	<key>DialogTimeoutDeferralAction</key>
 	<string>Defer</string>
 	<key>IgnoreAppsInHomeFolder</key>
 	<string>FALSE</string>
+	<key>SkipPreUpdateVerification</key>
+	<false/>
 	<key>IgnoredLabels</key>
 	<string>1password* androidstudio microsoft*</string>
+	<key>ExcludedBackgroundLabels</key>
+	<string>amazoncorretto* nodejs python*</string>
 	<key>InstallomatorOptions</key>
 	<string>BLOCKING_PROCESS_ACTION=quit_kill NOTIFY=silent LOGO=appstore IGNORE_APP_STORE_APPS=yes</string>
 	<key>InstallomatorUpdateDisable</key>
@@ -48,6 +64,22 @@
 	<string>Installomator/Installomator</string>
 	<key>InstallomatorVersionCustomBranchName</key>
 	<string>Main</string>
+	<key>GitHubAPIAuthEnabled</key>
+	<string>FALSE</string>
+	<key>GitHubAPIToken</key>
+	<string>github_pat_REPLACE_ME</string>
+	<key>PrePatchScript</key>
+	<string>/Library/Management/AppAutoPatch/Hooks/pre.sh</string>
+	<key>PostPatchScript</key>
+	<string>/Library/Management/AppAutoPatch/Hooks/post.sh</string>
+	<key>PrePatchScriptFailAction</key>
+	<string>ABORT</string>
+	<key>PostPatchScriptFailAction</key>
+	<string>CONTINUE</string>
+	<key>PatchScriptTimeoutSeconds</key>
+	<integer>300</integer>
+	<key>StaleProcessTimeoutSeconds</key>
+	<integer>3600</integer>
 	<key>InteractiveMode</key>
 	<integer>1</integer>
 	<key>MonthlyPatchingCadenceEnabled</key>
@@ -96,8 +128,18 @@
 	<string>https://webhook.microsoft.com</string>
 	<key>WorkflowDisableAppDiscovery</key>
 	<string>FALSE</string>
+	<key>WorkflowScheduledDiscovery</key>
+	<false/>
 	<key>WorkflowDisableRelaunch</key>
 	<string>FALSE</string>
+	<key>BusinessHours</key>
+	<string>MON:09:00-17:00,TUE:09:00-17:00,WED:09:00-17:00,THU:09:00-17:00,FRI:09:00-17:00</string>
+	<key>BusinessHoursRespectHardDeadline</key>
+	<false/>
+	<key>BusinessHoursSilentDuring</key>
+	<false/>
+	<key>BusinessHoursAllowDiscovery</key>
+	<false/>
 	<key>WorkflowInstallNowPatchingStatusAction</key>
 	<string>SUCCESS</string>
 	<key>ZoomCallActiveCheck</key>

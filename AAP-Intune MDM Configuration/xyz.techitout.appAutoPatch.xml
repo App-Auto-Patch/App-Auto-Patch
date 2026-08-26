@@ -42,6 +42,10 @@
 <integer>60</integer>
 <key>DialogOnTop</key>
 <string>TRUE</string>
+<key>DialogQuitHandlingDiscoveryStaging</key>
+<string>PROMPT</string>
+<key>StaleProcessTimeoutSeconds</key>
+<integer>3600</integer>
 <key>UseOverlayIcon</key>
 <string>TRUE</string>
 <key>RemoveInstallomatorPath</key>
@@ -49,6 +53,10 @@
 <key>VerboseMode</key>
 <string>TRUE</string>
 <key>WorkflowDisableAppDiscovery</key>
+<string>FALSE</string>
+<key>WorkflowScheduledDiscovery</key>
+<false/>
+<key>WorkflowDisableRelaunch</key>
 <string>FALSE</string>
 <key>WebhookFeature</key>
 <string>FALSE</string>

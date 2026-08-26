@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.6.3"
-scriptDate="2026/08/04"
-scriptBuild="3.6.3.2608040922"
+scriptVersion="3.7.0"
+scriptDate="2026/08/19"
+scriptBuild="3.7.0.2608191542"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -61,12 +61,26 @@ echo "
     Workflow Options:
     [--workflow-disable-relaunch] [--workflow-disable-relaunch-off]
     [--workflow-disable-app-discovery] [--workflow-disable-app-discovery-off]
+    [--workflow-discovery-only]
     [--discovery-frequency=hours]
     [--force-discovery]
     [--workflow-install-now] [--workflow-install-now-silent]
     [--workflow-install-now-patching-status-action-never]
     [--workflow-install-now-patching-status-action-always]
     [--workflow-install-now-patching-status-action-success]
+    [--business-hours=DAY:hh:mm-hh:mm,...]
+    [--business-hours-respect-hard-deadline]
+    [--business-hours-respect-hard-deadline-off]
+    [--business-hours-silent-during]
+    [--business-hours-silent-during-off]
+    [--business-hours-allow-discovery]
+    [--business-hours-allow-discovery-off]
+    [--skip-pre-update-verification] [--skip-pre-update-verification-off]
+    [--show-dock-icon] [--show-dock-icon-off]
+    [--show-notifications-all] [--show-notifications-all-off]
+    [--show-notifications-silent-updated] [--show-notifications-silent-updated-off]
+    [--show-notifications-apps-queued] [--show-notifications-apps-queued-off]
+    [--show-notifications-silent-and-queued] [--show-notifications-silent-and-queued-off]
 
     Deferral Deadline COUNT Options:
     [--deadline-count-focus=number]
@@ -81,6 +95,7 @@ echo "
     [--ignored-labels="label1 label2"]
     [--required-labels="label1 label2"]
     [--optional-labels="label1 label2"]
+    [--excluded-background-labels="label1 label2"]
     [--reset-labels]
 
     Deferral Timer Options:
@@ -91,6 +106,8 @@ echo "
 
     Dialog Options
     [--dialog-icon-option=filepath|URL]
+    [--preview-deferral-dialog]
+    [--pending-apps-dialog]
     
     Webhook Options:
     [--webhook-feature-all] [--webhook-feature-failures] [--webhook-feature-off]
@@ -99,6 +116,7 @@ echo "
     Troubleshooting Options:
     [--verbose-mode] [--verbose-mode-off]
     [--debug-mode] [--debug-mode-off]
+    [--stop]
     [--usage] [--help]
     [--uninstall]
     [--version]
@@ -126,13 +144,22 @@ echo "
     <key>DialogTimeoutDeferral</key> <integer>seconds</integer>
     <key>DialogTimeoutDeferralAction</key> <string>Defer,Continue</string>
     <key>DialogTimeoutConfirmInstall</key> <integer>seconds</integer>
+    <key>DialogQuitHandlingDiscoveryStaging</key> <string>PROMPT,CONTINUE,STOP</string> (Stop is ignored when a hard deadline is due or Install Now is running)
     <key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>
     <key>IgnoredLabels</key> <string>label label label etc</string>
+    <key>ExcludedBackgroundLabels</key> <string>label label label etc</string>
     <key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc</string>
     <key>InstallomatorUpdateDisable</key> <string>TRUE,FALSE</string>
     <key>InstallomatorVersion</key> <string>Main,Release,Custom</string>
     <key>InstallomatorVersionCustomRepoPath</key> <string>Installomator/Installomator</string>
     <key>InstallomatorVersionCustomBranchName</key> <string>main</string>
+    <key>GitHubAPIAuthEnabled</key> <string>TRUE,FALSE</string>
+    <key>GitHubAPIToken</key> <string>github_pat_...</string>
+    <key>PrePatchScript</key> <string>/Library/Management/AppAutoPatch/Hooks/pre.sh</string>
+    <key>PostPatchScript</key> <string>/Library/Management/AppAutoPatch/Hooks/post.sh</string>
+    <key>PrePatchScriptFailAction</key> <string>ABORT,CONTINUE</string>
+    <key>PostPatchScriptFailAction</key> <string>ABORT,CONTINUE</string>
+    <key>PatchScriptTimeoutSeconds</key> <integer>seconds</integer>
     <key>InteractiveMode</key> <integer>number</integer>
     <key>MonthlyPatchingCadenceEnabled</key> <true/> | <false/>
     <key>MonthlyPatchingCadenceOrdinalValue</key> <string>second</string>
@@ -151,6 +178,7 @@ echo "
     <key>UnattendedExit</key> <string>TRUE,FALSE</string>
     <key>UnattendedExitSeconds</key> <integer>seconds</integer>
     <key>UseOverlayIcon</key> <string>TRUE,FALSE</string>
+    <key>VerboseMode</key> <true/> | <false/>
     <key>VersionComparisonInstallomatorFallback</key> <true/> | <false/>
     <key>VersionComparisonMethod</key> <string>IS_AT_LEAST,EQUAL_TO</string>
     <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
@@ -159,7 +187,19 @@ echo "
     <key>WorkflowBackgroundPatchClosedApps</key> <true/> | <false/>
     <key>WorkflowStageUpdates</key> <true/> | <false/>
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
+    <key>WorkflowScheduledDiscovery</key> <true/> | <false/>
     <key>WorkflowDisableRelaunch</key> <true/> | <false/>
+    <key>BusinessHours</key> <string>MON:09:00-17:00,TUE:09:00-17:00,...</string>
+    <key>BusinessHoursRespectHardDeadline</key> <true/> | <false/>
+    <key>BusinessHoursSilentDuring</key> <true/> | <false/>
+    <key>BusinessHoursAllowDiscovery</key> <true/> | <false/>
+    <key>SkipPreUpdateVerification</key> <true/> | <false/>
+    <key>ShowDockIcon</key> <true/> | <false/>
+    <key>ShowNotificationsAll</key> <true/> | <false/>
+    <key>ShowNotificationsSilentUpdated</key> <true/> | <false/>
+    <key>ShowNotificationsAppsQueued</key> <true/> | <false/>
+    <key>ShowNotificationsSilentAndQueued</key> <true/> | <false/>
+    <key>StaleProcessTimeoutSeconds</key> <integer>seconds (0 disables timeout recovery; otherwise minimum 300)</integer>
     <key>DiscoveryFrequency</key> <integer>hours</integer>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
     <key>ZoomCallActiveCheck</key> <true/> | <false/>
@@ -249,6 +289,10 @@ set_defaults() {
     appAutoPatchLink="/usr/local/bin/appautopatch"
 
     appAutoPatchPIDfile="/var/run/aap.pid"
+    appAutoPatchHeartbeatFile="/var/run/aap.heartbeat"
+    appAutoPatchStarterSkipLogFile="/var/run/aap-starter-last-skip"
+    stale_process_timeout_seconds=3600 # MDM Enabled; 0 disables heartbeat timeout recovery
+    stop_aap_option="FALSE"
 
     InteractiveMode="2" # MDM Enabled
 
@@ -264,9 +308,49 @@ set_defaults() {
 
     ignoreAppsInHomeFolder="FALSE" # MDM Enabled
 
+    # When TRUE, discovery skips the local spctl/Team ID pre-update check in verifyApp() that can
+    # otherwise drop an already-installed app from the queue if Gatekeeper assessment fails.
+    # Installomator still validates the downloaded package after download. Default FALSE (#256).
+    # Empty until prefs resolve (managed > CLI > local > FALSE).
+    SkipPreUpdateVerificationOption="" # MDM Enabled
+
+    # Show the App Auto-Patch logo in the macOS Dock for workflow dialogs (swiftDialog 3.0+).
+    # Empty until prefs resolve (managed > CLI > local > TRUE).
+    ShowDockIconOption="" # MDM Enabled
+
+    # Banner-style swiftDialog notifications for silent/background update events. Default TRUE.
+    # Empty until prefs resolve (managed > CLI > local > TRUE).
+    # Banner notifications: ShowNotificationsAll (default TRUE) enables every type.
+    # When All is FALSE, each ShowNotifications* type key is opt-in (default FALSE).
+    # If All is TRUE alongside any individual key, All wins and every type is shown.
+    # Legacy managed/local key ShowNotifications maps to ShowNotificationsAll.
+    ShowNotificationsAllOption="" # MDM Enabled
+    ShowNotificationsSilentUpdatedOption="" # MDM Enabled
+    ShowNotificationsAppsQueuedOption="" # MDM Enabled
+    ShowNotificationsSilentAndQueuedOption="" # MDM Enabled
+
     installomatorOptions="BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=appstore" # MDM Enabled
     
     installomatorVersion="Main" # MDM Enabled - Use:  Release|Main 
+
+    # Optional GitHub REST API authentication (managed preferences only). When enabled, AAP sends
+    # Authorization: Bearer <token> on api.github.com requests (Installomator / swiftDialog lookups)
+    # to raise the rate limit from 60/hr (unauthenticated) to 5,000/hr. See issue #249.
+    github_api_auth_enabled_option="FALSE" # MDM Enabled
+    github_api_token_option="" # MDM Enabled (never logged, never written to local plist)
+    github_api_curl_auth_args=() # populated by resolve_github_api_auth() when enabled
+
+    # Optional pre/post patch hooks (#156). Managed preferences only - absolute paths under
+    # ${appAutoPatchFolder}/Hooks, root-owned, not group/world-writable. Never eval'd; never
+    # accepted from CLI or the local preference plist.
+    aapHooksFolder="${appAutoPatchFolder}/Hooks"
+    pre_patch_script_option="" # MDM Enabled
+    post_patch_script_option="" # MDM Enabled
+    pre_patch_script_fail_action="ABORT" # MDM Enabled - ABORT|CONTINUE
+    post_patch_script_fail_action="CONTINUE" # MDM Enabled - ABORT|CONTINUE
+    patch_script_timeout_seconds=300 # MDM Enabled
+    patch_hooks_pre_ran="FALSE"
+    patch_hooks_need_post="FALSE"
 
     DialogTimeoutDeferral="300" # MDM Enabled
     
@@ -284,6 +368,34 @@ set_defaults() {
 
     workflow_install_now_patching_status_action_option="SUCCESS" # MDM Enabled - Determines what happens when  NEVER | ALWAYS | SUCCESS 
 
+    # BusinessHours (#166) - DAY:hh:mm-hh:mm windows when interactive workflow must NOT run.
+    # Empty/unset = always allowed. Multiple windows per day supported (e.g. before/after lunch) so
+    # gaps between windows remain allowed. Local Mac timezone; same-day ranges only.
+    # During a window: reschedule NextAutoLaunch to the next clear time and exit — unless
+    # BusinessHoursSilentDuring is true (discover + silently patch closed apps only), or
+    # BusinessHoursAllowDiscovery is true (discover then defer; notifications may banner).
+    # Bypassed by --workflow-install-now / --workflow-install-now-silent / --preview-deferral-dialog.
+    business_hours_option="" # MDM Enabled
+    # Empty until prefs resolve; managed/CLI/local then normalize to FALSE (default: hard deadline
+    # bypasses business hours) or TRUE (even hard deadlines wait for a clear window).
+    business_hours_respect_hard_deadline_option="" # MDM Enabled
+    # Empty until prefs resolve; default FALSE = during business hours exit/reschedule.
+    # TRUE = closed-apps-only silent path during business hours.
+    business_hours_silent_during_option="" # MDM Enabled
+    business_hours_silent_during_active="FALSE" # runtime flag set by enforce_business_hours
+    # When TRUE during BusinessHours without SilentDuring: run discovery then defer (no interactive
+    # dialogs / silent patch). Default FALSE = historical immediate defer before discovery.
+    # ShowNotifications* independently controls whether queued apps get a banner after discovery.
+    business_hours_allow_discovery_option="" # MDM Enabled
+    business_hours_discovery_only_active="FALSE"
+    typeset -ga business_hours_windows # populated by manage_parameter_options: "dow:startmin:endmin"
+
+    # User-driven patching mode (#258): when paired with WorkflowDisableRelaunch, keep periodic
+    # headless discovery/report refreshes scheduled without showing deferral UI or patching apps.
+    WorkflowScheduledDiscoveryOption="" # MDM Enabled; default FALSE
+    workflow_discovery_only_option="FALSE" # one-shot CLI --workflow-discovery-only
+    workflow_discovery_only_active="FALSE" # effective runtime mode
+
     UnattendedExit="FALSE" # MDM Enabled
 
     UnattendedExitSeconds="60" # MDM Enabled
@@ -296,24 +408,69 @@ set_defaults() {
     # Format mirrors Munki's ManagedInstallReport.plist ("ItemsToInstall" array of dicts) so the
     # same file can be ingested by third-party reporting/inventory tooling.
     appAutoPatchReportPLIST="${appAutoPatchFolder}/xyz.techitout.appAutoPatchReport"
+    aapReportPreDiscoveryBackup="/var/tmp/aap-report-pre-discovery.$$.plist"
 
     appAutoPatchLaunchDaemonLabel="xyz.techitout.aap"
+    silent_patch_success_count=0
 
     WORKFLOW_INSTALL_NOW_FILE="${appAutoPatchFolder}/.WorkflowInstallNow"
     
     WORKFLOW_INSTALL_NOW_SILENT_FILE="${appAutoPatchFolder}/.WorkflowInstallNowSilent"
 
+    # Survives restart/network defer so pending-apps Install Now keeps skipping discovery and
+    # locks the install queue to the report PLIST the user confirmed (not DiscoveredLabels extras).
+    PENDING_APPS_INSTALL_NOW_FILE="${appAutoPatchFolder}/.PendingAppsInstallNow"
+
+    # One-shot flag so --pending-apps-dialog survives restart_aap (Jamf policy / out-of-folder
+    # install relaunches without CLI args). Consumed when the dialog is shown in main().
+    PENDING_APPS_DIALOG_FILE="${appAutoPatchFolder}/.PendingAppsDialog"
+
+    # User-writable trigger watched by xyz.techitout.aap.pendingAppsDialogTrigger so banner
+    # notification Install Now actions (which run as the console user) can open the pending-apps
+    # dialog as root. Choosing Install Now inside that dialog continues in-process as install-now.
+    aapPendingAppsTriggerDir="${appAutoPatchFolder}/Triggers"
+    aapPendingAppsTriggerFile="${aapPendingAppsTriggerDir}/PendingAppsDialog"
+    aapPendingAppsTriggerScript="${appAutoPatchFolder}/aap-pending-apps-dialog-trigger"
+    aapPendingAppsTriggerLaunchDaemonLabel="xyz.techitout.aap.pendingAppsDialogTrigger"
+    # Legacy Install Now WatchPaths label/paths from earlier 3.7.0 builds — removed by ensure_*.
+    aapInstallNowTriggerDir="${aapPendingAppsTriggerDir}"
+    aapInstallNowTriggerFile="${aapInstallNowTriggerDir}/InstallNow"
+    aapInstallNowTriggerScript="${appAutoPatchFolder}/aap-install-now-trigger"
+    aapInstallNowTriggerLaunchDaemonLabel="xyz.techitout.aap.installNowTrigger"
+
     FORCE_DISCOVERY_FILE="${appAutoPatchFolder}/.ForceDiscovery"
+
+    # One-shot flag so --workflow-discovery-only survives an out-of-folder / Jamf restart.
+    WORKFLOW_DISCOVERY_ONLY_FILE="${appAutoPatchFolder}/.WorkflowDiscoveryOnly"
+    # Original NextAutoLaunch value interrupted by the one-shot; restored on completion/error.
+    WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE="${appAutoPatchFolder}/.WorkflowDiscoveryOnlyNextAutoLaunch"
+    # Suppresses immediate crash-resume while a transient network error deferral is pending.
+    WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE="${appAutoPatchFolder}/.WorkflowDiscoveryOnlyDeferred"
 
     jamfBinary="/usr/local/bin/jamf"
 
     dialogBinary="/usr/local/bin/dialog"
-
+    
     dialogCommandFile=$( mktemp /var/tmp/dialog.appAutoPatch.XXXXX )
-
+    
     dialogTargetVersion="2.5.5"
-
+    
     dialogOnTop="FALSE" # MDM Enabled
+    # Populated in workflow_startup when swiftDialog 3.0+ is available (--dockicon / --dockiconbadge).
+    dialogDockOptions=()
+    dialogSupportsDockIcon="FALSE"
+    # Patching-dialog Dock Quit / ⌘Q handling (backgrounded progress window).
+    dialogPatchingPID=""
+    dialogPatchingContinueBackground="FALSE"
+    dialogPatchingIntentionalQuit="FALSE"
+    dialogDiscoverPID=""
+    dialogStagingPID=""
+    dialogPreparationContinueBackground="FALSE"
+    dialogQuitHandlingDiscoveryStagingOption="PROMPT" # MDM Enabled - PROMPT|CONTINUE|STOP
+    dialogPreparationIntentionalQuit="FALSE"
+    stagingWindowOpened="FALSE"
+    typeset -gA patchingItemStatus
+    patchingItemStatus=()
 
     reset_defaults_option="FALSE"
 
@@ -421,6 +578,10 @@ set_defaults() {
     bannerImageOption="" # MDM Enabled
     bannerTitleOption="" # MDM Enabled
     bannerHeightOption="" # MDM Enabled
+
+    # Set to TRUE by get_preferences when IgnoredLabels contains a bare "*", meaning "ignore every
+    # Installomator label except those listed in RequiredLabels and OptionalLabels".
+    ignore_all_labels="FALSE"
 }
 
 # Set language strings for dialogs and notifications.
@@ -453,11 +614,13 @@ set_display_strings_language() {
     #### Language for the Staging / Background Patch Closed Apps dialog (InteractiveMode 2 only)
     display_string_staging_message="Preparing updates"
     display_string_staging_progress="Staging"
-    display_string_silent_patch_progress="Installing updates for closed apps"
+    # Per-app progresstext prefix during background closed-app installs (app name is appended).
+    display_string_silent_patch_progress="Installing"
     
     #### Language for the Deferral Dialog with Deferrals
     display_string_deferral_button1="Defer"
     display_string_deferral_button2="Install Now"
+    display_string_pendingapps_button_later="Later"
     display_string_deferral_infobox1="Deferral available until"
     display_string_deferral_infobox2="out of"
     display_string_deferral_infobox3="deferrals remaining\n"
@@ -477,6 +640,24 @@ set_display_strings_language() {
     display_string_confirminstall_button2="No, Go Back"
     display_string_confirminstall_countdown="Continuing automatically in"
     display_string_confirminstall_countdown_suffix="seconds…"
+
+    #### Language for the dialog-dismissed prompt (Dock Quit / ⌘Q during patching)
+    display_string_dialogdismissed_message="The App Auto-Patch window was closed, but updates are still running in the background."
+    display_string_dialogdismissed_button1="Show Progress"
+    display_string_dialogdismissed_button2="Continue in Background"
+
+    #### Language for Dock Quit / ⌘Q during discovery and update preparation
+    display_string_preparationdismissed_message="The App Auto-Patch preparation window was closed. You can keep the workflow running in the background or stop App Auto-Patch until its next scheduled run."
+    display_string_preparationdismissed_button1="Keep Running"
+    display_string_preparationdismissed_button2="Stop App Auto-Patch"
+
+    #### Language for banner-style swiftDialog notifications
+    # Placeholders: {count} = number of apps updated or queued; {remaining} = open apps still queued.
+    display_string_notification_silent_updated="App Auto-Patch has updated {count} application(s) in the background."
+    display_string_notification_apps_queued="{count} application(s) require updates."
+    display_string_notification_silent_and_queued="{count} application(s) were updated in the background. {remaining} open application(s) remain queued."
+    display_string_notification_button_install="Install Now"
+    display_string_notification_button_dismiss="Dismiss"
     
     #### Language for the Deferral Dialog with NO deferrals remaining
     display_string_deferraldeadline_button1="Install Now"
@@ -570,6 +751,7 @@ set_display_strings_language() {
             display_string_deferral_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferral_button2_managed
             display_string_deferral_button2_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_button2" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_pendingapps_button_later_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_pendingapps_button_later" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferral_infobox1_managed
             display_string_deferral_infobox1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferral_infobox1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferral_infobox2_managed
@@ -598,6 +780,17 @@ set_display_strings_language() {
             display_string_confirminstall_countdown_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_confirminstall_countdown" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_confirminstall_countdown_suffix_managed
             display_string_confirminstall_countdown_suffix_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_confirminstall_countdown_suffix" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_dialogdismissed_message_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_dialogdismissed_message" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_dialogdismissed_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_dialogdismissed_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_dialogdismissed_button2_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_dialogdismissed_button2" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_preparationdismissed_message_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_preparationdismissed_message" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_preparationdismissed_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_preparationdismissed_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_preparationdismissed_button2_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_preparationdismissed_button2" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_notification_silent_updated_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_notification_silent_updated" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_notification_apps_queued_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_notification_apps_queued" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_notification_silent_and_queued_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_notification_silent_and_queued" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_notification_button_install_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_notification_button_install" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
+            display_string_notification_button_dismiss_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_notification_button_dismiss" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferraldeadline_button1_managed
             display_string_deferraldeadline_button1_managed=$(/usr/libexec/PlistBuddy -c "Print :userInterface:dialogElements:$elements:display_string_deferraldeadline_button1" "$appAutoPatchManagedPLIST.plist" 2>/dev/null)
             # local display_string_deferraldeadline_button2_managed
@@ -674,6 +867,7 @@ set_display_strings_language() {
     [[ -n "${display_string_silent_patch_progress_managed}" ]] && display_string_silent_patch_progress="${display_string_silent_patch_progress_managed}"
     [[ -n "${display_string_deferral_button1_managed}" ]] && display_string_deferral_button1="${display_string_deferral_button1_managed}"
     [[ -n "${display_string_deferral_button2_managed}" ]] && display_string_deferral_button2="${display_string_deferral_button2_managed}"
+    [[ -n "${display_string_pendingapps_button_later_managed}" ]] && display_string_pendingapps_button_later="${display_string_pendingapps_button_later_managed}"
     [[ -n "${display_string_deferral_infobox1_managed}" ]] && display_string_deferral_infobox1="${display_string_deferral_infobox1_managed}"
     [[ -n "${display_string_deferral_infobox2_managed}" ]] && display_string_deferral_infobox2="${display_string_deferral_infobox2_managed}"
     [[ -n "${display_string_deferral_infobox3_managed}" ]] && display_string_deferral_infobox3="${display_string_deferral_infobox3_managed}"
@@ -688,6 +882,17 @@ set_display_strings_language() {
     [[ -n "${display_string_confirminstall_button2_managed}" ]] && display_string_confirminstall_button2="${display_string_confirminstall_button2_managed}"
     [[ -n "${display_string_confirminstall_countdown_managed}" ]] && display_string_confirminstall_countdown="${display_string_confirminstall_countdown_managed}"
     [[ -n "${display_string_confirminstall_countdown_suffix_managed}" ]] && display_string_confirminstall_countdown_suffix="${display_string_confirminstall_countdown_suffix_managed}"
+    [[ -n "${display_string_dialogdismissed_message_managed}" ]] && display_string_dialogdismissed_message="${display_string_dialogdismissed_message_managed}"
+    [[ -n "${display_string_dialogdismissed_button1_managed}" ]] && display_string_dialogdismissed_button1="${display_string_dialogdismissed_button1_managed}"
+    [[ -n "${display_string_dialogdismissed_button2_managed}" ]] && display_string_dialogdismissed_button2="${display_string_dialogdismissed_button2_managed}"
+    [[ -n "${display_string_preparationdismissed_message_managed}" ]] && display_string_preparationdismissed_message="${display_string_preparationdismissed_message_managed}"
+    [[ -n "${display_string_preparationdismissed_button1_managed}" ]] && display_string_preparationdismissed_button1="${display_string_preparationdismissed_button1_managed}"
+    [[ -n "${display_string_preparationdismissed_button2_managed}" ]] && display_string_preparationdismissed_button2="${display_string_preparationdismissed_button2_managed}"
+    [[ -n "${display_string_notification_silent_updated_managed}" ]] && display_string_notification_silent_updated="${display_string_notification_silent_updated_managed}"
+    [[ -n "${display_string_notification_apps_queued_managed}" ]] && display_string_notification_apps_queued="${display_string_notification_apps_queued_managed}"
+    [[ -n "${display_string_notification_silent_and_queued_managed}" ]] && display_string_notification_silent_and_queued="${display_string_notification_silent_and_queued_managed}"
+    [[ -n "${display_string_notification_button_install_managed}" ]] && display_string_notification_button_install="${display_string_notification_button_install_managed}"
+    [[ -n "${display_string_notification_button_dismiss_managed}" ]] && display_string_notification_button_dismiss="${display_string_notification_button_dismiss_managed}"
     [[ -n "${display_string_deferraldeadline_button1_managed}" ]] && display_string_deferraldeadline_button1="${display_string_deferraldeadline_button1_managed}"
     [[ -n "${display_string_deferraldeadline_button2_managed}" ]] && display_string_deferraldeadline_button2="${display_string_deferraldeadline_button2_managed}"
     [[ -n "${display_string_deferraldeadline_infobox_managed}" ]] && display_string_deferraldeadline_infobox="${display_string_deferraldeadline_infobox_managed}"
@@ -733,6 +938,7 @@ set_display_strings_language() {
     log_verbose "display_string_silent_patch_progress: $display_string_silent_patch_progress"
     log_verbose "display_string_deferral_button1: $display_string_deferral_button1"
     log_verbose "display_string_deferral_button2: $display_string_deferral_button2"
+    log_verbose "display_string_pendingapps_button_later: $display_string_pendingapps_button_later"
     log_verbose "display_string_deferral_infobox1: $display_string_deferral_infobox1"
     log_verbose "display_string_deferral_infobox2: $display_string_deferral_infobox2"
     log_verbose "display_string_deferral_infobox3: $display_string_deferral_infobox3"
@@ -747,6 +953,17 @@ set_display_strings_language() {
     log_verbose "display_string_confirminstall_button2: $display_string_confirminstall_button2"
     log_verbose "display_string_confirminstall_countdown: $display_string_confirminstall_countdown"
     log_verbose "display_string_confirminstall_countdown_suffix: $display_string_confirminstall_countdown_suffix"
+    log_verbose "display_string_dialogdismissed_message: $display_string_dialogdismissed_message"
+    log_verbose "display_string_dialogdismissed_button1: $display_string_dialogdismissed_button1"
+    log_verbose "display_string_dialogdismissed_button2: $display_string_dialogdismissed_button2"
+    log_verbose "display_string_preparationdismissed_message: $display_string_preparationdismissed_message"
+    log_verbose "display_string_preparationdismissed_button1: $display_string_preparationdismissed_button1"
+    log_verbose "display_string_preparationdismissed_button2: $display_string_preparationdismissed_button2"
+    log_verbose "display_string_notification_silent_updated: $display_string_notification_silent_updated"
+    log_verbose "display_string_notification_apps_queued: $display_string_notification_apps_queued"
+    log_verbose "display_string_notification_silent_and_queued: $display_string_notification_silent_and_queued"
+    log_verbose "display_string_notification_button_install: $display_string_notification_button_install"
+    log_verbose "display_string_notification_button_dismiss: $display_string_notification_button_dismiss"
     log_verbose "display_string_deferraldeadline_button1: $display_string_deferraldeadline_button1"
     log_verbose "display_string_deferraldeadline_button2: $display_string_deferraldeadline_button2"
     log_verbose "display_string_deferraldeadline_infobox: $display_string_deferraldeadline_infobox"
@@ -851,6 +1068,9 @@ get_options() {
             --optional-labels=*)
                 optional_labels_option="${1##*=}"
             ;;
+            --excluded-background-labels=*)
+                excluded_background_labels_option="${1##*=}"
+            ;;
             -V|--verbose-mode)
                 verbose_mode_option="TRUE"
             ;;
@@ -862,6 +1082,10 @@ get_options() {
             ;;
             -d|--debug-mode-off)
                 debug_mode_option="FALSE"
+            ;;
+            --stop)
+                stop_aap_option="TRUE"
+                stop_running_aap
             ;;
             --deferral-timer-menu=*)
                 deferral_timer_menu_option="${1##*=}"
@@ -899,6 +1123,12 @@ get_options() {
             --dialog-icon-option=*)
                 dialog_icon_option="${1##*=}"
             ;;
+            --preview-deferral-dialog)
+                preview_deferral_dialog_option="TRUE"
+            ;;
+            --pending-apps-dialog)
+                pending_apps_dialog_option="TRUE"
+            ;;
             --patch-week-start-day=*)
                 patch_week_start_day_option="${1##*=}"
             ;;
@@ -929,6 +1159,9 @@ get_options() {
             --force-discovery)
                 force_discovery_option="TRUE"
             ;;
+            --workflow-discovery-only)
+                workflow_discovery_only_option="TRUE"
+            ;;
             --workflow-install-now)
                 workflow_install_now_option="TRUE"
             ;;
@@ -949,6 +1182,63 @@ get_options() {
             ;;
             --workflow-disable-relaunch-off)
                 workflow_disable_relaunch_option="FALSE"
+            ;;
+            --business-hours=*)
+                business_hours_option="${1##*=}"
+            ;;
+            --business-hours-respect-hard-deadline)
+                business_hours_respect_hard_deadline_option="TRUE"
+            ;;
+            --business-hours-respect-hard-deadline-off)
+                business_hours_respect_hard_deadline_option="FALSE"
+            ;;
+            --business-hours-silent-during)
+                business_hours_silent_during_option="TRUE"
+            ;;
+            --business-hours-silent-during-off)
+                business_hours_silent_during_option="FALSE"
+            ;;
+            --business-hours-allow-discovery)
+                business_hours_allow_discovery_option="TRUE"
+            ;;
+            --business-hours-allow-discovery-off)
+                business_hours_allow_discovery_option="FALSE"
+            ;;
+            --skip-pre-update-verification)
+                SkipPreUpdateVerificationOption="TRUE"
+            ;;
+            --skip-pre-update-verification-off)
+                SkipPreUpdateVerificationOption="FALSE"
+            ;;
+            --show-dock-icon)
+                ShowDockIconOption="TRUE"
+            ;;
+            --show-dock-icon-off)
+                ShowDockIconOption="FALSE"
+            ;;
+            --show-notifications-all|--show-notifications)
+                ShowNotificationsAllOption="TRUE"
+            ;;
+            --show-notifications-all-off|--show-notifications-off)
+                ShowNotificationsAllOption="FALSE"
+            ;;
+            --show-notifications-silent-updated)
+                ShowNotificationsSilentUpdatedOption="TRUE"
+            ;;
+            --show-notifications-silent-updated-off)
+                ShowNotificationsSilentUpdatedOption="FALSE"
+            ;;
+            --show-notifications-apps-queued)
+                ShowNotificationsAppsQueuedOption="TRUE"
+            ;;
+            --show-notifications-apps-queued-off)
+                ShowNotificationsAppsQueuedOption="FALSE"
+            ;;
+            --show-notifications-silent-and-queued)
+                ShowNotificationsSilentAndQueuedOption="TRUE"
+            ;;
+            --show-notifications-silent-and-queued-off)
+                ShowNotificationsSilentAndQueuedOption="FALSE"
             ;;
             --webhook-feature-off)
                 webhook_feature_option="FALSE"
@@ -1011,6 +1301,24 @@ get_options() {
 
 }
 
+# Normalise a labels preference into an array of bare label names, returned in
+# ${parsed_labels_option}. The source string is either a space-separated list (string-typed
+# preference) or the raw `defaults read` rendering of an array-typed preference, which carries
+# parentheses, quotes and trailing commas that would otherwise become array elements in their own
+# right (#254). Results are returned via a global because the caller needs an array, and a command
+# substitution would flatten it.
+parse_labels_option() {
+    local raw="${1}"
+    local token
+    parsed_labels_option=()
+    for token in ${=raw}; do
+        token="${token%,}"
+        token="${token//\"/}"
+        [[ -z "${token}" || "${token}" == "(" || "${token}" == ")" ]] && continue
+        parsed_labels_option+=("${token}")
+    done
+}
+
 get_preferences() {
 
     write_status "Running: Collecting preferences"
@@ -1033,7 +1341,18 @@ get_preferences() {
         [[ "${debug_mode_option}" == "TRUE" ]] && defaults write "${appAutoPatchLocalPLIST}" DebugMode -bool true
         rm -f "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
         rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
+        rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" 2> /dev/null
+        rm -f "${PENDING_APPS_DIALOG_FILE}" 2> /dev/null
         rm -f "${FORCE_DISCOVERY_FILE}" 2> /dev/null
+        rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2> /dev/null
+        # Also clear the matching in-memory one-shot flags so a reset run can't still act on them
+        # (some are armed at the top of workflow_startup, before this reset block runs).
+        pending_apps_dialog_option="FALSE"
+        pending_apps_install_now_option="FALSE"
+        workflow_install_now_option="FALSE"
+        workflow_install_now_silent_option="FALSE"
+        force_discovery_option="FALSE"
+        workflow_discovery_only_option="FALSE"
         
     else
         if [[ "${reset_labels_option}" == "TRUE" ]]; then
@@ -1042,6 +1361,7 @@ get_preferences() {
         defaults delete "${appAutoPatchLocalPLIST}" IgnoredLabels 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" RequiredLabels 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" OptionalLabels 2> /dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" ExcludedBackgroundLabels 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" DiscoveredLabels 2> /dev/null
         fi
 
@@ -1070,7 +1390,8 @@ get_preferences() {
 
     # Collect Managed PLIST preferences if any
     if [[ -f ${appAutoPatchManagedPLIST}.plist ]]; then
-        log_verbose "Managed preference file: ${appAutoPatchManagedPLIST}:\n$(defaults read "${appAutoPatchManagedPLIST}" 2> /dev/null)"
+        # Redact GitHubAPIToken from the verbose dump - a PAT must never appear in logs.
+        log_verbose "Managed preference file: ${appAutoPatchManagedPLIST}:\n$(defaults read "${appAutoPatchManagedPLIST}" 2> /dev/null | sed -E 's/(GitHubAPIToken[[:space:]]*=[[:space:]]*).*/\1"<redacted>";/')"
         local deferral_timer_default_managed
         deferral_timer_default_managed=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerDefault 2> /dev/null)
         local deferral_timer_menu_managed
@@ -1099,6 +1420,16 @@ get_preferences() {
         discovery_frequency_managed=$(defaults read "${appAutoPatchManagedPLIST}" DiscoveryFrequency 2> /dev/null)
         local workflow_disable_relaunch_managed
         workflow_disable_relaunch_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+        local workflow_scheduled_discovery_managed
+        workflow_scheduled_discovery_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+        local business_hours_managed
+        business_hours_managed=$(defaults read "${appAutoPatchManagedPLIST}" BusinessHours 2>/dev/null)
+        local business_hours_respect_hard_deadline_managed
+        business_hours_respect_hard_deadline_managed=$(defaults read "${appAutoPatchManagedPLIST}" BusinessHoursRespectHardDeadline 2>/dev/null)
+        local business_hours_silent_during_managed
+        business_hours_silent_during_managed=$(defaults read "${appAutoPatchManagedPLIST}" BusinessHoursSilentDuring 2>/dev/null)
+        local business_hours_allow_discovery_managed
+        business_hours_allow_discovery_managed=$(defaults read "${appAutoPatchManagedPLIST}" BusinessHoursAllowDiscovery 2>/dev/null)
         local webhook_feature_managed
         webhook_feature_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookFeature 2> /dev/null)
         local webhook_url_slack_managed
@@ -1111,12 +1442,29 @@ get_preferences() {
         required_labels_managed=$(defaults read "${appAutoPatchManagedPLIST}" RequiredLabels 2> /dev/null)
         local optional_labels_managed
         optional_labels_managed=$(defaults read "${appAutoPatchManagedPLIST}" OptionalLabels 2> /dev/null)
+        local excluded_background_labels_managed
+        excluded_background_labels_managed=$(defaults read "${appAutoPatchManagedPLIST}" ExcludedBackgroundLabels 2> /dev/null)
         local app_title_managed
         app_title_managed=$(defaults read "${appAutoPatchManagedPLIST}" AppTitle 2> /dev/null)
         local convert_apps_in_home_folder_managed
         convert_apps_in_home_folder_managed=$(defaults read "${appAutoPatchManagedPLIST}" ConvertAppsInHomeFolder 2> /dev/null)
         local ignore_apps_in_home_folder_managed
         ignore_apps_in_home_folder_managed=$(defaults read "${appAutoPatchManagedPLIST}" IgnoreAppsInHomeFolder 2> /dev/null)
+        local skip_pre_update_verification_managed
+        skip_pre_update_verification_managed=$(defaults read "${appAutoPatchManagedPLIST}" SkipPreUpdateVerification 2> /dev/null)
+        local show_dock_icon_managed
+        show_dock_icon_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowDockIcon 2> /dev/null)
+        local show_notifications_all_managed
+        show_notifications_all_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowNotificationsAll 2> /dev/null)
+        # Legacy key from earlier 3.7.0 builds — treat as ShowNotificationsAll when the new key is absent.
+        local show_notifications_legacy_managed
+        show_notifications_legacy_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowNotifications 2> /dev/null)
+        local show_notifications_silent_updated_managed
+        show_notifications_silent_updated_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowNotificationsSilentUpdated 2> /dev/null)
+        local show_notifications_apps_queued_managed
+        show_notifications_apps_queued_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowNotificationsAppsQueued 2> /dev/null)
+        local show_notifications_silent_and_queued_managed
+        show_notifications_silent_and_queued_managed=$(defaults read "${appAutoPatchManagedPLIST}" ShowNotificationsSilentAndQueued 2> /dev/null)
         local installomator_options_managed
         installomator_options_managed=$(defaults read "${appAutoPatchManagedPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_update_disable_managed
@@ -1133,6 +1481,10 @@ get_preferences() {
         dialog_timeout_deferral_action_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogTimeoutDeferralAction 2> /dev/null)
         local dialog_timeout_confirm_install_managed
         dialog_timeout_confirm_install_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogTimeoutConfirmInstall 2> /dev/null)
+        local dialog_quit_handling_discovery_staging_managed
+        dialog_quit_handling_discovery_staging_managed=$(defaults read "${appAutoPatchManagedPLIST}" DialogQuitHandlingDiscoveryStaging 2> /dev/null)
+        local stale_process_timeout_seconds_managed
+        stale_process_timeout_seconds_managed=$(defaults read "${appAutoPatchManagedPLIST}" StaleProcessTimeoutSeconds 2> /dev/null)
         local days_until_reset_managed
         days_until_reset_managed=$(defaults read "${appAutoPatchManagedPLIST}" DaysUntilReset 2> /dev/null)
         local Unattended_exit_managed
@@ -1184,6 +1536,17 @@ get_preferences() {
         banner_title_managed=$(defaults read "${appAutoPatchManagedPLIST}" BannerTitle 2> /dev/null)
         local banner_height_managed
         banner_height_managed=$(defaults read "${appAutoPatchManagedPLIST}" BannerHeight 2> /dev/null)
+        # Pre/Post patch hooks are managed-preferences-only (never read from local plist).
+        local pre_patch_script_managed
+        pre_patch_script_managed=$(defaults read "${appAutoPatchManagedPLIST}" PrePatchScript 2> /dev/null)
+        local post_patch_script_managed
+        post_patch_script_managed=$(defaults read "${appAutoPatchManagedPLIST}" PostPatchScript 2> /dev/null)
+        local pre_patch_script_fail_action_managed
+        pre_patch_script_fail_action_managed=$(defaults read "${appAutoPatchManagedPLIST}" PrePatchScriptFailAction 2> /dev/null)
+        local post_patch_script_fail_action_managed
+        post_patch_script_fail_action_managed=$(defaults read "${appAutoPatchManagedPLIST}" PostPatchScriptFailAction 2> /dev/null)
+        local patch_script_timeout_seconds_managed
+        patch_script_timeout_seconds_managed=$(defaults read "${appAutoPatchManagedPLIST}" PatchScriptTimeoutSeconds 2> /dev/null)
         
     else
         log_verbose "No managed preference file found for App Auto-Patch"
@@ -1224,6 +1587,16 @@ get_preferences() {
         discovery_frequency_local=$(defaults read "${appAutoPatchLocalPLIST}" DiscoveryFrequency 2> /dev/null)
         local workflow_disable_relaunch_local
         workflow_disable_relaunch_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+        local workflow_scheduled_discovery_local
+        workflow_scheduled_discovery_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+        local business_hours_local
+        business_hours_local=$(defaults read "${appAutoPatchLocalPLIST}" BusinessHours 2>/dev/null)
+        local business_hours_respect_hard_deadline_local
+        business_hours_respect_hard_deadline_local=$(defaults read "${appAutoPatchLocalPLIST}" BusinessHoursRespectHardDeadline 2>/dev/null)
+        local business_hours_silent_during_local
+        business_hours_silent_during_local=$(defaults read "${appAutoPatchLocalPLIST}" BusinessHoursSilentDuring 2>/dev/null)
+        local business_hours_allow_discovery_local
+        business_hours_allow_discovery_local=$(defaults read "${appAutoPatchLocalPLIST}" BusinessHoursAllowDiscovery 2>/dev/null)
         local webhook_feature_local
         webhook_feature_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookFeature 2> /dev/null)
         local webhook_url_slack_local
@@ -1236,12 +1609,28 @@ get_preferences() {
         required_labels_local=$(defaults read "${appAutoPatchLocalPLIST}" RequiredLabels 2> /dev/null)
         local optional_labels_local
         optional_labels_local=$(defaults read "${appAutoPatchLocalPLIST}" OptionalLabels 2> /dev/null)
+        local excluded_background_labels_local
+        excluded_background_labels_local=$(defaults read "${appAutoPatchLocalPLIST}" ExcludedBackgroundLabels 2> /dev/null)
         local app_title_local
         app_title_local=$(defaults read "${appAutoPatchLocalPLIST}" AppTitle 2> /dev/null)
         local convert_apps_in_home_folder_local
         convert_apps_in_home_folder_local=$(defaults read "${appAutoPatchLocalPLIST}" ConvertAppsInHomeFolder 2> /dev/null)
         local ignore_apps_in_home_folder_local
         ignore_apps_in_home_folder_local=$(defaults read "${appAutoPatchLocalPLIST}" IgnoreAppsInHomeFolder 2> /dev/null)
+        local skip_pre_update_verification_local
+        skip_pre_update_verification_local=$(defaults read "${appAutoPatchLocalPLIST}" SkipPreUpdateVerification 2> /dev/null)
+        local show_dock_icon_local
+        show_dock_icon_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowDockIcon 2> /dev/null)
+        local show_notifications_all_local
+        show_notifications_all_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowNotificationsAll 2> /dev/null)
+        local show_notifications_legacy_local
+        show_notifications_legacy_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowNotifications 2> /dev/null)
+        local show_notifications_silent_updated_local
+        show_notifications_silent_updated_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowNotificationsSilentUpdated 2> /dev/null)
+        local show_notifications_apps_queued_local
+        show_notifications_apps_queued_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowNotificationsAppsQueued 2> /dev/null)
+        local show_notifications_silent_and_queued_local
+        show_notifications_silent_and_queued_local=$(defaults read "${appAutoPatchLocalPLIST}" ShowNotificationsSilentAndQueued 2> /dev/null)
         local installomator_options_local
         installomator_options_local=$(defaults read "${appAutoPatchLocalPLIST}" InstallomatorOptions 2> /dev/null)
         local installomator_update_disable_local
@@ -1258,6 +1647,10 @@ get_preferences() {
         dialog_timeout_deferral_action_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogTimeoutDeferralAction 2> /dev/null)
         local dialog_timeout_confirm_install_local
         dialog_timeout_confirm_install_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogTimeoutConfirmInstall 2> /dev/null)
+        local dialog_quit_handling_discovery_staging_local
+        dialog_quit_handling_discovery_staging_local=$(defaults read "${appAutoPatchLocalPLIST}" DialogQuitHandlingDiscoveryStaging 2> /dev/null)
+        local stale_process_timeout_seconds_local
+        stale_process_timeout_seconds_local=$(defaults read "${appAutoPatchLocalPLIST}" StaleProcessTimeoutSeconds 2> /dev/null)
         local days_until_reset_local
         days_until_reset_local=$(defaults read "${appAutoPatchLocalPLIST}" DaysUntilReset 2> /dev/null)
         local Unattended_exit_local
@@ -1348,6 +1741,16 @@ get_preferences() {
     { [[ -z "${discovery_frequency_managed}" ]] && [[ -n "${discovery_frequency_local}" ]]; } && DiscoveryFrequency="${discovery_frequency_local}"
     [[ -n "${workflow_disable_relaunch_managed}" ]] && workflow_disable_relaunch_option="${workflow_disable_relaunch_managed}"
     { [[ -z "${workflow_disable_relaunch_managed}" ]] && [[ -z "${workflow_disable_relaunch_option}" ]] && [[ -n "${workflow_disable_relaunch_local}" ]]; } && workflow_disable_relaunch_option="${workflow_disable_relaunch_local}"
+    [[ -n "${workflow_scheduled_discovery_managed}" ]] && WorkflowScheduledDiscoveryOption="${workflow_scheduled_discovery_managed}"
+    { [[ -z "${workflow_scheduled_discovery_managed}" ]] && [[ -z "${WorkflowScheduledDiscoveryOption}" ]] && [[ -n "${workflow_scheduled_discovery_local}" ]]; } && WorkflowScheduledDiscoveryOption="${workflow_scheduled_discovery_local}"
+    [[ -n "${business_hours_managed}" ]] && business_hours_option="${business_hours_managed}"
+    { [[ -z "${business_hours_managed}" ]] && [[ -z "${business_hours_option}" ]] && [[ -n "${business_hours_local}" ]]; } && business_hours_option="${business_hours_local}"
+    [[ -n "${business_hours_respect_hard_deadline_managed}" ]] && business_hours_respect_hard_deadline_option="${business_hours_respect_hard_deadline_managed}"
+    { [[ -z "${business_hours_respect_hard_deadline_managed}" ]] && [[ -z "${business_hours_respect_hard_deadline_option}" ]] && [[ -n "${business_hours_respect_hard_deadline_local}" ]]; } && business_hours_respect_hard_deadline_option="${business_hours_respect_hard_deadline_local}"
+    [[ -n "${business_hours_silent_during_managed}" ]] && business_hours_silent_during_option="${business_hours_silent_during_managed}"
+    { [[ -z "${business_hours_silent_during_managed}" ]] && [[ -z "${business_hours_silent_during_option}" ]] && [[ -n "${business_hours_silent_during_local}" ]]; } && business_hours_silent_during_option="${business_hours_silent_during_local}"
+    [[ -n "${business_hours_allow_discovery_managed}" ]] && business_hours_allow_discovery_option="${business_hours_allow_discovery_managed}"
+    { [[ -z "${business_hours_allow_discovery_managed}" ]] && [[ -z "${business_hours_allow_discovery_option}" ]] && [[ -n "${business_hours_allow_discovery_local}" ]]; } && business_hours_allow_discovery_option="${business_hours_allow_discovery_local}"
     [[ -n "${webhook_feature_managed}" ]] && webhook_feature_option="${webhook_feature_managed}"
     { [[ -z "${webhook_feature_managed}" ]] && [[ -z "${webhook_feature_option}" ]] && [[ -n "${webhook_feature_local}" ]]; } && webhook_feature_option="${webhook_feature_local}"
     [[ -n "${webhook_url_slack_managed}" ]] && webhook_url_slack_option="${webhook_url_slack_managed}"
@@ -1360,6 +1763,8 @@ get_preferences() {
     { [[ -z "${required_labels_managed}" ]] && [[ -z "${required_labels_option}" ]] && [[ -n "${required_labels_local}" ]]; } && required_labels_option="${required_labels_local}"
     [[ -n "${optional_labels_managed}" ]] && optional_labels_option="${optional_labels_managed}"
     { [[ -z "${optional_labels_managed}" ]] && [[ -z "${optional_labels_option}" ]] && [[ -n "${optional_labels_local}" ]]; } && optional_labels_option="${optional_labels_local}"
+    [[ -n "${excluded_background_labels_managed}" ]] && excluded_background_labels_option="${excluded_background_labels_managed}"
+    { [[ -z "${excluded_background_labels_managed}" ]] && [[ -z "${excluded_background_labels_option}" ]] && [[ -n "${excluded_background_labels_local}" ]]; } && excluded_background_labels_option="${excluded_background_labels_local}"
 
     [[ -n "${zoom_call_active_check_managed}" ]] && zoom_call_active_check_option="${zoom_call_active_check_managed}"
     { [[ -z "${zoom_call_active_check_managed}" ]] && [[ -z "${zoom_call_active_check_option}" ]] && [[ -n "${zoom_call_active_check_local}" ]]; } && zoom_call_active_check_option="${zoom_call_active_check_local}"
@@ -1382,6 +1787,15 @@ get_preferences() {
     [[ -n "${banner_height_managed}" ]] && bannerHeightOption="${banner_height_managed}"
     { [[ -z "${banner_height_managed}" ]] && [[ -z "${bannerHeightOption}" ]] && [[ -n "${banner_height_local}" ]]; } && bannerHeightOption="${banner_height_local}"
 
+    # Pre/Post patch hooks: managed preferences only (never CLI / never local plist).
+    [[ -n "${pre_patch_script_managed}" ]] && pre_patch_script_option="${pre_patch_script_managed}"
+    [[ -n "${post_patch_script_managed}" ]] && post_patch_script_option="${post_patch_script_managed}"
+    [[ -n "${pre_patch_script_fail_action_managed}" ]] && pre_patch_script_fail_action="${pre_patch_script_fail_action_managed}"
+    [[ -n "${post_patch_script_fail_action_managed}" ]] && post_patch_script_fail_action="${post_patch_script_fail_action_managed}"
+    if [[ -n "${patch_script_timeout_seconds_managed}" ]]; then
+        patch_script_timeout_seconds="${patch_script_timeout_seconds_managed}"
+    fi
+
     # Need logic to ensures the priority order of managed preference overrides the saved local preference which overrides the script embedded variables .
     [[ -n "${app_title_managed}" ]] && appTitle="${app_title_managed}"
     { [[ -z "${app_title_managed}" ]] && [[ -n "${appTitle}" ]] && [[ -n "${app_title_local}" ]]; } && appTitle="${app_title_local}"
@@ -1389,6 +1803,20 @@ get_preferences() {
     { [[ -z "${convert_apps_in_home_folder_managed}" ]] && [[ -n "${convertAppsInHomeFolder}" ]] && [[ -n "${convert_apps_in_home_folder_local}" ]]; } && convertAppsInHomeFolder="${convert_apps_in_home_folder_local}"
     [[ -n "${ignore_apps_in_home_folder_managed}" ]] && ignoreAppsInHomeFolder="${ignore_apps_in_home_folder_managed}"
     { [[ -z "${ignore_apps_in_home_folder_managed}" ]] && [[ -n "${ignoreAppsInHomeFolder}" ]] && [[ -n "${ignore_apps_in_home_folder_local}" ]]; } && ignoreAppsInHomeFolder="${ignore_apps_in_home_folder_local}"
+    [[ -n "${skip_pre_update_verification_managed}" ]] && SkipPreUpdateVerificationOption="${skip_pre_update_verification_managed}"
+    { [[ -z "${skip_pre_update_verification_managed}" ]] && [[ -z "${SkipPreUpdateVerificationOption}" ]] && [[ -n "${skip_pre_update_verification_local}" ]]; } && SkipPreUpdateVerificationOption="${skip_pre_update_verification_local}"
+    [[ -n "${show_dock_icon_managed}" ]] && ShowDockIconOption="${show_dock_icon_managed}"
+    { [[ -z "${show_dock_icon_managed}" ]] && [[ -z "${ShowDockIconOption}" ]] && [[ -n "${show_dock_icon_local}" ]]; } && ShowDockIconOption="${show_dock_icon_local}"
+    [[ -n "${show_notifications_all_managed}" ]] && ShowNotificationsAllOption="${show_notifications_all_managed}"
+    { [[ -z "${show_notifications_all_managed}" ]] && [[ -z "${ShowNotificationsAllOption}" ]] && [[ -n "${show_notifications_legacy_managed}" ]]; } && ShowNotificationsAllOption="${show_notifications_legacy_managed}"
+    { [[ -z "${show_notifications_all_managed}" ]] && [[ -z "${show_notifications_legacy_managed}" ]] && [[ -z "${ShowNotificationsAllOption}" ]] && [[ -n "${show_notifications_all_local}" ]]; } && ShowNotificationsAllOption="${show_notifications_all_local}"
+    { [[ -z "${show_notifications_all_managed}" ]] && [[ -z "${show_notifications_legacy_managed}" ]] && [[ -z "${ShowNotificationsAllOption}" ]] && [[ -z "${show_notifications_all_local}" ]] && [[ -n "${show_notifications_legacy_local}" ]]; } && ShowNotificationsAllOption="${show_notifications_legacy_local}"
+    [[ -n "${show_notifications_silent_updated_managed}" ]] && ShowNotificationsSilentUpdatedOption="${show_notifications_silent_updated_managed}"
+    { [[ -z "${show_notifications_silent_updated_managed}" ]] && [[ -z "${ShowNotificationsSilentUpdatedOption}" ]] && [[ -n "${show_notifications_silent_updated_local}" ]]; } && ShowNotificationsSilentUpdatedOption="${show_notifications_silent_updated_local}"
+    [[ -n "${show_notifications_apps_queued_managed}" ]] && ShowNotificationsAppsQueuedOption="${show_notifications_apps_queued_managed}"
+    { [[ -z "${show_notifications_apps_queued_managed}" ]] && [[ -z "${ShowNotificationsAppsQueuedOption}" ]] && [[ -n "${show_notifications_apps_queued_local}" ]]; } && ShowNotificationsAppsQueuedOption="${show_notifications_apps_queued_local}"
+    [[ -n "${show_notifications_silent_and_queued_managed}" ]] && ShowNotificationsSilentAndQueuedOption="${show_notifications_silent_and_queued_managed}"
+    { [[ -z "${show_notifications_silent_and_queued_managed}" ]] && [[ -z "${ShowNotificationsSilentAndQueuedOption}" ]] && [[ -n "${show_notifications_silent_and_queued_local}" ]]; } && ShowNotificationsSilentAndQueuedOption="${show_notifications_silent_and_queued_local}"
     [[ -n "${installomator_options_managed}" ]] && installomatorOptions="${installomator_options_managed}"
     { [[ -z "${installomator_options_managed}" ]] && [[ -n "${installomatorOptions}" ]] && [[ -n "${installomator_options_local}" ]]; } && installomatorOptions="${installomator_options_local}"
     
@@ -1410,6 +1838,10 @@ get_preferences() {
     { [[ -z "${dialog_timeout_deferral_action_managed}" ]] && [[ -n "${DialogTimeoutDeferralAction}" ]] && [[ -n "${dialog_timeout_deferral_action_local}" ]]; } && DialogTimeoutDeferralAction="${dialog_timeout_deferral_action_local}"
     [[ -n "${dialog_timeout_confirm_install_managed}" ]] && DialogTimeoutConfirmInstall="${dialog_timeout_confirm_install_managed}"
     { [[ -z "${dialog_timeout_confirm_install_managed}" ]] && [[ -n "${DialogTimeoutConfirmInstall}" ]] && [[ -n "${dialog_timeout_confirm_install_local}" ]]; } && DialogTimeoutConfirmInstall="${dialog_timeout_confirm_install_local}"
+    [[ -n "${dialog_quit_handling_discovery_staging_managed}" ]] && dialogQuitHandlingDiscoveryStagingOption="${dialog_quit_handling_discovery_staging_managed}"
+    { [[ -z "${dialog_quit_handling_discovery_staging_managed}" ]] && [[ -n "${dialog_quit_handling_discovery_staging_local}" ]]; } && dialogQuitHandlingDiscoveryStagingOption="${dialog_quit_handling_discovery_staging_local}"
+    [[ -n "${stale_process_timeout_seconds_managed}" ]] && stale_process_timeout_seconds="${stale_process_timeout_seconds_managed}"
+    { [[ -z "${stale_process_timeout_seconds_managed}" ]] && [[ -n "${stale_process_timeout_seconds_local}" ]]; } && stale_process_timeout_seconds="${stale_process_timeout_seconds_local}"
     [[ -n "${days_until_reset_managed}" ]] && days_until_reset_option="${days_until_reset_managed}"
     { [[ -z "${days_until_reset_managed}" ]] && [[ -z "${days_until_reset_option}" ]] && [[ -n "${days_until_reset_local}" ]]; } && days_until_reset_option="${days_until_reset_local}"
     [[ -n "${Unattended_exit_managed}" ]] && UnattendedExit="${Unattended_exit_managed}"
@@ -1482,15 +1914,27 @@ get_preferences() {
     log_verbose "WorkflowDisableAppDiscovery: $workflow_disable_app_discovery_option"
     log_verbose "DiscoveryFrequency: $DiscoveryFrequency"
     log_verbose "WorkflowDisableRelaunch: $workflow_disable_relaunch_option"
+    log_verbose "WorkflowScheduledDiscovery: ${WorkflowScheduledDiscoveryOption:-<unset>}"
+    log_verbose "BusinessHours: ${business_hours_option:-<unset>}"
+    log_verbose "BusinessHoursRespectHardDeadline: ${business_hours_respect_hard_deadline_option:-<unset>}"
+    log_verbose "BusinessHoursSilentDuring: ${business_hours_silent_during_option:-<unset>}"
+    log_verbose "BusinessHoursAllowDiscovery: ${business_hours_allow_discovery_option:-<unset>}"
     log_verbose "WebhookFeature: $webhook_feature_option"
     log_verbose "WebhookURLSlack: $webhook_url_slack_option"
     log_verbose "WebhookURLTeams: $webhook_url_teams_option"
     log_verbose "IgnoredLabels: $ignored_labels_option"
     log_verbose "RequiredLabels: $required_labels_option"
     log_verbose "OptionalLabels: $optional_labels_option"
+    log_verbose "ExcludedBackgroundLabels: $excluded_background_labels_option"
     log_verbose "AppTitle: $appTitle"
     log_verbose "ConvertAppsInHomeFolder: $convertAppsInHomeFolder"
     log_verbose "IgnoreAppsInHomeFolder: $ignoreAppsInHomeFolder"
+    log_verbose "SkipPreUpdateVerification: ${SkipPreUpdateVerificationOption:-<unset>}"
+    log_verbose "ShowDockIcon: ${ShowDockIconOption:-<unset>}"
+    log_verbose "ShowNotificationsAll: ${ShowNotificationsAllOption:-<unset>}"
+    log_verbose "ShowNotificationsSilentUpdated: ${ShowNotificationsSilentUpdatedOption:-<unset>}"
+    log_verbose "ShowNotificationsAppsQueued: ${ShowNotificationsAppsQueuedOption:-<unset>}"
+    log_verbose "ShowNotificationsSilentAndQueued: ${ShowNotificationsSilentAndQueuedOption:-<unset>}"
     log_verbose "InstallomatorOptions: $installomatorOptions"
     log_verbose "InstallomatorUpdateDisable: $installomator_update_disable_option"
     log_verbose "InstallomatorVersion: $installomatorVersion"
@@ -1499,6 +1943,8 @@ get_preferences() {
     log_verbose "DialogTimeoutDeferral: $DialogTimeoutDeferral"
     log_verbose "DialogTimeoutDeferralAction: $DialogTimeoutDeferralAction"
     log_verbose "DialogTimeoutConfirmInstall: $DialogTimeoutConfirmInstall"
+    log_verbose "DialogQuitHandlingDiscoveryStaging: ${dialogQuitHandlingDiscoveryStagingOption}"
+    log_verbose "StaleProcessTimeoutSeconds: ${stale_process_timeout_seconds}"
     log_verbose "DaysUntilReset: $days_until_reset_option"
     log_verbose "UnattendedExit: $UnattendedExit"
     log_verbose "UnattendedExitSeconds: $UnattendedExitSeconds"
@@ -1525,6 +1971,16 @@ get_preferences() {
     log_verbose "bannerImageOption: $bannerImageOption"
     log_verbose "bannerTitleOption: $bannerTitleOption"
     log_verbose "bannerHeightOption: $bannerHeightOption"
+    # Token value intentionally not logged - only whether auth is enabled.
+    log_verbose "GitHubAPIAuthEnabled: ${github_api_auth_enabled_option}"
+    if [[ "${github_api_auth_enabled_option}" == "TRUE" ]]; then
+        log_verbose "GitHubAPIToken: <redacted, length ${#github_api_token_option}>"
+    fi
+    log_verbose "PrePatchScript: ${pre_patch_script_option:-<unset>}"
+    log_verbose "PostPatchScript: ${post_patch_script_option:-<unset>}"
+    log_verbose "PrePatchScriptFailAction: ${pre_patch_script_fail_action}"
+    log_verbose "PostPatchScriptFailAction: ${post_patch_script_fail_action}"
+    log_verbose "PatchScriptTimeoutSeconds: ${patch_script_timeout_seconds}"
     
     #Validate Custom Installomator Options
     if [[ "${installomatorVersion}" == "Custom" ]] || [[ "${installomatorVersion}" == "custom" ]]; then
@@ -1535,20 +1991,71 @@ get_preferences() {
     { [[ -n "${installomatorVersionCustomRepoPath}" ]]; } && log_verbose "installomatorVersionCustomRepoPath is: ${installomatorVersionCustomRepoPath}"
     { [[ -n "${installomatorVersionCustomBranchName}" ]]; } && log_verbose "installomatorVersionCustomBranchName is: ${installomatorVersionCustomBranchName}"
 
-    # Check for Installomator
-    get_installomator
+    # GitHub API auth is resolved earlier by resolve_github_api_auth() (before get_dialog /
+    # get_installomator). Re-assert the same required-key check here so a misconfiguration also
+    # trips the normal option_error / "Initial startup validation failed" path if somehow reached
+    # without that early exit.
+    if [[ "${github_api_auth_enabled_option}" == "TRUE" ]] && [[ -z "${github_api_token_option}" ]]; then
+        log_status "Parameter Error: GitHubAPIAuthEnabled is TRUE but GitHubAPIToken is missing or blank"; option_error="TRUE"
+    fi
+
+    # Normalize / validate pre/post patch hook preferences (#156).
+    case "${pre_patch_script_fail_action:l}" in
+        continue) pre_patch_script_fail_action="CONTINUE" ;;
+        *)        pre_patch_script_fail_action="ABORT" ;;
+    esac
+    case "${post_patch_script_fail_action:l}" in
+        abort) post_patch_script_fail_action="ABORT" ;;
+        *)     post_patch_script_fail_action="CONTINUE" ;;
+    esac
+    if [[ ! "${patch_script_timeout_seconds}" =~ ^[0-9]+$ ]] || [[ "${patch_script_timeout_seconds}" -lt 1 ]]; then
+        log_status "Parameter Error: PatchScriptTimeoutSeconds must be a positive integer"; option_error="TRUE"
+    fi
+    # Trim whitespace from configured paths.
+    pre_patch_script_option="${pre_patch_script_option#"${pre_patch_script_option%%[![:space:]]*}"}"
+    pre_patch_script_option="${pre_patch_script_option%"${pre_patch_script_option##*[![:space:]]}"}"
+    post_patch_script_option="${post_patch_script_option#"${post_patch_script_option%%[![:space:]]*}"}"
+    post_patch_script_option="${post_patch_script_option%"${post_patch_script_option##*[![:space:]]}"}"
+    if [[ -n "${pre_patch_script_option}" ]]; then
+        if [[ "${pre_patch_script_option}" != /* ]]; then
+            log_status "Parameter Error: PrePatchScript must be an absolute path under ${aapHooksFolder}"; option_error="TRUE"
+        elif [[ "${pre_patch_script_option}" != "${aapHooksFolder}/"* ]]; then
+            log_status "Parameter Error: PrePatchScript must be located under ${aapHooksFolder}"; option_error="TRUE"
+        elif [[ "${pre_patch_script_option}" == *..* ]]; then
+            log_status "Parameter Error: PrePatchScript path must not contain '..'"; option_error="TRUE"
+        fi
+    fi
+    if [[ -n "${post_patch_script_option}" ]]; then
+        if [[ "${post_patch_script_option}" != /* ]]; then
+            log_status "Parameter Error: PostPatchScript must be an absolute path under ${aapHooksFolder}"; option_error="TRUE"
+        elif [[ "${post_patch_script_option}" != "${aapHooksFolder}/"* ]]; then
+            log_status "Parameter Error: PostPatchScript must be located under ${aapHooksFolder}"; option_error="TRUE"
+        elif [[ "${post_patch_script_option}" == *..* ]]; then
+            log_status "Parameter Error: PostPatchScript path must not contain '..'"; option_error="TRUE"
+        fi
+    fi
+
+    # Check for Installomator — skip for pending-apps dialog when fragments already exist so
+    # notification / CLI triggers stay near-instant (icons only need local label files).
+    if [[ "${pending_apps_dialog_option}" == "TRUE" ]] && [[ -d "${fragmentsPath}/labels" ]]; then
+        log_verbose "Pending-apps dialog: skipping Installomator update check (fragments present)."
+    else
+        get_installomator
+    fi
     
     # Write App Labels to PLIST
-    ignoredLabelsArray=($(echo ${ignored_labels_option}))
-    requiredLabelsArray=($(echo ${required_labels_option}))
-    optionalLabelsArray=($(echo ${optional_labels_option}))
-    convertedLabelsArray=($(echo ${convertedLabels}))
+    parse_labels_option "${ignored_labels_option}"; ignoredLabelsArray=("${parsed_labels_option[@]}")
+    parse_labels_option "${required_labels_option}"; requiredLabelsArray=("${parsed_labels_option[@]}")
+    parse_labels_option "${optional_labels_option}"; optionalLabelsArray=("${parsed_labels_option[@]}")
+    parse_labels_option "${excluded_background_labels_option}"; excludedBackgroundLabelsArray=("${parsed_labels_option[@]}")
+    parse_labels_option "${convertedLabels}"; convertedLabelsArray=("${parsed_labels_option[@]}")
 
     log_status "Clearing previously set labels"
     defaults delete "${appAutoPatchLocalPLIST}" ConvertedLabels 2> /dev/null
     defaults delete "${appAutoPatchLocalPLIST}" IgnoredLabels 2> /dev/null
     defaults delete "${appAutoPatchLocalPLIST}" RequiredLabels 2> /dev/null
     defaults delete "${appAutoPatchLocalPLIST}" OptionalLabels 2> /dev/null
+    defaults delete "${appAutoPatchLocalPLIST}" ExcludedBackgroundLabels 2> /dev/null
     # NOTE: DiscoveredLabels is intentionally NOT cleared here. It holds the results of the last
     # completed discovery pass and must survive across runs so that DiscoveryFrequency-skipped runs
     # (i.e. discovery did not re-run) still know which labels are queued for patching. It is only
@@ -1558,6 +2065,7 @@ get_preferences() {
     /usr/libexec/PlistBuddy -c 'add ":IgnoredLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
     /usr/libexec/PlistBuddy -c 'add ":RequiredLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
     /usr/libexec/PlistBuddy -c 'add ":OptionalLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+    /usr/libexec/PlistBuddy -c 'add ":ExcludedBackgroundLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
     /usr/libexec/PlistBuddy -c 'add ":ConvertedLabels" array' "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
 
      # Attempt to populate the Optional Labels
@@ -1578,6 +2086,29 @@ get_preferences() {
     
     # Attempt to populate the Ignored Labels
     log_info "Attempting to populate ignored labels"
+
+    # A bare "*" is handled as an in-memory mode flag rather than being expanded into one plist
+    # entry per Installomator label. The old expansion issued ~1200 PlistBuddy writes on every run,
+    # which left cfprefsd's cache out of sync with the file on disk and made unrelated keys such as
+    # AAPPatchingStartDate read back blank (#254). It also swept RequiredLabels into IgnoredLabels,
+    # so required apps were then removed again by the ${labelsArray:|ignoredLabelsArray} subtraction.
+    ignore_all_labels="FALSE"
+    local -a explicitIgnoredLabels=()
+    for ignoredLabel in "${ignoredLabelsArray[@]}"; do
+        if [[ "${ignoredLabel}" == "*" ]]; then
+            ignore_all_labels="TRUE"
+        else
+            explicitIgnoredLabels+=("${ignoredLabel}")
+        fi
+    done
+    if [[ "${ignore_all_labels}" == "TRUE" ]]; then
+        log_notice "IgnoredLabels contains '*': ignoring every Installomator label except those listed in RequiredLabels and OptionalLabels."
+        /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"*\"" "${appAutoPatchLocalPLIST}.plist"
+        # Drop the wildcard token from the in-memory list so the exact-match membership tests and the
+        # array subtraction performed later never have to reason about a glob character.
+        ignoredLabelsArray=("${explicitIgnoredLabels[@]}")
+    fi
+
     for ignoredLabel in "${ignoredLabelsArray[@]}"; do
         if [[ -f "${fragmentsPath}/labels/${ignoredLabel}.sh" ]]; then
             # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
@@ -1603,6 +2134,11 @@ get_preferences() {
                         # Label Matching Corrections (#197: https://github.com/App-Auto-Patch/App-Auto-Patch/issues/197)
                         elif /usr/libexec/PlistBuddy -c "Print :OptionalLabels:" "${appAutoPatchLocalPLIST}".plist | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$ignored"; then
                             log_verbose "$ignored is listed as Optional, skip adding to IgnoredLabels"
+                        # RequiredLabels has not been written to the plist yet at this point, so check
+                        # the in-memory list. A wildcard the admin did not name explicitly must not
+                        # ignore a label they explicitly required (#254).
+                        elif (( ${requiredLabelsArray[(Ie)${ignored}]} )); then
+                            log_verbose "$ignored is listed as Required, skip adding to IgnoredLabels"
                         else
                             log_verbose "Writing ignored label $ignored to configuration plist"
                             ignored=$(echo $ignored | sed "s/[\"]//g" )
@@ -1615,6 +2151,47 @@ get_preferences() {
                 done 
             else
                 log_verbose "No such label ${ignoredLabel}"
+            fi
+        fi
+    done
+
+    # Attempt to populate the Excluded Background Labels.
+    # Unlike IgnoredLabels, these are still discovered and reported - they are only skipped
+    # during fully-silent / background-closed-app installs. Supports wildcards like IgnoredLabels.
+    log_info "Attempting to populate excluded background labels"
+    for excludedBackgroundLabel in "${excludedBackgroundLabelsArray[@]}"; do
+        if [[ -f "${fragmentsPath}/labels/${excludedBackgroundLabel}.sh" ]]; then
+            if /usr/libexec/PlistBuddy -c "Print :ExcludedBackgroundLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$excludedBackgroundLabel"; then
+                log_verbose "$excludedBackgroundLabel already exists, skip adding to ExcludedBackgroundLabels"
+            elif /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$excludedBackgroundLabel"; then
+                log_verbose "$excludedBackgroundLabel is listed as Ignored, skip adding to ExcludedBackgroundLabels"
+            else
+                log_verbose "Writing excluded background label $excludedBackgroundLabel to configuration plist"
+                /usr/libexec/PlistBuddy -c "add \":ExcludedBackgroundLabels:\" string \"${excludedBackgroundLabel}\"" "${appAutoPatchLocalPLIST}.plist"
+            fi
+        else
+            if [[ "${excludedBackgroundLabel}" == *"*"* ]]; then
+                log_verbose "Excluding all labels with $excludedBackgroundLabel from background updates"
+                wildExcluded=( $(find $fragmentsPath/labels -name "$excludedBackgroundLabel") )
+                for i in "${wildExcluded[@]}"; do
+                    excluded=$( echo $i | cut -d'.' -f1 | sed 's@.*/@@' )
+                    if [[ ! "$excluded" == "Application" ]]; then
+                        if /usr/libexec/PlistBuddy -c "Print :ExcludedBackgroundLabels:" "${appAutoPatchLocalPLIST}".plist | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$excluded"; then
+                            log_verbose "$excluded already exists, skip adding to ExcludedBackgroundLabels"
+                        elif /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}".plist | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- "$excluded"; then
+                            log_verbose "$excluded is listed as Ignored, skip adding to ExcludedBackgroundLabels"
+                        else
+                            log_verbose "Writing excluded background label $excluded to configuration plist"
+                            excluded=$(echo $excluded | sed "s/[\"]//g" )
+                            /usr/libexec/PlistBuddy -c "add \":ExcludedBackgroundLabels:\" string \"${excluded}\"" "${appAutoPatchLocalPLIST}.plist"
+                            excludedBackgroundLabelsArray+=($excluded)
+                        fi
+                    else
+                        sleep .1
+                    fi
+                done
+            else
+                log_verbose "No such label ${excludedBackgroundLabel}"
             fi
         fi
     done
@@ -1803,18 +2380,212 @@ manage_parameter_options() {
         defaults write "${appAutoPatchLocalPLIST}" DiscoveryFrequency -int "${DiscoveryFrequency}"
         log_info "Discovery frequency set to: ${DiscoveryFrequency} hours"
     fi
+
+    # Keep scheduled discovery alive even when the interactive/install relaunch workflow is
+    # disabled (#258). This preference has no effect unless WorkflowDisableRelaunch is also TRUE.
+    if [[ "${WorkflowScheduledDiscoveryOption}" -eq 1 ]] || [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]]; then
+        WorkflowScheduledDiscoveryOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery -bool true
+    else
+        WorkflowScheduledDiscoveryOption="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery 2>/dev/null
+    fi
+    if [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]] && [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then
+        log_warning "WorkflowScheduledDiscovery is enabled, but WorkflowDisableAppDiscovery takes priority; scheduled runs will retain the existing report without scanning."
+    fi
+    log_verbose "WorkflowScheduledDiscoveryOption is: ${WorkflowScheduledDiscoveryOption}"
     
     # Manage ${workflow_disable_relaunch_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
         workflow_disable_relaunch_option="TRUE"
         defaults write "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch -bool true
-        /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+        if [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]] || [[ "${workflow_discovery_only_option}" == "TRUE" ]]; then
+            # Leave the key absent while this run is active for crash recovery. The discovery-only
+            # completion path writes the next discovery date before exiting.
+            if [[ "${pending_apps_dialog_option}" != "TRUE" ]] && [[ "${preview_deferral_dialog_option}" != "TRUE" ]]; then
+                defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2>/dev/null
+            fi
+        else
+            /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+        fi
     else
         workflow_disable_relaunch_option="FALSE"
         defaults delete "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null
-        defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
+        # Clearing NextAutoLaunch here re-enables scheduling after WorkflowDisableRelaunch stored the
+        # "FALSE" sentinel; on a normal run it also doubles as crash recovery (startup already cleared
+        # it, and completion paths rewrite it). One-shot UI paths (--pending-apps-dialog /
+        # --preview-deferral-dialog) must not lose a real schedule this way: they never reach a
+        # completion path, so deleting a valid future date here left the key unset and forced a
+        # fresh deferral/cadence write. Only drop the disable sentinel for those workflows.
+        if [[ "${pending_apps_dialog_option}" == "TRUE" ]] || [[ "${preview_deferral_dialog_option}" == "TRUE" ]] || [[ "${workflow_discovery_only_option}" == "TRUE" ]]; then
+            local existing_next_auto_launch_relaunch
+            existing_next_auto_launch_relaunch=$(defaults read "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null)
+            if [[ "${existing_next_auto_launch_relaunch}" == "FALSE" ]] || [[ "${existing_next_auto_launch_relaunch}" == "0" ]]; then
+                defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
+            else
+                log_verbose "One-shot UI: preserving existing NextAutoLaunch (${existing_next_auto_launch_relaunch:-<unset>})."
+            fi
+        else
+            defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
+        fi
     fi
     { [[ -n "${workflow_disable_relaunch_option}" ]]; } && log_verbose "workflow_disable_relaunch_option is: ${workflow_disable_relaunch_option}"
+
+    # Manage BusinessHours (#166): parse DAY:hh:mm-hh:mm blocked windows (multiple per day allowed).
+    # Drop any leftover ScheduleWorkflowActive* keys from earlier builds of this feature.
+    defaults delete "${appAutoPatchLocalPLIST}" ScheduleWorkflowActive 2>/dev/null
+    defaults delete "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveRespectHardDeadline 2>/dev/null
+    defaults delete "${appAutoPatchLocalPLIST}" ScheduleWorkflowActiveSilentOutside 2>/dev/null
+    business_hours_windows=()
+    if [[ -n "${business_hours_option}" ]]; then
+        # Strip whitespace; format is comma-separated with no spaces.
+        local schedule_cleaned
+        schedule_cleaned="${business_hours_option//[[:space:]]/}"
+        if [[ -z "${schedule_cleaned}" ]]; then
+            business_hours_option=""
+            defaults delete "${appAutoPatchLocalPLIST}" BusinessHours 2>/dev/null
+        else
+            local schedule_parse_error="FALSE"
+            local schedule_window
+            local schedule_day schedule_start schedule_end
+            local schedule_start_h schedule_start_m schedule_end_h schedule_end_m
+            local schedule_start_mins schedule_end_mins schedule_dow
+            for schedule_window in ${(s:,:)schedule_cleaned}; do
+                if [[ ! "${schedule_window}" =~ '^(MON|TUE|WED|THU|FRI|SAT|SUN):([0-9]{2}):([0-9]{2})-([0-9]{2}):([0-9]{2})$' ]]; then
+                    log_status "Parameter Error: BusinessHours window '${schedule_window}' must be DAY:hh:mm-hh:mm (MON-SUN, 24-hour)."; schedule_parse_error="TRUE"
+                    continue
+                fi
+                schedule_day="${match[1]}"
+                schedule_start_h="${match[2]}"
+                schedule_start_m="${match[3]}"
+                schedule_end_h="${match[4]}"
+                schedule_end_m="${match[5]}"
+                if (( 10#${schedule_start_h} > 23 || 10#${schedule_end_h} > 23 || 10#${schedule_start_m} > 59 || 10#${schedule_end_m} > 59 )); then
+                    log_status "Parameter Error: BusinessHours window '${schedule_window}' has an invalid time."; schedule_parse_error="TRUE"
+                    continue
+                fi
+                schedule_start_mins=$(( 10#${schedule_start_h} * 60 + 10#${schedule_start_m} ))
+                schedule_end_mins=$(( 10#${schedule_end_h} * 60 + 10#${schedule_end_m} ))
+                if (( schedule_start_mins > schedule_end_mins )); then
+                    log_status "Parameter Error: BusinessHours window '${schedule_window}' must be same-day with start <= end (split overnight ranges into two windows)."; schedule_parse_error="TRUE"
+                    continue
+                fi
+                case "${schedule_day}" in
+                    MON) schedule_dow=1 ;;
+                    TUE) schedule_dow=2 ;;
+                    WED) schedule_dow=3 ;;
+                    THU) schedule_dow=4 ;;
+                    FRI) schedule_dow=5 ;;
+                    SAT) schedule_dow=6 ;;
+                    SUN) schedule_dow=7 ;;
+                esac
+                business_hours_windows+=("${schedule_dow}:${schedule_start_mins}:${schedule_end_mins}")
+            done
+            if [[ "${schedule_parse_error}" == "TRUE" ]] || [[ ${#business_hours_windows[@]} -eq 0 ]]; then
+                log_status "Parameter Error: BusinessHours value is invalid: ${business_hours_option}"; option_error="TRUE"
+                business_hours_windows=()
+            else
+                business_hours_option="${schedule_cleaned}"
+                defaults write "${appAutoPatchLocalPLIST}" BusinessHours -string "${business_hours_option}"
+                log_verbose "business_hours_windows: ${business_hours_windows[*]}"
+            fi
+        fi
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" BusinessHours 2>/dev/null
+    fi
+    { [[ -n "${business_hours_option}" ]]; } && log_verbose "business_hours_option is: ${business_hours_option}"
+
+    # Manage BusinessHoursRespectHardDeadline (default FALSE = overdue hard deadline bypasses business hours).
+    if [[ "${business_hours_respect_hard_deadline_option}" -eq 1 ]] || [[ "${business_hours_respect_hard_deadline_option}" == "TRUE" ]]; then
+        business_hours_respect_hard_deadline_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" BusinessHoursRespectHardDeadline -bool true
+    else
+        business_hours_respect_hard_deadline_option="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" BusinessHoursRespectHardDeadline 2>/dev/null
+    fi
+    log_verbose "business_hours_respect_hard_deadline_option is: ${business_hours_respect_hard_deadline_option}"
+
+    # Manage BusinessHoursSilentDuring (default FALSE = during business hours exit; TRUE = closed-apps-only silent path).
+    if [[ "${business_hours_silent_during_option}" -eq 1 ]] || [[ "${business_hours_silent_during_option}" == "TRUE" ]]; then
+        business_hours_silent_during_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" BusinessHoursSilentDuring -bool true
+    else
+        business_hours_silent_during_option="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" BusinessHoursSilentDuring 2>/dev/null
+    fi
+    log_verbose "business_hours_silent_during_option is: ${business_hours_silent_during_option}"
+
+    # Manage BusinessHoursAllowDiscovery (default FALSE = during business hours defer before discovery;
+    # TRUE = run discovery then defer when SilentDuring is off).
+    if [[ "${business_hours_allow_discovery_option}" -eq 1 ]] || [[ "${business_hours_allow_discovery_option}" == "TRUE" ]]; then
+        business_hours_allow_discovery_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" BusinessHoursAllowDiscovery -bool true
+    else
+        business_hours_allow_discovery_option="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" BusinessHoursAllowDiscovery 2>/dev/null
+    fi
+    log_verbose "business_hours_allow_discovery_option is: ${business_hours_allow_discovery_option}"
+
+    # Manage SkipPreUpdateVerification (default FALSE = keep spctl/Team ID discovery checks).
+    if [[ "${SkipPreUpdateVerificationOption}" -eq 1 ]] || [[ "${SkipPreUpdateVerificationOption}" == "TRUE" ]]; then
+        SkipPreUpdateVerificationOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" SkipPreUpdateVerification -bool true
+    else
+        SkipPreUpdateVerificationOption="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" SkipPreUpdateVerification 2>/dev/null
+    fi
+    log_verbose "SkipPreUpdateVerificationOption is: ${SkipPreUpdateVerificationOption}"
+
+    # Manage ShowDockIcon (default TRUE = show AAP logo in Dock for workflow dialogs; requires swiftDialog 3.0+).
+    if [[ -z "${ShowDockIconOption}" ]] || [[ "${ShowDockIconOption}" -eq 1 ]] || [[ "${ShowDockIconOption}" == "TRUE" ]]; then
+        ShowDockIconOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowDockIcon -bool true
+    else
+        ShowDockIconOption="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowDockIcon -bool false
+    fi
+    log_verbose "ShowDockIconOption is: ${ShowDockIconOption}"
+
+    # Manage ShowNotificationsAll (default TRUE = enable every banner notification type).
+    # When TRUE, individual ShowNotifications* type keys are ignored (All wins).
+    # Legacy local key ShowNotifications is migrated/removed.
+    if [[ -z "${ShowNotificationsAllOption}" ]] || [[ "${ShowNotificationsAllOption}" -eq 1 ]] || [[ "${ShowNotificationsAllOption}" == "TRUE" ]]; then
+        ShowNotificationsAllOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowNotificationsAll -bool true
+    else
+        ShowNotificationsAllOption="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowNotificationsAll -bool false
+    fi
+    defaults delete "${appAutoPatchLocalPLIST}" ShowNotifications 2>/dev/null
+    log_verbose "ShowNotificationsAllOption is: ${ShowNotificationsAllOption}"
+
+    # Per-type notification toggles (default FALSE). Only consulted when ShowNotificationsAll is FALSE.
+    if [[ "${ShowNotificationsSilentUpdatedOption}" -eq 1 ]] || [[ "${ShowNotificationsSilentUpdatedOption}" == "TRUE" ]]; then
+        ShowNotificationsSilentUpdatedOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowNotificationsSilentUpdated -bool true
+    else
+        ShowNotificationsSilentUpdatedOption="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" ShowNotificationsSilentUpdated 2>/dev/null
+    fi
+    log_verbose "ShowNotificationsSilentUpdatedOption is: ${ShowNotificationsSilentUpdatedOption}"
+
+    if [[ "${ShowNotificationsAppsQueuedOption}" -eq 1 ]] || [[ "${ShowNotificationsAppsQueuedOption}" == "TRUE" ]]; then
+        ShowNotificationsAppsQueuedOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowNotificationsAppsQueued -bool true
+    else
+        ShowNotificationsAppsQueuedOption="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" ShowNotificationsAppsQueued 2>/dev/null
+    fi
+    log_verbose "ShowNotificationsAppsQueuedOption is: ${ShowNotificationsAppsQueuedOption}"
+
+    if [[ "${ShowNotificationsSilentAndQueuedOption}" -eq 1 ]] || [[ "${ShowNotificationsSilentAndQueuedOption}" == "TRUE" ]]; then
+        ShowNotificationsSilentAndQueuedOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" ShowNotificationsSilentAndQueued -bool true
+    else
+        ShowNotificationsSilentAndQueuedOption="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" ShowNotificationsSilentAndQueued 2>/dev/null
+    fi
+    log_verbose "ShowNotificationsSilentAndQueuedOption is: ${ShowNotificationsSilentAndQueuedOption}"
     
     # Manage ${zoom_call_active_check_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${zoom_call_active_check_option}" -eq 1 ]] || [[ "${zoom_call_active_check_option}" == "TRUE" ]]; then
@@ -1908,6 +2679,33 @@ manage_parameter_options() {
     fi
     [[ -z "${UnattendedExitSeconds}" ]] && UnattendedExitSeconds=60
     log_verbose "UnattendedExitSeconds is: ${UnattendedExitSeconds}"
+
+    # AAP process-supervision timeout. Zero disables heartbeat-age recovery, but dead/reused PID
+    # cleanup remains active. Nonzero values below five minutes are unsafe for normal operations.
+    if [[ "${stale_process_timeout_seconds}" =~ ${REGEX_ANY_WHOLE_NUMBER} ]]; then
+        if (( stale_process_timeout_seconds != 0 && stale_process_timeout_seconds < 300 )); then
+            log_warning "StaleProcessTimeoutSeconds ${stale_process_timeout_seconds} is too low; using 300 seconds."
+            stale_process_timeout_seconds=300
+        fi
+    else
+        log_error "StaleProcessTimeoutSeconds must be a whole number; using 3600 seconds."
+        stale_process_timeout_seconds=3600
+        option_error="TRUE"
+    fi
+    defaults write "${appAutoPatchLocalPLIST}" StaleProcessTimeoutSeconds -int "${stale_process_timeout_seconds}"
+    log_verbose "stale_process_timeout_seconds is: ${stale_process_timeout_seconds}"
+
+    dialogQuitHandlingDiscoveryStagingOption="${dialogQuitHandlingDiscoveryStagingOption:u}"
+    case "${dialogQuitHandlingDiscoveryStagingOption}" in
+        PROMPT|CONTINUE|STOP) ;;
+        *)
+            log_error "DialogQuitHandlingDiscoveryStaging must be PROMPT, CONTINUE, or STOP; using PROMPT."
+            dialogQuitHandlingDiscoveryStagingOption="PROMPT"
+            option_error="TRUE"
+        ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" DialogQuitHandlingDiscoveryStaging -string "${dialogQuitHandlingDiscoveryStagingOption}"
+    log_verbose "dialogQuitHandlingDiscoveryStagingOption is: ${dialogQuitHandlingDiscoveryStagingOption}"
 
     { [[ -n "${deadline_count_focus}" ]]; } && log_verbose "deadline_count_focus is: ${deadline_count_focus}"
     { [[ -n "${deadline_count_hard}" ]]; } && log_verbose "deadline_count_hard is: ${deadline_count_hard}"
@@ -2205,6 +3003,41 @@ workflow_startup() {
 		exit 1
 	fi
 
+    # Resolve VerboseMode before any log_aap / log_verbose traffic so aap_verbose.log is gated for
+    # the entire run (including self_update, get_dialog, get_preferences preference dumps, etc.).
+    # Managed → CLI → local precedence matches the historical late-startup block.
+    resolve_verbose_mode
+
+    # --pending-apps-dialog is a one-shot trigger. The flag file lets the request survive a
+    # restart_aap relaunch (Jamf policy or out-of-folder install) which bootstraps the LaunchDaemon
+    # without the original CLI arguments. Restored here, before get_preferences() /
+    # manage_parameter_options(), so the dialog's Installomator/network fast paths still apply on a
+    # relaunched run. Consumed in main() when the dialog is shown. --reset-defaults wipes all
+    # one-shot state, so never (re)arm the dialog on a reset run.
+    if [[ "${reset_defaults_option}" == "TRUE" ]]; then
+        pending_apps_dialog_option="FALSE"
+        rm -f "${PENDING_APPS_DIALOG_FILE}" 2> /dev/null
+    elif [[ "${pending_apps_dialog_option}" == "TRUE" ]] || [[ -f "${PENDING_APPS_DIALOG_FILE}" ]]; then
+        log_status "Pending-apps dialog alternate workflow enabled."
+        pending_apps_dialog_option="TRUE"
+        touch "${PENDING_APPS_DIALOG_FILE}"
+    fi
+
+    # --workflow-discovery-only is a one-shot trigger that must survive an out-of-folder install
+    # or Jamf-parent restart. It is consumed only after the report refresh path completes.
+    if [[ "${reset_defaults_option}" == "TRUE" ]]; then
+        workflow_discovery_only_option="FALSE"
+        rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2> /dev/null
+    elif [[ "${workflow_discovery_only_option}" == "TRUE" ]] || [[ -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" ]]; then
+        log_status "Discovery-only alternate workflow enabled."
+        if [[ "${workflow_discovery_only_option}" == "TRUE" ]] && [[ ! -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" ]]; then
+            _snapshot_discovery_only_schedule
+        fi
+        workflow_discovery_only_option="TRUE"
+        touch "${WORKFLOW_DISCOVERY_ONLY_FILE}"
+        rm -f "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2>/dev/null
+    fi
+
     # One-shot override
     if [[ "${force_self_update_check_option:-}" == "TRUE" ]]; then
         forceSelfUpdateCheck="true"
@@ -2261,21 +3094,38 @@ workflow_startup() {
 		fi
 	fi
 	
-	# Check for any previous aap processes and kill them.
+	# Check for any previous AAP process. Manual invocations historically replace the active run;
+	# do that gracefully and never signal an unrelated process that inherited a stale PID.
 	local aapPreviousPID
 	aapPreviousPID=$(pgrep -F "${appAutoPatchPIDfile}" 2> /dev/null)
 	if [[ -n "${aapPreviousPID}" ]]; then
-		[[ -d "${appAutoPatchLogFolder}" ]] && log_status "Found previous aap instance running with PID ${aapPreviousPID}, killing processes..."
-		[[ ! -d "${appAutoPatchLogFolder}" ]] && log_echo "Status: Found previous aap instance running with PID ${aapPreviousPID}, killing processes..."
-		kill -9 "${aapPreviousPID}" > /dev/null 2>&1
-        killProcess "Dialog"
+        if _aap_pid_is_expected_process "${aapPreviousPID}" || _aap_heartbeat_claims_pid "${aapPreviousPID}"; then
+            [[ -d "${appAutoPatchLogFolder}" ]] && log_status "Found previous AAP instance PID ${aapPreviousPID}; terminating it gracefully..."
+            [[ ! -d "${appAutoPatchLogFolder}" ]] && log_echo "Status: Found previous AAP instance PID ${aapPreviousPID}; terminating it gracefully..."
+            _aap_terminate_process_tree "${aapPreviousPID}" 10
+            _aap_restore_pre_discovery_report "/var/tmp/aap-report-pre-discovery.${aapPreviousPID}.plist"
+            _aap_clear_foreign_dialog_command_files
+        else
+            log_warning "PID file points to live non-AAP process ${aapPreviousPID}; removing stale runtime markers without signaling it."
+        fi
+        rm -f "${appAutoPatchPIDfile}" "${appAutoPatchHeartbeatFile}" 2>/dev/null
 	fi
+	_aap_terminate_orphaned_instances
 	
-	# Create new ${appAutoPatchPIDfile} for this instance of aap
-	echo $$ > "${appAutoPatchPIDfile}"
+	# Create runtime ownership markers for this instance.
+	printf '%s\n' "$$" > "${appAutoPatchPIDfile}"
+    _aap_heartbeat "startup"
+    trap '_aap_signal_cleanup' HUP INT TERM
 	
-	# If aap crashes or the system restarts unexpectedly before aap exits, then automatically launch again.
-	defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
+	# If aap crashes or the system restarts unexpectedly before aap exits, then automatically launch
+	# again (aap-starter treats a missing NextAutoLaunch as "run now" on its 60s StartInterval).
+	# Skip for one-shot UI paths (--pending-apps-dialog / --preview-deferral-dialog): they must not
+	# tear down an existing LaunchDaemon schedule. Those workflows leave NextAutoLaunch intact on
+	# dismiss; pending-apps Install Now clears it before continuing into the install workflow so
+	# crash recovery still applies there.
+	if [[ "${pending_apps_dialog_option}" != "TRUE" ]] && [[ "${preview_deferral_dialog_option}" != "TRUE" ]] && [[ "${workflow_discovery_only_option}" != "TRUE" ]]; then
+		defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
+	fi
 	
 	# Check for aap installation.
 	local aapCurrentFolder
@@ -2297,6 +3147,11 @@ workflow_startup() {
         osascript -e 'display dialog "Please advise your Support Representative of the following error:\r\rExpected macOS Monterey (or newer), but found macOS '"${osVersion}"' ('"${osBuild}"').\r\r" with title "'"${scriptFunctionalName}"': Detected Outdated Operating System" buttons {"Open Software Update"} with icon caution'
         exit 1
     fi
+
+    # Resolve optional GitHub REST API auth (managed GitHubAPIAuthEnabled / GitHubAPIToken) before
+    # any api.github.com calls - get_dialog and get_installomator both hit the unauthenticated
+    # 60 req/hr rate limit otherwise. Must run after the AAP folder exists so logging/exit paths work.
+    resolve_github_api_auth
 
     # Check for Dialog - skipped for fully-silent runs (InteractiveMode 0, or
     # --workflow-install-now-silent), which never show a swiftDialog window, and also skipped when
@@ -2335,27 +3190,8 @@ workflow_startup() {
     get_mdm
 
 	
-	# Manage the ${verbose_mode_option} and if enabled start additional logging.
-	[[ "${reset_defaults_option}" == "TRUE" ]] && defaults delete "${appAutoPatchLocalPLIST}" VerboseMode 2> /dev/null
-    if [[ -f ${appAutoPatchManagedPLIST}.plist ]]; then
-		local verbose_mode_managed
-		verbose_mode_managed=$(defaults read "${appAutoPatchManagedPLIST}" VerboseMode 2> /dev/null)
-    fi
-
-	if [[ -f ${appAutoPatchLocalPLIST}.plist ]]; then
-		local verbose_mode_local
-		verbose_mode_local=$(defaults read "${appAutoPatchLocalPLIST}" VerboseMode 2> /dev/null)
-	fi
-
-	[[ -n "${verbose_mode_managed}" ]] && verbose_mode_option="${verbose_mode_managed}"
-	{ [[ -z "${verbose_mode_managed}" ]] && [[ -z "${verbose_mode_option}" ]] && [[ -n "${verbose_mode_local}" ]]; } && verbose_mode_option="${verbose_mode_local}"
-    if [[ "${verbose_mode_option}" -eq 1 ]] || [[ "${verbose_mode_option}" == "TRUE" ]]; then
-		verbose_mode_option="TRUE"
-		defaults write "${appAutoPatchLocalPLIST}" VerboseMode -bool true
-	else
-		verbose_mode_option="FALSE"
-		defaults delete "${appAutoPatchLocalPLIST}" VerboseMode 2> /dev/null
-	fi
+	# VerboseMode was already resolved at the top of workflow_startup (resolve_verbose_mode).
+	# Log the enablement banner here once the AAP STARTUP WORKFLOW header and computer stats are out.
 	if [[ "${verbose_mode_option}" == "TRUE" ]]; then
 		log_verbose "Verbose mode enabled."
 		log_verbose "aapCurrentFolder is: ${aapCurrentFolder}"
@@ -2420,6 +3256,21 @@ workflow_startup() {
         touch "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" # This is created in case the script restarts.
     fi
 
+    # Pending-apps dialog Install Now: restore after restart/network defer so discovery stays
+    # skipped and the install queue stays locked to the report PLIST the user confirmed.
+    # This is an interactive Install Now escape hatch — clear any stale silent install-now intent
+    # so ExcludedBackgroundLabels the user just confirmed are not dropped by the silent filter.
+    if [[ "${pending_apps_install_now_option}" == "TRUE" ]] || [[ -f "${PENDING_APPS_INSTALL_NOW_FILE}" ]]; then
+        log_status "Pending-apps Install Now alternate workflow enabled (locked report queue; no re-discovery)."
+        pending_apps_install_now_option="TRUE"
+        workflow_install_now_option="TRUE"
+        workflow_install_now_silent_option="FALSE"
+        InteractiveModeOption=2
+        rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
+        touch "${PENDING_APPS_INSTALL_NOW_FILE}"
+        touch "${WORKFLOW_INSTALL_NOW_FILE}"
+    fi
+
     # Check if a forced discovery (--force-discovery) was triggered. This is a one-shot trigger
     # that bypasses the DiscoveryFrequency window for this run only. The flag file lets the
     # request survive a restart_aap relaunch (e.g. when triggered via Jamf, which bootstraps the
@@ -2431,12 +3282,40 @@ workflow_startup() {
         touch "${FORCE_DISCOVERY_FILE}" # This is created in case the script restarts.
     fi
 
+    # Resolve the effective discovery-only mode after managed/local preferences and explicit
+    # install/dialog flags are known. Install Now and one-shot UI requests always take priority.
+    workflow_discovery_only_active="FALSE"
+    if [[ "${workflow_install_now_option}" == "TRUE" ]] \
+    || [[ "${workflow_install_now_silent_option}" == "TRUE" ]] \
+    || [[ "${pending_apps_install_now_option}" == "TRUE" ]] \
+    || [[ "${pending_apps_dialog_option}" == "TRUE" ]] \
+    || [[ "${preview_deferral_dialog_option}" == "TRUE" ]]; then
+        if [[ "${workflow_discovery_only_option}" == "TRUE" ]]; then
+            log_warning "Ignoring --workflow-discovery-only because an Install Now or one-shot dialog workflow is active."
+            workflow_discovery_only_option="FALSE"
+            _restore_discovery_only_schedule
+            rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2>/dev/null
+        fi
+    elif [[ "${workflow_discovery_only_option}" == "TRUE" ]] \
+    || { [[ "${workflow_disable_relaunch_option}" == "TRUE" ]] && [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]]; }; then
+        workflow_discovery_only_active="TRUE"
+        log_status "Discovery-only workflow active: report/staging/notification refresh only; no patching or deferral UI."
+    fi
+
     
 	if [[ "${check_error}" == "TRUE" ]] || [[ "${option_error}" == "TRUE" ]] || [[ "${helper_error}" == "TRUE" ]]; then
 		log_exit "Initial startup validation failed."
 		write_status "Inactive Error: Initial startup validation failed."
 		exit_error
 	fi
+
+	# BusinessHours early gate (#166): after prefs/validation and install-now flags resolve,
+	# before Jamf restart / network wait / discovery. Overdue hard deadline may bypass unless RespectHardDeadline.
+	enforce_business_hours
+
+    # Ensure the pending-apps dialog notification trigger path/LaunchDaemon exist on upgrades and
+    # non-install runs (banner notification Install Now actions write here as the console user).
+    ensure_aap_pending_apps_dialog_trigger
 	
 	# If aap is running via Jamf, then restart via LaunchDaemon to release the jamf parent process.
 	if [[ "${parent_process_is_jamf}" == "TRUE" ]]; then
@@ -2453,23 +3332,22 @@ workflow_startup() {
 	fi
 	
 	# Wait for a valid network connection. If there is still no network after two minutes, an automatic deferral is started.
-	local network_timeout
-	network_timeout=0
-	while [[ $(ifconfig -a inet 2>/dev/null | sed -n -e '/127.0.0.1/d' -e '/0.0.0.0/d' -e '/inet/p' | wc -l) -le 0 ]] && [[ "${network_timeout}" -lt 120 ]]; do
-		log_status "Waiting for network..."
-		sleep 5
-		network_timeout=$((network_timeout + 5))
-	done
-    if [[ $(ifconfig -a inet 2>/dev/null | sed -n -e '/127.0.0.1/d' -e '/0.0.0.0/d' -e '/inet/p' | wc -l) -le 0 ]]; then
-        deferral_timer_minutes="${deferral_timer_error_minutes}"
-        log_error "Network unavailable, trying again in ${deferral_timer_minutes} minutes."
-        write_status "Pending: Network unavailable, trying again in ${deferral_timer_minutes} minutes."
-        set_auto_launch_deferral
-    fi
+	# Pending-apps dialog only reads the local report PLIST — skip the network wait so notification /
+	# CLI triggers stay near-instant. (If the user then chooses Install Now, workflow_pending_apps_dialog
+	# performs this same network wait in-process before installing.)
+	if [[ "${pending_apps_dialog_option}" != "TRUE" ]]; then
+		if ! workflow_wait_for_network; then
+			deferral_timer_minutes="${deferral_timer_error_minutes}"
+			log_error "Network unavailable, trying again in ${deferral_timer_minutes} minutes."
+			write_status "Pending: Network unavailable, trying again in ${deferral_timer_minutes} minutes."
+            [[ "${workflow_discovery_only_option}" == "TRUE" ]] && touch "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}"
+			set_auto_launch_deferral
+		fi
+	fi
 	
     # Set icon based on whether the Mac is a desktop or laptop
     if [[ ! -n "$dialog_icon_option" ]]; then
-        log_warning ":warning:  App icon not found at $dialog_icon_option, using SF symbol instead"
+        log_info "Using SF symbol for App Icon"
         if system_profiler SPPowerDataType | grep -q "Battery Power"; then
             icon="SF=laptopcomputer.and.arrow.down,weight=regular,palette=gray,red"
         else
@@ -2584,6 +3462,8 @@ workflow_startup() {
                 overlayicon="/Applications/Workspace ONE Intelligent Hub.app/Contents/Resources/AppIcon.icns"
             elif [[ -e "/Applications/Kandji Self Service.app" ]]; then
                 overlayicon="/Applications/Kandji Self Service.app/Contents/Resources/AppIcon.icns"
+            elif [[ -e "/Applications/Mosyle Self Service.app" ]]; then
+                overlayicon="/Applications/Mosyle Self Service.app/Contents/Resources/AppIcon.icns"
             elif [[ -e "/usr/local/sbin/FileWave.app" ]]; then
                 overlayicon="/usr/local/sbin/FileWave.app/Contents/Resources/fwGUI.app/Contents/Resources/kiosk.icns"
             elif [[ -e "/System/Applications/App Store.app" || -e "/Applications/App Store.app" ]]; then
@@ -2611,6 +3491,25 @@ workflow_startup() {
     else
         log_verbose "Overlay icon disabled (UseOverlayIcon: ${useOverlayIcon}), continuing without an overlay icon."
         overlayicon=""
+    fi
+
+    # Dock icon for workflow dialogs (swiftDialog 3.0+; see https://swiftdialog.app/advanced/command-line-options/).
+    # Uses the App Auto-Patch logo — not DialogIcon / SF symbols — so the Dock entry is consistently
+    # branded. Admins can disable via ShowDockIcon. Older swiftDialog builds don't support these
+    # flags, so also gate on major version ≥ 3.
+    dialogDockOptions=()
+    dialogSupportsDockIcon="FALSE"
+    if [[ "${ShowDockIconOption}" != "TRUE" ]]; then
+        log_verbose "ShowDockIcon disabled; skipping dock icon for workflow dialogs"
+    elif [[ -n "${dialogVersion}" ]]; then
+        dialogMajorVersion="${dialogVersion%%.*}"
+        if [[ "${dialogMajorVersion}" -ge 3 ]] 2>/dev/null; then
+            dialogSupportsDockIcon="TRUE"
+            dialogDockOptions=(--dockicon "${logoImage}")
+            log_verbose "ShowDockIcon enabled; swiftDialog ${dialogVersion} supports dock icon; using ${logoImage}"
+        else
+            log_verbose "ShowDockIcon enabled, but swiftDialog ${dialogVersion} does not support --dockicon (requires 3.0+); skipping"
+        fi
     fi
     
     if [[ "${debug_mode_option}" == "TRUE" ]]; then
@@ -2673,6 +3572,7 @@ workflow_startup() {
         --quitkey k
         --icon "$icon"
         --overlayicon "$overlayicon"
+        ${dialogDockOptions[@]}
     )
 
 	if [[ "$dialogOnTop" == "TRUE" ]]; then
@@ -2696,6 +3596,7 @@ workflow_startup() {
         --progress
         --progresstext "${display_string_discovery_progress} ..." # Scanning …
         --quitkey k
+        ${dialogDockOptions[@]}
     )
     
 	if [[ "$dialogOnTop" == "TRUE" ]]; then
@@ -2719,6 +3620,7 @@ workflow_startup() {
         --progress
         --progresstext "${display_string_staging_progress} ..." # Staging …
         --quitkey k
+        ${dialogDockOptions[@]}
     )
 
     if [[ "$dialogOnTop" == "TRUE" ]]; then
@@ -2855,8 +3757,13 @@ interactive_interrupt() {
 # Restart AAP via the LaunchDaemon after waiting for ${restart_aap_sleep_seconds} seconds.
 restart_aap() {
 	if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-        log_aap "Automatic Relaunch is disabled... Setting NextAutoLaunch to FALSE"
-        /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+        if [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]] || [[ "${workflow_discovery_only_option}" == "TRUE" ]]; then
+            log_aap "Interactive relaunch is disabled, but discovery-only must survive restart; leaving NextAutoLaunch unset."
+            defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2>/dev/null
+        else
+            log_aap "Automatic Relaunch is disabled... Setting NextAutoLaunch to FALSE"
+            /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+        fi
     else
         /usr/libexec/PlistBuddy -c "Delete :NextAutoLaunch" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
     fi
@@ -2868,7 +3775,7 @@ restart_aap() {
 	disown
 	log_verbose "Local preference file at restart exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2>/dev/null)"
 	log_aap "**** App Auto-Patch ${scriptVersion} - EXIT AND RESTART WORKFLOW ****"
-	rm -f "${appAutoPatchPIDfile}" 2>/dev/null
+	rm -f "${appAutoPatchPIDfile}" "${appAutoPatchHeartbeatFile}" 2>/dev/null
 	exit 0
 }
 
@@ -2879,6 +3786,12 @@ install_app_auto_patch() {
     [[ ! -d "${appAutoPatchLogArchiveFolder}" ]] && mkdir -p "${appAutoPatchLogArchiveFolder}"
     [[ ! -d "${appAutoPatchVerboseLogArchiveFolder}" ]] && mkdir -p "${appAutoPatchVerboseLogArchiveFolder}"
     [[ ! -d "${appAutoPatchReceiptsFolder}" ]] && mkdir -p "${appAutoPatchReceiptsFolder}"
+    # Root-owned hooks directory for optional PrePatchScript / PostPatchScript (#156).
+    if [[ ! -d "${aapHooksFolder}" ]]; then
+        mkdir -p "${aapHooksFolder}"
+        chown root:wheel "${aapHooksFolder}"
+        chmod 755 "${aapHooksFolder}"
+    fi
     [[ ! -f "${appAutoPatchReportPLIST}.plist" ]] && clear_aap_report
 
     log_notice "###### App Auto-Patch ${scriptVersion} - Installing ... ######"
@@ -2920,8 +3833,180 @@ install_app_auto_patch() {
 # App Auto-Patch LaunchDaemon helper
 #
 
-# Exit if App Auto Patch is already running.
-[[ "$(pgrep -F "__APP_AUTOPATCH_PIDFILE__" 2>/dev/null)" ]] && exit 0
+log_line() {
+    echo "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: $*" >> "__AAP_LOG__"
+}
+
+# Match the program AAP was launched as, skipping any privilege wrapper or interpreter in front of
+# it. `sudo appautopatch …` records a PID whose argv names the entrypoint symlink rather than the
+# canonical script, which previously made this helper disown a live AAP run.
+command_invokes_aap() {
+    local command="$1" token base index=0 result=1
+    set -f
+    for token in $command; do
+        index=$(( index + 1 ))
+        (( index > 4 )) && break
+        case "$token" in
+            sudo|*/sudo|-*) continue ;;
+            zsh|*/zsh|bash|*/bash|sh|*/sh) continue ;;
+        esac
+        base="${token##*/}"
+        if [[ "$base" == "appautopatch" ]] || [[ "$base" == "App-Auto-Patch-via-Dialog.zsh" ]]; then
+            result=0
+        fi
+        break
+    done
+    set +f
+    return $result
+}
+
+process_start_epoch() {
+    local lstart
+    lstart="$(ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')"
+    [[ -n "$lstart" ]] || return 1
+    date -j -f "%a %b %d %T %Y" "$lstart" +%s 2>/dev/null
+}
+
+is_expected_aap_process() {
+    local pid="$1"
+    [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+    kill -0 "$pid" 2>/dev/null || return 1
+    [[ "$(ps -p "$pid" -o uid= 2>/dev/null | tr -d ' ')" == "0" ]] || return 1
+    local command
+    command="$(ps -p "$pid" -o command= 2>/dev/null)"
+    [[ -n "$command" ]] || return 1
+    command_invokes_aap "$command"
+}
+
+collect_tree() {
+    local pid="$1" child
+    for child in $(pgrep -P "$pid" 2>/dev/null); do
+        collect_tree "$child"
+    done
+    printf '%s\n' "$pid"
+}
+
+terminate_tree() {
+    local pid="$1" waited=0 tree_pid any_alive
+    local tree_pids
+    tree_pids="$(collect_tree "$pid")"
+    for tree_pid in $tree_pids; do
+        kill -TERM "$tree_pid" 2>/dev/null
+    done
+    while (( waited < 10 )); do
+        any_alive=0
+        for tree_pid in $tree_pids; do
+            kill -0 "$tree_pid" 2>/dev/null && any_alive=1
+        done
+        (( any_alive == 0 )) && break
+        sleep 1
+        (( waited++ ))
+    done
+    for tree_pid in $tree_pids; do
+        kill -0 "$tree_pid" 2>/dev/null && kill -KILL "$tree_pid" 2>/dev/null
+    done
+}
+
+restore_pre_discovery_report() {
+    local pid="$1"
+    local backup="/var/tmp/aap-report-pre-discovery.${pid}.plist"
+    local restore_tmp="__AAP_REPORT_PLIST__.restore.$$"
+    [[ -f "$backup" ]] || return 0
+    if cp -p "$backup" "$restore_tmp" 2>/dev/null && mv -f "$restore_tmp" "__AAP_REPORT_PLIST__" 2>/dev/null; then
+        rm -f "$backup"
+        log_line "Restored the pre-discovery pending-app report for interrupted PID $pid."
+    else
+        rm -f "$restore_tmp"
+        log_line "[WARNING] Unable to restore the pre-discovery pending-app report for PID $pid."
+    fi
+}
+
+log_running_skip_throttled() {
+    local now last=0
+    now="$(date +%s)"
+    [[ -f "__AAP_STARTER_SKIP_LOG_FILE__" ]] && read -r last < "__AAP_STARTER_SKIP_LOG_FILE__"
+    [[ "$last" =~ ^[0-9]+$ ]] || last=0
+    if (( now - last >= 900 )); then
+        log_line "$*"
+        printf '%s\n' "$now" > "__AAP_STARTER_SKIP_LOG_FILE__"
+    fi
+}
+
+# Validate the PID owner and heartbeat instead of treating any live PID as healthy forever.
+force_launch=0
+recorded_pid=""
+[[ -f "__APP_AUTOPATCH_PIDFILE__" ]] && read -r recorded_pid < "__APP_AUTOPATCH_PIDFILE__"
+if [[ -n "$recorded_pid" ]] && kill -0 "$recorded_pid" 2>/dev/null; then
+    heartbeat_pid=""
+    heartbeat_epoch=""
+    heartbeat_phase=""
+    if [[ -f "__AAP_HEARTBEAT_FILE__" ]]; then
+        IFS=$'\t' read -r heartbeat_pid heartbeat_epoch heartbeat_phase < "__AAP_HEARTBEAT_FILE__"
+    fi
+
+    # Only AAP writes the heartbeat, and only for its own PID, so a record naming this live PID
+    # proves ownership even when the argv check cannot recognize how the run was invoked. Without
+    # this, a misjudged PID was released and a second instance launched alongside the first
+    # (duplicate deferral dialogs). A process that started after the record was written cannot be
+    # the run that wrote it, so a reused PID is not mistaken for the run that has since exited.
+    heartbeat_owns_pid=0
+    if [[ "$heartbeat_pid" == "$recorded_pid" ]] && [[ "$heartbeat_epoch" =~ ^[0-9]+$ ]]; then
+        start_epoch="$(process_start_epoch "$recorded_pid")"
+        if [[ "$start_epoch" =~ ^[0-9]+$ ]] && (( start_epoch <= heartbeat_epoch )); then
+            heartbeat_owns_pid=1
+        fi
+    fi
+
+    if ! is_expected_aap_process "$recorded_pid" && (( heartbeat_owns_pid == 0 )); then
+        log_line "[WARNING] aap.pid points to live non-AAP PID $recorded_pid; removing stale runtime markers without signaling it."
+        rm -f "__APP_AUTOPATCH_PIDFILE__" "__AAP_HEARTBEAT_FILE__"
+    else
+        timeout="$(defaults read "__AAP_MANAGED_PLIST__" StaleProcessTimeoutSeconds 2>/dev/null)"
+        [[ -z "$timeout" ]] && timeout="$(defaults read "__AAP_LOCAL_PLIST__" StaleProcessTimeoutSeconds 2>/dev/null)"
+        [[ "$timeout" =~ ^[0-9]+$ ]] || timeout=3600
+        if (( timeout != 0 && timeout < 300 )); then timeout=300; fi
+
+        if (( heartbeat_owns_pid == 0 )); then
+            heartbeat_epoch="$(stat -f '%m' "__APP_AUTOPATCH_PIDFILE__" 2>/dev/null)"
+            heartbeat_phase="startup"
+        fi
+        [[ "$heartbeat_epoch" =~ ^[0-9]+$ ]] || heartbeat_epoch="$(date +%s)"
+        now="$(date +%s)"
+        heartbeat_age=$(( now - heartbeat_epoch ))
+
+        if (( timeout == 0 || heartbeat_age <= timeout )); then
+            log_running_skip_throttled "AAP PID $recorded_pid is active (phase=${heartbeat_phase:-unknown}, heartbeat age=${heartbeat_age}s); skipping duplicate launch."
+            exit 0
+        fi
+
+        # An expired heartbeat no longer proves the PID still belongs to AAP, so only signal a
+        # process whose command line confirms it. Otherwise release the markers and let the fresh
+        # run take over without touching a PID that may have been reused by something unrelated.
+        if is_expected_aap_process "$recorded_pid"; then
+            log_line "[WARNING] AAP PID $recorded_pid is stale (phase=${heartbeat_phase:-unknown}, heartbeat age=${heartbeat_age}s, timeout=${timeout}s); restarting."
+            terminate_tree "$recorded_pid"
+        else
+            log_line "[WARNING] aap.pid points to live PID $recorded_pid with an expired heartbeat (phase=${heartbeat_phase:-unknown}, age=${heartbeat_age}s) that is no longer identifiable as AAP; removing runtime markers without signaling it."
+        fi
+        restore_pre_discovery_report "$recorded_pid"
+        rm -f "__APP_AUTOPATCH_PIDFILE__" "__AAP_HEARTBEAT_FILE__"
+        rm -f /var/tmp/dialog.appAutoPatch.* 2>/dev/null
+        force_launch=1
+    fi
+elif [[ -n "$recorded_pid" ]]; then
+    log_line "Removing dead AAP PID $recorded_pid runtime markers."
+    restore_pre_discovery_report "$recorded_pid"
+    rm -f "__APP_AUTOPATCH_PIDFILE__" "__AAP_HEARTBEAT_FILE__"
+    rm -f /var/tmp/dialog.appAutoPatch.* 2>/dev/null
+elif [[ -f "__AAP_HEARTBEAT_FILE__" ]]; then
+    rm -f "__AAP_HEARTBEAT_FILE__"
+fi
+
+# A one-shot discovery request survives process replacement/crash and must resume immediately,
+# independent of the ordinary NextAutoLaunch date it has saved for later restoration.
+if [[ -f "__AAP_DISCOVERY_ONLY_FILE__" ]] && [[ ! -f "__AAP_DISCOVERY_ONLY_DEFERRED_FILE__" ]]; then
+    force_launch=1
+fi
 
 # Read NextAutoLaunch — may be:
 #   - "FALSE"    (string disable)
@@ -2930,13 +4015,49 @@ install_app_auto_patch() {
 #   - date stamp (formatted per __TIMESTAMP_FORMAT__)
 next_auto_launch="$(defaults read "__AAP_LOCAL_PLIST__" NextAutoLaunch 2>/dev/null)"
 
-# Explicit disable states
+# WorkflowScheduledDiscovery keeps discovery/report refreshes alive while interactive relaunch is
+# disabled. Read managed first (including an explicit false), then local.
+disable_relaunch="$(defaults read "__AAP_MANAGED_PLIST__" WorkflowDisableRelaunch 2>/dev/null)"
+[[ -z "$disable_relaunch" ]] && disable_relaunch="$(defaults read "__AAP_LOCAL_PLIST__" WorkflowDisableRelaunch 2>/dev/null)"
+scheduled_discovery="$(defaults read "__AAP_MANAGED_PLIST__" WorkflowScheduledDiscovery 2>/dev/null)"
+[[ -z "$scheduled_discovery" ]] && scheduled_discovery="$(defaults read "__AAP_LOCAL_PLIST__" WorkflowScheduledDiscovery 2>/dev/null)"
+scheduled_discovery_mode=0
+if { [[ "$disable_relaunch" == "1" ]] || [[ "$disable_relaunch" == "TRUE" ]]; } \
+&& { [[ "$scheduled_discovery" == "1" ]] || [[ "$scheduled_discovery" == "TRUE" ]]; }; then
+    scheduled_discovery_mode=1
+fi
+
+# FALSE remains a hard disable unless scheduled discovery has explicitly been paired with it.
 if [[ "$next_auto_launch" == "FALSE" ]] || [[ "$next_auto_launch" == "0" ]]; then
-    exit 0
+    if (( force_launch == 1 )); then
+        :
+    elif (( scheduled_discovery_mode == 0 )); then
+        exit 0
+    else
+        discovery_frequency="$(defaults read "__AAP_MANAGED_PLIST__" DiscoveryFrequency 2>/dev/null)"
+        [[ -z "$discovery_frequency" ]] && discovery_frequency="$(defaults read "__AAP_LOCAL_PLIST__" DiscoveryFrequency 2>/dev/null)"
+        [[ "$discovery_frequency" =~ ^[0-9]+$ ]] || discovery_frequency=24
+        now="$(date +%s)"
+        last_discovery="$(defaults read "__AAP_LOCAL_PLIST__" LastDiscoveryEpoch 2>/dev/null)"
+        [[ "$last_discovery" =~ ^[0-9]+$ ]] || last_discovery=0
+        if (( discovery_frequency > 0 )); then
+            interval=$(( discovery_frequency * 3600 ))
+        else
+            relaunch_minutes="$(defaults read "__AAP_MANAGED_PLIST__" DeferralTimerWorkflowRelaunch 2>/dev/null)"
+            [[ -z "$relaunch_minutes" ]] && relaunch_minutes="$(defaults read "__AAP_LOCAL_PLIST__" DeferralTimerWorkflowRelaunch 2>/dev/null)"
+            [[ "$relaunch_minutes" =~ ^[0-9]+$ ]] || relaunch_minutes=1440
+            (( relaunch_minutes < 2 )) && relaunch_minutes=2
+            interval=$(( relaunch_minutes * 60 ))
+        fi
+        if (( last_discovery > 0 && now < last_discovery + interval )); then
+            exit 0
+        fi
+        force_launch=1
+    fi
 fi
 
 # Unset case (no NextAutoLaunch key)
-if [[ -z "$next_auto_launch" ]]; then
+if (( force_launch == 0 && scheduled_discovery_mode == 0 )) && [[ -z "$next_auto_launch" ]]; then
     # Read last saved startup timestamp
     saved="$(defaults read "__AAP_LOCAL_PLIST__" MacLastStartup 2>/dev/null)"
     saved_epoch="$(date -j -f "__TIMESTAMP_FORMAT__" "$saved" +%s 2>/dev/null)"
@@ -2954,7 +4075,7 @@ fi
 next_epoch="$(date -j -f "__TIMESTAMP_FORMAT__" "$next_auto_launch" +%s 2>/dev/null)"
 
 # If date parsed successfully and next_epoch > now → not time yet
-if [[ -n "$next_epoch" ]]; then
+if (( force_launch == 0 )) && [[ -n "$next_epoch" ]]; then
     now="$(date +%s)"
     if (( now < next_epoch )); then
         exit 0
@@ -2973,6 +4094,12 @@ EOAS
     # Replace placeholders in the starter
     /usr/bin/sed -i "" \
     -e "s|__APP_AUTOPATCH_PIDFILE__|${appAutoPatchPIDfile}|g" \
+    -e "s|__AAP_HEARTBEAT_FILE__|${appAutoPatchHeartbeatFile}|g" \
+    -e "s|__AAP_STARTER_SKIP_LOG_FILE__|${appAutoPatchStarterSkipLogFile}|g" \
+    -e "s|__AAP_DISCOVERY_ONLY_FILE__|${WORKFLOW_DISCOVERY_ONLY_FILE}|g" \
+    -e "s|__AAP_DISCOVERY_ONLY_DEFERRED_FILE__|${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}|g" \
+    -e "s|__AAP_REPORT_PLIST__|${appAutoPatchReportPLIST}.plist|g" \
+    -e "s|__AAP_MANAGED_PLIST__|${appAutoPatchManagedPLIST}|g" \
     -e "s|__AAP_LOCAL_PLIST__|${appAutoPatchLocalPLIST}|g" \
     -e "s|__TIMESTAMP_FORMAT__|${timestamp_format}|g" \
     -e "s|__SCRIPT_VERSION__|${scriptVersion}|g" \
@@ -3039,6 +4166,9 @@ EOLD
     chmod 644 "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
     chown root:wheel "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
 
+    # User-writable Install Now trigger used by banner notification actions.
+    ensure_aap_install_now_trigger
+
     # Record installed version
     defaults write "${appAutoPatchLocalPLIST}" AAPVersion -string "${scriptVersion}"
     defaults write "${appAutoPatchLocalPLIST}" AAPBuild -string "${scriptBuild}"
@@ -3056,16 +4186,25 @@ function uninstall_app_auto_patch() {
     local aapPreviousPID
     aapPreviousPID=$(pgrep -F "${appAutoPatchPIDfile}" 2> /dev/null)
     if [[ -n "${aapPreviousPID}" ]]; then
-        [[ -d "${appAutoPatchLogFolder}" ]] && log_status "Found previous aap instance running with PID ${aapPreviousPID}, killing processes..."
-        [[ ! -d "${appAutoPatchLogFolder}" ]] && log_echo "Status: Found previous aap instance running with PID ${aapPreviousPID}, killing processes..."
-        kill -9 "${aapPreviousPID}" > /dev/null 2>&1
-        killProcess "Dialog"
+        if _aap_pid_is_expected_process "${aapPreviousPID}" || _aap_heartbeat_claims_pid "${aapPreviousPID}"; then
+            log_status "Found previous AAP instance PID ${aapPreviousPID}; terminating it before uninstall."
+            _aap_terminate_process_tree "${aapPreviousPID}" 10
+            _aap_restore_pre_discovery_report "/var/tmp/aap-report-pre-discovery.${aapPreviousPID}.plist"
+            _aap_clear_foreign_dialog_command_files
+        else
+            log_warning "PID file points to non-AAP process ${aapPreviousPID}; leaving it untouched."
+        fi
     fi
+    rm -f "${appAutoPatchPIDfile}" "${appAutoPatchHeartbeatFile}" "${appAutoPatchStarterSkipLogFile}" 2>/dev/null
 
     # Boot out launch daemon and remove
     log_uninstall "Removing previous AAP Launch Daemon: /Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
     launchctl bootout system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" 2> /dev/null
     rm -f "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" 2> /dev/null
+
+    log_uninstall "Removing Install Now trigger Launch Daemon: /Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist"
+    launchctl bootout system "/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist" 2> /dev/null
+    rm -f "/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist" 2> /dev/null
 
     # Remove the App Auto Patch sym link
     log_uninstall "Removing ${appAutoPatchLink}"
@@ -3081,7 +4220,8 @@ function uninstall_app_auto_patch() {
 install_dialog() {
 
     # Get the URL of the latest PKG From the Dialog GitHub repo
-    dialogURL=$(curl -L --silent --fail "https://api.github.com/repos/swiftDialog/swiftDialog/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
+    # github_api_curl_auth_args is empty when auth is disabled; Bearer header when enabled (#249).
+    dialogURL=$(curl -L --silent --fail "${github_api_curl_auth_args[@]}" "https://api.github.com/repos/swiftDialog/swiftDialog/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
 
     # Expected Team ID of the downloaded PKG
     expectedDialogTeamID="PWA5E9TQ59"
@@ -3179,17 +4319,17 @@ get_installomator() {
         
         if [[ "$installomatorVersion" == "Release" ]] || [[ "$installomatorVersion" == "release" ]]; then
             log_info "Attempting to download Installomator release version"
-            latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
+            latestURL=$(curl -sSL "${github_api_curl_auth_args[@]}" -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
         elif [[ "$installomatorVersion" == "Custom" ]] || [[ "$installomatorVersion" == "custom" ]]; then
             log_info "Attempting to download Installomator from Custom Repo"
             # Match the exact `"name": "branch"` JSON line, not a bare substring - otherwise a
             # branch name that's a substring of another (e.g. "apple-ls" vs "dev-apple-ls") can
             # match multiple entries in the branches API response, and `tail -1` silently picks
             # the wrong one's commit sha (whichever sorts last alphabetically).
-            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "\"name\": \"${installomatorVersionCustomBranchName}\"" | tail -1 | cut -d'"' -f4)"
+            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL "${github_api_curl_auth_args[@]}" -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "\"name\": \"${installomatorVersionCustomBranchName}\"" | tail -1 | cut -d'"' -f4)"
         else
             log_info "Attempting to download Installomator main version"
-            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "\"name\": \"main\"" | tail -1 | cut -d'"' -f4)"
+            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL "${github_api_curl_auth_args[@]}" -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "\"name\": \"main\"" | tail -1 | cut -d'"' -f4)"
         fi
         
         tarPath="$installomatorPath/installomator.latest.tar.gz"
@@ -3213,12 +4353,12 @@ get_installomator() {
         log_notice "Installomator was found at $installomatorPath, checking version ..."
         if [[ "$installomatorVersion" == "Release" ]] || [[ "$installomatorVersion" == "release" ]]; then
             log_notice "pulling from Installomator Latest Release"
-            latestURL=$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
+            latestURL=$(curl -sSL "${github_api_curl_auth_args[@]}" -o - "https://api.github.com/repos/Installomator/Installomator/releases/latest" | grep tarball_url | awk '{gsub(/[",]/,"")}{print $2}')
             appNewVersion=$(curl -sLI "https://github.com/Installomator/Installomator/releases/latest" | grep -i "^location" | tr "/" "\n" | tail -1 | sed 's/[^0-9\.]//g')
             appVersion="$(cat $fragmentsPath/version.sh)"
         elif [[ "$installomatorVersion" == "Custom" ]] || [[ "$installomatorVersion" == "custom" ]]; then
             log_notice "Pulling from custom installomator"
-            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "\"name\": \"${installomatorVersionCustomBranchName}\"" | tail -1 | cut -d'"' -f4)"
+            latestURL="https://codeload.github.com/$installomatorVersionCustomRepoPath/legacy.tar.gz/$(curl -sSL "${github_api_curl_auth_args[@]}" -o - "https://api.github.com/repos/$installomatorVersionCustomRepoPath/branches" | grep -A2 "\"name\": \"${installomatorVersionCustomBranchName}\"" | tail -1 | cut -d'"' -f4)"
             appNewVersion="$(curl -sL "https://raw.githubusercontent.com/$installomatorVersionCustomRepoPath/refs/heads/$installomatorVersionCustomBranchName/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
             appVersion="$(cat "${installomatorScript}" | grep VERSIONDATE= | cut -d'"' -f2)"
             # convert to epoch
@@ -3226,7 +4366,7 @@ get_installomator() {
             #appVersion=$(date -j -f "%Y-%m-%d" "${appVersion}" +%s)
         else
             log_notice "Pulling from Installomator Main Branch"
-            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "\"name\": \"main\"" | tail -1 | cut -d'"' -f4)"
+            latestURL="https://codeload.github.com/Installomator/Installomator/legacy.tar.gz/$(curl -sSL "${github_api_curl_auth_args[@]}" -o - "https://api.github.com/repos/Installomator/Installomator/branches" | grep -A2 "\"name\": \"main\"" | tail -1 | cut -d'"' -f4)"
             appNewVersion="$(curl -sL "https://raw.githubusercontent.com/Installomator/Installomator/refs/heads/main/Installomator.sh" | grep VERSIONDATE= | cut -d'"' -f2)"
             appVersion="$(cat "${installomatorScript}" | grep VERSIONDATE= | cut -d'"' -f2)"
             # convert to epoch
@@ -3406,12 +4546,41 @@ get_mdm(){
             log_info "MDM is Workspace One"
             mdmName="Workspace One"
         ;;
+        *mosyle*)
+            log_info "MDM is Mosyle"
+            mdmName="Mosyle"
+        ;;
         *)
             log_info "Unable to determine MDM from ServerURL"
         ;;
     esac
 
 
+}
+
+# Read a key from the local preference plist, falling back to PlistBuddy when `defaults` returns
+# nothing. A high volume of PlistBuddy writes elsewhere in the workflow can leave cfprefsd's cache
+# transiently out of sync with the file on disk, in which case `defaults read` returns an empty
+# string for keys that are demonstrably present in the file (#254).
+read_local_preference() {
+    local key="${1}"
+    local value
+    value=$(defaults read "${appAutoPatchLocalPLIST}" "${key}" 2> /dev/null)
+    if [[ -z "${value}" ]]; then
+        value=$(/usr/libexec/PlistBuddy -c "Print :${key}" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null)
+        if [[ -n "${value}" ]]; then
+            # log_aap tees to stdout, which this function is called through a command substitution
+            # to capture. Discard that copy; both log files are still written to directly.
+            log_warning "Preference ${key} read back empty via defaults but is present on disk; using the on-disk value." > /dev/null
+        fi
+    fi
+    # PlistBuddy prints booleans as true/false where `defaults` prints 1/0. Normalise so callers
+    # can keep comparing against 1/0 regardless of which reader supplied the value.
+    case "${value:l}" in
+        true) value="1" ;;
+        false) value="0" ;;
+    esac
+    printf '%s' "${value}"
 }
 
 #Evaluate if patching cadence has been completed or not
@@ -3436,16 +4605,27 @@ check_completion_status() {
         Patch_Week_Start_Date=$CurrentDate
     fi 
     
-    PatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus 2> /dev/null)
-    PatchingStartDate=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingStartDate 2> /dev/null)
+    PatchingComplete=$(read_local_preference AAPPatchingCompletionStatus)
+    PatchingStartDate=$(read_local_preference AAPPatchingStartDate)
     
     if [[ -z $PatchingComplete || -z $PatchingStartDate ]]; then
         log_info "Patching Completion Status or Start Date not set, setting values"
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool false
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingStartDate "$Patch_Week_Start_Date"
         
-        PatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus 2> /dev/null)
-        PatchingStartDate=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingStartDate 2> /dev/null)
+        PatchingComplete=$(read_local_preference AAPPatchingCompletionStatus)
+        PatchingStartDate=$(read_local_preference AAPPatchingStartDate)
+    fi
+
+    # Never hand an unparseable value to strftime below: it yields epoch 0 and a nonsensical
+    # "Days Since Patching Start Date" in the tens of thousands, which then trips every deadline
+    # and reset calculation downstream (#254).
+    if [[ "${PatchingStartDate}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+        PatchingStartDate="${PatchingStartDate[1,10]}"
+    else
+        log_error "Could not read a usable AAPPatchingStartDate from ${appAutoPatchLocalPLIST}.plist (got '${PatchingStartDate}'). Falling back to ${Patch_Week_Start_Date} and rewriting the value."
+        PatchingStartDate="${Patch_Week_Start_Date}"
+        defaults write "${appAutoPatchLocalPLIST}" AAPPatchingStartDate "$Patch_Week_Start_Date"
     fi
 
     zmodload zsh/datetime
@@ -3472,8 +4652,10 @@ check_completion_status() {
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool false
         log_info "Setting Patch Week Start Date as $Patch_Week_Start_Date"
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingStartDate "$Patch_Week_Start_Date"
-        PatchingStartDate=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingStartDate 2> /dev/null)
-        PatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus 2> /dev/null)
+        PatchingStartDate=$(read_local_preference AAPPatchingStartDate)
+        [[ -n "${PatchingStartDate}" ]] || PatchingStartDate="${Patch_Week_Start_Date}"
+        PatchingComplete=$(read_local_preference AAPPatchingCompletionStatus)
+        [[ -n "${PatchingComplete}" ]] || PatchingComplete="0"
         defaults delete "${appAutoPatchLocalPLIST}" DeadlineCounterFocus 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" DeadlineCounterHard 2> /dev/null
     fi
@@ -3517,7 +4699,8 @@ check_completion_status() {
         log_info "Unknown Status... Setting status to False"
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool false
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingStartDate "$Patch_Week_Start_Date"
-        PatchingComplete=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus 2> /dev/null)
+        PatchingComplete=$(read_local_preference AAPPatchingCompletionStatus)
+        [[ -n "${PatchingComplete}" ]] || PatchingComplete="0"
         log_info "Continuing App Auto-Patch Workflow"
     fi
     
@@ -3784,10 +4967,573 @@ check_deadlines_count() {
     log_verbose  "user_focus_active is: ${user_focus_active}"
 }
 
+# Evaluate BusinessHours blocked windows (#166). Windows are stored as "dow:startmin:endmin"
+# where dow matches `date +%u` (1=Mon ... 7=Sun) and minutes are inclusive on both ends.
+# Empty/unset BusinessHours means nothing is blocked (always allowed).
+
+is_epoch_in_business_hours() {
+    local target_epoch="${1}"
+    if [[ ${#business_hours_windows[@]} -eq 0 ]]; then
+        return 1
+    fi
+    local target_dow target_mins
+    target_dow=$(date -r "${target_epoch}" +%u)
+    target_mins=$(( 10#$(date -r "${target_epoch}" +%H) * 60 + 10#$(date -r "${target_epoch}" +%M) ))
+    local window window_dow window_start window_end window_rest
+    for window in "${business_hours_windows[@]}"; do
+        window_dow="${window%%:*}"
+        window_rest="${window#*:}"
+        window_start="${window_rest%%:*}"
+        window_end="${window_rest#*:}"
+        if [[ "${window_dow}" == "${target_dow}" ]] && (( target_mins >= window_start && target_mins <= window_end )); then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Earliest epoch at or after ${1} that is NOT inside any BusinessHours window.
+# Echoes epoch to stdout only (safe for $(...)). Gaps between multiple same-day windows
+# (e.g. lunch) are treated as clear/allowed.
+next_business_hours_clear_epoch() {
+    local after_epoch="${1}"
+    if [[ ${#business_hours_windows[@]} -eq 0 ]]; then
+        echo "${after_epoch}"
+        return 0
+    fi
+    local candidate="${after_epoch}"
+    local attempts=0
+    local day_midnight target_dow target_mins
+    local window window_dow window_start window_end window_rest
+    local covering_end
+    while (( attempts < 500 )); do
+        if ! is_epoch_in_business_hours "${candidate}"; then
+            echo "${candidate}"
+            return 0
+        fi
+        day_midnight=$(date -j -f "%Y-%m-%d %H:%M:%S" "$(date -r "${candidate}" +%Y-%m-%d) 00:00:00" +%s 2>/dev/null)
+        if [[ -z "${day_midnight}" ]]; then
+            candidate=$(( candidate + 60 ))
+            attempts=$(( attempts + 1 ))
+            continue
+        fi
+        target_dow=$(date -r "${candidate}" +%u)
+        target_mins=$(( 10#$(date -r "${candidate}" +%H) * 60 + 10#$(date -r "${candidate}" +%M) ))
+        covering_end=""
+        for window in "${business_hours_windows[@]}"; do
+            window_dow="${window%%:*}"
+            window_rest="${window#*:}"
+            window_start="${window_rest%%:*}"
+            window_end="${window_rest#*:}"
+            if [[ "${window_dow}" == "${target_dow}" ]] && (( target_mins >= window_start && target_mins <= window_end )); then
+                if [[ -z "${covering_end}" ]] || (( window_end < covering_end )); then
+                    covering_end="${window_end}"
+                fi
+            fi
+        done
+        if [[ -z "${covering_end}" ]]; then
+            candidate=$(( candidate + 60 ))
+        elif (( covering_end >= 23 * 60 + 59 )); then
+            candidate=$(( day_midnight + 86400 ))
+        else
+            candidate=$(( day_midnight + (covering_end + 1) * 60 ))
+        fi
+        attempts=$(( attempts + 1 ))
+    done
+    echo $(( after_epoch + 86400 ))
+}
+
+# If epoch is outside BusinessHours (or none configured), return it unchanged; otherwise the next clear time.
+# Echoes epoch only — callers log when the value changes.
+clamp_epoch_outside_business_hours() {
+    local target_epoch="${1}"
+    if [[ ${#business_hours_windows[@]} -eq 0 ]]; then
+        echo "${target_epoch}"
+        return 0
+    fi
+    if ! is_epoch_in_business_hours "${target_epoch}"; then
+        echo "${target_epoch}"
+        return 0
+    fi
+    next_business_hours_clear_epoch "${target_epoch}"
+}
+
+# Lightweight hard-deadline check for the early BusinessHours gate.
+# Read-only: does not mutate DeadlineCounter* and does not sleep near a days deadline.
+# Returns 0 when a hard days/count deadline is already due (or within 120s for days).
+is_hard_deadline_due_lightweight() {
+    local current_epoch
+    current_epoch=$(date +%s)
+
+    if [[ -n "${deadline_days_hard}" ]]; then
+        local patching_start_raw patching_start_date zero_epoch hard_epoch hard_diff
+        patching_start_raw=$(defaults read "${appAutoPatchLocalPLIST}" AAPPatchingStartDate 2>/dev/null)
+        if [[ -n "${patching_start_raw}" ]]; then
+            patching_start_date="${patching_start_raw:0:10}"
+            zero_epoch=$(date -j -f "%Y-%m-%d" "${patching_start_date}" +%s 2>/dev/null)
+            if [[ -n "${zero_epoch}" ]] && [[ -n "${deadline_days_hard_seconds}" ]]; then
+                hard_epoch=$(( zero_epoch + deadline_days_hard_seconds ))
+                hard_diff=$(( hard_epoch - current_epoch ))
+                if (( hard_epoch <= current_epoch )) || (( hard_diff <= 120 )); then
+                    return 0
+                fi
+            fi
+        fi
+    fi
+
+    if [[ -n "${deadline_count_hard}" ]]; then
+        local deadline_counter_hard_previous deadline_counter_hard_current
+        deadline_counter_hard_previous=$(defaults read "${appAutoPatchLocalPLIST}" DeadlineCounterHard 2>/dev/null)
+        if [[ -z "${deadline_counter_hard_previous}" ]]; then
+            deadline_counter_hard_current=0
+        else
+            deadline_counter_hard_current=$(( deadline_counter_hard_previous + 1 ))
+        fi
+        if (( deadline_counter_hard_current >= deadline_count_hard )); then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# Write NextAutoLaunch to the next clear (non-BusinessHours) time and exit cleanly.
+business_hours_defer_until_clear_and_exit() {
+    local status_message="${1:-During BusinessHours}"
+    local now_epoch next_epoch next_auto_launch
+    now_epoch=$(date +%s)
+
+    if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+        log_status "Automatic relaunch is disabled; exiting without discovery/patching."
+        write_status "Inactive: ${status_message}; automatic relaunch disabled."
+        exit_clean
+    fi
+
+    next_epoch=$(next_business_hours_clear_epoch "${now_epoch}")
+    # Avoid LaunchDaemon spin if the next clear time is moments away.
+    if (( next_epoch - now_epoch < 300 )); then
+        next_epoch=$(clamp_epoch_outside_business_hours $(( now_epoch + 300 )))
+    fi
+    next_auto_launch=$(date -r "${next_epoch}" +"${timestamp_format}")
+    defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_auto_launch}"
+    log_status "NextAutoLaunch set to next clear time after BusinessHours: ${next_auto_launch}"
+    write_status "Pending: ${status_message}; next clear window ${next_auto_launch}."
+    log_exit "AAP is scheduled to automatically relaunch at: ${next_auto_launch}"
+    exit_clean
+}
+
+# Creates the user-writable Triggers directory + root LaunchDaemon WatchPaths helper so a
+# banner notification's Install Now action (running as the console user) can open the
+# pending-apps dialog as root. Choosing Install Now inside that dialog starts
+# --workflow-install-now. Also removes the legacy InstallNow WatchPaths daemon from earlier
+# 3.7.0 builds that jumped straight to --workflow-install-now.
+ensure_aap_pending_apps_dialog_trigger() {
+    [[ $(id -u) -ne 0 ]] && return 0
+
+    mkdir -p "${aapPendingAppsTriggerDir}"
+    chown root:wheel "${aapPendingAppsTriggerDir}"
+    # Sticky + world-writable so any console user can touch the trigger; only the owner (root)
+    # can delete others' files — same pattern as /tmp.
+    chmod 1777 "${aapPendingAppsTriggerDir}"
+
+    /bin/cat <<EOF > "${aapPendingAppsTriggerScript}"
+#!/bin/zsh --no-rcs
+# Invoked by LaunchDaemon WatchPaths when a console-user notification touches PendingAppsDialog.
+trigger_file="${aapPendingAppsTriggerFile}"
+aap_bin="${appAutoPatchFolder}/appautopatch"
+[[ -e "\${trigger_file}" ]] || exit 0
+rm -f "\${trigger_file}"
+[[ -x "\${aap_bin}" ]] || aap_bin="/usr/local/bin/appautopatch"
+[[ -x "\${aap_bin}" ]] || exit 0
+"\${aap_bin}" --pending-apps-dialog
+exit 0
+EOF
+    chown root:wheel "${aapPendingAppsTriggerScript}"
+    chmod 755 "${aapPendingAppsTriggerScript}"
+
+    # Thin user-context helper for notification button1action (cannot run appautopatch as root).
+    local request_script="${appAutoPatchFolder}/aap-notification-request-pending-apps"
+    /bin/cat <<EOF > "${request_script}"
+#!/bin/zsh --no-rcs
+/usr/bin/touch "${aapPendingAppsTriggerFile}"
+EOF
+    chown root:wheel "${request_script}"
+    chmod 755 "${request_script}"
+
+    local trigger_plist="/Library/LaunchDaemons/${aapPendingAppsTriggerLaunchDaemonLabel}.plist"
+    /bin/cat <<EOF > "${trigger_plist}"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>${aapPendingAppsTriggerLaunchDaemonLabel}</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>${aapPendingAppsTriggerScript}</string>
+	</array>
+	<key>WatchPaths</key>
+	<array>
+		<string>${aapPendingAppsTriggerDir}</string>
+	</array>
+	<key>UserName</key>
+	<string>root</string>
+	<key>RunAtLoad</key>
+	<false/>
+</dict>
+</plist>
+EOF
+    chown root:wheel "${trigger_plist}"
+    chmod 644 "${trigger_plist}"
+    launchctl bootout system "${trigger_plist}" >/dev/null 2>&1
+    launchctl bootstrap system "${trigger_plist}" >/dev/null 2>&1
+    log_verbose "Pending-apps dialog notification trigger ready at ${aapPendingAppsTriggerFile}"
+
+    # Remove legacy Install Now WatchPaths daemon/helper from earlier 3.7.0 builds.
+    local legacy_plist="/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist"
+    launchctl bootout system "${legacy_plist}" >/dev/null 2>&1
+    rm -f "${legacy_plist}" \
+          "${aapInstallNowTriggerScript}" \
+          "${aapInstallNowTriggerFile}" \
+          "${appAutoPatchFolder}/aap-notification-request-install-now" 2>/dev/null
+}
+
+# Back-compat name used by older call sites / mental model; forwards to the pending-apps trigger.
+ensure_aap_install_now_trigger() {
+    ensure_aap_pending_apps_dialog_trigger
+}
+
+# Replace {count}/{remaining} placeholders in notification language strings.
+_format_notification_message() {
+    local template="$1"
+    local count="${2:-0}"
+    local remaining="${3:-0}"
+    local message="${template}"
+    message="${message//\{count\}/${count}}"
+    message="${message//\{remaining\}/${remaining}}"
+    print -r -- "${message}"
+}
+
+# Returns 0 when the given banner notification type should be shown.
+# ShowNotificationsAll=TRUE enables every type and wins over individual keys.
+# When All is FALSE, only types with their individual key TRUE are shown.
+# Usage: aap_notification_enabled silent_updated|apps_queued|silent_and_queued
+aap_notification_enabled() {
+    local notif_type="$1"
+    if [[ "${ShowNotificationsAllOption}" == "TRUE" ]]; then
+        return 0
+    fi
+    case "${notif_type}" in
+        silent_updated)
+            [[ "${ShowNotificationsSilentUpdatedOption}" == "TRUE" ]] && return 0
+            ;;
+        apps_queued)
+            [[ "${ShowNotificationsAppsQueuedOption}" == "TRUE" ]] && return 0
+            ;;
+        silent_and_queued)
+            [[ "${ShowNotificationsSilentAndQueuedOption}" == "TRUE" ]] && return 0
+            ;;
+    esac
+    return 1
+}
+
+# Send a non-persistent banner-style swiftDialog notification.
+# Usage: send_aap_notification <message> [offer_install_now]
+# Callers must gate with aap_notification_enabled <type> first.
+send_aap_notification() {
+    local message="$1"
+    local offer_install_now="${2:-FALSE}"
+
+    [[ -z "${message}" ]] && return 0
+    [[ "${currentUserAccountName}" == "FALSE" || -z "${currentUserAccountName}" ]] && {
+        log_verbose "No console user; skipping notification."
+        return 0
+    }
+    [[ ! -x "${dialogBinary}" ]] && {
+        log_verbose "swiftDialog not available; skipping notification."
+        return 0
+    }
+
+    ensure_aap_pending_apps_dialog_trigger
+
+    local notifIcon="${logoImage}"
+    [[ -s "${notifIcon}" ]] || notifIcon="${icon}"
+    # Prefer a file path for notification icons; SF symbols may not render in banner helpers.
+    if [[ "${notifIcon}" == SF=* ]]; then
+        [[ -s "${logoImage}" ]] && notifIcon="${logoImage}"
+    fi
+
+    local -a notifArgs
+    notifArgs=(
+        --notification
+        --style banner
+        --title "${appTitle}"
+        --message "${message}"
+        --identifier "xyz.techitout.appAutoPatch.notification"
+    )
+    [[ -n "${notifIcon}" && "${notifIcon}" != SF=* && -e "${notifIcon}" ]] && notifArgs+=(--icon "${notifIcon}")
+
+    if [[ "${offer_install_now}" == "TRUE" ]]; then
+        # Opens the pending-apps dialog (not a silent --workflow-install-now). Install Now inside
+        # that dialog is what starts the privileged install workflow.
+        local request_script="${appAutoPatchFolder}/aap-notification-request-pending-apps"
+        notifArgs+=(
+            --button1text "${display_string_notification_button_install}"
+            --button1action "${request_script}"
+            --button2text "${display_string_notification_button_dismiss}"
+        )
+    fi
+
+    log_notice "Sending banner notification: ${message}"
+    # swiftDialog 3.1 delivers banner/alert notifications through helper apps that run in the
+    # calling context. Launched from a root daemon they cannot reach the user's notification
+    # service ("connection to com.apple.usernotifications.listener was invalidated") and nothing
+    # is displayed, so hand the notification off to the console user's GUI session.
+    local -a notifCommand
+    notifCommand=("${dialogBinary}")
+    if [[ $(id -u) -eq 0 ]] && [[ -n "${currentUserID}" ]] && [[ "${currentUserID}" != "FALSE" ]]; then
+        notifCommand=(launchctl asuser "${currentUserID}" sudo -u "${currentUserAccountName}" "${dialogBinary}")
+    fi
+    if [[ "${verbose_mode_option}" == "TRUE" ]]; then
+        "${notifCommand[@]}" "${notifArgs[@]}" >> "${appAutoPatchVerboseLog}" 2>&1 &
+    else
+        "${notifCommand[@]}" "${notifArgs[@]}" >/dev/null 2>&1 &
+    fi
+    disown
+}
+
+send_aap_notification_silent_updated() {
+    local count="${1:-0}"
+    (( count > 0 )) || return 0
+    aap_notification_enabled silent_updated || {
+        log_verbose "Skipping silent-updated notification (disabled by preference)."
+        return 0
+    }
+    local message
+    message="$(_format_notification_message "${display_string_notification_silent_updated}" "${count}")"
+    send_aap_notification "${message}" "FALSE"
+}
+
+send_aap_notification_apps_queued() {
+    local count="${1:-0}"
+    (( count > 0 )) || return 0
+    aap_notification_enabled apps_queued || {
+        log_verbose "Skipping apps-queued notification (disabled by preference)."
+        return 0
+    }
+    local message
+    message="$(_format_notification_message "${display_string_notification_apps_queued}" "${count}")"
+    send_aap_notification "${message}" "TRUE"
+}
+
+send_aap_notification_silent_and_queued() {
+    local updated="${1:-0}"
+    local remaining="${2:-0}"
+    (( updated > 0 )) || return 0
+    aap_notification_enabled silent_and_queued || {
+        log_verbose "Skipping silent-and-queued notification (disabled by preference)."
+        return 0
+    }
+    local message
+    message="$(_format_notification_message "${display_string_notification_silent_and_queued}" "${updated}" "${remaining}")"
+    if (( remaining > 0 )); then
+        send_aap_notification "${message}" "TRUE"
+    else
+        send_aap_notification "${message}" "FALSE"
+    fi
+}
+
+# Early gate: during BusinessHours, either continue silent closed-app patching
+# (BusinessHoursSilentDuring), run discovery-only when BusinessHoursAllowDiscovery is TRUE,
+# or reschedule to the next clear time and exit cleanly.
+# ShowNotifications* independently controls banner notifications after discovery.
+# Bypassed by --workflow-install-now / --workflow-install-now-silent / --preview-deferral-dialog,
+# and by overdue hard deadline unless BusinessHoursRespectHardDeadline is TRUE.
+enforce_business_hours() {
+    business_hours_silent_during_active="FALSE"
+    business_hours_discovery_only_active="FALSE"
+    if [[ "${workflow_discovery_only_active}" == "TRUE" ]]; then
+        log_status "BusinessHours bypassed for headless discovery-only workflow."
+        return 0
+    fi
+    if [[ ${#business_hours_windows[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ "${workflow_install_now_silent_option}" == "TRUE" ]] || [[ "${preview_deferral_dialog_option}" == "TRUE" ]] || [[ "${pending_apps_dialog_option}" == "TRUE" ]]; then
+        log_status "BusinessHours bypassed (install-now, preview-deferral-dialog, or pending-apps-dialog)."
+        return 0
+    fi
+
+    if [[ "${business_hours_respect_hard_deadline_option}" != "TRUE" ]] && is_hard_deadline_due_lightweight; then
+        log_status "Hard deadline due; bypassing BusinessHours."
+        return 0
+    fi
+
+    local now_epoch
+    now_epoch=$(date +%s)
+    if ! is_epoch_in_business_hours "${now_epoch}"; then
+        log_verbose "Outside BusinessHours; workflow allowed."
+        return 0
+    fi
+
+    log_status "During BusinessHours (${business_hours_option})."
+
+    if [[ "${business_hours_silent_during_option}" == "TRUE" ]]; then
+        business_hours_silent_during_active="TRUE"
+        log_status "BusinessHoursSilentDuring enabled; continuing with discovery and closed-app silent patching only (no dialogs)."
+        write_status "Running: During BusinessHours; silent closed-app patching."
+        return 0
+    fi
+
+    # Without SilentDuring, historically AAP exited before discovery. AllowDiscovery runs
+    # discovery then defers; notifications may banner pending apps after discovery.
+    if [[ "${business_hours_allow_discovery_option}" == "TRUE" ]]; then
+        business_hours_discovery_only_active="TRUE"
+        log_status "BusinessHoursAllowDiscovery enabled; continuing with discovery only (no interactive dialogs or silent patching)."
+        write_status "Running: During BusinessHours; discovery only."
+        return 0
+    fi
+
+    business_hours_defer_until_clear_and_exit "During BusinessHours"
+}
+
+_snapshot_discovery_only_schedule() {
+    [[ -f "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" ]] && return 0
+    local existing
+    existing=$(defaults read "${appAutoPatchLocalPLIST}" NextAutoLaunch 2>/dev/null)
+    [[ -z "${existing}" ]] && existing="__UNSET__"
+    printf '%s\n' "${existing}" > "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}"
+    chmod 600 "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" 2>/dev/null
+    log_verbose "Discovery-only workflow saved interrupted NextAutoLaunch=${existing}."
+}
+
+_restore_discovery_only_schedule() {
+    [[ -f "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" ]] || return 1
+    local saved
+    IFS= read -r saved < "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}"
+    case "${saved}" in
+        "__UNSET__"|"")
+            defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2>/dev/null
+        ;;
+        "FALSE"|"0")
+            defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -string FALSE
+        ;;
+        *)
+            defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${saved}"
+        ;;
+    esac
+    rm -f "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" 2>/dev/null
+    log_verbose "Discovery-only workflow restored interrupted NextAutoLaunch=${saved}."
+    return 0
+}
+
+# Restore a saved schedule only when it is a real date that is still in the future, reporting the
+# value in ${discovery_only_restored_schedule}. Unset, disabled, and overdue values return 1 so the
+# caller can compute a fresh date instead of leaving a scheduled-discovery Mac without one.
+_restore_future_discovery_only_schedule() {
+    discovery_only_restored_schedule=""
+    [[ -f "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" ]] || return 1
+    local saved saved_epoch
+    IFS= read -r saved < "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}"
+    case "${saved}" in
+        "__UNSET__"|""|"FALSE"|"0") return 1 ;;
+    esac
+    saved_epoch=$(date -j -f "${timestamp_format}" "${saved}" +%s 2>/dev/null)
+    [[ "${saved_epoch}" =~ ^[0-9]+$ ]] || return 1
+    (( saved_epoch > $(date +%s) )) || return 1
+    defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${saved}"
+    rm -f "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" 2>/dev/null
+    discovery_only_restored_schedule="${saved}"
+    log_verbose "Discovery-only workflow kept the interrupted scheduled-discovery date ${saved}."
+    return 0
+}
+
+_next_scheduled_discovery_epoch() {
+    local now_epoch last_discovery_epoch interval_seconds next_epoch
+    now_epoch=$(date +%s)
+    last_discovery_epoch=$(defaults read "${appAutoPatchLocalPLIST}" LastDiscoveryEpoch 2>/dev/null)
+    [[ "${last_discovery_epoch}" =~ ^[0-9]+$ ]] || last_discovery_epoch=0
+
+    if [[ "${DiscoveryFrequency}" =~ ^[0-9]+$ ]] && (( DiscoveryFrequency > 0 )); then
+        interval_seconds=$(( DiscoveryFrequency * 3600 ))
+        if (( last_discovery_epoch > 0 )); then
+            next_epoch=$(( last_discovery_epoch + interval_seconds ))
+        else
+            next_epoch=$(( now_epoch + interval_seconds ))
+        fi
+    else
+        # DiscoveryFrequency=0 historically means "scan every workflow." A LaunchDaemon checked
+        # every 60 seconds would spin, so use the normal workflow relaunch interval as a safe floor.
+        local fallback_minutes="${deferral_timer_workflow_relaunch_minutes:-${DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES}}"
+        [[ "${fallback_minutes}" =~ ^[0-9]+$ ]] || fallback_minutes="${DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES}"
+        (( fallback_minutes < 2 )) && fallback_minutes=2
+        interval_seconds=$(( fallback_minutes * 60 ))
+        next_epoch=$(( now_epoch + interval_seconds ))
+    fi
+
+    # A manual trigger may arrive after the calculated due time. Never leave an overdue date that
+    # would make aap-starter launch discovery every 60 seconds.
+    (( next_epoch <= now_epoch )) && next_epoch=$(( now_epoch + interval_seconds ))
+    echo "${next_epoch}"
+}
+
+schedule_next_discovery_and_exit() {
+    local context="${1:-Discovery-only workflow complete}"
+    local next_epoch next_date
+    next_epoch=$(_next_scheduled_discovery_epoch)
+    next_date=$(date -r "${next_epoch}" +"${timestamp_format}")
+    defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_date}"
+    rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2>/dev/null
+    write_status "Pending: ${context}; next discovery ${next_date}."
+    log_exit "${context}; next discovery scheduled for ${next_date}."
+    exit_clean
+}
+
+exit_discovery_only_workflow() {
+    local context="${1:-Discovery-only workflow complete}"
+    if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]] && [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]]; then
+        # A one-shot that interrupted a still-future scheduled discovery keeps that date rather than
+        # resetting the fleet's cadence to this manual run.
+        if _restore_future_discovery_only_schedule; then
+            rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2>/dev/null
+            write_status "Pending: ${context}; next discovery ${discovery_only_restored_schedule}."
+            log_exit "${context}; keeping the interrupted discovery schedule ${discovery_only_restored_schedule}."
+            exit_clean
+        fi
+        schedule_next_discovery_and_exit "${context}"
+    fi
+
+    # Explicit one-shot discovery keeps the workflow schedule it interrupted. If there was no
+    # usable schedule, the shared helper creates the same safe fallback used by one-shot dialogs.
+    _restore_discovery_only_schedule
+    rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2>/dev/null
+    write_status "Idle: ${context}."
+    _exit_one_shot_ui_preserving_schedule "${context}"
+}
+
+exit_after_disabled_relaunch() {
+    local context="${1:-Workflow complete}"
+    if [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]]; then
+        schedule_next_discovery_and_exit "${context}"
+    fi
+    log_aap "Status: ${context} and Automatic Relaunch is disabled. Exiting."
+    log_status "Inactive: ${context} and Automatic Relaunch is disabled."
+    /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2>/dev/null
+    { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+    disown
+    exit_clean
+}
+
 set_auto_launch_deferral() {
     log_verbose  "deferralNextLaunch is: ${deferral_timer_minutes}"
     local deferral_timestamp
     deferral_timestamp=$(( $(date +%s) + deferral_timer_minutes * 60 ))
+    local original_deferral_timestamp="${deferral_timestamp}"
+    deferral_timestamp=$(clamp_epoch_outside_business_hours "${deferral_timestamp}")
+    if [[ "${deferral_timestamp}" != "${original_deferral_timestamp}" ]]; then
+        log_notice "Deferral relaunch clamped outside BusinessHours (was $(date -r "${original_deferral_timestamp}" +"${timestamp_format}"))."
+    fi
     local next_auto_launch
     next_auto_launch=$(date -r $deferral_timestamp +"$timestamp_format")
     defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_auto_launch}"
@@ -3798,7 +5544,14 @@ set_auto_launch_deferral() {
 set_auto_launch_monthly_cadence() {
     log_verbose  "deferralNextLaunch is: ${next_nth_weekday}"
     fixed_input="${next_nth_weekday/:/ }"
-    next_nth_weekday_for_defaults="$(date -j -f "%Y-%m-%d %H:%M:%S" "$fixed_input" +"$timestamp_format")"
+    local cadence_epoch original_cadence_epoch
+    cadence_epoch=$(date -j -f "%Y-%m-%d %H:%M:%S" "$fixed_input" +%s)
+    original_cadence_epoch="${cadence_epoch}"
+    cadence_epoch=$(clamp_epoch_outside_business_hours "${cadence_epoch}")
+    if [[ "${cadence_epoch}" != "${original_cadence_epoch}" ]]; then
+        log_notice "Monthly cadence relaunch clamped outside BusinessHours (was $(date -r "${original_cadence_epoch}" +"${timestamp_format}"))."
+    fi
+    next_nth_weekday_for_defaults="$(date -r "${cadence_epoch}" +"$timestamp_format")"
     defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_nth_weekday_for_defaults}"
     log_exit "AAP is scheduled to automatically relaunch at: ${next_nth_weekday_for_defaults}"
     exit_clean
@@ -3823,6 +5576,318 @@ function killProcess() {
     fi
 }
 
+# Return success only when ${1} is the installed AAP zsh process. A live unrelated process can
+# inherit a stale PID after PID reuse; it must never be terminated merely because aap.pid points to it.
+_aap_pid_is_expected_process() {
+    local pid="$1"
+    [[ "${pid}" =~ '^[0-9]+$' ]] || return 1
+    kill -0 "${pid}" 2>/dev/null || return 1
+    [[ "$(ps -p "${pid}" -o uid= 2>/dev/null | tr -d ' ')" == "0" ]] || return 1
+    local command
+    command=$(ps -p "${pid}" -o command= 2>/dev/null)
+    [[ -n "${command}" ]] || return 1
+    _aap_command_invokes_aap "${command}"
+}
+
+# Match the program AAP was launched as, skipping any privilege wrapper or interpreter in front of
+# it. `sudo appautopatch …` and the LaunchDaemon both record a PID whose argv names the entrypoint
+# rather than the canonical script, so matching only the script filename disowned live AAP runs.
+_aap_command_invokes_aap() {
+    local -a tokens
+    tokens=(${=1})
+    local index token
+    for (( index = 1; index <= ${#tokens} && index <= 4; index++ )); do
+        token="${tokens[index]}"
+        case "${token}" in
+            sudo|*/sudo|-*) continue ;;
+            zsh|*/zsh|bash|*/bash|sh|*/sh) continue ;;
+        esac
+        [[ "${token:t}" == "appautopatch" ]] && return 0
+        [[ "${token:t}" == "App-Auto-Patch-via-Dialog.zsh" ]] && return 0
+        return 1
+    done
+    return 1
+}
+
+_aap_process_start_epoch() {
+    local lstart
+    lstart=$(ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')
+    [[ -n "${lstart}" ]] || return 1
+    date -j -f "%a %b %d %T %Y" "${lstart}" +%s 2>/dev/null
+}
+
+# Only AAP writes the heartbeat, and only for its own PID, so a recent record naming ${1} proves
+# that live PID is an AAP run even when its argv cannot be recognized. Used as a second opinion
+# before releasing a PID as foreign. A process that started after the heartbeat was written cannot
+# be the run that wrote it, and an expired record no longer proves anything: in both cases the
+# original run may have exited and left the PID to be reused by something that must not be signaled.
+_aap_heartbeat_claims_pid() {
+    local pid="$1"
+    [[ -f "${appAutoPatchHeartbeatFile}" ]] || return 1
+    local heartbeat_pid heartbeat_epoch heartbeat_phase
+    IFS=$'\t' read -r heartbeat_pid heartbeat_epoch heartbeat_phase < "${appAutoPatchHeartbeatFile}"
+    [[ "${heartbeat_pid}" == "${pid}" ]] || return 1
+    [[ "${heartbeat_epoch}" =~ '^[0-9]+$' ]] || return 1
+
+    local start_epoch
+    start_epoch=$(_aap_process_start_epoch "${pid}")
+    [[ "${start_epoch}" =~ '^[0-9]+$' ]] || return 1
+    (( start_epoch <= heartbeat_epoch )) || return 1
+
+    local max_age="${stale_process_timeout_seconds}"
+    [[ "${max_age}" =~ '^[0-9]+$' ]] || max_age=3600
+    (( max_age == 0 )) && return 0
+    (( max_age < 300 )) && max_age=300
+    (( $(date +%s) - heartbeat_epoch <= max_age ))
+}
+
+_aap_process_tree_pids() {
+    local pid="$1"
+    local child
+    for child in $(pgrep -P "${pid}" 2>/dev/null); do
+        _aap_process_tree_pids "${child}"
+    done
+    print -r -- "${pid}"
+}
+
+_aap_terminate_process_tree() {
+    local pid="$1"
+    local grace_seconds="${2:-10}"
+    [[ "${pid}" =~ '^[0-9]+$' ]] || return 0
+    kill -0 "${pid}" 2>/dev/null || return 0
+
+    local -a tree_pids
+    tree_pids=("${(@f)$(_aap_process_tree_pids "${pid}")}")
+    local tree_pid
+    for tree_pid in "${tree_pids[@]}"; do
+        kill -TERM "${tree_pid}" 2>/dev/null
+    done
+    local waited=0
+    while (( waited < grace_seconds )); do
+        local any_alive="FALSE"
+        for tree_pid in "${tree_pids[@]}"; do
+            kill -0 "${tree_pid}" 2>/dev/null && any_alive="TRUE"
+        done
+        [[ "${any_alive}" == "FALSE" ]] && break
+        sleep 1
+        (( waited++ ))
+    done
+    for tree_pid in "${tree_pids[@]}"; do
+        kill -0 "${tree_pid}" 2>/dev/null && kill -KILL "${tree_pid}" 2>/dev/null
+    done
+}
+
+# Clear command files abandoned by other instances while keeping the one this run already created
+# in set_defaults; deleting it would break the swiftDialog window this instance is about to open.
+_aap_clear_foreign_dialog_command_files() {
+    local file
+    for file in /var/tmp/dialog.appAutoPatch.*(N); do
+        [[ "${file}" == "${dialogCommandFile}"* ]] && continue
+        rm -f "${file}" 2>/dev/null
+    done
+}
+
+_aap_ancestor_pids() {
+    local pid=$$
+    local guard=0
+    while [[ "${pid}" =~ '^[0-9]+$' ]] && (( pid > 1 )) && (( guard < 32 )); do
+        print -r -- "${pid}"
+        pid=$(ps -p "${pid}" -o ppid= 2>/dev/null | tr -d ' ')
+        (( guard++ ))
+    done
+}
+
+# AAP is single-instance, but the PID marker can be lost or released while an older run continues
+# (that run then kept working and showed a second set of dialogs). Sweep any other live AAP run so
+# ownership of the markers and the user-facing dialogs always belongs to exactly one process.
+_aap_terminate_orphaned_instances() {
+    local -a ancestors
+    ancestors=("${(@f)$(_aap_ancestor_pids)}")
+    local candidate
+    for candidate in "${(@f)$(pgrep -f 'App-Auto-Patch-via-Dialog.zsh|appautopatch' 2>/dev/null)}"; do
+        [[ "${candidate}" =~ '^[0-9]+$' ]] || continue
+        (( ${ancestors[(Ie)${candidate}]} )) && continue
+        _aap_pid_is_expected_process "${candidate}" || continue
+        if [[ -d "${appAutoPatchLogFolder}" ]]; then
+            log_warning "Found orphaned AAP instance PID ${candidate} without runtime markers; terminating it gracefully..."
+        else
+            log_echo "Warning: Found orphaned AAP instance PID ${candidate} without runtime markers; terminating it gracefully..."
+        fi
+        _aap_terminate_process_tree "${candidate}" 10
+        _aap_restore_pre_discovery_report "/var/tmp/aap-report-pre-discovery.${candidate}.plist"
+        _aap_clear_foreign_dialog_command_files
+    done
+}
+
+_aap_heartbeat() {
+    setopt localoptions extended_glob
+    local phase="${1:-running}"
+    # The record must stay one tab-delimited line: callers pass label-derived text that can contain
+    # newlines/tabs, which would truncate the phase and leave aap-starter parsing a partial record.
+    phase="${phase//[[:space:]]##/ }"
+    phase="${phase##[[:space:]]#}"
+    phase="${phase%%[[:space:]]#}"
+    phase="${phase[1,80]}"
+    [[ -z "${phase}" ]] && phase="running"
+    local owner_pid=""
+    [[ -f "${appAutoPatchPIDfile}" ]] && owner_pid=$(<"${appAutoPatchPIDfile}")
+    [[ "${owner_pid}" == "$$" ]] || return 0
+    local heartbeat_tmp="${appAutoPatchHeartbeatFile}.$$"
+    printf '%s\t%s\t%s\n' "$$" "$(date +%s)" "${phase}" > "${heartbeat_tmp}" 2>/dev/null \
+        && mv -f "${heartbeat_tmp}" "${appAutoPatchHeartbeatFile}" 2>/dev/null
+}
+
+# Keep the supervisor heartbeat fresh while AAP is intentionally blocked on a foreground user
+# dialog. Unlike staging/install work, waiting for a user's choice is not a lack of progress.
+_aap_wait_for_dialog_with_heartbeat() {
+    local pid="$1"
+    local phase="${2:-dialog}"
+    local ticks=0
+    while kill -0 "${pid}" 2>/dev/null; do
+        if (( ticks % 30 == 0 )); then
+            _aap_heartbeat "dialog:${phase}"
+        fi
+        sleep 1
+        (( ticks++ ))
+    done
+    wait "${pid}" 2>/dev/null
+    return $?
+}
+
+_aap_restore_pre_discovery_report() {
+    local backup_path="${1:-${aapReportPreDiscoveryBackup}}"
+    [[ -f "${backup_path}" ]] || return 0
+    local restore_tmp="${appAutoPatchReportPLIST}.plist.restore.$$"
+    if cp -p "${backup_path}" "${restore_tmp}" 2>/dev/null \
+        && mv -f "${restore_tmp}" "${appAutoPatchReportPLIST}.plist" 2>/dev/null; then
+        rm -f "${backup_path}" 2>/dev/null
+        log_notice "Restored the pre-discovery pending-app report after an interrupted discovery."
+    else
+        rm -f "${restore_tmp}" 2>/dev/null
+        log_warning "Unable to restore the pre-discovery pending-app report from ${backup_path}."
+    fi
+}
+
+_aap_discard_pre_discovery_report_backup() {
+    rm -f "${aapReportPreDiscoveryBackup}" 2>/dev/null
+}
+
+_aap_clear_runtime_files() {
+    local recorded_pid=""
+    [[ -f "${appAutoPatchPIDfile}" ]] && recorded_pid=$(<"${appAutoPatchPIDfile}")
+    if [[ -z "${recorded_pid}" ]] || [[ "${recorded_pid}" == "$$" ]]; then
+        rm -f "${appAutoPatchPIDfile}" "${appAutoPatchHeartbeatFile}" 2>/dev/null
+    fi
+    rm -f "${dialogCommandFile}" "${dialogCommandFile}.selection.$$" 2>/dev/null
+}
+
+# TERM/INT/HUP are crash-recovery exits: clear runtime locks, but deliberately leave
+# NextAutoLaunch untouched/unset so aap-starter can relaunch after an unexpected termination.
+# Headless discovery is the exception — it has no schedule to fall back on while relaunch is
+# disabled, so a signaled run writes its next date rather than being retried every 60 seconds.
+_aap_signal_cleanup() {
+    trap - HUP INT TERM
+    _aap_restore_pre_discovery_report
+    _aap_finalize_discovery_schedule_on_error
+    _aap_clear_runtime_files
+    exit 143
+}
+
+_aap_ensure_future_schedule_for_stop() {
+    local context="${1:-App Auto-Patch stopped}"
+    local existing existing_epoch now relaunch_minutes next_epoch next_date disable_relaunch scheduled_discovery discovery_frequency
+    existing=$(defaults read "${appAutoPatchLocalPLIST}" NextAutoLaunch 2>/dev/null)
+    disable_relaunch=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+    [[ -z "${disable_relaunch}" ]] && disable_relaunch=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+    scheduled_discovery=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+    [[ -z "${scheduled_discovery}" ]] && scheduled_discovery=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+
+    now=$(date +%s)
+    existing_epoch=$(date -j -f "${timestamp_format}" "${existing}" +%s 2>/dev/null)
+    if { [[ "${disable_relaunch}" == "TRUE" ]] || [[ "${disable_relaunch}" == "1" ]]; } \
+    && { [[ "${scheduled_discovery}" == "TRUE" ]] || [[ "${scheduled_discovery}" == "1" ]]; }; then
+        if [[ -n "${existing_epoch}" ]] && (( existing_epoch > now )); then
+            return 0
+        fi
+        discovery_frequency=$(defaults read "${appAutoPatchManagedPLIST}" DiscoveryFrequency 2>/dev/null)
+        [[ -z "${discovery_frequency}" ]] && discovery_frequency=$(defaults read "${appAutoPatchLocalPLIST}" DiscoveryFrequency 2>/dev/null)
+        [[ "${discovery_frequency}" =~ ^[0-9]+$ ]] || discovery_frequency=24
+        local saved_discovery_frequency="${DiscoveryFrequency}"
+        DiscoveryFrequency="${discovery_frequency}"
+        next_epoch=$(_next_scheduled_discovery_epoch)
+        DiscoveryFrequency="${saved_discovery_frequency}"
+        next_date=$(date -r "${next_epoch}" +"${timestamp_format}")
+        defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_date}"
+        log_notice "${context}; preserved scheduled-discovery mode with next discovery ${next_date}."
+        return 0
+    fi
+
+    if [[ "${existing}" == "FALSE" ]] || [[ "${existing}" == "0" ]]; then
+        return 0
+    fi
+    if [[ "${disable_relaunch}" == "TRUE" ]] || [[ "${disable_relaunch}" == "1" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -string FALSE
+        return 0
+    fi
+    if [[ -n "${existing_epoch}" ]] && (( existing_epoch > now )); then
+        return 0
+    fi
+
+    relaunch_minutes=$(defaults read "${appAutoPatchManagedPLIST}" DeferralTimerWorkflowRelaunch 2>/dev/null)
+    [[ -z "${relaunch_minutes}" ]] && relaunch_minutes=$(defaults read "${appAutoPatchLocalPLIST}" DeferralTimerWorkflowRelaunch 2>/dev/null)
+    [[ "${relaunch_minutes}" =~ '^[0-9]+$' ]] || relaunch_minutes="${DEFERRAL_TIMER_WORKFLOW_RELAUNCH_DEFAULT_MINUTES}"
+    (( relaunch_minutes < 2 )) && relaunch_minutes=2
+    next_epoch=$(( now + relaunch_minutes * 60 ))
+    # In-process stops have already parsed BusinessHours; the CLI --stop path safely leaves this
+    # unchanged because business_hours_windows is still empty.
+    next_epoch=$(clamp_epoch_outside_business_hours "${next_epoch}")
+    next_date=$(date -r "${next_epoch}" +"${timestamp_format}")
+    defaults write "${appAutoPatchLocalPLIST}" NextAutoLaunch -date "${next_date}"
+    log_notice "${context}; scheduled the next run for ${next_date}."
+}
+
+# Administrative escape hatch. This is called while parsing --stop, before workflow_startup can
+# replace the PID file or clear NextAutoLaunch.
+stop_running_aap() {
+    [[ $(id -u) -eq 0 ]] || { log_echo "Error: --stop must be run as root."; exit 1; }
+    local pid=""
+    [[ -f "${appAutoPatchPIDfile}" ]] && pid=$(<"${appAutoPatchPIDfile}")
+
+    # --stop is authoritative: cancel a pending/running one-shot discovery request and restore the
+    # schedule it interrupted before applying the normal stop schedule-preservation rules.
+    if [[ -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" ]]; then
+        _restore_discovery_only_schedule
+        rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2>/dev/null
+    fi
+    _aap_ensure_future_schedule_for_stop "Administrative stop"
+    if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+        if _aap_pid_is_expected_process "${pid}" || _aap_heartbeat_claims_pid "${pid}"; then
+            log_echo "[STATUS] Stopping App Auto-Patch PID ${pid} and its child processes."
+            _aap_terminate_process_tree "${pid}" 10
+            _aap_restore_pre_discovery_report "/var/tmp/aap-report-pre-discovery.${pid}.plist"
+            _aap_clear_foreign_dialog_command_files
+        else
+            log_echo "[WARNING] PID file points to non-AAP process ${pid}; leaving that process untouched."
+        fi
+    else
+        log_echo "[STATUS] No running App Auto-Patch process was found."
+    fi
+    rm -f "${appAutoPatchPIDfile}" "${appAutoPatchHeartbeatFile}" 2>/dev/null
+    _aap_clear_runtime_files
+    write_status "Pending: App Auto-Patch stopped by administrator."
+    exit 0
+}
+
+_exit_user_stop_preserving_schedule() {
+    local context="${1:-User stopped App Auto-Patch}"
+    dialogPreparationIntentionalQuit="TRUE"
+    _aap_restore_pre_discovery_report
+    _aap_ensure_future_schedule_for_stop "${context}"
+    write_status "Pending: ${context}; queued updates remain pending."
+    log_notice "${context}; stopping cleanly with queued updates preserved."
+    exit_clean
+}
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Quit Script
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -3833,17 +5898,42 @@ exit_clean() {
     { [[ "${InteractiveModeOption}" == 0 ]]; } && defaults write $appAutoPatchLocalPLIST AAPLastSilentRunDate -date "$timestamp"
     defaults write $appAutoPatchLocalPLIST AAPLastRunDate -date "$timestamp"
     
+    _aap_restore_pre_discovery_report
     log_verbose  "Local preference file at clean exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
     log_aap "**** App Auto-Patch ${scriptVersion} - CLEAN EXIT ****"
-    rm -f "${appAutoPatchPIDfile}" 2> /dev/null
+    _aap_clear_runtime_files
     exit 0
+}
+
+_aap_finalize_discovery_schedule_on_error() {
+    # A failed explicit one-shot is complete (not a transient network deferral): restore the
+    # schedule it interrupted and disarm the request so aap-starter cannot retry every minute.
+    if [[ -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" ]]; then
+        _restore_discovery_only_schedule
+        rm -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" "${WORKFLOW_DISCOVERY_ONLY_SCHEDULE_FILE}" "${WORKFLOW_DISCOVERY_ONLY_DEFERRED_FILE}" 2>/dev/null
+        return 0
+    fi
+
+    # Scheduled-discovery startup removes NextAutoLaunch for crash recovery. A controlled error
+    # must put back a bounded future date; otherwise the 60-second LaunchDaemon would spin.
+    local disable_relaunch scheduled_discovery
+    disable_relaunch=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+    [[ -z "${disable_relaunch}" ]] && disable_relaunch=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+    scheduled_discovery=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+    [[ -z "${scheduled_discovery}" ]] && scheduled_discovery=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+    if { [[ "${disable_relaunch}" == "TRUE" ]] || [[ "${disable_relaunch}" == "1" ]]; } \
+    && { [[ "${scheduled_discovery}" == "TRUE" ]] || [[ "${scheduled_discovery}" == "1" ]]; }; then
+        _aap_ensure_future_schedule_for_stop "Discovery-only error"
+    fi
 }
 
 exit_error() {
 
+    _aap_restore_pre_discovery_report
+    _aap_finalize_discovery_schedule_on_error
     log_verbose "Local preference file at error exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2> /dev/null)"
     log_aap "**** App Auto-Patch ${scriptVersion} - ERROR EXIT ****"
-    rm -f "${appAutoPatchPIDfile}" 2> /dev/null
+    _aap_clear_runtime_files
     exit 1
 }
 
@@ -3851,9 +5941,117 @@ exit_error() {
 # Logging Related Functions
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+# Cached identity + open append FDs (H3). Avoids per-line hostname/basename/open syscalls.
+# Verbose FD is only opened when VerboseMode is TRUE; aap_verbose.log is otherwise untouched.
+typeset -g _aap_log_host=""
+typeset -g _aap_log_script=""
+typeset -g _aap_log_fd=0
+typeset -g _aap_verbose_log_fd=0
+
+_aap_init_log_identity() {
+    [[ -n "${_aap_log_host}" ]] && return 0
+    _aap_log_host=$(hostname -s 2>/dev/null)
+    [[ -z "${_aap_log_host}" ]] && _aap_log_host="localhost"
+    # ZSH_ARGZERO is the invoked script path. Plain $0 can't be used here: inside a zsh function
+    # it expands to the function name (which is why log lines historically read "log_aap[pid]").
+    _aap_log_script="${${ZSH_ARGZERO:-${(%):-%x}}:t}"
+    [[ -z "${_aap_log_script}" ]] && _aap_log_script="App-Auto-Patch-via-Dialog.zsh"
+}
+
+_aap_close_log_fds() {
+    if [[ ${_aap_log_fd:-0} -gt 2 ]]; then
+        exec {_aap_log_fd}>&-
+    fi
+    _aap_log_fd=0
+    if [[ ${_aap_verbose_log_fd:-0} -gt 2 ]]; then
+        exec {_aap_verbose_log_fd}>&-
+    fi
+    _aap_verbose_log_fd=0
+}
+
+# Open (or re-open) append FDs for the main log and, when VerboseMode is on, the verbose log.
+# Called after archive_logs moves a log file so subsequent writes recreate the live path.
+_aap_ensure_log_fds() {
+    _aap_init_log_identity
+    mkdir -p "${appAutoPatchLogFolder}" 2>/dev/null
+    if [[ ${_aap_log_fd:-0} -le 2 ]]; then
+        exec {_aap_log_fd}>>"${appAutoPatchLog}" 2>/dev/null || _aap_log_fd=0
+    fi
+    if [[ "${verbose_mode_option}" == "TRUE" ]]; then
+        if [[ ${_aap_verbose_log_fd:-0} -le 2 ]]; then
+            exec {_aap_verbose_log_fd}>>"${appAutoPatchVerboseLog}" 2>/dev/null || _aap_verbose_log_fd=0
+        fi
+    elif [[ ${_aap_verbose_log_fd:-0} -gt 2 ]]; then
+        # VerboseMode flipped off mid-run (shouldn't happen after early resolve) — close verbose FD.
+        exec {_aap_verbose_log_fd}>&-
+        _aap_verbose_log_fd=0
+    fi
+}
+
+_aap_reopen_log_fds() {
+    _aap_close_log_fds
+    _aap_ensure_log_fds
+}
+
+# Format one log line. Uses zsh's built-in %D strftime (no date(1) subprocess) plus cached host/script.
+_aap_format_log_line() {
+    print -r -- "$(print -P '%D{%a %b %d %T}') ${_aap_log_host} ${_aap_log_script}[$$]: $*"
+}
+
+# Resolve VerboseMode from managed → CLI → local (same precedence as before), early enough that
+# every subsequent log_aap / log_verbose call honors the gate for aap_verbose.log.
+resolve_verbose_mode() {
+    [[ "${reset_defaults_option}" == "TRUE" ]] && defaults delete "${appAutoPatchLocalPLIST}" VerboseMode 2> /dev/null
+
+    local verbose_mode_managed=""
+    local verbose_mode_local=""
+    if [[ -f "${appAutoPatchManagedPLIST}.plist" ]]; then
+        verbose_mode_managed=$(defaults read "${appAutoPatchManagedPLIST}" VerboseMode 2> /dev/null)
+    fi
+    if [[ -f "${appAutoPatchLocalPLIST}.plist" ]]; then
+        verbose_mode_local=$(defaults read "${appAutoPatchLocalPLIST}" VerboseMode 2> /dev/null)
+    fi
+
+    [[ -n "${verbose_mode_managed}" ]] && verbose_mode_option="${verbose_mode_managed}"
+    { [[ -z "${verbose_mode_managed}" ]] && [[ -z "${verbose_mode_option}" ]] && [[ -n "${verbose_mode_local}" ]]; } && verbose_mode_option="${verbose_mode_local}"
+
+    # Ensure the AAP folder exists so defaults write succeeds even on a first-run install
+    # (resolve_verbose_mode now runs before install_app_auto_patch).
+    mkdir -p "${appAutoPatchFolder}" 2>/dev/null
+
+    if [[ "${verbose_mode_option}" -eq 1 ]] || [[ "${verbose_mode_option}" == "TRUE" ]]; then
+        verbose_mode_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" VerboseMode -bool true
+    else
+        verbose_mode_option="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" VerboseMode 2> /dev/null
+    fi
+
+    # Ensure FDs match the resolved mode (opens verbose FD only when TRUE).
+    _aap_ensure_log_fds
+}
+
+# Core log writer. Scope decides which files the line lands in:
+#   main    - stdout + aap.log, mirrored into aap_verbose.log when VerboseMode is on
+#   verbose - stdout + aap_verbose.log only; VERBOSE lines never pollute aap.log
+# stdout is always written to preserve the historical tee -a behavior for Jamf/CLI output.
+_aap_write_log() {
+    local scope="$1"
+    shift
+    _aap_ensure_log_fds
+    local line
+    line="$(_aap_format_log_line "$*")"
+    echo -e "${line}"
+    if [[ "${scope}" != "verbose" ]] && [[ ${_aap_log_fd:-0} -gt 2 ]]; then
+        echo -e "${line}" >&${_aap_log_fd}
+    fi
+    if [[ "${verbose_mode_option}" == "TRUE" ]] && [[ ${_aap_verbose_log_fd:-0} -gt 2 ]]; then
+        echo -e "${line}" >&${_aap_verbose_log_fd}
+    fi
+}
+
 function log_aap() {
-    echo -e "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: $*" | tee -a "${appAutoPatchLog}"
-    echo -e "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: $*" >> "${appAutoPatchVerboseLog}"
+    _aap_write_log main "$*"
 }
 
 function log_notice () {
@@ -3869,9 +6067,11 @@ function log_uninstall () {
 }
 
 function log_verbose() {
-	local caller_line="${funcfiletrace[1]##*:}"
-	[[ "${verbose_mode_option}" == "TRUE" ]] && log_aap "[VERBOSE] Function ${funcstack[2]} (line ${caller_line}): $1"
-	echo -e "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: [VERBOSE] Function ${funcstack[2]} (line ${caller_line}): $1" >> "${appAutoPatchVerboseLog}"
+    # VerboseMode off: no work and no aap_verbose.log I/O. On: written once, to aap_verbose.log
+    # only - aap.log stays free of VERBOSE noise.
+    [[ "${verbose_mode_option}" == "TRUE" ]] || return 0
+    local caller_line="${funcfiletrace[1]##*:}"
+    _aap_write_log verbose "[VERBOSE] Function ${funcstack[2]} (line ${caller_line}): $1"
 }
 
 function log_debug () {
@@ -3915,10 +6115,12 @@ function log_exit() {
 
 write_status() {
     defaults write "${appAutoPatchLocalPLIST}" AAPStatus -string "$(date +$timestamp_format): $*"
+    _aap_heartbeat "status"
 }
 
 log_echo() {
-    echo -e "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: Not Logged: $*"
+    _aap_init_log_identity
+    echo -e "$(_aap_format_log_line "Not Logged: $*")"
 }
 
 archive_logs() {
@@ -3935,6 +6137,8 @@ archive_logs() {
         log_notice "**** App Auto-Patch ${scriptVersion} - LOGS ARCHIVAL ****"
         mkdir -p "${appAutoPatchLogArchiveFolder}/${log_archive_name}"
         mv "${appAutoPatchLog}" "${appAutoPatchLogArchiveFolder}/${log_archive_name}/$(basename ${appAutoPatchLog})"
+        # Live path moved; reopen append FD so the next write recreates aap.log (tee -a used to).
+        _aap_reopen_log_fds
         log_notice "**** App Auto-Patch ${scriptVersion} - LOGS ARCHIVAL ****"
         log_status "An App Auto-Patch log was larger than ${appAutoPatchLogArchiveSize} KB, previous logs archived to: ${appAutoPatchLogArchiveFolder}/${log_archive_name}.zip"
         zip -r -j "${appAutoPatchLogArchiveFolder}/${log_archive_name}.zip" "${appAutoPatchLogArchiveFolder}/${log_archive_name}" > /dev/null 2>&1
@@ -3952,6 +6156,8 @@ archive_logs() {
         log_notice "**** App Auto-Patch ${scriptVersion} - VERBOSE LOGS ARCHIVAL ****"
         mkdir -p "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}"
         mv "${appAutoPatchVerboseLog}" "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}/$(basename ${appAutoPatchVerboseLog})"
+        # Live verbose path moved; reopen so VerboseMode mirrors recreate aap_verbose.log.
+        _aap_reopen_log_fds
         log_notice "**** App Auto-Patch ${scriptVersion} - VERBOSE LOGS ARCHIVAL ****"
         log_status "Verbose log was larger than ${appAutoPatchVerboseLogArchiveSize} KB, previous log archived to: ${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}.zip"
         zip -r -j "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}.zip" "${appAutoPatchVerboseLogArchiveFolder}/${verbose_archive_name}" > /dev/null 2>&1
@@ -4082,6 +6288,7 @@ swiftDialogPatchingWindow(){
         fi
         
         # Build our list of Display Names for the SwiftDialog list
+        displayNames=()
         for label in $queuedLabelsArray; do
             # Get display name from label fragment
             currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
@@ -4094,24 +6301,263 @@ swiftDialogPatchingWindow(){
         done
         
         _prepare_dialog_command_file
+        : > "$dialogCommandFile"
+        chmod 644 "$dialogCommandFile" 2>/dev/null
+        
+        dialogPatchingContinueBackground="FALSE"
+        dialogPatchingIntentionalQuit="FALSE"
         
         # Create our running swiftDialog window
         $dialogBinary \
         ${dialogPatchingConfigurationOptions[@]} \
         ${displayNames[@]} \
         &
+        dialogPatchingPID=$!
+        log_verbose "Patching dialog PID: ${dialogPatchingPID}"
     fi
     
+}
+
+# Relaunch the patching progress dialog after Dock Quit / ⌘Q, preserving completed-item status.
+_relaunch_patching_dialog() {
+    [[ ${InteractiveModeOption} -lt 1 ]] && return 0
+
+    currentUser=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
+    if [ "$currentUser" = "root" ] || [ "$currentUser" = "loginwindow" ] || [ "$currentUser" = "_mbsetupuser" ] || [ -z "$currentUser" ]; then
+        return 0
+    fi
+
+    local -a relaunchDisplayNames
+    local idx=0
+    local label currentDisplay_name iconPath
+
+    for label in $queuedLabelsArray; do
+        currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        iconPath=$(resolve_app_icon_path "$label")
+        relaunchDisplayNames+=("--listitem")
+        if [[ -n "${patchingItemStatus[$idx]}" ]]; then
+            relaunchDisplayNames+=(${currentDisplay_name},icon="${iconPath}",status="${patchingItemStatus[$idx]}")
+        else
+            relaunchDisplayNames+=(${currentDisplay_name},icon="${iconPath}")
+        fi
+        (( idx++ ))
+    done
+
+    sleep 1
+    _prepare_dialog_command_file
+    : > "$dialogCommandFile"
+    chmod 644 "$dialogCommandFile" 2>/dev/null
+
+    dialogPatchingContinueBackground="FALSE"
+    dialogPatchingIntentionalQuit="FALSE"
+
+    $dialogBinary \
+    ${dialogPatchingConfigurationOptions[@]} \
+    ${relaunchDisplayNames[@]} \
+    &
+    dialogPatchingPID=$!
+    log_notice "Relaunched patching dialog (PID ${dialogPatchingPID}) after user quit."
+
+    sleep 0.5
+    swiftDialogUpdate "infobox: + <br><br>"
+    swiftDialogUpdate "infobox: + **${display_string_patching_infobox_updates}** ${queuedLabelsArrayLength}"
+    # Restore progress roughly to completed count.
+    if (( queuedLabelsArrayLength > 0 )); then
+        swiftDialogUpdate "progress: $(( (100 * i) / queuedLabelsArrayLength ))"
+    fi
+    if [[ "${dialogSupportsDockIcon}" == "TRUE" ]]; then
+        swiftDialogUpdate "dockiconbadge: $(( queuedLabelsArrayLength - i ))"
+    fi
+}
+
+# Prompt shown when the backgrounded patching dialog disappears unexpectedly (Dock ▸ Quit, menu bar
+# Quit, or cmd+quitkey). Button 1 = Show Progress (relaunch). Button 2 / Quit / timeout = continue headless.
+_dialog_patching_dismissed_prompt() {
+    local dismissedContent dismissedOutput
+    # Quitting from the Dock terminates Dialog.app, so give it a moment to fully exit before
+    # launching another window.
+    sleep 1
+    _prepare_dialog_command_file
+
+    dismissedContent=(
+        --title "$appTitle"
+        --message "${display_string_dialogdismissed_message}"
+        --messagefont size=12
+        --icon "$icon"
+        --button1text "${display_string_dialogdismissed_button1}"
+        --button2text "${display_string_dialogdismissed_button2}"
+        --style "mini"
+        --moveable
+        --position center
+        --windowbuttons min
+        --quitkey k
+        --timer 30
+        --hidetimerbar
+        ${dialogDockOptions[@]}
+    )
+    if [[ "$dialogOnTop" == "TRUE" ]]; then
+        dismissedContent+=(--ontop)
+    fi
+
+    "$dialogBinary" "${dismissedContent[@]}"
+    dismissedOutput=$?
+    log_aap "patchingDismissedDialogOutput: $dismissedOutput"
+
+    case "${dismissedOutput}" in
+        0)
+            log_status "User chose Show Progress after dismissing the patching dialog."
+            _relaunch_patching_dialog
+        ;;
+        *)
+            log_status "User chose to continue patching in the background (or dismissed the prompt)."
+            dialogPatchingContinueBackground="TRUE"
+            dialogPatchingPID=""
+        ;;
+    esac
+}
+
+# Called during the install loop: if the patching dialog was Quit'd via Dock/⌘Q, offer relaunch.
+_ensure_patching_dialog() {
+    [[ ${InteractiveModeOption} -lt 1 ]] && return 0
+    [[ "${dialogPatchingContinueBackground}" == "TRUE" ]] && return 0
+    [[ "${dialogPatchingIntentionalQuit}" == "TRUE" ]] && return 0
+    [[ -z "${dialogPatchingPID}" ]] && return 0
+
+    if kill -0 "${dialogPatchingPID}" 2>/dev/null; then
+        return 0
+    fi
+
+    wait "${dialogPatchingPID}" 2>/dev/null
+    local dialogExit=$?
+    log_warning "Patching dialog is no longer running (PID ${dialogPatchingPID}, exit ${dialogExit})."
+    dialogPatchingPID=""
+    _dialog_patching_dismissed_prompt
+}
+
+# Stop is a user deferral-equivalent. It must not be available after a hard deadline (discovery
+# runs before check_deadlines_* in main) or during Install Now. Admin `appautopatch --stop` is
+# unaffected.
+_aap_preparation_stop_disallowed_reason() {
+    if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ "${pending_apps_install_now_option}" == "TRUE" ]]; then
+        echo "Install Now is in progress"
+        return 0
+    fi
+    if is_hard_deadline_due_lightweight; then
+        echo "a hard deadline is due"
+        return 0
+    fi
+    return 1
+}
+
+_dialog_preparation_dismissed_prompt() {
+    local stop_block_reason
+    if stop_block_reason=$(_aap_preparation_stop_disallowed_reason); then
+        log_status "Preparation window dismissed; continuing because ${stop_block_reason}."
+        dialogPreparationContinueBackground="TRUE"
+        return 0
+    fi
+
+    sleep 1
+    _prepare_dialog_command_file
+
+    local -a promptOptions
+    promptOptions=(
+        --title "$appTitle"
+        --message "${display_string_preparationdismissed_message}"
+        --messagefont size=12
+        --icon "$icon"
+        --button1text "${display_string_preparationdismissed_button1}"
+        --button2text "${display_string_preparationdismissed_button2}"
+        --style "mini"
+        --moveable
+        --position center
+        --windowbuttons min
+        --quitkey k
+        --timer 30
+        --hidetimerbar
+        ${dialogDockOptions[@]}
+    )
+    [[ "$dialogOnTop" == "TRUE" ]] && promptOptions+=(--ontop)
+
+    "$dialogBinary" "${promptOptions[@]}"
+    local promptExit=$?
+    if [[ "${promptExit}" == "2" ]]; then
+        if stop_block_reason=$(_aap_preparation_stop_disallowed_reason); then
+            log_status "Stop is unavailable because ${stop_block_reason}; continuing App Auto-Patch."
+        else
+            log_status "User chose to stop App Auto-Patch after closing the preparation window."
+            _exit_user_stop_preserving_schedule "User stopped App Auto-Patch during update preparation"
+        fi
+    fi
+
+    # Button 1, timeout, Quit, and any unexpected result all choose the safe non-destructive path.
+    log_status "Preparation window dismissed; continuing App Auto-Patch in the background."
+    dialogPreparationContinueBackground="TRUE"
+}
+
+# Detect discovery/staging Dock Quit only between labels. This avoids interrupting an active
+# Installomator operation; a staging curl is likewise allowed to return/fail before policy runs.
+_ensure_preparation_dialog() {
+    local phase="$1"
+    [[ "${dialogPreparationContinueBackground}" == "TRUE" ]] && return 0
+    [[ "${dialogPreparationIntentionalQuit}" == "TRUE" ]] && return 0
+
+    local pid=""
+    case "${phase}" in
+        discovery) pid="${dialogDiscoverPID}" ;;
+        staging) pid="${dialogStagingPID}" ;;
+        *) return 0 ;;
+    esac
+    [[ -z "${pid}" ]] && return 0
+    kill -0 "${pid}" 2>/dev/null && return 0
+
+    wait "${pid}" 2>/dev/null
+    log_warning "${phase} dialog is no longer running (PID ${pid})."
+    case "${phase}" in
+        discovery) dialogDiscoverPID="" ;;
+        staging) dialogStagingPID="" ;;
+    esac
+
+    local stop_block_reason
+    if stop_block_reason=$(_aap_preparation_stop_disallowed_reason); then
+        log_status "Dock Quit during ${phase}; continuing because ${stop_block_reason}."
+        dialogPreparationContinueBackground="TRUE"
+        return 0
+    fi
+
+    case "${dialogQuitHandlingDiscoveryStagingOption}" in
+        STOP)
+            _exit_user_stop_preserving_schedule "Dock Quit stopped App Auto-Patch during ${phase}"
+        ;;
+        CONTINUE)
+            log_status "Dock Quit during ${phase}; managed policy CONTINUE is keeping AAP running headless."
+            dialogPreparationContinueBackground="TRUE"
+        ;;
+        *)
+            _dialog_preparation_dismissed_prompt
+        ;;
+    esac
 }
 
 swiftDialogDiscoverWindow(){
     
     # If we are using SwiftDialog
     _prepare_dialog_command_file
+    if [[ "${workflow_discovery_only_active}" == "TRUE" ]]; then
+        return 0
+    fi
+    # BusinessHours silent/discovery-only paths must not show interactive discovery UI.
+    if [[ "${business_hours_silent_during_active}" == "TRUE" ]] || [[ "${business_hours_discovery_only_active}" == "TRUE" ]]; then
+        return 0
+    fi
     if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ ${InteractiveModeOption} -gt 1 ]]; then
+        dialogPreparationContinueBackground="FALSE"
+        dialogPreparationIntentionalQuit="FALSE"
         $dialogBinary \
         ${dialogDiscoverConfigurationOptions[@]} \
         &
+        dialogDiscoverPID=$!
+        log_verbose "Discovery dialog PID: ${dialogDiscoverPID}"
     fi
     
 }
@@ -4119,10 +6565,17 @@ swiftDialogDiscoverWindow(){
 swiftDialogCompleteDialogPatching(){
     
     if [ ${InteractiveModeOption} -ge 1 ]; then
+        if [[ "${dialogPatchingContinueBackground}" == "TRUE" ]] || [[ -z "${dialogPatchingPID}" ]] || ! kill -0 "${dialogPatchingPID}" 2>/dev/null; then
+            log_verbose "Patching dialog already closed or running in background; skipping completion UI updates."
+            rm -f "$dialogCommandFile" 2>/dev/null
+            dialogPatchingPID=""
+            return
+        fi
         # swiftDialogCommand "listitem: add, title: Updates Complete!,status: success"
         swiftDialogUpdate "icon: SF=checkmark.circle.fill,weight=bold,colour1=#00ff44,colour2=#075c1e"
         swiftDialogUpdate "progress: complete"
         swiftDialogUpdate "progresstext: ${display_string_complete_progress}"
+        [[ "${dialogSupportsDockIcon}" == "TRUE" ]] && swiftDialogUpdate "dockiconbadge: 0"
         
         sleep 1
         # Activate button 1
@@ -4132,8 +6585,10 @@ swiftDialogCompleteDialogPatching(){
     if [ ${UnattendedExit} = "TRUE" ]; then
         log_info "Unattended Exit set to TRUE, sleeping for $UnattendedExitSeconds"
         sleep $UnattendedExitSeconds
+        dialogPatchingIntentionalQuit="TRUE"
         swiftDialogUpdate "quit:"
         rm "$dialogCommandFile"
+        dialogPatchingPID=""
     else
     # Delete the tmp command file
     rm "$dialogCommandFile"
@@ -4144,8 +6599,21 @@ swiftDialogCompleteDialogPatching(){
 swiftDialogCompleteDialogDiscover(){
     
     if [ ${InteractiveModeOption} -gt 1 ]; then
+        _ensure_preparation_dialog "discovery"
+        if [[ "${dialogPreparationContinueBackground}" == "TRUE" ]]; then
+            rm -f "$dialogCommandFile" 2>/dev/null
+            return
+        fi
+        if [[ -n "${dialogDiscoverPID}" ]] && ! kill -0 "${dialogDiscoverPID}" 2>/dev/null; then
+            log_info "Discovery dialog was already closed (Dock Quit / ⌘Q); continuing without UI."
+            wait "${dialogDiscoverPID}" 2>/dev/null
+            dialogDiscoverPID=""
+            rm -f "$dialogCommandFile" 2>/dev/null
+            return
+        fi
         swiftDialogCommand "quit:"
         rm "$dialogCommandFile"
+        dialogDiscoverPID=""
     fi
     
 }
@@ -4158,9 +6626,13 @@ swiftDialogStagingWindow(){
 
     _prepare_dialog_command_file
     if [[ ${InteractiveModeOption} == 2 ]]; then
+        dialogPreparationContinueBackground="FALSE"
+        dialogPreparationIntentionalQuit="FALSE"
         $dialogBinary \
         ${dialogStagingConfigurationOptions[@]} \
         &
+        dialogStagingPID=$!
+        log_verbose "Staging dialog PID: ${dialogStagingPID}"
     fi
 
 }
@@ -4168,8 +6640,21 @@ swiftDialogStagingWindow(){
 swiftDialogCompleteDialogStaging(){
 
     if [[ ${InteractiveModeOption} == 2 ]]; then
+        _ensure_preparation_dialog "staging"
+        if [[ "${dialogPreparationContinueBackground}" == "TRUE" ]]; then
+            rm -f "$dialogCommandFile" 2>/dev/null
+            return
+        fi
+        if [[ -n "${dialogStagingPID}" ]] && ! kill -0 "${dialogStagingPID}" 2>/dev/null; then
+            log_info "Staging dialog was already closed (Dock Quit / ⌘Q); continuing without UI."
+            wait "${dialogStagingPID}" 2>/dev/null
+            dialogStagingPID=""
+            rm -f "$dialogCommandFile" 2>/dev/null
+            return
+        fi
         swiftDialogCommand "quit:"
         rm -f "$dialogCommandFile"
+        dialogStagingPID=""
     fi
 
 }
@@ -4183,10 +6668,62 @@ _prepare_dialog_command_file() {
 }
 
 swiftDialogUpdate(){
-    
-    log_verbose "Update swiftDialog: $1" 
+    # Skip writes when the user chose to continue patching headless after dismissing the dialog.
+    [[ "${dialogPatchingContinueBackground}" == "TRUE" ]] && return 0
     echo "$1" >> "$dialogCommandFile"
-    
+}
+
+# InteractiveMode 2 mini dialog (staging / silent closed-app patch): reset to a determinate bar.
+# Usage: _aap_mini_progress_begin <total_items> <progresstext_prefix> [optional_message]
+_aap_mini_progress_begin() {
+    [[ ${InteractiveModeOption} != 2 ]] && return 0
+    [[ "${stagingWindowOpened}" != "TRUE" ]] && return 0
+    local total="${1:-0}"
+    local progress_prefix="${2:-}"
+    local phase_message="${3:-}"
+    [[ -n "${phase_message}" ]] && swiftDialogUpdate "message: ${phase_message} ..."
+    [[ -n "${progress_prefix}" ]] && swiftDialogUpdate "progresstext: ${progress_prefix} ..."
+    if (( total > 0 )); then
+        swiftDialogUpdate "progress: reset"
+        swiftDialogUpdate "progress: 0"
+    fi
+}
+
+# Show the current app under the progress bar and set absolute progress for completed items.
+# Usage: _aap_mini_progress_item <label> <progresstext_prefix> <completed_count> <total>
+_aap_mini_progress_item() {
+    [[ ${InteractiveModeOption} != 2 ]] && return 0
+    [[ "${stagingWindowOpened}" != "TRUE" ]] && return 0
+    local label="$1"
+    local progress_prefix="$2"
+    local completed="${3:-0}"
+    local total="${4:-0}"
+    local display_name icon_path
+
+    display_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh" 2>/dev/null)"
+    [[ -z "${display_name}" ]] && display_name="${label}"
+    icon_path=$(resolve_app_icon_path "${label}")
+    [[ -n "${icon_path}" ]] && swiftDialogUpdate "icon: ${icon_path}"
+    swiftDialogUpdate "progresstext: ${progress_prefix} ${display_name} …"
+    _aap_mini_progress_advance "${completed}" "${total}"
+}
+
+# Advance the determinate mini progress bar after an item finishes (or is skipped).
+# Usage: _aap_mini_progress_advance <completed_count> <total>
+_aap_mini_progress_advance() {
+    [[ ${InteractiveModeOption} != 2 ]] && return 0
+    [[ "${stagingWindowOpened}" != "TRUE" ]] && return 0
+    local completed="${1:-0}"
+    local total="${2:-0}"
+    local pct
+    if (( total > 0 )); then
+        if (( completed >= total )); then
+            swiftDialogUpdate "progress: complete"
+        else
+            pct=$(( (100 * completed) / total ))
+            swiftDialogUpdate "progress: ${pct}"
+        fi
+    fi
 }
 
 set_deferral_menu() {
@@ -4281,6 +6818,345 @@ set_deferral_menu() {
     fi
 }
 
+# Preview-only path for --preview-deferral-dialog: show the real deferral dialog with sample
+# list items so admins can iterate on BannerImage/BannerTitle/BannerHeight (and other dialog
+# cosmetics) without running discovery or installing anything. Both Install Now and Defer are
+# no-ops for patching, and NextAutoLaunch is left untouched (same preserve/fallback rules as
+# --pending-apps-dialog Later).
+workflow_preview_deferral_dialog() {
+    log_notice "**** App Auto-Patch ${scriptVersion} - PREVIEW DEFERRAL DIALOG ****"
+    log_info "Building a sample app list for the deferral dialog preview (no discovery, no patching)."
+
+    # Clear deadline display strings so the preview uses the unlimited-deferrals infobox. Real
+    # deadline state from a prior production run would otherwise leak into a cosmetic preview.
+    unset display_string_deadline
+    unset display_string_deadline_count
+    unset display_string_deadline_count_maximum
+
+    # Prefer real app icons when those apps are installed so the preview looks like production;
+    # fall back to the App Store icon (or AAP's own logo) when they aren't.
+    local fallbackIcon="${icon}"
+    if [[ -s "/System/Applications/App Store.app/Contents/Resources/AppIcon.icns" ]]; then
+        fallbackIcon="/System/Applications/App Store.app/Contents/Resources/AppIcon.icns"
+    elif [[ -s "/Applications/App Store.app/Contents/Resources/AppIcon.icns" ]]; then
+        fallbackIcon="/Applications/App Store.app/Contents/Resources/AppIcon.icns"
+    elif [[ -s "${appAutoPatchFolder}/AAPLogo.png" ]]; then
+        fallbackIcon="${appAutoPatchFolder}/AAPLogo.png"
+    fi
+
+    local -a previewSamples
+    # Each entry: "Display Name|preferred icon path|current version|new version"
+    previewSamples=(
+        "Google Chrome|/Applications/Google Chrome.app/Contents/Resources/app.icns|128.0.6613.138|129.0.6668.59"
+        "Firefox|/Applications/Firefox.app/Contents/Resources/firefox.icns|128.0.3|129.0.1"
+        "Slack|/Applications/Slack.app/Contents/Resources/electron.icns|4.39.95|4.40.12"
+        "zoom.us|/Applications/zoom.us.app/Contents/Resources/ZPLogo.icns|6.1.10|6.2.0"
+        "1Password|/Applications/1Password.app/Contents/Resources/icon.icns|8.10.36|8.10.40"
+        "Safari|/Applications/Safari.app/Contents/Resources/AppIcon.icns|18.3|18.4"
+    )
+
+    appNamesArray=()
+    local sample entry sampleName sampleIcon sampleCurrent sampleNew sampleSubtitle
+    for entry in "${previewSamples[@]}"; do
+        sampleName="${entry%%|*}"
+        sample="${entry#*|}"
+        sampleIcon="${sample%%|*}"
+        sample="${sample#*|}"
+        sampleCurrent="${sample%%|*}"
+        sampleNew="${sample#*|}"
+        [[ -s "${sampleIcon}" ]] || sampleIcon="${fallbackIcon}"
+        sampleSubtitle="${display_string_version_current} ${sampleCurrent}  →  ${display_string_version_new} ${sampleNew}"
+        appNamesArray+=("--listitem")
+        appNamesArray+=(${sampleName},icon="${sampleIcon}",subtitle="${sampleSubtitle}")
+    done
+
+    numberOfUpdates=$(( ${#appNamesArray[@]} / 2 ))
+    log_info "Deferral dialog preview will show ${numberOfUpdates} sample apps."
+
+    dialog_install_or_defer
+
+    # Cosmetic preview only — discard any Install Now / menu-defer choice the dialog recorded and
+    # leave the existing LaunchDaemon schedule alone.
+    dialog_user_choice_install="FALSE"
+    log_notice "Preview complete - no install will be performed and NextAutoLaunch is unchanged."
+    write_status "Idle: Deferral dialog preview complete."
+    _exit_one_shot_ui_preserving_schedule "Deferral dialog preview"
+}
+
+# Waits up to two minutes for a non-loopback IPv4 address. Returns 0 as soon as one appears,
+# or 1 if none is present after the timeout. Callers decide what to do on failure (workflow_startup
+# and the pending-apps Install Now path both defer). Shared so both use identical detection.
+workflow_wait_for_network() {
+    local network_timeout=0
+    while [[ $(ifconfig -a inet 2>/dev/null | sed -n -e '/127.0.0.1/d' -e '/0.0.0.0/d' -e '/inet/p' | wc -l) -le 0 ]] && [[ "${network_timeout}" -lt 120 ]]; do
+        log_status "Waiting for network..."
+        sleep 5
+        network_timeout=$((network_timeout + 5))
+    done
+    if [[ $(ifconfig -a inet 2>/dev/null | sed -n -e '/127.0.0.1/d' -e '/0.0.0.0/d' -e '/inet/p' | wc -l) -le 0 ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# Builds the effective label policy used to decide whether a queued label may be patched, merging
+# the in-memory option arrays with what manage_parameter_options persisted to the local PLIST
+# (which is where wildcard IgnoredLabels patterns are expanded into individual labels). The
+# pending-apps dialog and the locked install queue both consult this, so the list the user sees is
+# exactly the list that gets patched.
+_load_effective_label_policy() {
+    typeset -ga aapPolicyIgnored=() aapPolicyRequired=() aapPolicyOptional=()
+    typeset -g aapPolicyIgnoreAll="${ignore_all_labels:-FALSE}"
+
+    aapPolicyIgnored=("${ignoredLabelsArray[@]}")
+    aapPolicyRequired=("${requiredLabelsArray[@]}")
+    aapPolicyOptional=("${optionalLabelsArray[@]}")
+
+    aapPolicyIgnored+=($(defaults read "${appAutoPatchLocalPLIST}" IgnoredLabels 2> /dev/null | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+    aapPolicyRequired+=($(defaults read "${appAutoPatchLocalPLIST}" RequiredLabels 2> /dev/null | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+    aapPolicyOptional+=($(defaults read "${appAutoPatchLocalPLIST}" OptionalLabels 2> /dev/null | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+}
+
+# Returns 0 when ${1} may be patched under the current policy: not explicitly ignored, and in
+# ignore-all mode ('*' in IgnoredLabels) only when required or optional. Mirrors the filtering the
+# normal queue path applies in main(). Requires _load_effective_label_policy to have run.
+_label_allowed_by_policy() {
+    local candidate="${1}"
+    [[ -z "${candidate}" ]] && return 1
+    (( ${aapPolicyIgnored[(Ie)${candidate}]} )) && return 1
+    if [[ "${aapPolicyIgnoreAll}" == "TRUE" ]]; then
+        { (( ${aapPolicyRequired[(Ie)${candidate}]} )) || (( ${aapPolicyOptional[(Ie)${candidate}]} )); } && return 0
+        return 1
+    fi
+    return 0
+}
+
+# Exit path for one-shot UI workflows (--pending-apps-dialog Later/up-to-date,
+# --preview-deferral-dialog). Startup intentionally skips deleting NextAutoLaunch for these
+# paths so an existing future schedule (Business Hours clear time, monthly cadence, normal
+# deferral) survives. If somehow no usable future schedule remains — or NextAutoLaunch was
+# already overdue — write a new one; otherwise the LaunchDaemon's 60s StartInterval would
+# relaunch AAP almost immediately because aap-starter treats an unset NextAutoLaunch as "run now".
+# ${1} is a short log label identifying the caller (e.g. "Pending apps dialog").
+_exit_one_shot_ui_preserving_schedule() {
+    local context="${1:-One-shot UI}"
+    local existing existing_epoch now
+    existing=$(defaults read "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null)
+    if [[ "${existing}" == "FALSE" ]] || [[ "${existing}" == "0" ]]; then
+        log_info "${context}: Automatic Relaunch is disabled (NextAutoLaunch=${existing}) — leaving it as-is."
+        exit_clean
+    fi
+    now=$(date +%s)
+    existing_epoch=$(date -j -f "${timestamp_format}" "${existing}" +%s 2> /dev/null)
+    if [[ -n "${existing_epoch}" ]] && (( existing_epoch > now )); then
+        log_info "${context}: keeping existing future NextAutoLaunch (${existing})."
+        log_exit "AAP is scheduled to automatically relaunch at: ${existing}"
+        exit_clean
+    fi
+
+    if [[ -n "${existing}" ]]; then
+        log_notice "${context}: NextAutoLaunch (${existing}) is missing or overdue — rescheduling so LaunchDaemon does not relaunch immediately."
+    else
+        log_notice "${context}: NextAutoLaunch unset — rescheduling so LaunchDaemon does not relaunch immediately."
+    fi
+
+    if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
+    || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
+        next_nth_weekday=$(next_nth_weekday_datetime ${monthly_patching_cadence_weekday_index} ${monthly_patching_cadence_ordinal_value} "${monthly_patching_cadence_start_time}")
+        log_notice "Will auto launch on ${next_nth_weekday}"
+        set_auto_launch_monthly_cadence
+    else
+        set_auto_launch_deferral
+    fi
+}
+
+# User-facing pending-updates dialog (same UX as Resources/SupportApp-Extension/aap_pending_apps_dialog.zsh).
+# Reads the report PLIST (no discovery). Button1 = Later (dismiss). Button2 = Install Now.
+# Install Now continues in-process (no second appautopatch process): it adopts install-now
+# semantics and returns to main(), which patches the exact queue shown here (from the report
+# PLIST / DiscoveredLabels, without a fresh discovery scan). Used by the --pending-apps-dialog
+# CLI and by queued-app notification Install Now actions via the PendingAppsDialog WatchPaths trigger.
+workflow_pending_apps_dialog() {
+    log_notice "**** App Auto-Patch ${scriptVersion} - PENDING APPS DIALOG ****"
+
+    # This dialog is the authority for the install decision. Supersede any Install Now intent left
+    # armed by an earlier network-deferred Install Now (or a stale flag file) so re-presenting the
+    # dialog can't be bypassed, and a dialog that fails to show can't silently fall through to an
+    # unconfirmed install-now on the next cycle. Re-armed below only if the user clicks Install Now.
+    rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
+    pending_apps_install_now_option="FALSE"
+    workflow_install_now_option="FALSE"
+
+    if [[ ! -x "${dialogBinary}" ]]; then
+        log_error "swiftDialog not available; cannot show pending apps dialog."
+        write_status "Inactive Error: Pending apps dialog requested but swiftDialog is missing."
+        exit_error
+    fi
+
+    # swiftDialog is present, so the dialog can actually be presented now. Consume the one-shot
+    # .PendingAppsDialog survival flag here (not earlier) so the missing-swiftDialog exit above
+    # leaves it armed to retry on the next LaunchDaemon cycle.
+    rm -f "${PENDING_APPS_DIALOG_FILE}" 2> /dev/null
+
+    # Only list what an install would actually patch: apply the same IgnoredLabels / ignore-all
+    # policy the queue path applies, so Install Now never patches an app the dialog omitted and
+    # never silently drops one it listed.
+    _load_effective_label_policy
+
+    local -a pendingItems=()
+    local _label _disp _inst _nver
+    while IFS=$'\t' read -r _label _disp _inst _nver; do
+        [[ -z "${_label}" ]] && continue
+        if ! _label_allowed_by_policy "${_label}"; then
+            # Stale queue entry: discovery queued this label before IgnoredLabels started excluding
+            # it. Prune it from the report PLIST and DiscoveredLabels rather than just hiding it, so
+            # the Support App tile count, banner {count} text, and the report itself agree with this
+            # dialog instead of continuing to advertise an update that will never be installed.
+            log_verbose "Pending apps dialog: pruning '${_label}' from the queue (excluded by IgnoredLabels policy)."
+            remove_aap_report_item "${_label}"
+            remove_discovered_label "${_label}"
+            continue
+        fi
+        pendingItems+=("${_label}"$'\t'"${_disp}"$'\t'"${_inst}"$'\t'"${_nver}")
+    done < <(get_aap_report_entries)
+
+    if [[ ${#pendingItems[@]} -eq 0 ]]; then
+        log_info "No pending apps in report PLIST; showing up-to-date mini dialog."
+        $dialogBinary \
+            --title "${appTitle}" \
+            --message "${display_string_uptodate_message}" \
+            --icon "${logoImage:-${icon}}" \
+            --overlayicon "${overlayicon}" \
+            --button1text "${display_string_uptodate_button1}" \
+            --style mini \
+            --moveable \
+            --position topright \
+            --windowbuttons min \
+            --timer 15 \
+            --hidetimerbar \
+            --quitkey k \
+            ${dialogDockOptions[@]} \
+            >/dev/null 2>&1
+        write_status "Idle: Pending apps dialog — no updates queued."
+        # Cancel any leftover Install Now intent from a prior deferred attempt so the next
+        # scheduled run does not jump straight into install-now.
+        rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
+        _exit_one_shot_ui_preserving_schedule "Pending apps dialog"
+    fi
+
+    local -a appNamesArray=()
+    local iconPath versionSubtitle _cur _new item
+    for item in "${pendingItems[@]}"; do
+        IFS=$'\t' read -r _label _disp _inst _nver <<< "${item}"
+        [[ -z "${_disp}" ]] && _disp="${_label}"
+        iconPath=$(resolve_app_icon_path "${_label}")
+        _cur="${_inst//,/}"
+        _new="${_nver//,/}"
+        if [[ -n "${_cur}" ]] && [[ -n "${_new}" ]]; then
+            versionSubtitle="${display_string_version_current} ${_cur}  →  ${display_string_version_new} ${_new}"
+        elif [[ -n "${_new}" ]]; then
+            versionSubtitle="${display_string_version_new} ${_new}"
+        elif [[ -n "${_cur}" ]]; then
+            versionSubtitle="${display_string_version_current} ${_cur}"
+        else
+            versionSubtitle=""
+        fi
+        appNamesArray+=("--listitem")
+        if [[ -n "${versionSubtitle}" ]]; then
+            appNamesArray+=(${_disp},icon="${iconPath}",subtitle="${versionSubtitle}")
+        else
+            appNamesArray+=(${_disp},icon="${iconPath}")
+        fi
+    done
+
+    local numberOfUpdates=${#pendingItems[@]}
+    local message="${display_string_there_are} **(${numberOfUpdates})** ${display_string_deferral_message_02}"
+    log_info "Pending apps dialog will show ${numberOfUpdates} queued update(s)."
+
+    local -a pendingDialogOptions
+    pendingDialogOptions=(
+        ${dialogTitleOptions[@]}
+        --message "${message}"
+        --icon "${icon}"
+        --overlayicon "${overlayicon}"
+        --button1text "${display_string_pendingapps_button_later}"
+        --button2text "${display_string_deferral_button2}"
+        --position bottomright
+        --height 500
+        --width 600
+        --moveable
+        --windowbuttons min
+        --titlefont size=18
+        --messagefont size=14
+        --quitkey k
+        ${dialogDockOptions[@]}
+    )
+    [[ "${dialogOnTop}" == "TRUE" ]] && pendingDialogOptions+=(--ontop)
+    [[ "${dialogSupportsDockIcon}" == "TRUE" ]] && pendingDialogOptions+=(--dockiconbadge "${numberOfUpdates}")
+
+    $dialogBinary "${pendingDialogOptions[@]}" "${appNamesArray[@]}" &
+    local pendingDialogPID=$!
+    _aap_wait_for_dialog_with_heartbeat "${pendingDialogPID}" "pending-apps"
+    local dialogOutput=$?
+    log_verbose "Pending apps dialog exit code: ${dialogOutput}"
+
+    if [[ ${dialogOutput} -eq 2 ]]; then
+        log_notice "Pending apps dialog: Install Now — continuing in-process via the install-now workflow (no re-discovery; patching the queue shown)."
+        write_status "Running: Pending apps dialog Install Now."
+
+        # Adopt install-now semantics in-process rather than spawning a second appautopatch:
+        #   - full dialogs (InteractiveMode 2), matching --workflow-install-now
+        #   - skip re-discovery; main() locks the queue to report PLIST ItemsToInstall
+        #     (see pending_apps_install_now_option) so we patch exactly the set the user confirmed
+        workflow_install_now_option="TRUE"
+        workflow_install_now_silent_option="FALSE"
+        InteractiveModeOption=2
+        pending_apps_dialog_option="FALSE"
+        pending_apps_install_now_option="TRUE"
+        # Persist both flags so an unexpected restart or network defer re-enters this path
+        # (install-now + locked report queue) without re-running discovery. Write the report-lock
+        # flag FIRST: if the process dies between the two touches, the next run finds only
+        # .PendingAppsInstallNow (which re-arms plain install-now anyway in workflow_startup) rather
+        # than only .WorkflowInstallNow, which would run a plain install-now merging the full
+        # discovery queue instead of the report-locked queue the user confirmed.
+        # Also clear any stale silent install-now flag so ExcludedBackgroundLabels stay in the queue.
+        rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
+        touch "${PENDING_APPS_INSTALL_NOW_FILE}" 2> /dev/null
+        touch "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
+
+        # Entering a real install workflow — clear NextAutoLaunch so a mid-install crash re-arms
+        # LaunchDaemon relaunch (same as a normal AAP run's startup). Completion paths will write a
+        # fresh schedule when the install finishes.
+        defaults delete "${appAutoPatchLocalPLIST}" NextAutoLaunch 2> /dev/null
+
+        # The dialog path skipped the network wait and Installomator check for speed; both are
+        # needed before installing. Defer cleanly if the network never comes up.
+        if ! workflow_wait_for_network; then
+            deferral_timer_minutes="${deferral_timer_error_minutes}"
+            log_error "Network unavailable for Install Now, trying again in ${deferral_timer_minutes} minutes."
+            write_status "Pending: Network unavailable, trying again in ${deferral_timer_minutes} minutes."
+            set_auto_launch_deferral
+            exit_clean
+        fi
+        get_installomator
+
+        # Return to main(), which continues into the install-now branch: queue locked to the
+        # report PLIST, optional staging + silent closed-app patch, workflow_do_Installations, and
+        # the shared completion / webhook / relaunch handling.
+        return 0
+    fi
+
+    log_notice "Pending apps dialog: Later / dismissed — no install started."
+    write_status "Idle: Pending apps dialog dismissed without installing."
+    # Explicit Later/dismiss cancels any leftover Install Now intent (e.g. a prior Install Now
+    # that deferred for network and left .PendingAppsInstallNow / .WorkflowInstallNow behind).
+    # Without this, the next LaunchDaemon run would restore install-now and patch with no dialog.
+    rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
+    pending_apps_install_now_option="FALSE"
+    workflow_install_now_option="FALSE"
+    _exit_one_shot_ui_preserving_schedule "Pending apps dialog"
+}
+
 dialog_install_or_defer() {
 
     _prepare_dialog_command_file
@@ -4309,11 +7185,13 @@ dialog_install_or_defer() {
         --width 600
 		--quitoninfo
 		--moveable
+		--windowbuttons min
 		--quitkey k
 		--titlefont size=18
 		--messagefont size=14
         --alwaysreturninput
 		--commandfile "$dialogCommandFile"
+        ${dialogDockOptions[@]}
 	)
 
 	if [[ "$dialogOnTop" == "TRUE" ]]; then
@@ -4361,9 +7239,17 @@ dialog_install_or_defer() {
                 --button1text "${display_string_deferral_button1}"
             )
         fi
+        # Badge the Dock icon with the number of pending updates (swiftDialog 3.0+).
+        [[ "${dialogSupportsDockIcon}" == "TRUE" ]] && deferralDialogContent+=(--dockiconbadge "${numberOfUpdates}")
 
-        SELECTION=$("$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}")
+        local selectionFile="${dialogCommandFile}.selection.$$"
+        "$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}" > "${selectionFile}" &
+        local deferralDialogPID=$!
+        _aap_wait_for_dialog_with_heartbeat "${deferralDialogPID}" "deferral"
         dialogOutput=$?
+        SELECTION=""
+        [[ -f "${selectionFile}" ]] && SELECTION=$(<"${selectionFile}")
+        rm -f "${selectionFile}" 2>/dev/null
         log_aap "dialogOutput: $dialogOutput"
         case "${dialogOutput}" in
             0)
@@ -4393,6 +7279,16 @@ dialog_install_or_defer() {
                     write_status "Pending: Display timeout automatically chose to defer update, using the default defer of ${deferral_timer_minutes} minutes."
                 fi
                 break
+            ;;
+            9|10|15|137|143)
+                # User dismissed the window rather than choosing an action, so reopen it instead of
+                # falling through to Install Now below. swiftDialog documents 10 for cmd+quitkey, but
+                # Dock ▸ Quit and the menu bar Quit terminate Dialog.app itself, so dialogcli reports
+                # the raw signal instead: 15 (quit) or 9 (Force Quit); 143/137 cover 128+signal.
+                log_status "User quit the deferral dialog (exit ${dialogOutput}); reopening."
+                # Let Dialog.app finish terminating before relaunching, and keep a quit-spam loop
+                # from spinning until the deferral timer expires.
+                sleep 1
             ;;
             *)
                 log_status "User selected install now, presenting confirmation dialog."
@@ -4432,8 +7328,10 @@ _dialog_confirm_install_now() {
         --style "mini"
         --moveable
         --position center
+        --windowbuttons min
         --quitkey k
         --commandfile "$dialogCommandFile"
+        ${dialogDockOptions[@]}
     )
 
     if [[ "$dialogOnTop" == "TRUE" ]]; then
@@ -4446,6 +7344,7 @@ _dialog_confirm_install_now() {
     remaining_seconds="${DialogTimeoutConfirmInstall}"
     while (( remaining_seconds > 0 )); do
         kill -0 "${confirmDialogPID}" 2>/dev/null || break
+        (( remaining_seconds % 30 == 0 )) && _aap_heartbeat "dialog:confirm-install"
         sleep 1
         remaining_seconds=$(( remaining_seconds - 1 ))
         kill -0 "${confirmDialogPID}" 2>/dev/null || break
@@ -4467,7 +7366,8 @@ _dialog_confirm_install_now() {
         confirmDialogOutput=$?
         log_aap "confirmDialogOutput: $confirmDialogOutput"
         case "${confirmDialogOutput}" in
-            2)
+            2|9|10|15|137|143)
+                # Button 2 ("Go Back"), or the user quit the window - return to the deferral dialog.
                 log_status "User declined the install now confirmation."
                 dialog_user_choice_install="FALSE"
             ;;
@@ -4488,49 +7388,69 @@ dialog_install_hard_deadline() {
     fi
 	
 	height=480
-	
-	deferralDialogContent=(
-		${dialogTitleOptions[@]}
-		--message "$message"
-		--helpmessage "$helpMessage"
-		--icon "$icon"
-		--overlayicon "$overlayicon"
-		--infobox "${display_string_deferraldeadline_infobox}"
-		--timer $DialogTimeoutDeferral
-		--button1text "${display_string_deferraldeadline_button1}"
-        --button2text "${display_string_deferraldeadline_button2}"
-        --button2disabled
-	)
-	
-	deferralDialogOptions=(
-		--position bottomright
-        --height 500
-        --width 600
-		--quitoninfo
-		--moveable
-		--quitkey k
-		--titlefont size=18
-		--messagefont size=14
-		--commandfile "$dialogCommandFile"
-	)
-	
-	if [[ "$dialogOnTop" == "TRUE" ]]; then
-		deferralDialogOptions+=(--ontop)
-	fi
 
-	"$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}"
-	dialogOutput=$?
-	log_aap "dialogOutput: $dialogOutput"
-	case "${dialogOutput}" in
-		4)
-			log_status "Display timeout, proceed with installation"
-			write_status "Pending: Display timeout, proceed with installation"
-		;;
-		*)
-			log_status "User chose to install now."
-			dialog_user_choice_install="TRUE"
-		;;
-	esac
+    local hard_deadline_start_epoch hard_deadline_timer_total_seconds remaining_seconds
+    hard_deadline_start_epoch=$(date +%s)
+    hard_deadline_timer_total_seconds="$DialogTimeoutDeferral"
+
+    while true; do
+        remaining_seconds=$(( hard_deadline_timer_total_seconds - ( $(date +%s) - hard_deadline_start_epoch ) ))
+        (( remaining_seconds < 1 )) && remaining_seconds=1
+
+        deferralDialogContent=(
+            ${dialogTitleOptions[@]}
+            --message "$message"
+            --helpmessage "$helpMessage"
+            --icon "$icon"
+            --overlayicon "$overlayicon"
+            --infobox "${display_string_deferraldeadline_infobox}"
+            --timer $remaining_seconds
+            --button1text "${display_string_deferraldeadline_button1}"
+            --button2text "${display_string_deferraldeadline_button2}"
+            --button2disabled
+        )
+        [[ "${dialogSupportsDockIcon}" == "TRUE" ]] && deferralDialogContent+=(--dockiconbadge "${numberOfUpdates}")
+        
+        deferralDialogOptions=(
+            --position bottomright
+            --height 500
+            --width 600
+            --quitoninfo
+            --moveable
+            --windowbuttons min
+            --quitkey k
+            --titlefont size=18
+            --messagefont size=14
+            --commandfile "$dialogCommandFile"
+            ${dialogDockOptions[@]}
+        )
+        
+        if [[ "$dialogOnTop" == "TRUE" ]]; then
+            deferralDialogOptions+=(--ontop)
+        fi
+
+        "$dialogBinary" "${deferralDialogContent[@]}" "${deferralDialogOptions[@]}" "${appNamesArray[@]}" &
+        local hardDeadlineDialogPID=$!
+        _aap_wait_for_dialog_with_heartbeat "${hardDeadlineDialogPID}" "hard-deadline"
+        dialogOutput=$?
+        log_aap "dialogOutput: $dialogOutput"
+        case "${dialogOutput}" in
+            9|10|15|137|143)
+                log_status "User quit the hard-deadline dialog (exit ${dialogOutput}); reopening."
+                sleep 1
+            ;;
+            4)
+                log_status "Display timeout, proceed with installation"
+                write_status "Pending: Display timeout, proceed with installation"
+                break
+            ;;
+            *)
+                log_status "User chose to install now."
+                dialog_user_choice_install="TRUE"
+                break
+            ;;
+        esac
+    done
 }
 
 function write_aap_receipt() {
@@ -4694,31 +7614,40 @@ function verifyApp() {
     swiftDialogUpdate "progresstext: $(get_localized_path $appPath)"
     swiftDialogUpdate "icon: $appPath"
     
-    # verify with spctl
-    appVerify=$(spctl -a -vv "$appPath" 2>&1 )
-    appVerifyStatus=$(echo $?)
-    teamID=$(echo $appVerify | awk '/origin=/ {print $NF }' | tr -d '()' )
-    
-    log_verbose "expectedTeamID: $expectedTeamID"
-    if [[ "$expectedTeamID" == *"Software Update"* ]];  then
-        log_warning "Team ID not available for Apple apps... Skipping pre-update validation (Validation will still occur post-download via Installomator)"
-    elif [[ $appVerifyStatus -ne 0 ]]; then
-        error "Error verifying $appPath"
-        log_error "Returned $appVerifyStatus"
-        return
-    fi
-    
-    if [[ "$expectedTeamID" != *"Software Update"* ]] && [[ "$expectedTeamID" != "$teamID" ]]; then
-        error "Error verifying $appPath"
-        log_warning "Team IDs do not match: expected: $expectedTeamID, found $teamID"
-        return
+    # verify with spctl / Team ID (can be skipped via SkipPreUpdateVerification — #256)
+    if [[ "${SkipPreUpdateVerificationOption}" == "TRUE" ]]; then
+        log_warning "SkipPreUpdateVerification enabled; skipping spctl/Team ID pre-update validation for $appPath (Installomator will still validate post-download)"
     else
-        
-        typeset -gA levels
+        appVerify=$(spctl -a -vv "$appPath" 2>&1 )
+        appVerifyStatus=$(echo $?)
+        teamID=$(echo $appVerify | awk '/origin=/ {print $NF }' | tr -d '()' )
+
+        log_verbose "expectedTeamID: $expectedTeamID"
+        if [[ "$expectedTeamID" == *"Software Update"* ]];  then
+            log_warning "Team ID not available for Apple apps... Skipping pre-update validation (Validation will still occur post-download via Installomator)"
+        elif [[ $appVerifyStatus -ne 0 ]]; then
+            error "Error verifying $appPath"
+            log_error "Returned $appVerifyStatus"
+            return
+        fi
+
+        if [[ "$expectedTeamID" != *"Software Update"* ]] && [[ "$expectedTeamID" != "$teamID" ]]; then
+            error "Error verifying $appPath"
+            log_warning "Team IDs do not match: expected: $expectedTeamID, found $teamID"
+            return
+        fi
+    fi
+
+    typeset -gA levels
         levels=(DEBUG 0 INFO 1 WARN 2 ERROR 3 REQ 4)
         LOGGING="${LOGGING:-INFO}"
         label="${label_name}"
-        log_location="${appAutoPatchVerboseLog}"
+        # Installomator fragment logging follows VerboseMode: only touch aap_verbose.log when enabled.
+        if [[ "${verbose_mode_option}" == "TRUE" ]]; then
+            log_location="${appAutoPatchVerboseLog}"
+        else
+            log_location="/dev/null"
+        fi
         previous_log_message=""
         logrepeat=0
 
@@ -4738,7 +7667,9 @@ function verifyApp() {
         eval $caseStatement
         
         if [[ -n $name ]]; then
-            if [[ ! " ${ignoredLabelsArray[@]} " =~ " ${label_name} " ]]; then
+            # Exact-element membership; a "${array[@]}" substring match depends on IFS and can also
+            # match partial label names (#254).
+            if (( ! ${ignoredLabelsArray[(Ie)${label_name}]} )); then
                 if [[ -n "$configArray[$appPath]" ]]; then
                     exists="$configArray[$appPath]"
                     
@@ -4863,8 +7794,6 @@ function verifyApp() {
         unset appNewVersion
         unset name
         unset previousVersion
-        
-    fi
 }
 
 function clear_aap_report() {
@@ -5056,6 +7985,46 @@ _resolve_label_staging_info() {
     return $rc
 }
 
+is_excluded_background_label() {
+    # Returns 0 (true) if $1 is in ExcludedBackgroundLabels. Unlike IgnoredLabels, these apps
+    # are still discovered and reported - they are only withheld from fully-silent installs
+    # (InteractiveMode 0 / --workflow-install-now-silent) and from Background Patch Closed Apps.
+    # Interactive Install Now / hard-deadline installs still update them.
+    local label="$1"
+    [[ -z "${label}" ]] && return 1
+    # Exact-element membership; a "${array[*]}" substring match depends on IFS and can also match
+    # partial label names (#254).
+    (( ${excludedBackgroundLabelsArray[(Ie)${label}]} ))
+}
+
+filter_excluded_background_labels_from_silent_install() {
+    # For fully-silent runs only: pull excluded-background labels out of the install queue so
+    # they are not patched unattended, while leaving them in DiscoveredLabels / the report PLIST
+    # so they remain visible to inventory and the next interactive run.
+    local remainingLabels=()
+    local skippedLabels=()
+    local label
+
+    for label in $queuedLabelsArray; do
+        if is_excluded_background_label "${label}"; then
+            skippedLabels+=("${label}")
+            log_info "Skipping silent install of '${label}' (listed in ExcludedBackgroundLabels); leaving it queued for discovery/reporting and interactive installs."
+        else
+            remainingLabels+=("${label}")
+        fi
+    done
+
+    if [[ ${#skippedLabels[@]} -gt 0 ]]; then
+        log_notice "Excluded ${#skippedLabels[@]} label(s) from silent install via ExcludedBackgroundLabels: ${skippedLabels[*]}"
+    fi
+
+    queuedLabelsArray=("${remainingLabels[@]}")
+    countOfElementsArray=()
+    for label in $queuedLabelsArray; do
+        countOfElementsArray+=("${label}")
+    done
+}
+
 workflow_stage_updates() {
     # Pre-download pending update installers to a local staging folder before displaying the
     # user dialog. When workflow_do_Installations later runs, it detects the staged file and
@@ -5121,8 +8090,26 @@ workflow_stage_updates() {
     local stagedCount=0
     local stageSkipCount=0
     local stageErrorCount=0
+    local progressTotal=${#queuedLabelsArray[@]}
+    local progressCompleted=0
+
+    _aap_mini_progress_begin "${progressTotal}" "${display_string_staging_progress}" "${display_string_staging_message}"
 
     for label in $queuedLabelsArray; do
+        _aap_heartbeat "staging:${label}"
+        _ensure_preparation_dialog "staging"
+        _aap_mini_progress_item "${label}" "${display_string_staging_progress}" "${progressCompleted}" "${progressTotal}"
+
+        # On fully-silent runs, don't waste a download on labels we will never silently install.
+        # Interactive runs still stage them so Install Now / hard-deadline is fast.
+        if { [[ ${InteractiveModeOption} == 0 ]] || [[ "${workflow_install_now_silent_option}" == "TRUE" ]]; } && is_excluded_background_label "${label}"; then
+            log_info "Skipping staging of '${label}' (ExcludedBackgroundLabels on a silent run)."
+            stageSkipCount=$((stageSkipCount + 1))
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
+            continue
+        fi
+
         log_info "Resolving download info for staging: ${label}"
 
         # Resolve the label's downloadURL and related vars in an isolated subprocess
@@ -5131,6 +8118,8 @@ workflow_stage_updates() {
         if [[ $? -ne 0 ]] || [[ -z "$labelInfo" ]]; then
             log_error "Could not resolve download info for '${label}'. Skipping staging."
             stageErrorCount=$((stageErrorCount + 1))
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
             continue
         fi
 
@@ -5146,12 +8135,16 @@ workflow_stage_updates() {
         if [[ "$stagingType" == "updateronly" ]]; then
             log_info "'${label}' uses an in-app updater (updateronly). Skipping staging."
             stageSkipCount=$((stageSkipCount + 1))
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
             continue
         fi
 
         if [[ -z "$stagingURL" ]]; then
             log_error "Empty downloadURL for '${label}'. Skipping staging."
             stageErrorCount=$((stageErrorCount + 1))
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
             continue
         fi
 
@@ -5176,6 +8169,8 @@ workflow_stage_updates() {
             if [[ -n "$stagingVersion" && "$existingVersion" == "$stagingVersion" ]]; then
                 log_notice "Already staged: '${label}' at version ${stagingVersion}. Skipping download."
                 stageSkipCount=$((stageSkipCount + 1))
+                progressCompleted=$((progressCompleted + 1))
+                _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
                 continue
             else
                 log_info "Version mismatch for staged '${label}' (cached=${existingVersion}, available=${stagingVersion:-unknown}). Re-staging."
@@ -5185,6 +8180,8 @@ workflow_stage_updates() {
             # Staged file exists but label has no version string — assume it is still current
             log_notice "Staged file for '${label}' exists with no version info. Using existing staged file."
             stageSkipCount=$((stageSkipCount + 1))
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
             continue
         elif [[ -f "$stagedFile" ]]; then
             # File without version sidecar — remove and re-stage
@@ -5193,7 +8190,10 @@ workflow_stage_updates() {
         fi
 
         # Build curl arguments, honouring any curlOptions the label declares
-        local curlArgs=("--location" "--silent" "--fail" "--show-error")
+        # Fail a connection attempt promptly and abort a transfer that receives no data for five
+        # minutes. Active downloads are unrestricted; this only prevents a dead socket from holding
+        # the entire AAP workflow indefinitely.
+        local curlArgs=("--location" "--silent" "--fail" "--show-error" "--connect-timeout" "30" "--speed-limit" "1" "--speed-time" "300")
         [[ -n "$stagingCurlOpts" ]] && curlArgs+=($=stagingCurlOpts)
         curlArgs+=("-o" "$stagedFile" "$stagingURL")
 
@@ -5210,6 +8210,10 @@ workflow_stage_updates() {
             rm -f "$stagedFile" "$stagedVersionFile" "$stagedTypeFile"
             stageErrorCount=$((stageErrorCount + 1))
         fi
+        _aap_heartbeat "staging-complete:${label}"
+
+        progressCompleted=$((progressCompleted + 1))
+        _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
     done
 
     log_notice "Staging complete: ${stagedCount} downloaded, ${stageSkipCount} already current/skipped, ${stageErrorCount} error(s)"
@@ -5222,6 +8226,8 @@ workflow_silent_patch_closed_apps() {
     # dialog. Apps that update successfully (exit 0) are removed from the queue entirely.
 
     log_info "InteractiveMode ${InteractiveModeOption}: Attempting silent background patch for apps that are not currently open..."
+
+    run_pre_patch_hook_once
 
     # Ensure installomatorOptions is populated before we manipulate it
     local baseOptions="${installomatorOptions}"
@@ -5239,10 +8245,37 @@ workflow_silent_patch_closed_apps() {
 
     local remainingLabels=()
     local newAppNamesArray=()
-    local silentPatchCount=0
+    silent_patch_success_count=0
     local silentPatchErrors=0
+    local progressTotal=${#queuedLabelsArray[@]}
+    local progressCompleted=0
+
+    _aap_mini_progress_begin "${progressTotal}" "${display_string_silent_patch_progress}" "${display_string_staging_message}"
 
     for label in $queuedLabelsArray; do
+        _aap_heartbeat "silent-patch:${label}"
+        _ensure_preparation_dialog "staging"
+        _aap_mini_progress_item "${label}" "${display_string_silent_patch_progress}" "${progressCompleted}" "${progressTotal}"
+
+        # ExcludedBackgroundLabels: discover/report but do not silently patch. Leave in the
+        # remaining queue so InteractiveMode 1/2 can still offer Install Now / hard-deadline.
+        if is_excluded_background_label "${label}"; then
+            log_info "Skipping silent background patch of '${label}' (listed in ExcludedBackgroundLabels); adding to user dialog queue."
+            remainingLabels+=("${label}")
+            local _dname _ipath
+            _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+            _ipath=$(resolve_app_icon_path "${label}")
+            _compute_version_subtitle "${label}"
+            newAppNamesArray+=("--listitem")
+            if [[ -n "$versionSubtitle" ]]; then
+                newAppNamesArray+=(${_dname},icon="${_ipath}",subtitle="${versionSubtitle}")
+            else
+                newAppNamesArray+=(${_dname},icon="${_ipath}")
+            fi
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
+            continue
+        fi
 
         # Respect Zoom call active check for zoom labels
         if [[ "${zoom_call_active_check_option}" == "TRUE" && "${label}" == "zoom"* ]]; then
@@ -5262,6 +8295,8 @@ workflow_silent_patch_closed_apps() {
                 else
                     newAppNamesArray+=(${_dname},icon="${_ipath}")
                 fi
+                progressCompleted=$((progressCompleted + 1))
+                _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
                 continue
             fi
         fi
@@ -5292,7 +8327,7 @@ workflow_silent_patch_closed_apps() {
                 # Pruning both DiscoveredLabels and the report PLIST ensures that a subsequent
                 # DiscoveryFrequency-skipped run never re-queues this now-patched app.
                 log_notice "Silent background patch succeeded for: ${label} (exit 0)"
-                silentPatchCount=$((silentPatchCount + 1))
+                silent_patch_success_count=$((silent_patch_success_count + 1))
                 local _newVersion="${AAPVersionByLabel[$label]:-}"
                 write_aap_receipt "${label}" "${_newVersion}" "${silentExitCode}"
                 remove_aap_report_item "${label}"
@@ -5336,10 +8371,14 @@ workflow_silent_patch_closed_apps() {
                 fi
                 ;;
         esac
+
+        progressCompleted=$((progressCompleted + 1))
+        _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
+        _aap_heartbeat "silent-patch-complete:${label}"
     done
 
-    if [[ $silentPatchCount -gt 0 ]]; then
-        log_notice "Silent background patching complete: ${silentPatchCount} app(s) updated without user interaction."
+    if [[ $silent_patch_success_count -gt 0 ]]; then
+        log_notice "Silent background patching complete: ${silent_patch_success_count} app(s) updated without user interaction."
     fi
     if [[ $silentPatchErrors -gt 0 ]]; then
         log_error "Silent background patching encountered ${silentPatchErrors} error(s). Those app(s) will appear in the user dialog."
@@ -5356,6 +8395,12 @@ workflow_silent_patch_closed_apps() {
     done
 
     log_notice "Apps remaining for user interaction after silent pre-patch: ${#countOfElementsArray[@]}"
+
+    # If every pending update was handled silently, run the post-patch hook now. Otherwise leave
+    # it for workflow_do_Installations() after the interactive / hard-deadline install pass.
+    if [[ ${#countOfElementsArray[@]} -eq 0 ]]; then
+        run_post_patch_hook_if_needed
+    fi
 }
 
 workflow_do_Installations() {
@@ -5367,9 +8412,12 @@ workflow_do_Installations() {
     fi
     
     log_info "Installomator Options: $installomatorOptions"
+
+    run_pre_patch_hook_once
     
     # Count errors
     errorCount=0
+    patchingItemStatus=()
     
     swiftDialogPatchingWindow # Create our main "list" swiftDialog Window
     
@@ -5380,15 +8428,20 @@ workflow_do_Installations() {
         sleep 1
         swiftDialogUpdate "infobox: + <br><br>"
         swiftDialogUpdate "infobox: + **${display_string_patching_infobox_updates}** $queuedLabelsArrayLength"
+        # Dock badge starts at total pending installs and counts down after each label.
+        [[ "${dialogSupportsDockIcon}" == "TRUE" ]] && swiftDialogUpdate "dockiconbadge: ${queuedLabelsArrayLength}"
     fi
     swiftDialogUpdate "progress: 1"
     i=0
     for label in $queuedLabelsArray; do
+        _aap_heartbeat "install:${label}"
+        _ensure_patching_dialog
         log_info "Installing ${label}..."
+        local itemStatus="success"
         
         # Use built-in swiftDialog Installomator integration options (if swiftDialog is being used)
         swiftDialogOptions=()
-        if [ ${InteractiveModeOption} -ge 1 ]; then
+        if [ ${InteractiveModeOption} -ge 1 ] && [[ "${dialogPatchingContinueBackground}" != "TRUE" ]]; then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
             currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplay_name}"\')
@@ -5427,6 +8480,7 @@ workflow_do_Installations() {
 	        if [[ -n "$CPTHOSTPID" || -n "$AOMHOSTPID" ]]; then
 		        log_error "Zoom Meeting in progress. Skipping Update"
                 let errorCount++
+                itemStatus="fail"
                 swiftDialogUpdate "listitem: index: $i, status: fail, statustext: Zoom Active…"
             else
                 # Run Installomator (use staged installer if available)
@@ -5434,6 +8488,7 @@ workflow_do_Installations() {
                 installomatorExitCode=$?
                 if [ $installomatorExitCode != 0 ]; then
                     log_error "Error installing ${label}. Exit code $installomatorExitCode"
+                    itemStatus="fail"
                     swiftDialogUpdate "listitem: index: $i, status: fail"
                     let errorCount++
                 fi
@@ -5478,6 +8533,7 @@ workflow_do_Installations() {
             installomatorExitCode=$?
             if [ $installomatorExitCode != 0 ]; then
                 log_error "Error installing ${label}. Exit code $installomatorExitCode"
+                itemStatus="fail"
                 swiftDialogUpdate "listitem: index: $i, status: fail"
                 let errorCount++
             fi
@@ -5516,8 +8572,13 @@ workflow_do_Installations() {
             fi
             write_aap_receipt "$label" "$newVersion" "$installomatorExitCode"
         fi
+        patchingItemStatus[$i]="${itemStatus}"
+        _aap_heartbeat "install-complete:${label}"
         let i++
         swiftDialogUpdate "progress: increment ${progressIncrementValue}"
+        if [ ${InteractiveModeOption} -ge 1 ] && [[ "${dialogSupportsDockIcon}" == "TRUE" ]]; then
+            swiftDialogUpdate "dockiconbadge: $(( queuedLabelsArrayLength - i ))"
+        fi
     done
     
     log_notice "Errors: $errorCount"
@@ -5526,7 +8587,9 @@ workflow_do_Installations() {
     
     remove_installomator
     
-    log_info "Error Count $errorCount" 
+    log_info "Error Count $errorCount"
+
+    run_post_patch_hook_if_needed
     
 }
 
@@ -5627,6 +8690,21 @@ appsUpToDate(){
 }
 
 webHookMessage() {
+
+    # Resolve Mosyle device deep-link once for Slack/Teams payloads (#240). Prefer the enrolled
+    # MDM host from get_mdm(); fall back to the public Mosyle Business console. Device UDID for
+    # Macs is the Hardware UUID (IOPlatformUUID).
+    local mosyleComputerURL=""
+    if [[ "${mdmName}" == "Mosyle" ]]; then
+        local mosyleBaseURL=""
+        if [[ -n "${server_url}" ]]; then
+            mosyleBaseURL=$(echo "${server_url}" | sed -n 's/\(https:\/\/[^\/]*\).*/\1/p')
+        fi
+        [[ -z "${mosyleBaseURL}" ]] && mosyleBaseURL="https://business.mosyle.com"
+        local mosyleHardwareUUID
+        mosyleHardwareUUID=$(ioreg -d2 -c IOPlatformExpertDevice | awk -F\" '/IOPlatformUUID/{print $(NF-1)}')
+        mosyleComputerURL="${mosyleBaseURL}/#device_${mosyleHardwareUUID}"
+    fi
     
     if [[ $webhook_url_slack_option == "" ]]; then
         log_info "No slack URL configured"
@@ -5663,6 +8741,9 @@ webHookMessage() {
                 # Fallback to generic Workspace One console
                 mdmComputerURL="https://console.workspace.one"
             fi
+        # If Mac is managed by Mosyle, link to this device in the Mosyle console
+        elif [[ $mdmName == "Mosyle" ]]; then
+            mdmComputerURL="${mosyleComputerURL}"
         else
             log_info "No MDM determined - webhook call will fail"
         fi
@@ -5735,6 +8816,17 @@ webHookMessage() {
             # If Mac is managed by Jumpcloud, link to the Jumpcloud devices page
         elif [[  $mdmName == "Jumpcloud" ]]; then
             mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
+            # If Mac is managed by Workspace One, link to the devices page
+        elif [[ $mdmName == "Workspace One" ]]; then
+            if [[ -n "$server_url" ]]; then
+                base_url=$(echo "$server_url" | sed -n 's/\(https:\/\/[^\/]*\).*/\1/p')
+                mdmComputerURL="${base_url}/AirWatch/#/AirWatch/Devices/List/"
+            else
+                mdmComputerURL="https://console.workspace.one"
+            fi
+            # If Mac is managed by Mosyle, link to this device in the Mosyle console
+        elif [[ $mdmName == "Mosyle" ]]; then
+            mdmComputerURL="${mosyleComputerURL}"
         else
             log_info "No MDM determined - webhook call will fail"
         fi
@@ -5914,6 +9006,12 @@ resolve_early_silent_mode() {
     # single source of truth for the rest of the run.
     runningSilentlyOption="FALSE"
 
+    # --preview-deferral-dialog / --pending-apps-dialog need the real UI (swiftDialog), so never
+    # treat those runs as silent even if InteractiveMode itself is configured as 0.
+    if [[ "${preview_deferral_dialog_option:-}" == "TRUE" ]] || [[ "${pending_apps_dialog_option:-}" == "TRUE" ]]; then
+        return 0
+    fi
+
     # --workflow-install-now (non-silent) always forces InteractiveModeOption to 2 later on, so
     # never treat this run as silent even if InteractiveMode itself is configured as 0.
     if [[ "${workflow_install_now_option:-}" == "TRUE" ]] || [[ -f "${WORKFLOW_INSTALL_NOW_FILE}" ]]; then
@@ -5921,6 +9019,22 @@ resolve_early_silent_mode() {
     fi
 
     if [[ "${workflow_install_now_silent_option:-}" == "TRUE" ]] || [[ -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" ]]; then
+        runningSilentlyOption="TRUE"
+        return 0
+    fi
+
+    if [[ "${workflow_discovery_only_option:-}" == "TRUE" ]] || [[ -f "${WORKFLOW_DISCOVERY_ONLY_FILE}" ]]; then
+        runningSilentlyOption="TRUE"
+        return 0
+    fi
+
+    local disable_relaunch_preview scheduled_discovery_preview
+    disable_relaunch_preview=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+    [[ -z "${disable_relaunch_preview}" ]] && disable_relaunch_preview=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
+    scheduled_discovery_preview=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+    [[ -z "${scheduled_discovery_preview}" ]] && scheduled_discovery_preview=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+    if { [[ "${disable_relaunch_preview}" == "TRUE" ]] || [[ "${disable_relaunch_preview}" == "1" ]]; } \
+    && { [[ "${scheduled_discovery_preview}" == "TRUE" ]] || [[ "${scheduled_discovery_preview}" == "1" ]]; }; then
         runningSilentlyOption="TRUE"
         return 0
     fi
@@ -5934,6 +9048,256 @@ resolve_early_silent_mode() {
     { [[ -z "${interactive_mode_managed}" ]] && [[ -z "${InteractiveModeOption}" ]] && [[ -n "${interactive_mode_local}" ]]; } && interactive_mode_preview="${interactive_mode_local}"
 
     [[ "${interactive_mode_preview}" == "0" ]] && runningSilentlyOption="TRUE"
+}
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Pre/Post patch hooks (#156) - managed absolute paths under ${aapHooksFolder} only
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+ensure_aap_hooks_folder() {
+    if [[ ! -d "${aapHooksFolder}" ]]; then
+        mkdir -p "${aapHooksFolder}"
+        chown root:wheel "${aapHooksFolder}"
+        chmod 755 "${aapHooksFolder}"
+    fi
+}
+
+# Returns 0 if $1 is safe to execute as an AAP patch hook. Logs the specific failure otherwise.
+validate_aap_hook_script() {
+    local script_path="$1"
+    local hook_label="${2:-Hook}"
+
+    if [[ -z "${script_path}" ]]; then
+        log_error "${hook_label}: path is empty."
+        return 1
+    fi
+    if [[ "${script_path}" != /* ]]; then
+        log_error "${hook_label}: path must be absolute (${script_path})."
+        return 1
+    fi
+    if [[ "${script_path}" == *..* ]]; then
+        log_error "${hook_label}: path must not contain '..' (${script_path})."
+        return 1
+    fi
+    if [[ "${script_path}" != "${aapHooksFolder}/"* ]]; then
+        log_error "${hook_label}: path must be under ${aapHooksFolder} (${script_path})."
+        return 1
+    fi
+    if [[ -L "${script_path}" ]]; then
+        log_error "${hook_label}: symlinks are not allowed (${script_path})."
+        return 1
+    fi
+    if [[ ! -f "${script_path}" ]]; then
+        log_error "${hook_label}: not a regular file or does not exist (${script_path})."
+        return 1
+    fi
+    if [[ ! -x "${script_path}" ]]; then
+        log_error "${hook_label}: file is not executable (${script_path})."
+        return 1
+    fi
+
+    local owner mode dir owner_dir mode_dir
+    owner=$(stat -f %u "${script_path}" 2>/dev/null)
+    mode=$(stat -f %Lp "${script_path}" 2>/dev/null)
+    if [[ "${owner}" != "0" ]]; then
+        log_error "${hook_label}: file must be owned by root (uid ${owner}: ${script_path})."
+        return 1
+    fi
+    if [[ ! "${mode}" =~ ^[0-9]+$ ]] || (( (8#${mode} & 8#022) != 0 )); then
+        log_error "${hook_label}: file must not be group/world-writable (mode ${mode}: ${script_path})."
+        return 1
+    fi
+
+    dir=$(dirname "${script_path}")
+    if [[ -L "${dir}" ]]; then
+        log_error "${hook_label}: parent directory must not be a symlink (${dir})."
+        return 1
+    fi
+    owner_dir=$(stat -f %u "${dir}" 2>/dev/null)
+    mode_dir=$(stat -f %Lp "${dir}" 2>/dev/null)
+    if [[ "${owner_dir}" != "0" ]]; then
+        log_error "${hook_label}: parent directory must be owned by root (${dir})."
+        return 1
+    fi
+    if [[ ! "${mode_dir}" =~ ^[0-9]+$ ]] || (( (8#${mode_dir} & 8#022) != 0 )); then
+        log_error "${hook_label}: parent directory must not be group/world-writable (mode ${mode_dir}: ${dir})."
+        return 1
+    fi
+
+    # Final allowlist check after resolving the directory (blocks unexpected bind/mount tricks).
+    local resolved_dir hooks_resolved
+    resolved_dir=$(cd "${dir}" && pwd -P 2>/dev/null) || {
+        log_error "${hook_label}: unable to resolve parent directory (${dir})."
+        return 1
+    }
+    ensure_aap_hooks_folder
+    hooks_resolved=$(cd "${aapHooksFolder}" && pwd -P 2>/dev/null) || {
+        log_error "${hook_label}: unable to resolve hooks directory (${aapHooksFolder})."
+        return 1
+    }
+    if [[ "${resolved_dir}" != "${hooks_resolved}" && "${resolved_dir}" != "${hooks_resolved}/"* ]]; then
+        log_error "${hook_label}: resolved path escapes ${aapHooksFolder} (${resolved_dir})."
+        return 1
+    fi
+
+    return 0
+}
+
+# Run $1 for up to $2 seconds; returns the command exit status, or 124 on timeout.
+run_aap_hook_with_timeout() {
+    local timeout_secs="$1"
+    shift
+    "$@" &
+    local pid=$!
+    local waited=0
+    while kill -0 "${pid}" 2>/dev/null; do
+        if (( waited >= timeout_secs )); then
+            log_error "Hook timed out after ${timeout_secs}s (pid ${pid}); sending TERM."
+            kill -TERM "${pid}" 2>/dev/null
+            sleep 2
+            kill -KILL "${pid}" 2>/dev/null
+            wait "${pid}" 2>/dev/null
+            return 124
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    wait "${pid}"
+    return $?
+}
+
+# Executes a validated hook script. $1 = pre|post. Returns 0 on success / skip, 1 on failure.
+run_aap_patch_hook() {
+    local hook_phase="$1"
+    local script_path fail_action hook_label
+
+    case "${hook_phase}" in
+        pre)
+            script_path="${pre_patch_script_option}"
+            fail_action="${pre_patch_script_fail_action}"
+            hook_label="PrePatchScript"
+            ;;
+        post)
+            script_path="${post_patch_script_option}"
+            fail_action="${post_patch_script_fail_action}"
+            hook_label="PostPatchScript"
+            ;;
+        *)
+            log_error "Unknown patch hook phase: ${hook_phase}"
+            return 1
+            ;;
+    esac
+
+    [[ -z "${script_path}" ]] && return 0
+
+    if ! validate_aap_hook_script "${script_path}" "${hook_label}"; then
+        if [[ "${fail_action}" == "ABORT" ]]; then
+            return 1
+        fi
+        log_warning "${hook_label}: validation failed; continuing because FailAction=CONTINUE."
+        return 0
+    fi
+
+    log_notice "Running ${hook_label}: ${script_path}"
+    export AAP_HOOK="${hook_phase}"
+    export AAP_VERSION="${scriptVersion}"
+    export AAP_BUILD="${scriptBuild}"
+    export AAP_SERIAL="${serialNumber}"
+    export AAP_COMPUTER_NAME="${computerName}"
+    export AAP_QUEUED_LABELS="${queuedLabelsArray[*]}"
+    export AAP_ERROR_COUNT="${errorCount:-0}"
+    export AAP_HOOKS_DIR="${aapHooksFolder}"
+
+    local hook_exit=0
+    # Direct exec (honours shebang). Never eval / never bash -c with the path as a shell string.
+    run_aap_hook_with_timeout "${patch_script_timeout_seconds}" "${script_path}" || hook_exit=$?
+
+    unset AAP_HOOK AAP_VERSION AAP_BUILD AAP_SERIAL AAP_COMPUTER_NAME AAP_QUEUED_LABELS AAP_ERROR_COUNT AAP_HOOKS_DIR
+
+    if [[ ${hook_exit} -eq 0 ]]; then
+        log_notice "${hook_label} completed successfully."
+        return 0
+    fi
+
+    log_error "${hook_label} exited with status ${hook_exit}."
+    if [[ "${fail_action}" == "ABORT" ]]; then
+        return 1
+    fi
+    log_warning "${hook_label}: continuing because FailAction=CONTINUE."
+    return 0
+}
+
+run_pre_patch_hook_once() {
+    [[ "${patch_hooks_pre_ran}" == "TRUE" ]] && return 0
+    patch_hooks_pre_ran="TRUE"
+    patch_hooks_need_post="TRUE"
+    if ! run_aap_patch_hook "pre"; then
+        log_error "Pre-patch hook failed with FailAction=ABORT; skipping installations."
+        write_status "Inactive Error: PrePatchScript failed."
+        exit_error
+    fi
+    return 0
+}
+
+run_post_patch_hook_if_needed() {
+    [[ "${patch_hooks_need_post}" == "TRUE" ]] || return 0
+    patch_hooks_need_post="FALSE"
+    if ! run_aap_patch_hook "post"; then
+        log_error "Post-patch hook failed with FailAction=ABORT."
+        write_status "Inactive Error: PostPatchScript failed."
+        exit_error
+    fi
+    return 0
+}
+
+resolve_github_api_auth() {
+    # Optional GitHub REST API authentication via managed preferences only (#249).
+    # Raised rate limit: unauthenticated 60 req/hr → authenticated 5,000 req/hr.
+    # Must run before get_dialog()/get_installomator() hit api.github.com. Token is never written
+    # to the local plist and never logged in cleartext.
+    # Docs: https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api
+    github_api_curl_auth_args=()
+    github_api_token_option=""
+
+    local github_api_auth_enabled_managed github_api_token_managed
+    github_api_auth_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" GitHubAPIAuthEnabled 2> /dev/null)
+    github_api_token_managed=$(defaults read "${appAutoPatchManagedPLIST}" GitHubAPIToken 2> /dev/null)
+
+    [[ -n "${github_api_auth_enabled_managed}" ]] && github_api_auth_enabled_option="${github_api_auth_enabled_managed}"
+
+    case "${github_api_auth_enabled_option:l}" in
+        true|1|yes) github_api_auth_enabled_option="TRUE" ;;
+        *)          github_api_auth_enabled_option="FALSE" ;;
+    esac
+
+    if [[ "${github_api_auth_enabled_option}" != "TRUE" ]]; then
+        log_verbose "GitHubAPIAuthEnabled: FALSE (unauthenticated GitHub API requests)"
+        return 0
+    fi
+
+    # Trim leading/trailing whitespace from the managed token string.
+    github_api_token_option="${github_api_token_managed}"
+    github_api_token_option="${github_api_token_option#"${github_api_token_option%%[![:space:]]*}"}"
+    github_api_token_option="${github_api_token_option%"${github_api_token_option##*[![:space:]]}"}"
+
+    if [[ -z "${github_api_token_option}" ]]; then
+        if [[ -d "${appAutoPatchLogFolder}" ]]; then
+            log_error "Parameter Error: GitHubAPIAuthEnabled is TRUE but GitHubAPIToken is missing or blank."
+            write_status "Inactive Error: GitHub API auth enabled without token."
+            exit_error
+        else
+            log_echo "[ERROR] Parameter Error: GitHubAPIAuthEnabled is TRUE but GitHubAPIToken is missing or blank."
+            exit 1
+        fi
+    fi
+
+    # Bearer is the documented scheme for PATs; Accept header matches GitHub REST guidance.
+    github_api_curl_auth_args=(
+        -H "Authorization: Bearer ${github_api_token_option}"
+        -H "Accept: application/vnd.github+json"
+    )
+    log_info "GitHub API authentication enabled for api.github.com requests."
+    log_verbose "GitHubAPIAuthEnabled: TRUE; GitHubAPIToken: <redacted, length ${#github_api_token_option}>"
 }
 
 resolve_self_update_preferences() {
@@ -6158,11 +9522,32 @@ main() {
     get_options "$@"
 
     workflow_startup
+
+    # Cosmetic preview of the deferral dialog with sample apps/icons - skips discovery, patching,
+    # and completion-status checks. Both dialog buttons are no-ops for install; only the default
+    # deferral-timer reschedule runs. Must happen after workflow_startup so banner/icon/language/
+    # overlay preferences are fully resolved the same way a real run would see them.
+    if [[ "${preview_deferral_dialog_option}" == "TRUE" ]]; then
+        workflow_preview_deferral_dialog
+    fi
+
+    # Pending-apps dialog from CLI or queued-app notification Install Now — report PLIST only,
+    # no discovery. If the user dismisses (Later), the function exits. If they choose Install Now,
+    # it sets install-now flags (workflow_install_now_option / pending_apps_install_now_option) and
+    # returns here so the normal install-now workflow below patches the queue in-process.
+    # The one-shot .PendingAppsDialog flag is consumed inside workflow_pending_apps_dialog (only
+    # once swiftDialog is confirmed present), so a dialog that cannot be shown stays armed to retry.
+    if [[ "${pending_apps_dialog_option}" == "TRUE" ]]; then
+        workflow_pending_apps_dialog
+    fi
+
     #Run the function to check if a user has already completed patching for the set cadence, ignore if using --workflow-install-now
     if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ "${workflow_install_now_silent_option}" == "TRUE" ]]; then
         log_notice "**** App Auto-Patch ${scriptVersion} - WORKFLOW INSTALL NOW - Skipping Completion Status Check"
+    elif [[ "${workflow_discovery_only_active}" == "TRUE" ]]; then
+        log_notice "**** App Auto-Patch ${scriptVersion} - DISCOVERY ONLY - Skipping Completion Status Check"
     else
-    check_completion_status
+        check_completion_status
     fi
 
     declare -A configArray=()
@@ -6183,9 +9568,19 @@ main() {
         rm -f "${FORCE_DISCOVERY_FILE}" 2> /dev/null
     fi
     
-    if [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then
+    if [[ "${pending_apps_install_now_option}" == "TRUE" ]]; then
+        # Install Now was chosen from the pending-apps dialog (or restored from
+        # PENDING_APPS_INSTALL_NOW_FILE after a restart/network defer). Patch exactly the queue
+        # the user confirmed (report PLIST ItemsToInstall) — never kick off a fresh discovery
+        # scan here, regardless of the DiscoveryFrequency window.
+        discovery_skip_reason="pending-apps Install Now (using existing report queue)"
+    elif [[ "${workflow_disable_app_discovery_option}" == "TRUE" ]]; then
         # Discovery explicitly disabled
         discovery_skip_reason="disabled by workflow option"
+    elif [[ "${workflow_discovery_only_option}" == "TRUE" ]]; then
+        # Explicit one-shot discovery-only is an immediate scan, independent of DiscoveryFrequency.
+        run_discovery="TRUE"
+        log_info "Explicit discovery-only workflow triggered; ignoring DiscoveryFrequency for this run."
     elif [[ "${force_discovery_option}" == "TRUE" ]]; then
         # Forced discovery requested via --force-discovery (or a pending flag file from a prior
         # relaunch) - bypass the DiscoveryFrequency window for this run only.
@@ -6249,6 +9644,14 @@ main() {
             /usr/libexec/PlistBuddy -c 'add ":DiscoveredLabels" array' "${appAutoPatchLocalPLIST}.plist"
         fi
 
+        # Preserve the last complete report until discovery reaches a safe completion boundary.
+        # If the user chooses STOP (or the process is terminated) mid-discovery, restore this
+        # snapshot so Support App / pending-app state is not replaced by a partial scan.
+        _aap_discard_pre_discovery_report_backup
+        if [[ -f "${appAutoPatchReportPLIST}.plist" ]]; then
+            cp -p "${appAutoPatchReportPLIST}.plist" "${aapReportPreDiscoveryBackup}" 2>/dev/null
+        fi
+
         # Reset the persisted report (ItemsToInstall) so it reflects only this run's findings
         clear_aap_report
         
@@ -6268,6 +9671,10 @@ main() {
         defaultVersionKey="CFBundleShortVersionString"
         versionKey="$defaultVersionKey"
 
+        # Label fragment parsing needs IFS=$'\n', but it must be restored once discovery finishes.
+        # Leaving it set corrupts every later "${array[*]}" join, command substitution word split,
+        # and the ${labelsArray:|ignoredLabelsArray} subtraction that drops ignored labels (#254).
+        discovery_saved_IFS=$IFS
         IFS=$'\n'
         in_label=0
         current_label=""
@@ -6322,13 +9729,15 @@ main() {
         # for each .sh file in fragments/labels/ strip out the switch/case lines and any comments. 
         log_info "Running discovery of installed applications"
 
-        # Need to grab any required, ingnored, or optional labels
+        # Need to grab any required, ignored, optional, or excluded-background labels
         ignoredLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" IgnoredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
         requiredLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" RequiredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
         optionalLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" OptionalLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+        excludedBackgroundLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" ExcludedBackgroundLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
         ignoredLabelsArray+=($ignoredLabelsFromConfig)
         requiredLabelsArray+=($requiredLabelsFromConfig)
         optionalLabelsArray+=($optionalLabelsFromConfig)
+        excludedBackgroundLabelsArray+=($excludedBackgroundLabelsFromConfig)
 
         for labelFragment in "$fragmentsPath"/labels/*.sh; do 
             
@@ -6356,9 +9765,18 @@ main() {
             labelFile="${labelFile%.*}"
             
             # Issue 142 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/142
-            #if [[ $ignoredLabelsArray =~ ${labelFile} ]]; then
-            if [[ " ${ignoredLabelsArray[*]} " == *" ${labelFile} "* ]]; then
+            # Exact-element membership rather than a "${array[*]}" substring match: the latter joins
+            # on the first character of IFS, so it silently matched nothing while IFS was $'\n'.
+            if (( ${ignoredLabelsArray[(Ie)${labelFile}]} )); then
                 log_verbose "Ignoring label $labelFile."
+                continue
+            fi
+            
+            # IgnoredLabels="*" means ignore everything that is not explicitly required or optional.
+            if [[ "${ignore_all_labels}" == "TRUE" ]] \
+            && (( ! ${requiredLabelsArray[(Ie)${labelFile}]} )) \
+            && (( ! ${optionalLabelsArray[(Ie)${labelFile}]} )); then
+                log_verbose "Ignoring label $labelFile (IgnoredLabels is '*' and this label is neither required nor optional)."
                 continue
             fi
             
@@ -6386,6 +9804,8 @@ main() {
                     
                     if [[ $in_label -eq 1 && "$scrubbedLine" =~ $endlabel_re ]]; then 
                         # label complete. A valid label includes a Team ID. If we have one, we can check for installed
+                        _aap_heartbeat "discovery:${label_name:-${labelFile:-label}}"
+                        _ensure_preparation_dialog "discovery"
                         [[ -n $expectedTeamID ]] && PgetAppVersion
                         
                         in_label=0
@@ -6419,6 +9839,9 @@ main() {
             done
         done
 
+        # Label fragment parsing is finished; everything below relies on normal word splitting.
+        IFS=$discovery_saved_IFS
+
         # Close our bouncing progress swiftDialog window
         swiftDialogCompleteDialogDiscover
         
@@ -6434,12 +9857,13 @@ main() {
     ignoredLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" IgnoredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
     requiredLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" RequiredLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
     optionalLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" OptionalLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
+    excludedBackgroundLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" ExcludedBackgroundLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
     convertedLabelsFromConfig=($(defaults read "$appAutoPatchLocalPLIST" ConvertedLabels | awk '{printf "%s ",$NF}' | tr -c -d "[:alnum:][:space:][\-_]" | tr -s "[:space:]"))
     ignoredLabelsArray+=($ignoredLabelsFromConfig)
     requiredLabelsArray+=($requiredLabelsFromConfig)
     optionalLabelsArray+=($optionalLabelsFromConfig)
+    excludedBackgroundLabelsArray+=($excludedBackgroundLabelsFromConfig)
     convertedLabelsArray+=($convertedLabelsFromConfig)
-    labelsArray+=($labelsFromConfig $requiredLabels $requiredLabelsFromConfig $convertedLabelsFromConfig)
 
     # Deduplicate ignored labels
     ignoredLabelsArray=($(tr ' ' '\n' <<< "${ignoredLabelsArray[@]}" | sort -u | tr '\n' ' '))
@@ -6450,13 +9874,62 @@ main() {
     # Deduplicate optional labels
     optionalLabelsArray=($(tr ' ' '\n' <<< "${optionalLabelsArray[@]}" | sort -u | tr '\n' ' '))
 
+    # Deduplicate excluded background labels
+    excludedBackgroundLabelsArray=($(tr ' ' '\n' <<< "${excludedBackgroundLabelsArray[@]}" | sort -u | tr '\n' ' '))
+
     # Deduplicate converted labels
     convertedLabelsArray=($(tr ' ' '\n' <<< "${convertedLabelsArray[@]}" | sort -u | tr '\n' ' '))
 
-    # Deduplicate labels list
-    labelsArray=($(tr ' ' '\n' <<< "${labelsArray[@]}" | sort -u | tr '\n' ' '))
+    if [[ "${pending_apps_install_now_option}" == "TRUE" ]]; then
+        # Lock the install queue to the report PLIST ItemsToInstall the user just confirmed in the
+        # pending-apps dialog. Do NOT merge DiscoveredLabels / RequiredLabels / ConvertedLabels —
+        # those can add apps the dialog never listed (or omit report entries if they diverge).
+        # The same IgnoredLabels / ignore-all policy the dialog used is applied here (rather than the
+        # plain ${labelsArray:|ignoredLabelsArray} subtraction below) so the queue matches the list
+        # the user approved and still honors ignore-all mode on a flag-file-restored run.
+        _load_effective_label_policy
+        local -a reportQueueLabels=()
+        local _rqLabel _rqDisp _rqInst _rqNew
+        while IFS=$'\t' read -r _rqLabel _rqDisp _rqInst _rqNew; do
+            [[ -z "${_rqLabel}" ]] && continue
+            if ! _label_allowed_by_policy "${_rqLabel}"; then
+                # Prune rather than silently skip, so the report PLIST / Support App tile count stop
+                # advertising an update that policy will never install (see workflow_pending_apps_dialog).
+                log_verbose "Pending-apps Install Now: pruning '${_rqLabel}' from the queue (excluded by IgnoredLabels policy)."
+                remove_aap_report_item "${_rqLabel}"
+                remove_discovered_label "${_rqLabel}"
+                continue
+            fi
+            reportQueueLabels+=("${_rqLabel}")
+            AAPVersionByLabel[$_rqLabel]="${_rqNew}"
+            AAPInstalledVersionByLabel[$_rqLabel]="${_rqInst}"
+        done < <(get_aap_report_entries)
+        labelsArray=($(tr ' ' '\n' <<< "${reportQueueLabels[@]}" | sort -u | tr '\n' ' '))
+        log_notice "Pending-apps Install Now: install queue locked to report PLIST (${#reportQueueLabels[@]} label(s))."
+    else
+        labelsArray+=($labelsFromConfig $requiredLabels $requiredLabelsFromConfig $convertedLabelsFromConfig)
 
-    labelsArray=${labelsArray:|ignoredLabelsArray}
+        # Deduplicate labels list
+        labelsArray=($(tr ' ' '\n' <<< "${labelsArray[@]}" | sort -u | tr '\n' ' '))
+
+        labelsArray=${labelsArray:|ignoredLabelsArray}
+
+        # In ignore-all mode the subtraction above cannot do the work, because IgnoredLabels holds the
+        # "*" flag rather than an entry per label. Keep only required and optional labels (#254).
+        if [[ "${ignore_all_labels}" == "TRUE" ]]; then
+            local -a allowedLabels=()
+            local candidateLabel
+            for candidateLabel in ${(s/ /)labelsArray}; do
+                [[ -z "${candidateLabel}" ]] && continue
+                if (( ${requiredLabelsArray[(Ie)${candidateLabel}]} )) || (( ${optionalLabelsArray[(Ie)${candidateLabel}]} )); then
+                    allowedLabels+=("${candidateLabel}")
+                else
+                    log_verbose "Dropping ${candidateLabel} from the queue (IgnoredLabels is '*' and this label is neither required nor optional)."
+                fi
+            done
+            labelsArray="${allowedLabels[*]}"
+        fi
+    fi
 
     appNamesArray=()
     # Get App Names for each label in labelsArray
@@ -6486,6 +9959,7 @@ main() {
     log_notice "Ignoring labels: $ignoredLabelsArray"
     log_notice "Required labels: $requiredLabelsArray"
     log_notice "Optional Labels: $optionalLabelsArray"
+    log_notice "Excluded Background Labels: $excludedBackgroundLabelsArray"
     log_notice "Converted Labels: $convertedLabelsArray"
 
     log_info "Discovery of installed applications complete..."
@@ -6500,22 +9974,113 @@ main() {
     for label in $queuedLabelsArray; do
         countOfElementsArray+=($label)
     done
+    # Discovery and queue reconstruction are now complete; the new report is authoritative.
+    _aap_discard_pre_discovery_report_backup
+
+    # User-driven patching mode (#258): refresh discovery/report state, optionally stage installers,
+    # optionally notify the user, then exit without silent patching, deferral UI, hard-deadline
+    # enforcement, or installation. Support App / pending-apps dialog remains the install trigger.
+    if [[ "${workflow_discovery_only_active}" == "TRUE" ]]; then
+        if [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            log_info "Discovery-only workflow: staging ${#countOfElementsArray[@]} queued update(s)."
+            workflow_stage_updates
+        fi
+        if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            if aap_notification_enabled apps_queued; then
+                send_aap_notification_apps_queued "${#countOfElementsArray[@]}"
+            else
+                log_info "Discovery-only workflow: ${#countOfElementsArray[@]} app(s) queued (apps-queued notification off)."
+            fi
+        else
+            log_info "Discovery-only workflow: no pending updates found."
+        fi
+        exit_discovery_only_workflow "Discovery-only workflow complete"
+    fi
+
+    # During BusinessHours without SilentDuring, with AllowDiscovery: discovery-only path.
+    # Optionally notify about pending apps (with Install Now), then defer until clear.
+    if [[ "${business_hours_discovery_only_active}" == "TRUE" ]]; then
+        if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            if aap_notification_enabled apps_queued; then
+                send_aap_notification_apps_queued "${#countOfElementsArray[@]}"
+            else
+                log_info "During BusinessHours (discovery-only): ${#countOfElementsArray[@]} app(s) require updates (apps-queued notification off)."
+            fi
+        else
+            log_info "During BusinessHours (discovery-only): no apps require updates."
+        fi
+        business_hours_defer_until_clear_and_exit "During BusinessHours; discovery-only complete"
+    fi
+
+    # During BusinessHours with SilentDuring: discovery already ran; patch closed apps
+    # only with no dialogs. Remaining open/blocked apps wait until BusinessHours clear.
+    if [[ "${business_hours_silent_during_active}" == "TRUE" ]]; then
+        if [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            workflow_stage_updates
+        fi
+        if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            log_info "BusinessHoursSilentDuring: silently patching closed apps only..."
+            workflow_silent_patch_closed_apps
+        fi
+        # Banner notifications for silent/queued outcomes during BusinessHours.
+        if [[ ${silent_patch_success_count} -gt 0 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            send_aap_notification_silent_and_queued "${silent_patch_success_count}" "${#countOfElementsArray[@]}"
+        elif [[ ${silent_patch_success_count} -gt 0 ]]; then
+            send_aap_notification_silent_updated "${silent_patch_success_count}"
+        elif [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            send_aap_notification_apps_queued "${#countOfElementsArray[@]}"
+        fi
+        if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            log_status "During BusinessHours: ${#countOfElementsArray[@]} open/blocked app(s) remain; deferring interactive install until BusinessHours clear."
+            business_hours_defer_until_clear_and_exit "During BusinessHours; open apps remain after silent closed-app patch"
+        fi
+        log_info "During BusinessHours: no apps remain after silent closed-app patch (or none were due)."
+        defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true
+        timestamp="$(date +$timestamp_format)"
+        defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
+        check_webhook
+        if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+            exit_after_disabled_relaunch "Patching Complete"
+        else
+            if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
+            || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
+                log_aap "Monthly Patching Cadence Enabled: Calculating next launch date"
+                next_nth_weekday=$(next_nth_weekday_datetime ${monthly_patching_cadence_weekday_index} ${monthly_patching_cadence_ordinal_value} "${monthly_patching_cadence_start_time}")
+                log_notice "Will auto launch on ${next_nth_weekday}"
+                set_auto_launch_monthly_cadence
+            else
+                deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
+                log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
+                set_auto_launch_deferral
+            fi
+        fi
+    fi
+
+    # Pending-apps Install Now: the user already reviewed the queue and asked for it to be installed
+    # right now, and these updates were staged when they were first queued. Skip the pre-staging pass
+    # and the silent background closed-app patch (both only exist to prepare for / avoid a later
+    # interactive prompt) and go straight to the patching dialog. Any already-staged installers are
+    # still reused by workflow_do_Installations; anything unstaged is downloaded during the install.
+    local skip_stage_and_background_patch="FALSE"
+    if [[ "${pending_apps_install_now_option}" == "TRUE" ]]; then
+        skip_stage_and_background_patch="TRUE"
+        log_info "Pending-apps Install Now: skipping staging and background closed-app patch; going straight to the install dialog."
+    fi
 
     # Stage installers before the silent background-patch pass below, so each queued app is
     # downloaded at most once (closed apps then install from the staged copy; open/blocked apps
-    # keep it ready for the later user-approved install). InteractiveMode 2 only: show a bouncing
-    # progress window over both steps. stagingWindowOpened tracks whether it was opened, since
-    # countOfElementsArray can end up empty afterward (all apps patched silently) even though the
-    # window still needs closing.
+    # keep it ready for the later user-approved install). InteractiveMode 2 only: show a mini
+    # progress window over both steps with per-app status and a determinate progress bar.
+    # stagingWindowOpened tracks whether it was opened, since countOfElementsArray can end up
+    # empty afterward (all apps patched silently) even though the window still needs closing.
     stagingWindowOpened="FALSE"
-    if [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+    if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         swiftDialogStagingWindow
         stagingWindowOpened="TRUE"
     fi
 
     # Controlled by WorkflowStageUpdatesOption (managed key: WorkflowStageUpdates).
-    if [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
-        [[ ${InteractiveModeOption} == 2 ]] && swiftDialogUpdate "progresstext: ${display_string_staging_progress} ..."
+    if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         workflow_stage_updates
     fi
 
@@ -6523,9 +10088,13 @@ main() {
     # of open state): before showing any dialog, silently patch apps that aren't currently open.
     # Apps with a blocking process (Installomator exit 12) stay queued for the deferral/deadline
     # dialog. Controlled by WorkflowBackgroundPatchClosedAppsOption (managed key: WorkflowBackgroundPatchClosedApps).
-    if [[ ${InteractiveModeOption} -ge 1 ]] && [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
-        [[ ${InteractiveModeOption} == 2 ]] && swiftDialogUpdate "progresstext: ${display_string_silent_patch_progress} ..."
+    # ExcludedBackgroundLabels are also skipped here and left for the interactive dialog.
+    if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ ${InteractiveModeOption} -ge 1 ]] && [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
         workflow_silent_patch_closed_apps
+        # Scenario 1: any successful silent closed-app patches outside the BusinessHours-only path.
+        if [[ ${silent_patch_success_count} -gt 0 ]]; then
+            send_aap_notification_silent_updated "${silent_patch_success_count}"
+        fi
     fi
 
     # Close the staging/silent-patch progress window (if opened above), checked against
@@ -6541,7 +10110,36 @@ main() {
         if [[ "${workflow_install_now_option}" == "TRUE" ]] || [[ "${workflow_install_now_silent_option}" == "TRUE" ]] || [[ ${InteractiveModeOption} == 0 ]]; then
             rm -f "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
             rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
+            rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" 2> /dev/null
             log_info "Install Now Workflow or Silent Mode active - Bypassing deferral workflow"
+            # Fully-silent path: withhold ExcludedBackgroundLabels from the install. --workflow-install-now
+            # (non-silent) deliberately does NOT filter them - that is the manual escape hatch.
+            if [[ "${workflow_install_now_silent_option}" == "TRUE" ]] || { [[ ${InteractiveModeOption} == 0 ]] && [[ "${workflow_install_now_option}" != "TRUE" ]]; }; then
+                filter_excluded_background_labels_from_silent_install
+                numberOfUpdates=$((${#countOfElementsArray[@]}))
+            fi
+            if [[ ${#countOfElementsArray[@]} -eq 0 ]]; then
+                log_notice "No apps remain to install after applying ExcludedBackgroundLabels; treating silent run as complete."
+                defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true
+                timestamp="$(date +$timestamp_format)"
+                defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
+                check_webhook
+                if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
+                    exit_after_disabled_relaunch "Patching Complete"
+                else
+                    if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
+                    || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
+                        log_aap "Monthly Patching Cadence Enabled: Calculating next launch date"
+                        next_nth_weekday=$(next_nth_weekday_datetime ${monthly_patching_cadence_weekday_index} ${monthly_patching_cadence_ordinal_value} "${monthly_patching_cadence_start_time}")
+                        log_notice "Will auto launch on ${next_nth_weekday}"
+                        set_auto_launch_monthly_cadence
+                    else
+                        deferral_timer_minutes="${deferral_timer_workflow_relaunch_minutes}"
+                        log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
+                        set_auto_launch_deferral
+                    fi
+                fi
+            else
             log_notice "Passing ${numberOfUpdates} labels to Installomator: $queuedLabelsArray"
             workflow_do_Installations
             
@@ -6552,12 +10150,7 @@ main() {
             fi
             check_webhook
             if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-                log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
-                log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
-                /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
-                { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
-                disown
-                exit_clean
+                exit_after_disabled_relaunch "Patching Complete"
             else
                 if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
                 || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
@@ -6570,6 +10163,7 @@ main() {
                     log_notice "Will auto launch in ${deferral_timer_minutes} minutes."
                     set_auto_launch_deferral
                 fi
+            fi
             fi
 
         else
@@ -6596,12 +10190,7 @@ main() {
                 check_webhook
 
                 if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-                    log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
-                    log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
-                    /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
-                    { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
-                    disown
-                    exit_clean
+                    exit_after_disabled_relaunch "Patching Complete"
                 else
                     if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
                     || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
@@ -6634,12 +10223,7 @@ main() {
                     check_webhook
                     
                     if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-                        log_aap "Status: Patching Complete and Automatic Relaunch is disabled. Exiting."
-                        log_status "Inactive: Patching Complete and Automatic Relaunch is disabled."
-                        /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
-                        { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
-                        disown
-                        exit_clean
+                        exit_after_disabled_relaunch "Patching Complete"
                     else
                         if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
                         || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then
@@ -6663,21 +10247,22 @@ main() {
         fi
     else
         log_info "All apps are up to date. Nothing to do."
+        rm -f "${WORKFLOW_INSTALL_NOW_FILE}" 2> /dev/null
+        rm -f "${WORKFLOW_INSTALL_NOW_SILENT_FILE}" 2> /dev/null
+        rm -f "${PENDING_APPS_INSTALL_NOW_FILE}" 2> /dev/null
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompletionStatus -bool true #Set completion status to true
         timestamp="$(date +$timestamp_format)"
         defaults write "${appAutoPatchLocalPLIST}" AAPPatchingCompleteDate -date "$timestamp"
         
         if [ ${InteractiveModeOption} -gt 1 ]; then
-            $dialogBinary --title "$appTitle" --message "${display_string_uptodate_message}" --windowbuttons min --icon "${icon}" --overlayicon "$overlayicon" --moveable --position topright --timer 60 --quitkey k --button1text "${display_string_uptodate_button1}" --style "mini" --hidetimerbar
+            $dialogBinary --title "$appTitle" --message "${display_string_uptodate_message}" --windowbuttons min --icon "${icon}" --overlayicon "$overlayicon" --moveable --position topright --timer 60 --quitkey k --button1text "${display_string_uptodate_button1}" --style "mini" --hidetimerbar "${dialogDockOptions[@]}"
         fi
         
         
         
         # Logic for ${workflow_disable_relaunch_option} and ${deferral_timer_workflow_relaunch_minutes}.
         if [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
-            log_aap "Status: Full AAP workflow complete! Automatic relaunch is disabled."
-            log_status "Inactive: Full AAP workflow complete! Automatic relaunch is disabled."
-            /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2> /dev/null
+            exit_after_disabled_relaunch "Full AAP workflow complete"
         else # Default AAP workflow automatically relaunches.
             if [[ "${monthly_patching_cadence_enabled:l}" == "true" ]] \
                 || [[ "${monthly_patching_cadence_enabled}" == "1" ]]; then

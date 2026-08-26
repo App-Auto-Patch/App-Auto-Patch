@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.6.3
+# App Auto-Patch 3.7.0
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub pre-release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag&include_prereleases) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch) [![swiftDialog](https://img.shields.io/badge/swiftDialog-Enabled-blue)](https://swiftdialog.app)
 
@@ -13,6 +13,54 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 ## Why Build This
 
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
+
+## New features/Specific Changes in 3.7.0
+- **Business Hours** — Block interactive discovery/dialogs/patching during configured weekday time windows (`DAY:hh:mm-hh:mm`). Multiple windows per day supported (e.g. leave lunch clear). Outside those windows the workflow is allowed. During a window AAP reschedules to the next clear time unless Silent During is enabled. `--workflow-install-now` / `--workflow-install-now-silent` / `--preview-deferral-dialog` / `--pending-apps-dialog` and headless discovery-only workflows intentionally bypass. Overdue hard deadlines bypass by default. (#166)
+	- Managed Preference Key: `<key>BusinessHours</key>` `<string>MON:09:00-17:00,...</string>`
+	- Managed Preference Key: `<key>BusinessHoursRespectHardDeadline</key>` `<true/>` | `<false/>` (default `false`)
+	- Managed Preference Key: `<key>BusinessHoursSilentDuring</key>` `<true/>` | `<false/>` (default `false`) — during Business Hours: discovery + closed-apps-only silent patch; no dialogs; open apps wait until clear
+	- Managed Preference Key: `<key>BusinessHoursAllowDiscovery</key>` `<true/>` | `<false/>` (default `false`) — during Business Hours without SilentDuring: run discovery then defer (no interactive dialogs / silent patch). Default off = historical immediate defer with no discovery
+	- CLI: `--business-hours=` / `--business-hours-respect-hard-deadline` / `-off` / `--business-hours-silent-during` / `-off` / `--business-hours-allow-discovery` / `-off`
+- **Skip Pre-Update Verification** — Optionally skip the local Gatekeeper (`spctl`) / Team ID check during discovery when it intermittently fails for a valid installed app and would otherwise exclude that app from updates. Installomator still validates after download. Default off. (#256)
+	- Managed Preference Key: `<key>SkipPreUpdateVerification</key>` `<true/>` | `<false/>` (default `false`)
+	- CLI: `--skip-pre-update-verification` / `--skip-pre-update-verification-off`
+- **Dock Icon** — Workflow dialogs show the App Auto-Patch logo in the macOS Dock when swiftDialog 3.0+ is installed (default on). Deferral dialogs badge the pending update count; the installation dialog counts the badge down as updates finish. Admins can disable via preference or CLI. Dock Quit / ⌘Q reopens deferral dialogs (instead of installing) and offers Show Progress or Continue in Background if the patching window is dismissed. Discovery/staging windows follow `DialogQuitHandlingDiscoveryStaging` (default **PROMPT**: Keep Running vs Stop App Auto-Patch).
+	- Managed Preference Key: `<key>ShowDockIcon</key>` `<true/>` | `<false/>` (default `true`)
+	- CLI: `--show-dock-icon` / `--show-dock-icon-off`
+- **Discovery/Staging Dock Quit** — When the user quits the discovery or staging window, AAP can prompt, keep running, or stop until the next scheduled launch. Stopping preserves `NextAutoLaunch`. Stop is ignored when a hard deadline is already due or Install Now is running — the workflow continues instead. Localizable strings: `display_string_preparationdismissed_message`, `display_string_preparationdismissed_button1` (default `Keep Running`), `display_string_preparationdismissed_button2` (default `Stop App Auto-Patch`).
+	- Managed Preference Key: `<key>DialogQuitHandlingDiscoveryStaging</key>` `PROMPT`|`CONTINUE`|`STOP` (default `PROMPT`)
+- **Stale process recovery** — AAP writes a heartbeat and validates the PID file so a leftover hung process (or a recycled PID) cannot block the LaunchDaemon forever. After the timeout, recovery is graceful `TERM` then `KILL`. Staging downloads abort if curl transfers no data. Admins can stop a live run with `--stop` without discarding the existing schedule.
+	- Managed Preference Key: `<key>StaleProcessTimeoutSeconds</key>` `<integer>3600</integer>` — default `3600`; `0` disables timeout-based stale-process killing (dead/reused PID cleanup still runs); any other value below `300` is raised to `300`
+	- CLI: `--stop`
+- **Banner Notifications** — Non-persistent swiftDialog banner notifications (default on) for silent closed-app updates and for pending updates when discovery runs during Business Hours (`BusinessHoursAllowDiscovery` or SilentDuring). Queued-app notifications include **Install Now** (opens the pending-apps dialog) and **Dismiss**.
+	- Managed Preference Key: `<key>ShowNotificationsAll</key>` `<true/>` | `<false/>` (default `true`) — master switch; when true, every type is shown and individual keys are ignored
+	- Managed Preference Key: `<key>ShowNotificationsSilentUpdated</key>` / `<key>ShowNotificationsAppsQueued</key>` / `<key>ShowNotificationsSilentAndQueued</key>` `<true/>` | `<false/>` (default `false`) — opt-in per type when All is false
+	- CLI: `--show-notifications-all` / `-off` (aliases: `--show-notifications` / `-off`) plus `--show-notifications-silent-updated` / `--show-notifications-apps-queued` / `--show-notifications-silent-and-queued` (each with `-off`)
+	- Language keys: `display_string_notification_silent_updated`, `display_string_notification_apps_queued`, `display_string_notification_silent_and_queued`, `display_string_notification_button_install`, `display_string_notification_button_dismiss` (placeholders `{count}` / `{remaining}`)
+	- Requires notifications to be approved for swiftDialog. Deploy a `com.apple.notificationsettings` profile for `au.csiro.dialog.notifier.banner` (swiftDialog 3.1+ banner helper), `au.csiro.dialog.notifier.alert` (alert helper), and `au.csiro.dialog` (3.0 and earlier)
+- **Pending Apps Dialog** — List pending updates from the report PLIST (no discovery) with Install Now / Later. Used by queued-app notification Install Now and available as a CLI/Support App trigger. Install Now installs in-process — it patches exactly the queue shown (report PLIST only; no fresh discovery scan) via the standard install-now workflow, without launching a second `appautopatch` process, and goes straight to the patching dialog (no pre-staging or background closed-app patch). Intent survives restart/network defer.
+	- CLI Trigger: `--pending-apps-dialog`
+	- Language key: `display_string_pendingapps_button_later` (default `Later`); Install Now reuses `display_string_deferral_button2`
+- **Pre/Post Patch Scripts** — Run a managed, root-owned script once before and/or after Installomator installations (e.g. `jamf recon`). Scripts must live under `/Library/Management/AppAutoPatch/Hooks/`, cannot be symlinks, and must not be group/world-writable. Managed preferences only — never CLI or local prefs, never `eval`'d. (#156)
+	- Managed Preference Key: `<key>PrePatchScript</key>` / `<key>PostPatchScript</key>`
+	- Managed Preference Key: `<key>PrePatchScriptFailAction</key>` `ABORT`|`CONTINUE` (default `ABORT`)
+	- Managed Preference Key: `<key>PostPatchScriptFailAction</key>` `ABORT`|`CONTINUE` (default `CONTINUE`)
+	- Managed Preference Key: `<key>PatchScriptTimeoutSeconds</key>` (default `300`)
+- **Mosyle MDM support** — Detect Mosyle from the enrollment ServerURL, include a “View in Mosyle” device deep-link in Slack/Teams webhooks (enrolled MDM host, fallback `https://business.mosyle.com`), and prefer the Mosyle Self Service overlay icon when present. (#240)
+- **GitHub API Authentication** — Optionally authenticate `api.github.com` requests with a GitHub personal access token so AAP stays under GitHub's rate limits in large fleets (60 → 5,000 requests/hour). Managed preferences only; the token is never written to the local preference file and is never logged. If auth is enabled without a token, startup validation fails. (#249)
+	- Managed Preference Key: `<key>GitHubAPIAuthEnabled</key>` `<string>TRUE,FALSE</string>` — default: `FALSE`
+	- Managed Preference Key: `<key>GitHubAPIToken</key>` `<string>github_pat_...</string>` — required when auth is enabled
+- **Excluded Background Labels** — Pin specific apps so AAP still discovers and reports them, but does not update them during fully-silent runs (`InteractiveMode 0` / `--workflow-install-now-silent`) or Background Patch Closed Apps. Interactive Install Now and hard-deadline installs still update them. Unlike `IgnoredLabels`, these apps stay visible in discovery, logs, and inventory. Supports wildcards. (#238)
+	- Managed Preference Key: `<key>ExcludedBackgroundLabels</key>` `<string>label1 label2*</string>`
+	- CLI Trigger: `--excluded-background-labels="label1 label2*"`
+- **Preview Deferral Dialog** — Quickly preview how the deferral dialog looks with your current banner/icon/language settings, using sample apps (no discovery, no patching). Both buttons are no-ops for install, and `NextAutoLaunch` is left unchanged.
+	- CLI Trigger: `--preview-deferral-dialog`
+- Changed: if no user is logged in, AAP no longer exits after waiting for the Dock — it waits up to 20 seconds, then continues without an active user session and skips the swiftDialog install/update check. Fully-silent runs still skip the Dock wait entirely
+- Fixed: Teams webhooks now resolve Workspace One device links the same way Slack webhooks already did
+- Fixed: the `AAP-LatestPatches` Jamf Pro EA could stall `jamf recon`; it now avoids NUL-delimited reads/process substitution, always emits `<result>`, and lists receipts via a temp file
+- Fixed: ignored labels were disregarded on any run where app discovery actually executed, so ignored apps were queued and patched anyway. Discovery left `IFS` set to a newline, which broke the ignored-label membership checks and the subtraction that removes them from the install queue. Runs that skipped discovery were unaffected, which made it look intermittent (#254)
+- Fixed: `IgnoredLabels="*"` is no longer expanded into ~1,200 individual local preference entries per run. That write volume desynchronised the preferences cache from the file on disk and made unrelated keys read back blank — most visibly `AAPPatchingStartDate`, producing a "Days Since Patching Start Date" in the tens of thousands and resetting the patching cadence. **No configuration change is required**; `IgnoredLabels="*"` keeps its meaning of "ignore every label except those in `RequiredLabels` and `OptionalLabels`" (#254)
+- Fixed: labels in `RequiredLabels` could be swept into the ignored list by a wildcard in `IgnoredLabels` and then dropped from the queue, so required apps were never patched (#254)
 
 ## New features/Specific Changes in 3.6.3
 - Changed: if no user is logged in, AAP no longer exits after waiting for the Dock - it waits up to 20 seconds, then continues without an active user session and skips the swiftDialog install/update check. Fully-silent runs still skip the Dock wait entirely
@@ -47,11 +95,16 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 	- Managed Preference Key: `<key>WorkflowStageUpdates</key>` `<true/>` | `<false/>` — default: `false`
 
 - **Discovery Frequency** — Skip the app-discovery (scanning) phase on subsequent runs within a configurable time window. Useful when a user defers multiple times in a day — AAP won't re-scan every app each time, saving runtime, bandwidth, and system resources.
-	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>` — default: `0` (always run discovery)
+	- Managed Preference Key: `<key>DiscoveryFrequency</key>` `<integer>hours</integer>` — default: `24`; `0` runs discovery on every workflow execution
 
 - **Force Discovery CLI trigger** — A new `--force-discovery` CLI trigger runs the app-discovery (scanning) phase immediately, even if `DiscoveryFrequency` hasn't elapsed yet. It's a one-shot trigger: it applies to the very next run only, then automatically clears itself — including when the run is relaunched via the LaunchDaemon (e.g. triggered remotely through Jamf), so it still takes effect even though the relaunched process doesn't see the original command-line flag.
 	- CLI Trigger: `--force-discovery`
 	- Note: an administrator-disabled discovery workflow (`WorkflowDisableAppDiscovery`) still takes priority — `--force-discovery` only bypasses the `DiscoveryFrequency` wait, not a hard disable.
+
+- **Scheduled Discovery Only** — Keep discovery and pending-app reporting current while leaving installation entirely user-driven. Pair `WorkflowScheduledDiscovery=true` with `WorkflowDisableRelaunch=true`: AAP wakes on `DiscoveryFrequency`, runs a headless scan, refreshes the report/Support App data, optionally stages installers (`WorkflowStageUpdates`), optionally sends the queued-app notification, and schedules the next scan. It does not silently patch closed apps, evaluate deferral/hard-deadline UI, or install anything. Explicit `--pending-apps-dialog`, notification, Support App, and Install Now triggers remain available.
+	- Managed Preference Key: `<key>WorkflowScheduledDiscovery</key>` `<true/>` | `<false/>` — default: `false`; effective only with `WorkflowDisableRelaunch=true`
+	- CLI Trigger: `--workflow-discovery-only` — one-shot immediate headless discovery/report refresh; preserves the existing automatic schedule
+	- `WorkflowDisableAppDiscovery=true` still takes priority. If `DiscoveryFrequency=0`, scheduled mode uses `DeferralTimerWorkflowRelaunch` (minimum two minutes) instead of spinning on the LaunchDaemon's 60-second interval.
 
 - **Ignore DND Apps** — Exclude specific apps from Focus/Do-Not-Disturb display-sleep-assertion detection, so background utilities that permanently hold a display assertion (e.g. Logi Options+, Amphetamine) don't indefinitely block interactive patching from proceeding. (#149)
 	- Managed Preference Key: `<key>IgnoreDNDApps</key>` `<string>App1,App2,App3</string>` — comma-separated app names, matched exactly as reported by macOS (including spaces)
@@ -66,7 +119,7 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 	- AAP now waits for the Dock to become active (up to 2 minutes) before proceeding at startup, ensuring a full user session is established first.
 	- The swiftDialog download and code-signing verification now automatically retry up to 3 times before failing, reducing false failures on flaky networks.
 
-- **Verbose log retention** — The verbose log is now archived (instead of being deleted every run) once it grows past a size threshold, matching the existing rotation behavior of the main log, with a capped number of archives to prevent unbounded disk usage.
+- **Verbose log retention** — When `VerboseMode` is enabled, the verbose log (`aap_verbose.log`) holds the full run transcript (regular output plus `[VERBOSE]` lines) and is archived (instead of being deleted every run) once it grows past a size threshold, matching the existing rotation behavior of the main log, with a capped number of archives to prevent unbounded disk usage. When `VerboseMode` is off, nothing is written to `aap_verbose.log`. `[VERBOSE]` lines never go to `aap.log`.
 
 - **Banner image support** — The Patching, Deferral, and Hard Deadline dialogs can now display a custom banner (image, URL, solid colour, or gradient) across the top in place of the plain text title, using swiftDialog's `--bannerimage`/`--bannertitle`/`--bannerheight` options. If no banner image is configured, dialogs look exactly as before.
 	- Managed Preference Key: `<key>BannerImage</key>` `<string>Filepath|URL|colour=#hex|gradient=colour,colour</string>` — leave unset to keep the standard text title
@@ -211,7 +264,7 @@ Or trigger the script directly to perform an install with the parameters you'd l
 - To reset AAP to defaults:
   `./App-Auto-Patch-via-Dialog.zsh --reset-defaults`
 
-- Clear Ignored, Required, and Optional Labels:
+- Clear Ignored, Required, Optional, and Excluded Background Labels:
   `./App-Auto-Patch-via-Dialog.zsh --reset-labels`
 
 - Uninstall App Auto Patch:
