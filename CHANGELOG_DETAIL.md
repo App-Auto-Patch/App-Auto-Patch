@@ -2,6 +2,10 @@
 
 # Version 3
 
+## Version 3.7.1
+### 28-Aug-2026 (1) - Build 3.7.1.2608282057
+- [#264](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/264): resolve the console user from `/dev/console` ownership (`stat -f "%Su"`) instead of `scutil State:/Users/ConsoleUser` `Name :`. That field can report a truncated or non-account name, which then breaks `su`/`id` lookups used for language, notifications, dialogs, and user details. Shared helper `get_console_user_account_name()` covers `get_preferences`, `get_logged_in_user`, and the patching-dialog session checks. `scutil` remains a fallback if `stat` returns empty; a verbose log is written when the two sources disagree.
+
 ## Version 3.7.0
 ### 19-Aug-2026 (3) - Build 3.7.0.2608191542
 - Fixed: a live AAP run started as `sudo appautopatch …` was reported by `aap-starter` as `aap.pid points to live non-AAP PID`, which released the runtime markers and launched a second instance alongside the first (duplicate deferral dialogs). PID ownership is now matched on the program AAP was invoked as (`appautopatch` entrypoint or `App-Auto-Patch-via-Dialog.zsh`) after skipping `sudo`/interpreter arguments, in both `aap-starter` and the script's own startup, uninstall, and `--stop` checks

@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.7.0"
-scriptDate="2026/08/19"
-scriptBuild="3.7.0.2608191542"
+scriptVersion="3.7.1"
+scriptDate="2026/08/28"
+scriptBuild="3.7.1.2608282057"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -1319,12 +1319,24 @@ parse_labels_option() {
     done
 }
 
+# Console user short name from /dev/console ownership.
+# scutil State:/Users/ConsoleUser "Name :" can report a truncated or non-account
+# name, which then breaks su/id lookups (#264).
+get_console_user_account_name() {
+    local consoleUser
+    consoleUser=$(/usr/bin/stat -f "%Su" /dev/console 2>/dev/null)
+    if [[ -z "${consoleUser}" ]]; then
+        consoleUser=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
+    fi
+    echo "${consoleUser}"
+}
+
 get_preferences() {
 
     write_status "Running: Collecting preferences"
     
     # Get current local user
-    currentUserAccountName=$(scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ {$1=$2="";print $0;}' | xargs)
+    currentUserAccountName=$(get_console_user_account_name)
     # Get language setting for current local user
     langUser=$(su - ${currentUserAccountName} -c "/usr/bin/defaults read -g AppleLocale | cut -d'_' -f1")
     if [[ "${reset_defaults_option}" == "TRUE" ]]; then
@@ -4457,7 +4469,12 @@ get_logged_in_user() {
     [[ -z "${currentUserAccountName}" ]] && currentUserAccountName="FALSE"
     [[ -z "${currentUserID}" ]] && currentUserID="FALSE"
     local currentUserAccountName_response
-    currentUserAccountName_response=$(scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ {$1=$2="";print $0;}' | xargs)
+    currentUserAccountName_response=$(get_console_user_account_name)
+    local currentUserAccountName_scutil
+    currentUserAccountName_scutil=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
+    if [[ -n "${currentUserAccountName_scutil}" && "${currentUserAccountName_response}" != "${currentUserAccountName_scutil}" ]]; then
+        log_verbose "Console user from /dev/console is ${currentUserAccountName_response}; scutil Name was ${currentUserAccountName_scutil}"
+    fi
     local currentUserID_response
     currentUserID_response=$(id -u "${currentUserAccountName_response}" 2> /dev/null)
     log_verbose  "currentUserAccountName is: ${currentUserAccountName}"
@@ -6282,7 +6299,7 @@ swiftDialogPatchingWindow(){
     # If we are using SwiftDialog
     if [ ${InteractiveModeOption} -ge 1 ]; then
         # Check if there's a valid logged-in user:
-        currentUser=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
+        currentUser=$(get_console_user_account_name)
         if [ "$currentUser" = "root" ] || [ "$currentUser" = "loginwindow" ] || [ "$currentUser" = "_mbsetupuser" ] || [ -z "$currentUser" ]; then
             return 0
         fi
@@ -6322,7 +6339,7 @@ swiftDialogPatchingWindow(){
 _relaunch_patching_dialog() {
     [[ ${InteractiveModeOption} -lt 1 ]] && return 0
 
-    currentUser=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
+    currentUser=$(get_console_user_account_name)
     if [ "$currentUser" = "root" ] || [ "$currentUser" = "loginwindow" ] || [ "$currentUser" = "_mbsetupuser" ] || [ -z "$currentUser" ]; then
         return 0
     fi

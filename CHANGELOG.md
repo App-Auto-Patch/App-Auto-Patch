@@ -4,6 +4,13 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 # Version 3
 
+## Version 3.7.1
+### 28-Aug-2026
+
+**Fixes**
+
+- Fixed: console user detection now uses `/dev/console` ownership (`stat -f "%Su"`) instead of `scutil`'s ConsoleUser `Name` field. In some environments that `Name` value is not the account short name (for example `nathan` instead of `nathan.beranger`), which then breaks `su`, `id`, and other per-user lookups. (#264)
+
 ## Version 3.7.0
 ### 08-Aug-2026
 
