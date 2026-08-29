@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.1"
 scriptDate="2026/08/28"
-scriptBuild="3.7.1.2608282057"
+scriptBuild="3.7.1.2608282112"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -1319,16 +1319,23 @@ parse_labels_option() {
     done
 }
 
-# Console user short name from /dev/console ownership.
-# scutil State:/Users/ConsoleUser "Name :" can report a truncated or non-account
-# name, which then breaks su/id lookups (#264).
+# Console user short name from SystemConfiguration, then Directory Services.
+# scutil ConsoleUser "Name" can be a login alias (Jamf Connect / IDP) rather than
+# the account RecordName, which then breaks su/id lookups (#264).
+# Do not use stat /dev/console: at the login window it returns root and cannot
+# distinguish loginwindow from an actual root GUI session.
+# https://scriptingosx.com/2020/02/getting-the-current-user-in-macos-update/
 get_console_user_account_name() {
-    local consoleUser
-    consoleUser=$(/usr/bin/stat -f "%Su" /dev/console 2>/dev/null)
-    if [[ -z "${consoleUser}" ]]; then
-        consoleUser=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
+    local scutil_out consoleName consoleUID consoleUser
+    scutil_out=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser")
+    consoleName=$(print -r -- "${scutil_out}" | awk '/^[[:space:]]*Name :/ && ! /loginwindow/ { print $3; exit }')
+    [[ -z "${consoleName}" ]] && return 0
+    consoleUID=$(print -r -- "${scutil_out}" | awk '/^[[:space:]]*UID :/ { print $3; exit }')
+    if [[ -n "${consoleUID}" ]]; then
+        consoleUser=$(/usr/bin/id -un "${consoleUID}" 2>/dev/null)
+        [[ -n "${consoleUser}" ]] && echo "${consoleUser}" && return 0
     fi
-    echo "${consoleUser}"
+    echo "${consoleName}"
 }
 
 get_preferences() {
@@ -4471,9 +4478,9 @@ get_logged_in_user() {
     local currentUserAccountName_response
     currentUserAccountName_response=$(get_console_user_account_name)
     local currentUserAccountName_scutil
-    currentUserAccountName_scutil=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
+    currentUserAccountName_scutil=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/^[[:space:]]*Name :/ && ! /loginwindow/ { print $3; exit }')
     if [[ -n "${currentUserAccountName_scutil}" && "${currentUserAccountName_response}" != "${currentUserAccountName_scutil}" ]]; then
-        log_verbose "Console user from /dev/console is ${currentUserAccountName_response}; scutil Name was ${currentUserAccountName_scutil}"
+        log_verbose "Console user RecordName is ${currentUserAccountName_response}; scutil Name was ${currentUserAccountName_scutil}"
     fi
     local currentUserID_response
     currentUserID_response=$(id -u "${currentUserAccountName_response}" 2> /dev/null)

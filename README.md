@@ -15,7 +15,7 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.7.1
-- Fixed: console user detection now uses `/dev/console` ownership instead of `scutil`'s ConsoleUser `Name` field, which can resolve to the wrong account short name and break per-user lookups. (#264)
+- Fixed: console user detection now resolves the `scutil` ConsoleUser UID to the account RecordName with `id -un`, instead of using the `Name` field (which can be a login alias) or `stat /dev/console`. (#264)
 
 ## New features/Specific Changes in 3.7.0
 - **Business Hours** — Block interactive discovery/dialogs/patching during configured weekday time windows (`DAY:hh:mm-hh:mm`). Multiple windows per day supported (e.g. leave lunch clear). Outside those windows the workflow is allowed. During a window AAP reschedules to the next clear time unless Silent During is enabled. `--workflow-install-now` / `--workflow-install-now-silent` / `--preview-deferral-dialog` / `--pending-apps-dialog` and headless discovery-only workflows intentionally bypass. Overdue hard deadlines bypass by default. (#166)

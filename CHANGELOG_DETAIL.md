@@ -3,8 +3,11 @@
 # Version 3
 
 ## Version 3.7.1
+### 28-Aug-2026 (2) - Build 3.7.1.2608282112
+- [#264](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/264): keep SystemConfiguration (`scutil State:/Users/ConsoleUser`) as the console-user source, but resolve the account from the ConsoleUser UID via `id -un` instead of trusting the `Name` field. That name can be a login alias (Jamf Connect / IDP) rather than the Directory Services RecordName, which then breaks `su`/`id` lookups. The `Name` parse uses the Scripting OS X pattern (`/^[[:space:]]*Name :/ && ! /loginwindow/ { print $3; exit }`) so loginwindow yields no GUI user. `id -un` failure falls back to the scutil `Name`. Shared helper `get_console_user_account_name()` covers `get_preferences`, `get_logged_in_user`, and the patching-dialog session checks. Verbose logging records a mismatch when Name and RecordName disagree.
+
 ### 28-Aug-2026 (1) - Build 3.7.1.2608282057
-- [#264](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/264): resolve the console user from `/dev/console` ownership (`stat -f "%Su"`) instead of `scutil State:/Users/ConsoleUser` `Name :`. That field can report a truncated or non-account name, which then breaks `su`/`id` lookups used for language, notifications, dialogs, and user details. Shared helper `get_console_user_account_name()` covers `get_preferences`, `get_logged_in_user`, and the patching-dialog session checks. `scutil` remains a fallback if `stat` returns empty; a verbose log is written when the two sources disagree.
+- [#264](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/264): first attempt used `/dev/console` ownership (`stat -f "%Su"`). Replaced in build `3.7.1.2608282112` so loginwindow vs root GUI sessions stay distinguishable.
 
 ## Version 3.7.0
 ### 19-Aug-2026 (3) - Build 3.7.0.2608191542
