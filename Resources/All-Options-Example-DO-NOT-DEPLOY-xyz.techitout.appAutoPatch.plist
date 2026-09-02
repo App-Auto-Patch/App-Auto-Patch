@@ -126,6 +126,8 @@
 	<string>https://webhook.slack.com</string>
 	<key>WebhookURLTeams</key>
 	<string>https://webhook.microsoft.com</string>
+	<key>MosyleConsoleURL</key>
+	<string>https://mybusiness.mosyle.com</string>
 	<key>WorkflowDisableAppDiscovery</key>
 	<string>FALSE</string>
 	<key>WorkflowScheduledDiscovery</key>

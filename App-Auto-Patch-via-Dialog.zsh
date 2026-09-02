@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.1"
-scriptDate="2026/08/28"
-scriptBuild="3.7.1.2608282112"
+scriptDate="2026/09/02"
+scriptBuild="3.7.1.2609021118"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -112,6 +112,7 @@ echo "
     Webhook Options:
     [--webhook-feature-all] [--webhook-feature-failures] [--webhook-feature-off]
     [--webhook-url-slack=URL] [--webhook-url-teams=URL]
+    [--mosyle-console-url=URL]
 
     Troubleshooting Options:
     [--verbose-mode] [--verbose-mode-off]
@@ -184,6 +185,7 @@ echo "
     <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
     <key>WebhookURLSlack</key> <string>URL</string>
     <key>WebhookURLTeams</key> <string>URL</string>
+    <key>MosyleConsoleURL</key> <string>https://mybusiness.mosyle.com</string>
     <key>WorkflowBackgroundPatchClosedApps</key> <true/> | <false/>
     <key>WorkflowStageUpdates</key> <true/> | <false/>
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
@@ -1255,6 +1257,9 @@ get_options() {
             --webhook-url-teams=*)
                 webhook_url_teams_option="${1##*=}"
             ;;
+            --mosyle-console-url=*)
+                mosyle_console_url_option="${1##*=}"
+            ;;
             --uninstall)
                 uninstall_app_auto_patch
             ;;
@@ -1455,6 +1460,8 @@ get_preferences() {
         webhook_url_slack_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLSlack 2> /dev/null)
         local webhook_url_teams_managed
         webhook_url_teams_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLTeams 2> /dev/null)
+        local mosyle_console_url_managed
+        mosyle_console_url_managed=$(defaults read "${appAutoPatchManagedPLIST}" MosyleConsoleURL 2> /dev/null)
         local ignored_labels_managed
         ignored_labels_managed=$(defaults read "${appAutoPatchManagedPLIST}" IgnoredLabels 2> /dev/null)
         local required_labels_managed
@@ -1622,6 +1629,8 @@ get_preferences() {
         webhook_url_slack_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLSlack 2> /dev/null)
         local webhook_url_teams_local
         webhook_url_teams_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLTeams 2> /dev/null)
+        local mosyle_console_url_local
+        mosyle_console_url_local=$(defaults read "${appAutoPatchLocalPLIST}" MosyleConsoleURL 2> /dev/null)
         local ignored_labels_local
         ignored_labels_local=$(defaults read "${appAutoPatchLocalPLIST}" IgnoredLabels 2> /dev/null)
         local required_labels_local
@@ -1776,6 +1785,8 @@ get_preferences() {
     { [[ -z "${webhook_url_slack_managed}" ]] && [[ -z "${webhook_url_slack_option}" ]] && [[ -n "${webhook_url_slack_local}" ]]; } && webhook_url_slack_option="${webhook_url_slack_local}"
     [[ -n "${webhook_url_teams_managed}" ]] && webhook_url_teams_option="${webhook_url_teams_managed}"
     { [[ -z "${webhook_url_teams_managed}" ]] && [[ -z "${webhook_url_teams_option}" ]] && [[ -n "${webhook_url_teams_local}" ]]; } && webhook_url_teams_option="${webhook_url_teams_local}"
+    [[ -n "${mosyle_console_url_managed}" ]] && mosyle_console_url_option="${mosyle_console_url_managed}"
+    { [[ -z "${mosyle_console_url_managed}" ]] && [[ -z "${mosyle_console_url_option}" ]] && [[ -n "${mosyle_console_url_local}" ]]; } && mosyle_console_url_option="${mosyle_console_url_local}"
     [[ -n "${ignored_labels_managed}" ]] && ignored_labels_option="${ignored_labels_managed}"
     { [[ -z "${ignored_labels_managed}" ]] && [[ -z "${ignored_labels_option}" ]] && [[ -n "${ignored_labels_local}" ]]; } && ignored_labels_option="${ignored_labels_local}"
     [[ -n "${required_labels_managed}" ]] && required_labels_option="${required_labels_managed}"
@@ -1941,6 +1952,7 @@ get_preferences() {
     log_verbose "WebhookFeature: $webhook_feature_option"
     log_verbose "WebhookURLSlack: $webhook_url_slack_option"
     log_verbose "WebhookURLTeams: $webhook_url_teams_option"
+    log_verbose "MosyleConsoleURL: $mosyle_console_url_option"
     log_verbose "IgnoredLabels: $ignored_labels_option"
     log_verbose "RequiredLabels: $required_labels_option"
     log_verbose "OptionalLabels: $optional_labels_option"
@@ -2875,10 +2887,18 @@ manage_parameter_options() {
     else
         defaults delete "${appAutoPatchLocalPLIST}" WebhookURLTeams 2> /dev/null
     fi
+
+    # Manage ${mosyle_console_url_option} and save to ${appAutoPatchLocalPLIST}.
+    if [[ -n "${mosyle_console_url_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" MosyleConsoleURL -string "${mosyle_console_url_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" MosyleConsoleURL 2> /dev/null
+    fi
     
     { [[ -n "${webhook_feature_option}" ]]; } && log_verbose "webhook_feature_option is: ${webhook_feature_option}"
     { [[ -n "${webhook_url_slack_option}" ]]; } && log_verbose "webhook_url_slack_option is: ${webhook_url_slack_option}"
     { [[ -n "${webhook_url_teams_option}" ]]; } && log_verbose "webhook_url_teams_option is: ${webhook_url_teams_option}"
+    { [[ -n "${mosyle_console_url_option}" ]]; } && log_verbose "mosyle_console_url_option is: ${mosyle_console_url_option}"
 
     # SelfUpdateEnabled/SelfUpdateFrequency are already resolved, normalized, and saved by
     # resolve_self_update_preferences() before self_update() runs earlier in workflow_startup() -
@@ -8713,21 +8733,40 @@ appsUpToDate(){
     
 }
 
+# Mosyle enrollment ServerURL (e.g. https://biz-1234.mosyle.com) is the MDM
+# check-in host, not the human admin console (#267). Map to the shared portal
+# unless MosyleConsoleURL is set: Business → mybusiness.mosyle.com, otherwise
+# Manager/Education → my.mosyle.com.
+resolve_mosyle_console_base_url() {
+    local override="${mosyle_console_url_option:-}"
+    override="${override%/}"
+    if [[ -n "${override}" ]]; then
+        [[ "${override}" != http://* && "${override}" != https://* ]] && override="https://${override}"
+        echo "${override}"
+        return 0
+    fi
+    case "${server_url:l}" in
+        *biz-*|*mybusiness.mosyle*|*business.mosyle*)
+            echo "https://mybusiness.mosyle.com"
+            ;;
+        *)
+            echo "https://my.mosyle.com"
+            ;;
+    esac
+}
+
 webHookMessage() {
 
-    # Resolve Mosyle device deep-link once for Slack/Teams payloads (#240). Prefer the enrolled
-    # MDM host from get_mdm(); fall back to the public Mosyle Business console. Device UDID for
-    # Macs is the Hardware UUID (IOPlatformUUID).
+    # Resolve Mosyle device deep-link once for Slack/Teams payloads (#240, #267).
+    # Device UDID for Macs is the Hardware UUID (IOPlatformUUID).
     local mosyleComputerURL=""
     if [[ "${mdmName}" == "Mosyle" ]]; then
-        local mosyleBaseURL=""
-        if [[ -n "${server_url}" ]]; then
-            mosyleBaseURL=$(echo "${server_url}" | sed -n 's/\(https:\/\/[^\/]*\).*/\1/p')
-        fi
-        [[ -z "${mosyleBaseURL}" ]] && mosyleBaseURL="https://business.mosyle.com"
+        local mosyleBaseURL
+        mosyleBaseURL=$(resolve_mosyle_console_base_url)
         local mosyleHardwareUUID
         mosyleHardwareUUID=$(ioreg -d2 -c IOPlatformExpertDevice | awk -F\" '/IOPlatformUUID/{print $(NF-1)}')
         mosyleComputerURL="${mosyleBaseURL}/#device_${mosyleHardwareUUID}"
+        log_verbose "Mosyle webhook console URL: ${mosyleComputerURL}"
     fi
     
     if [[ $webhook_url_slack_option == "" ]]; then

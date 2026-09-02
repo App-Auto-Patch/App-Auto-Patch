@@ -1153,6 +1153,18 @@
             ],
             "property_order": 185
         },
+        "MosyleConsoleURL": {
+            "type": "string",
+            "title": "Mosyle Console URL",
+            "description": "Override the Mosyle admin console host used in Slack/Teams View in Mosyle device links. The enrollment ServerURL (for example https://biz-1234.mosyle.com) is the MDM check-in endpoint, not the console. Leave unset to map Business enrollments (biz-* / *business.mosyle*) to https://mybusiness.mosyle.com and other Mosyle enrollments to https://my.mosyle.com (Manager/Education).",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#mosyleconsoleurl"
+                }
+            ],
+            "property_order": 186
+        },
         "WorkflowDisableAppDiscovery": {
             "type": "string",
             "title": "Disable App Discovery Workflow",

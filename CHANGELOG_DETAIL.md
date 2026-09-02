@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.1
+### 02-Sep-2026 (1) - Build 3.7.1.2609021118
+- [#267](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/267): Mosyle webhook device links no longer use `get_mdm()` enrollment `server_url` (e.g. `https://biz-1234.mosyle.com`). That host is the MDM check-in endpoint, not the admin console. `resolve_mosyle_console_base_url()` maps `biz-*` / `*business.mosyle*` to `https://mybusiness.mosyle.com` and other Mosyle enrollments to `https://my.mosyle.com`. Optional managed/CLI/local `MosyleConsoleURL` / `--mosyle-console-url=` overrides the host. Manifests, All-Options example, Intune XML, README, and wiki updated.
+
 ### 28-Aug-2026 (2) - Build 3.7.1.2608282112
 - [#264](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/264): keep SystemConfiguration (`scutil State:/Users/ConsoleUser`) as the console-user source, but resolve the account from the ConsoleUser UID via `id -un` instead of trusting the `Name` field. That name can be a login alias (Jamf Connect / IDP) rather than the Directory Services RecordName, which then breaks `su`/`id` lookups. The `Name` parse uses the Scripting OS X pattern (`/^[[:space:]]*Name :/ && ! /loginwindow/ { print $3; exit }`) so loginwindow yields no GUI user. `id -un` failure falls back to the scutil `Name`. Shared helper `get_console_user_account_name()` covers `get_preferences`, `get_logged_in_user`, and the patching-dialog session checks. Verbose logging records a mismatch when Name and RecordName disagree.
 

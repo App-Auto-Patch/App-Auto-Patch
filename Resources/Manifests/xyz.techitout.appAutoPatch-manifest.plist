@@ -221,6 +221,7 @@ During a profile replacement, the system updates payloads with the same 'Payload
 					<string>SupportTeamEmail</string>
 					<string>SupportTeamPhone</string>
 					<string>SupportTeamWebsite</string>
+					<string>MosyleConsoleURL</string>
 					<string>WebhookFeature</string>
 					<string>WebhookURLSlack</string>
 					<string>WebhookURLTeams</string>
@@ -1424,6 +1425,22 @@ During a profile replacement, the system updates payloads with the same 'Payload
 			<string>string</string>
 			<key>pfm_value_placeholder</key>
 			<string>https://webhook.microsoft.com</string>
+		</dict>
+		<dict>
+			<key>pfm_app_min</key>
+			<string>3.7.1</string>
+			<key>pfm_description</key>
+			<string>Override the Mosyle admin console host used in Slack/Teams "View in Mosyle" device links. The enrollment ServerURL (for example https://biz-1234.mosyle.com) is the MDM check-in endpoint, not the console. Leave unset to map Business enrollments (biz-* / *business.mosyle*) to https://mybusiness.mosyle.com and other Mosyle enrollments to https://my.mosyle.com (Manager/Education).</string>
+			<key>pfm_documentation_url</key>
+			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings</string>
+			<key>pfm_name</key>
+			<string>MosyleConsoleURL</string>
+			<key>pfm_title</key>
+			<string>Mosyle Console URL</string>
+			<key>pfm_type</key>
+			<string>string</string>
+			<key>pfm_value_placeholder</key>
+			<string>https://mybusiness.mosyle.com</string>
 		</dict>
 		<dict>
 			<key>pfm_app_min</key>

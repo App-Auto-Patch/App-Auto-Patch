@@ -64,6 +64,8 @@
 <string>longURL</string>
 <key>WebhookURLTeams</key>
 <string>longerURL</string>
+<key>MosyleConsoleURL</key>
+<string>https://mybusiness.mosyle.com</string>
 <key>SupportTeamName</key>
 <string>Company Support Team</string>
 <key>SupportTeamPhone</key>
