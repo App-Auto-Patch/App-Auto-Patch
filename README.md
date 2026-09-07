@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.7.1
+# App Auto-Patch 3.9.0
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub pre-release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag&include_prereleases) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch) [![swiftDialog](https://img.shields.io/badge/swiftDialog-Enabled-blue)](https://swiftdialog.app)
 
@@ -13,6 +13,18 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 ## Why Build This
 
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
+
+## New features/Specific Changes in 3.9.0
+
+- **Homebrew Support**: App Auto-Patch can now discover and upgrade outdated Homebrew casks and formulae in the same run as Installomator labels. Packages appear in the same patching dialog, honour the same deferral timers and hard deadlines, and are written to the same report. Disabled by default.
+	- `<key>HomebrewEnabled</key>` `<true/>` | `<false/>` — default `false`
+	- `<key>HomebrewCaskEnabled</key>` / `<key>HomebrewFormulaEnabled</key>` — default `true` for both
+	- `<key>HomebrewPriority</key>` `<string>INSTALLOMATOR</string>` (default) or `<string>HOMEBREW</string>` — which tool wins when the same software is available from both
+	- `<key>HomebrewPreferredPackages</key>` — a space-separated list that inverts `HomebrewPriority` per package. Under `INSTALLOMATOR` priority these packages come from Homebrew; under `HOMEBREW` priority they come from Installomator
+	- `<key>HomebrewBinaryPath</key>` — optional; `/opt/homebrew/bin/brew` and `/usr/local/bin/brew` are probed automatically
+	- `<key>HomebrewIgnoredCasks</key>` / `<key>HomebrewIgnoredFormulae</key>` — space-separated exact package names. Use these rather than `IgnoredLabels`, which cannot represent versioned formula names such as `openssl@3`
+	- Homebrew runs de-privileged as the owner of the Homebrew prefix. If that prefix is owned by root, or by an account other than the logged-in user, Homebrew is skipped and the reason is logged
+	- Casks that update themselves (`auto_updates true` or `version :latest`) are left alone, and casks whose installer requires an administrator password cannot be upgraded unattended
 
 ## New features/Specific Changes in 3.7.1
 - Fixed: Mosyle webhook **View in Mosyle** links use the admin console (`mybusiness.mosyle.com` for Business, `my.mosyle.com` for Education) instead of the enrollment `ServerURL`. Optional `MosyleConsoleURL` override. (#267)

@@ -2,6 +2,21 @@
 
 # Version 3
 
+## Version 3.9.0
+### 07-Sep-2026 (1) - Build 3.9.0.2609071200
+- Homebrew cask and formula support, ported from the `3.6.0_Homebrew` branch onto the 3.8.0 line and reworked for the machinery added since:
+	- Outdated packages are queued as pseudo-labels (`brewcask__<name>` / `brewformula__<name>`) at the end of discovery, so deferral, hard deadlines, the unified dialog list, notifications, the Dock badge and `ExcludedBackgroundLabels` all apply to them without special-casing
+	- Queue persisted in a dedicated `HomebrewDiscoveredPackages` array rather than `DiscoveredLabels`. `DiscoveredLabels` is read back through `tr -c -d "[:alnum:][:space:][\-_]"`, which strips `@`, `.` and `+` and would rewrite `brewformula__openssl@3` as `brewformula__openssl3` — a package name that does not exist. The new key is written and read with `PlistBuddy` only
+	- `brew outdated --json=v2` is parsed with `plutil -convert xml1` piped into `PlistBuddy`. The source branch used an inline `/usr/bin/python3` heredoc, which on a managed Mac without the Xcode Command Line Tools is a stub that raises an install prompt from a root LaunchDaemon
+	- Homebrew runs as the owner of the prefix (`stat -f %Su`), not as the console user the source branch assumed. Discovery is skipped when the prefix is root-owned, or owned by someone other than the console user, because running `brew` as a non-owner makes Homebrew rewrite permissions across the prefix
+	- `brew update --quiet` runs before `brew outdated` (which does not auto-update), non-fatally; `brew upgrade` then runs with `HOMEBREW_NO_AUTO_UPDATE=1`
+	- Membership tests use exact-element zsh subscripts throughout, so ignoring `node` no longer also ignores `node@22` — the same class of defect fix [#254](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/254) addressed elsewhere in the script
+	- Fixed in the port: the source branch's `homebrew_discovery` had no closing brace, so `zsh -n` failed on the whole script; the local-preference fallbacks tested `-n` on the option instead of `-z`, so a saved local preference always beat the CLI flag; and the install log expanded `(cask)` for formulae as well
+	- Fixed in the port: the superseded-label removal used `labelsArray=(${labelsArray:#${_sup}})`, but `labelsArray` is a scalar string at that point in `main()`, and `${scalar:#pattern}` is a whole-string anchored match rather than the per-element filter `${array:#pattern}` performs — so the block removed nothing while still logging that it had, and Installomator and Homebrew would both have patched the same application in the same run
+	- New `resolve_label_display_name` replaces seven identical copies of the label-fragment `name=` lookup, and `resolve_app_icon_path` gained a Homebrew branch, so the display/icon call sites in `swiftDialogPatchingWindow`, `workflow_silent_patch_closed_apps`, `workflow_do_Installations` and `main()` needed no per-site changes
+	- Staging is skipped for Homebrew packages; silent background patching upgrades them, except a cask whose application is currently running, which is left for the interactive dialog
+	- iMazing + Jamf manifests, All-Options examples and the Intune manifest updated
+
 ## Version 3.7.1
 ### 02-Sep-2026 (1) - Build 3.7.1.2609021118
 - [#267](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/267): Mosyle webhook device links no longer use `get_mdm()` enrollment `server_url` (e.g. `https://biz-1234.mosyle.com`). That host is the MDM check-in endpoint, not the admin console. `resolve_mosyle_console_base_url()` maps `biz-*` / `*business.mosyle*` to `https://mybusiness.mosyle.com` and other Mosyle enrollments to `https://my.mosyle.com`. Optional managed/CLI/local `MosyleConsoleURL` / `--mosyle-console-url=` overrides the host. Manifests, All-Options example, Intune XML, README, and wiki updated.

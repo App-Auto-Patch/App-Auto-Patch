@@ -146,5 +146,21 @@
 	<string>SUCCESS</string>
 	<key>ZoomCallActiveCheck</key>
 	<true/>
+	<key>HomebrewEnabled</key>
+	<false/>
+	<key>HomebrewCaskEnabled</key>
+	<true/>
+	<key>HomebrewFormulaEnabled</key>
+	<true/>
+	<key>HomebrewPriority</key>
+	<string>INSTALLOMATOR</string>
+	<key>HomebrewPreferredPackages</key>
+	<string>firefox</string>
+	<key>HomebrewBinaryPath</key>
+	<string>/opt/homebrew/bin/brew</string>
+	<key>HomebrewIgnoredCasks</key>
+	<string>docker</string>
+	<key>HomebrewIgnoredFormulae</key>
+	<string>openssl@3</string>
 </dict>
 </plist>
