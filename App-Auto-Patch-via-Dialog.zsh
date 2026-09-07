@@ -8381,6 +8381,45 @@ homebrew_remove_discovered() {
     return 0
 }
 
+homebrew_should_queue() {
+    # Decides whether an outdated Homebrew package should be queued, and whether queueing it
+    # supersedes an Installomator label for the same software.
+    #
+    # Usage: homebrew_should_queue "package-name" TRUE|FALSE   (second arg: also an Installomator label?)
+    # Prints: QUEUE | QUEUE_SUPERSEDE | SKIP
+    #
+    # Note the asymmetry under HOMEBREW priority: HomebrewPreferredPackages inverts and names
+    # the packages for which Installomator should win instead.
+    local pkg_name="$1"
+    local in_installomator="$2"
+
+    # Exact-element membership. The substring form `[[ " $list " == *" $x "* ]]` is IFS-dependent
+    # and partial-matches (it would treat node@22 as preferred when only node is listed) — fix
+    # #254 removed that pattern from the rest of this script.
+    local -a preferred_arr
+    preferred_arr=(${=homebrew_preferred_packages_option})
+    local in_preferred="FALSE"
+    (( ${preferred_arr[(Ie)${pkg_name}]} )) && in_preferred="TRUE"
+
+    if [[ "${homebrew_priority_option}" == "HOMEBREW" ]]; then
+        if [[ "${in_preferred}" == "TRUE" ]]; then
+            [[ "${in_installomator}" == "TRUE" ]] && echo "SKIP" || echo "QUEUE"
+        else
+            [[ "${in_installomator}" == "TRUE" ]] && echo "QUEUE_SUPERSEDE" || echo "QUEUE"
+        fi
+        return
+    fi
+
+    # INSTALLOMATOR priority (the default)
+    if [[ "${in_preferred}" == "TRUE" ]]; then
+        echo "QUEUE_SUPERSEDE"
+    elif [[ "${in_installomator}" == "TRUE" ]]; then
+        echo "SKIP"
+    else
+        echo "QUEUE"
+    fi
+}
+
 # ==== END HOMEBREW ====
 
 _resolve_label_staging_info() {
