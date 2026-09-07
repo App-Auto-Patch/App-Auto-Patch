@@ -8338,17 +8338,17 @@ resolve_label_display_name() {
 homebrew_clear_discovered() {
     local plistFile="${appAutoPatchLocalPLIST}.plist"
     if /usr/libexec/PlistBuddy -c 'Print :HomebrewDiscoveredPackages' "${plistFile}" &> /dev/null; then
-        /usr/libexec/PlistBuddy -c 'Delete :HomebrewDiscoveredPackages' "${plistFile}" 2> /dev/null
+        /usr/libexec/PlistBuddy -c 'Delete :HomebrewDiscoveredPackages' "${plistFile}" &> /dev/null
     fi
-    /usr/libexec/PlistBuddy -c 'Add :HomebrewDiscoveredPackages array' "${plistFile}" 2> /dev/null
+    /usr/libexec/PlistBuddy -c 'Add :HomebrewDiscoveredPackages array' "${plistFile}" &> /dev/null
 }
 
 homebrew_record_discovered() {
     local label="$1"
     local plistFile="${appAutoPatchLocalPLIST}.plist"
     /usr/libexec/PlistBuddy -c 'Print :HomebrewDiscoveredPackages' "${plistFile}" &> /dev/null \
-        || /usr/libexec/PlistBuddy -c 'Add :HomebrewDiscoveredPackages array' "${plistFile}" 2> /dev/null
-    /usr/libexec/PlistBuddy -c "Add :HomebrewDiscoveredPackages: string '${label}'" "${plistFile}" 2> /dev/null
+        || /usr/libexec/PlistBuddy -c 'Add :HomebrewDiscoveredPackages array' "${plistFile}" &> /dev/null
+    /usr/libexec/PlistBuddy -c "Add :HomebrewDiscoveredPackages: string '${label}'" "${plistFile}" &> /dev/null
 }
 
 homebrew_read_discovered() {
@@ -8372,7 +8372,7 @@ homebrew_remove_discovered() {
     local i=0 entry
     while entry=$(/usr/libexec/PlistBuddy -c "Print :HomebrewDiscoveredPackages:${i}" "${plistFile}" 2> /dev/null); do
         if [[ "${entry}" == "${label}" ]]; then
-            /usr/libexec/PlistBuddy -c "Delete :HomebrewDiscoveredPackages:${i}" "${plistFile}" 2> /dev/null
+            /usr/libexec/PlistBuddy -c "Delete :HomebrewDiscoveredPackages:${i}" "${plistFile}" &> /dev/null
             log_verbose "Removed '${label}' from HomebrewDiscoveredPackages"
             return 0
         fi
