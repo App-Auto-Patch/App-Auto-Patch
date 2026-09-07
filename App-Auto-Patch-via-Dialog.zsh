@@ -53,6 +53,16 @@ echo "
     [--days-until-reset=number]
     [--zoom-call-active-check-enabled] [--zoom-call-active-check-disabled]
 
+    Homebrew Options:
+    [--homebrew-enabled] [--homebrew-disabled]
+    [--homebrew-cask-enabled] [--homebrew-cask-disabled]
+    [--homebrew-formula-enabled] [--homebrew-formula-disabled]
+    [--homebrew-priority=INSTALLOMATOR|HOMEBREW]
+    [--homebrew-preferred-packages="pkg1 pkg2"]
+    [--homebrew-binary-path=/path/to/brew]
+    [--homebrew-ignored-casks="cask1 cask2"]
+    [--homebrew-ignored-formulae="formula1 formula2"]
+
     App Auto-Patch Self Update Options
     [--force-self-update-check]
     [--self-update-enabled] [--self-update-disabled]
@@ -205,6 +215,14 @@ echo "
     <key>DiscoveryFrequency</key> <integer>hours</integer>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
     <key>ZoomCallActiveCheck</key> <true/> | <false/>
+    <key>HomebrewEnabled</key> <true/> | <false/>
+    <key>HomebrewCaskEnabled</key> <true/> | <false/>
+    <key>HomebrewFormulaEnabled</key> <true/> | <false/>
+    <key>HomebrewPriority</key> <string>INSTALLOMATOR | HOMEBREW</string>
+    <key>HomebrewPreferredPackages</key> <string>token1 token2 ...</string>
+    <key>HomebrewBinaryPath</key> <string>/opt/homebrew/bin/brew</string>
+    <key>HomebrewIgnoredCasks</key> <string>cask1 cask2 ...</string>
+    <key>HomebrewIgnoredFormulae</key> <string>formula1 formula2 ...</string>
     <key>IgnoreDNDApps</key> <string>App1,App2,App3</string>
 
     ** Detailed documentation can be found at: https://github.com/App-Auto-Patch/App-Auto-Patch/wiki
@@ -552,6 +570,13 @@ set_defaults() {
     # TRUE (default): Allows Installomator Debug Fallback to run
     # FALSE: Does not allow Installomator Debug Fallback to run and will not add the app to the queue for updates
     VersionComparisonInstallomatorFallback="TRUE"
+
+    # Homebrew runtime state. The eight Homebrew *preference* options are deliberately NOT
+    # defaulted here — they must stay empty until manage_parameter_options so the
+    # managed > CLI > local precedence chain in get_preferences works (see zoom_call_active_check).
+    brewBinary=""
+    brewBrewUser=""
+    brewSupersedingLabels=""
 
     # InteractiveMode 1 or 2 only (not 0): When TRUE (default), apps that are NOT currently open
     # are silently patched in the background before the user dialog is shown. Only apps with
@@ -1275,6 +1300,39 @@ get_options() {
             --zoom-call-active-check-disabled)
                 zoom_call_active_check_option="FALSE"
             ;;
+            --homebrew-enabled)
+                homebrew_enabled_option="TRUE"
+            ;;
+            --homebrew-disabled)
+                homebrew_enabled_option="FALSE"
+            ;;
+            --homebrew-cask-enabled)
+                homebrew_cask_enabled_option="TRUE"
+            ;;
+            --homebrew-cask-disabled)
+                homebrew_cask_enabled_option="FALSE"
+            ;;
+            --homebrew-formula-enabled)
+                homebrew_formula_enabled_option="TRUE"
+            ;;
+            --homebrew-formula-disabled)
+                homebrew_formula_enabled_option="FALSE"
+            ;;
+            --homebrew-priority=*)
+                homebrew_priority_option="${1#*=}"
+            ;;
+            --homebrew-preferred-packages=*)
+                homebrew_preferred_packages_option="${1#*=}"
+            ;;
+            --homebrew-binary-path=*)
+                homebrew_binary_path_option="${1#*=}"
+            ;;
+            --homebrew-ignored-casks=*)
+                homebrew_ignored_casks_option="${1#*=}"
+            ;;
+            --homebrew-ignored-formulae=*)
+                homebrew_ignored_formulae_option="${1#*=}"
+            ;;
             *)
                 unrecognized_options_array+=("$1")
             ;;  
@@ -1387,6 +1445,7 @@ get_preferences() {
         defaults delete "${appAutoPatchLocalPLIST}" OptionalLabels 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" ExcludedBackgroundLabels 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" DiscoveredLabels 2> /dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" HomebrewDiscoveredPackages 2> /dev/null
         fi
 
         if [[ "${deferral_timer_reset_all_option}" == "TRUE" ]]; then
@@ -1550,6 +1609,22 @@ get_preferences() {
         version_comparison_installomator_fallback_managed=$(defaults read "${appAutoPatchManagedPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
         local zoom_call_active_check_managed
         zoom_call_active_check_managed=$(defaults read "${appAutoPatchManagedPLIST}" ZoomCallActiveCheck 2> /dev/null)
+        local homebrew_enabled_managed
+        homebrew_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewEnabled 2> /dev/null)
+        local homebrew_cask_enabled_managed
+        homebrew_cask_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewCaskEnabled 2> /dev/null)
+        local homebrew_formula_enabled_managed
+        homebrew_formula_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewFormulaEnabled 2> /dev/null)
+        local homebrew_priority_managed
+        homebrew_priority_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewPriority 2> /dev/null)
+        local homebrew_preferred_packages_managed
+        homebrew_preferred_packages_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewPreferredPackages 2> /dev/null)
+        local homebrew_binary_path_managed
+        homebrew_binary_path_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewBinaryPath 2> /dev/null)
+        local homebrew_ignored_casks_managed
+        homebrew_ignored_casks_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewIgnoredCasks 2> /dev/null)
+        local homebrew_ignored_formulae_managed
+        homebrew_ignored_formulae_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewIgnoredFormulae 2> /dev/null)
         local ignore_dnd_apps_managed
         ignore_dnd_apps_managed=$(defaults read "${appAutoPatchManagedPLIST}" IgnoreDNDApps 2> /dev/null)
         local workflow_background_patch_closed_apps_managed
@@ -1717,6 +1792,22 @@ get_preferences() {
         version_comparison_installomator_fallback_local=$(defaults read "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
         local zoom_call_active_check_local
         zoom_call_active_check_local=$(defaults read "${appAutoPatchLocalPLIST}" ZoomCallActiveCheck 2> /dev/null)
+        local homebrew_enabled_local
+        homebrew_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewEnabled 2> /dev/null)
+        local homebrew_cask_enabled_local
+        homebrew_cask_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewCaskEnabled 2> /dev/null)
+        local homebrew_formula_enabled_local
+        homebrew_formula_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewFormulaEnabled 2> /dev/null)
+        local homebrew_priority_local
+        homebrew_priority_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewPriority 2> /dev/null)
+        local homebrew_preferred_packages_local
+        homebrew_preferred_packages_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewPreferredPackages 2> /dev/null)
+        local homebrew_binary_path_local
+        homebrew_binary_path_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewBinaryPath 2> /dev/null)
+        local homebrew_ignored_casks_local
+        homebrew_ignored_casks_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewIgnoredCasks 2> /dev/null)
+        local homebrew_ignored_formulae_local
+        homebrew_ignored_formulae_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewIgnoredFormulae 2> /dev/null)
         local ignore_dnd_apps_local
         ignore_dnd_apps_local=$(defaults read "${appAutoPatchLocalPLIST}" IgnoreDNDApps 2> /dev/null)
         local workflow_background_patch_closed_apps_local
@@ -1798,6 +1889,23 @@ get_preferences() {
 
     [[ -n "${zoom_call_active_check_managed}" ]] && zoom_call_active_check_option="${zoom_call_active_check_managed}"
     { [[ -z "${zoom_call_active_check_managed}" ]] && [[ -z "${zoom_call_active_check_option}" ]] && [[ -n "${zoom_call_active_check_local}" ]]; } && zoom_call_active_check_option="${zoom_call_active_check_local}"
+
+    [[ -n "${homebrew_enabled_managed}" ]] && homebrew_enabled_option="${homebrew_enabled_managed}"
+    { [[ -z "${homebrew_enabled_managed}" ]] && [[ -z "${homebrew_enabled_option}" ]] && [[ -n "${homebrew_enabled_local}" ]]; } && homebrew_enabled_option="${homebrew_enabled_local}"
+    [[ -n "${homebrew_cask_enabled_managed}" ]] && homebrew_cask_enabled_option="${homebrew_cask_enabled_managed}"
+    { [[ -z "${homebrew_cask_enabled_managed}" ]] && [[ -z "${homebrew_cask_enabled_option}" ]] && [[ -n "${homebrew_cask_enabled_local}" ]]; } && homebrew_cask_enabled_option="${homebrew_cask_enabled_local}"
+    [[ -n "${homebrew_formula_enabled_managed}" ]] && homebrew_formula_enabled_option="${homebrew_formula_enabled_managed}"
+    { [[ -z "${homebrew_formula_enabled_managed}" ]] && [[ -z "${homebrew_formula_enabled_option}" ]] && [[ -n "${homebrew_formula_enabled_local}" ]]; } && homebrew_formula_enabled_option="${homebrew_formula_enabled_local}"
+    [[ -n "${homebrew_priority_managed}" ]] && homebrew_priority_option="${homebrew_priority_managed}"
+    { [[ -z "${homebrew_priority_managed}" ]] && [[ -z "${homebrew_priority_option}" ]] && [[ -n "${homebrew_priority_local}" ]]; } && homebrew_priority_option="${homebrew_priority_local}"
+    [[ -n "${homebrew_preferred_packages_managed}" ]] && homebrew_preferred_packages_option="${homebrew_preferred_packages_managed}"
+    { [[ -z "${homebrew_preferred_packages_managed}" ]] && [[ -z "${homebrew_preferred_packages_option}" ]] && [[ -n "${homebrew_preferred_packages_local}" ]]; } && homebrew_preferred_packages_option="${homebrew_preferred_packages_local}"
+    [[ -n "${homebrew_binary_path_managed}" ]] && homebrew_binary_path_option="${homebrew_binary_path_managed}"
+    { [[ -z "${homebrew_binary_path_managed}" ]] && [[ -z "${homebrew_binary_path_option}" ]] && [[ -n "${homebrew_binary_path_local}" ]]; } && homebrew_binary_path_option="${homebrew_binary_path_local}"
+    [[ -n "${homebrew_ignored_casks_managed}" ]] && homebrew_ignored_casks_option="${homebrew_ignored_casks_managed}"
+    { [[ -z "${homebrew_ignored_casks_managed}" ]] && [[ -z "${homebrew_ignored_casks_option}" ]] && [[ -n "${homebrew_ignored_casks_local}" ]]; } && homebrew_ignored_casks_option="${homebrew_ignored_casks_local}"
+    [[ -n "${homebrew_ignored_formulae_managed}" ]] && homebrew_ignored_formulae_option="${homebrew_ignored_formulae_managed}"
+    { [[ -z "${homebrew_ignored_formulae_managed}" ]] && [[ -z "${homebrew_ignored_formulae_option}" ]] && [[ -n "${homebrew_ignored_formulae_local}" ]]; } && homebrew_ignored_formulae_option="${homebrew_ignored_formulae_local}"
 
     [[ -n "${ignore_dnd_apps_managed}" ]] && ignoreDNDAppsOption="${ignore_dnd_apps_managed}"
     { [[ -z "${ignore_dnd_apps_managed}" ]] && [[ -z "${ignoreDNDAppsOption}" ]] && [[ -n "${ignore_dnd_apps_local}" ]]; } && ignoreDNDAppsOption="${ignore_dnd_apps_local}"
@@ -1996,6 +2104,14 @@ get_preferences() {
     log_verbose "monthly_patching_cadence_start_time: $monthly_patching_cadence_start_time"
     log_verbose "version_comparison_method_option: $version_comparison_method_option"
     log_verbose "zoom_call_active_check_option: $zoom_call_active_check_option"
+    log_verbose "homebrew_enabled_option: $homebrew_enabled_option"
+    log_verbose "homebrew_cask_enabled_option: $homebrew_cask_enabled_option"
+    log_verbose "homebrew_formula_enabled_option: $homebrew_formula_enabled_option"
+    log_verbose "homebrew_priority_option: $homebrew_priority_option"
+    log_verbose "homebrew_preferred_packages_option: $homebrew_preferred_packages_option"
+    log_verbose "homebrew_binary_path_option: $homebrew_binary_path_option"
+    log_verbose "homebrew_ignored_casks_option: $homebrew_ignored_casks_option"
+    log_verbose "homebrew_ignored_formulae_option: $homebrew_ignored_formulae_option"
     log_verbose "ignoreDNDAppsOption: $ignoreDNDAppsOption"
     log_verbose "WorkflowBackgroundPatchClosedAppsOption: $WorkflowBackgroundPatchClosedAppsOption"
     log_verbose "WorkflowStageUpdatesOption: $WorkflowStageUpdatesOption"
@@ -2630,6 +2746,73 @@ manage_parameter_options() {
         defaults write "${appAutoPatchLocalPLIST}" ZoomCallActiveCheck -bool false
     fi
     { [[ -n "${zoom_call_active_check_option}" ]]; } && log_verbose "zoom_call_active_check_option is: ${zoom_call_active_check_option}"
+
+    # Manage Homebrew settings and save to ${appAutoPatchLocalPLIST}. Defaults are applied here,
+    # not in set_defaults, so the managed > CLI > local precedence chain above can distinguish
+    # "not specified" from "specified as FALSE".
+    if [[ "${homebrew_enabled_option}" -eq 1 ]] || [[ "${homebrew_enabled_option}" == "TRUE" ]]; then
+        homebrew_enabled_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewEnabled -bool true
+    else
+        homebrew_enabled_option="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewEnabled -bool false
+    fi
+    log_verbose "homebrew_enabled_option is: ${homebrew_enabled_option}"
+
+    if [[ "${homebrew_cask_enabled_option}" -eq 1 ]] || [[ "${homebrew_cask_enabled_option}" == "TRUE" ]] || [[ -z "${homebrew_cask_enabled_option}" ]]; then
+        homebrew_cask_enabled_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewCaskEnabled -bool true
+    else
+        homebrew_cask_enabled_option="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewCaskEnabled -bool false
+    fi
+    log_verbose "homebrew_cask_enabled_option is: ${homebrew_cask_enabled_option}"
+
+    if [[ "${homebrew_formula_enabled_option}" -eq 1 ]] || [[ "${homebrew_formula_enabled_option}" == "TRUE" ]] || [[ -z "${homebrew_formula_enabled_option}" ]]; then
+        homebrew_formula_enabled_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewFormulaEnabled -bool true
+    else
+        homebrew_formula_enabled_option="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewFormulaEnabled -bool false
+    fi
+    log_verbose "homebrew_formula_enabled_option is: ${homebrew_formula_enabled_option}"
+
+    # HomebrewPriority accepts only INSTALLOMATOR or HOMEBREW; anything else falls back with a warning.
+    case "${homebrew_priority_option:u}" in
+        HOMEBREW)
+            homebrew_priority_option="HOMEBREW"
+        ;;
+        INSTALLOMATOR|"")
+            homebrew_priority_option="INSTALLOMATOR"
+        ;;
+        *)
+            log_warning "HomebrewPriority '${homebrew_priority_option}' is not recognised; falling back to INSTALLOMATOR."
+            homebrew_priority_option="INSTALLOMATOR"
+        ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" HomebrewPriority -string "${homebrew_priority_option}"
+    log_verbose "homebrew_priority_option is: ${homebrew_priority_option}"
+
+    if [[ -n "${homebrew_preferred_packages_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewPreferredPackages -string "${homebrew_preferred_packages_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" HomebrewPreferredPackages 2> /dev/null
+    fi
+    if [[ -n "${homebrew_binary_path_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewBinaryPath -string "${homebrew_binary_path_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" HomebrewBinaryPath 2> /dev/null
+    fi
+    if [[ -n "${homebrew_ignored_casks_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewIgnoredCasks -string "${homebrew_ignored_casks_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" HomebrewIgnoredCasks 2> /dev/null
+    fi
+    if [[ -n "${homebrew_ignored_formulae_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewIgnoredFormulae -string "${homebrew_ignored_formulae_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" HomebrewIgnoredFormulae 2> /dev/null
+    fi
 
     # Manage ${ignoreDNDAppsOption} — store the raw comma-separated string to the local plist
     # so it persists for reporting; no boolean coercion needed.
