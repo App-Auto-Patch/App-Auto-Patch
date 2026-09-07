@@ -10728,13 +10728,17 @@ main() {
     # run after both the ignoredLabelsArray subtraction and the ignore-all rebuild above, since
     # that rebuild would otherwise reintroduce a superseded label.
     if [[ -n "${brewSupersedingLabels}" ]]; then
-        local -a _superseded_arr
+        local -a _labelsArr _superseded_arr
         local _sup
+        _labelsArr=(${(s/ /)labelsArray})
         _superseded_arr=(${=brewSupersedingLabels})
         for _sup in "${_superseded_arr[@]}"; do
-            labelsArray=(${labelsArray:#${_sup}})
-            log_notice "Homebrew supersedes Installomator label: ${_sup}"
+            if (( ${_labelsArr[(Ie)${_sup}]} )); then
+                _labelsArr=(${_labelsArr:#${_sup}})
+                log_notice "Homebrew supersedes Installomator label: ${_sup}"
+            fi
         done
+        labelsArray="${_labelsArr[*]}"
     fi
 
     appNamesArray=()
