@@ -6435,6 +6435,12 @@ swiftDialogCommand(){
 # Returns the app path, or $logoImage as a fallback.
 resolve_app_icon_path() {
     local label="$1"
+    # Homebrew pseudo-labels have no Installomator fragment; their icon was resolved during
+    # discovery. Returning here keeps all eight call sites of this function brew-aware.
+    if is_brew_label "${label}"; then
+        echo "${brewIconPaths[$label]:-SF=shippingbox.fill,colour1=#f5a623}"
+        return
+    fi
     local icon_appName icon_targetDir icon_name icon_path
     local name folderName targetDir appName  # Variables that may be referenced in label fragment
     
@@ -6518,7 +6524,7 @@ swiftDialogPatchingWindow(){
         displayNames=()
         for label in $queuedLabelsArray; do
             # Get display name from label fragment
-            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            currentDisplay_name="$(resolve_label_display_name "$label")"
             
             # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
             iconPath=$(resolve_app_icon_path "$label")
@@ -8276,6 +8282,53 @@ brew_as_user() {
         "${brewBinary}" "$@"
 }
 
+resolve_brew_icon_path() {
+    # Best-effort icon for a Homebrew package. Formulae are command-line software and get a
+    # generic SF Symbol; casks are matched against an installed application bundle so the
+    # dialog shows the real app icon.
+    #
+    # Usage: resolve_brew_icon_path cask|formula "package-name"
+    local pkg_type="$1"
+    local pkg_name="$2"
+
+    if [[ "${pkg_type}" == "formula" ]]; then
+        echo "SF=terminal,colour1=#f5a623"
+        return
+    fi
+
+    local cap_name
+    cap_name="$(echo "${pkg_name}" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
+
+    if [[ -d "/Applications/${cap_name}.app" ]]; then
+        echo "/Applications/${cap_name}.app"
+        return
+    fi
+    if [[ -d "/Applications/${pkg_name}.app" ]]; then
+        echo "/Applications/${pkg_name}.app"
+        return
+    fi
+
+    local mdfind_result
+    mdfind_result=$(mdfind "kMDItemFSName == '${cap_name}.app' && kMDItemContentType == 'com.apple.application-bundle'" -0 2> /dev/null | tr -d '\0' | head -c 4096)
+    if [[ -n "${mdfind_result}" && -d "${mdfind_result}" ]]; then
+        echo "${mdfind_result}"
+        return
+    fi
+
+    echo "SF=shippingbox.fill,colour1=#f5a623"
+}
+
+resolve_label_display_name() {
+    # Single source of truth for a queued item's display name. Replaces seven identical copies
+    # of the awk fragment lookup, and keeps every one of those call sites brew-aware for free.
+    local label="$1"
+    if is_brew_label "${label}"; then
+        echo "${brewDisplayNames[$label]:-${label}}"
+        return
+    fi
+    awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh"
+}
+
 # ==== END HOMEBREW ====
 
 _resolve_label_staging_info() {
@@ -8609,7 +8662,7 @@ workflow_silent_patch_closed_apps() {
             log_info "Skipping silent background patch of '${label}' (listed in ExcludedBackgroundLabels); adding to user dialog queue."
             remainingLabels+=("${label}")
             local _dname _ipath
-            _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+            _dname="$(resolve_label_display_name "${label}")"
             _ipath=$(resolve_app_icon_path "${label}")
             _compute_version_subtitle "${label}"
             newAppNamesArray+=("--listitem")
@@ -8632,7 +8685,7 @@ workflow_silent_patch_closed_apps() {
                 log_info "Zoom meeting in progress. Skipping silent patch of '${label}'; adding to user dialog queue."
                 remainingLabels+=("${label}")
                 local _dname _ipath
-                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _dname="$(resolve_label_display_name "${label}")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
                 newAppNamesArray+=("--listitem")
@@ -8690,7 +8743,7 @@ workflow_silent_patch_closed_apps() {
                 log_info "Blocking process detected for '${label}' (exit 12). Adding to user dialog queue."
                 remainingLabels+=("${label}")
                 local _dname _ipath
-                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _dname="$(resolve_label_display_name "${label}")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
                 newAppNamesArray+=("--listitem")
@@ -8706,7 +8759,7 @@ workflow_silent_patch_closed_apps() {
                 silentPatchErrors=$((silentPatchErrors + 1))
                 remainingLabels+=("${label}")
                 local _dname _ipath
-                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _dname="$(resolve_label_display_name "${label}")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
                 newAppNamesArray+=("--listitem")
@@ -8789,7 +8842,7 @@ workflow_do_Installations() {
         swiftDialogOptions=()
         if [ ${InteractiveModeOption} -ge 1 ] && [[ "${dialogPatchingContinueBackground}" != "TRUE" ]]; then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
-            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            currentDisplay_name="$(resolve_label_display_name "$label")"
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplay_name}"\')
             sleep .5
 
@@ -10303,8 +10356,8 @@ main() {
         log_verbose "Obtaining proper name for $label"
         
         # Get display name from label fragment
-        currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-        
+        currentDisplay_name="$(resolve_label_display_name "$label")"
+
         # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
         iconPath=$(resolve_app_icon_path "$label")
         log_verbose "Resolved icon path: $iconPath"
