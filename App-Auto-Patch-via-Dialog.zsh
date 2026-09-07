@@ -7976,6 +7976,22 @@ function queueLabel() {
     write_aap_report_item "$label_name" "$name" "$previousVersion" "$appNewVersion"
 }
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Homebrew Related Functions
+#
+# Every Homebrew function lives between the BEGIN/END markers below so the block can be
+# extracted and exercised in isolation, without running main(). Do not move functions out of
+# this block, and do not change the marker lines.
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# ==== BEGIN HOMEBREW ====
+
+is_brew_label() {
+    # True when the label is a Homebrew pseudo-label rather than an Installomator label.
+    [[ "$1" == brewcask__* || "$1" == brewformula__* ]]
+}
+
+# ==== END HOMEBREW ====
+
 _resolve_label_staging_info() {
     # Executes a label fragment in an isolated subshell to resolve the downloadURL and related
     # variables that may be computed dynamically (API calls, GitHub release lookups, etc.).
