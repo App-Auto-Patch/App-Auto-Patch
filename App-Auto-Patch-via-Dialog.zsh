@@ -8420,6 +8420,143 @@ homebrew_should_queue() {
     fi
 }
 
+homebrew_queue_package() {
+    # Applies the ignore list and the priority rules to one outdated package, and queues it if
+    # it survives both. Shared by the cask and formula passes.
+    #
+    # Usage: homebrew_queue_package cask|formula "name" "installed_version" "current_version"
+    # Returns 0 when the package was queued, 1 when it was skipped.
+    local pkg_type="$1" pkg_name="$2" installed_ver="$3" current_ver="$4"
+
+    local -a ignored_arr
+    if [[ "${pkg_type}" == "cask" ]]; then
+        ignored_arr=(${=homebrew_ignored_casks_option})
+    else
+        ignored_arr=(${=homebrew_ignored_formulae_option})
+    fi
+    if (( ${ignored_arr[(Ie)${pkg_name}]} )); then
+        log_verbose "Homebrew: ignoring ${pkg_type} ${pkg_name}"
+        return 1
+    fi
+
+    local -a installomator_arr
+    installomator_arr=(${=labelsArray})
+    local in_installomator="FALSE"
+    (( ${installomator_arr[(Ie)${pkg_name}]} )) && in_installomator="TRUE"
+
+    local decision
+    decision=$(homebrew_should_queue "${pkg_name}" "${in_installomator}")
+    if [[ "${decision}" == "SKIP" ]]; then
+        log_notice "Homebrew: skipping ${pkg_type} ${pkg_name} (Installomator preferred for this package)"
+        return 1
+    fi
+    if [[ "${decision}" == "QUEUE_SUPERSEDE" ]] && [[ "${in_installomator}" == "TRUE" ]]; then
+        brewSupersedingLabels+="${pkg_name} "
+    fi
+
+    local brew_label display_suffix
+    if [[ "${pkg_type}" == "cask" ]]; then
+        brew_label="brewcask__${pkg_name}"
+        display_suffix="Homebrew Cask"
+    else
+        brew_label="brewformula__${pkg_name}"
+        display_suffix="Homebrew Formula"
+    fi
+
+    log_notice "Homebrew: queuing ${pkg_type} ${pkg_name} (${installed_ver} → ${current_ver})"
+    brewDisplayNames[$brew_label]="${pkg_name} (${display_suffix})"
+    brewIconPaths[$brew_label]=$(resolve_brew_icon_path "${pkg_type}" "${pkg_name}")
+    AAPVersionByLabel[$brew_label]="${current_ver}"
+    AAPInstalledVersionByLabel[$brew_label]="${installed_ver}"
+    homebrew_record_discovered "${brew_label}"
+    write_aap_report_item "${brew_label}" "${brewDisplayNames[$brew_label]}" "${installed_ver}" "${current_ver}"
+    labelsArray+="${brew_label} "
+    return 0
+}
+
+homebrew_discovery() {
+    # Discovers outdated Homebrew packages and queues them as pseudo-labels. Called from main()
+    # after Installomator discovery, so labelsArray is populated and conflict detection is valid.
+    if [[ "${homebrew_enabled_option}" != "TRUE" ]]; then
+        log_info "Homebrew management disabled"
+        return 0
+    fi
+    if [[ "${homebrew_cask_enabled_option}" != "TRUE" ]] && [[ "${homebrew_formula_enabled_option}" != "TRUE" ]]; then
+        log_info "Homebrew cask and formula management both disabled"
+        return 0
+    fi
+    if [[ -z "${currentUserAccountName}" ]] || [[ "${currentUserAccountName}" == "FALSE" ]]; then
+        log_warning "Homebrew discovery skipped: no user logged in"
+        return 0
+    fi
+    if ! get_homebrew_binary; then
+        log_warning "Homebrew binary unusable — skipping Homebrew discovery"
+        return 0
+    fi
+
+    log_notice "**** Homebrew Discovery ****"
+
+    # `brew outdated` does NOT trigger Homebrew's auto-update, so without this it reports against
+    # whatever formula data was last fetched. Non-fatal: stale results beat a failed run.
+    if ! brew_as_user update --quiet > /dev/null 2>&1; then
+        log_warning "brew update failed; continuing with possibly stale package data"
+    fi
+
+    local brew_outdated_json
+    brew_outdated_json=$(brew_as_user outdated --json=v2 2> /dev/null)
+    local brew_exit_code=$?
+    if [[ ${brew_exit_code} -ne 0 ]] || [[ -z "${brew_outdated_json}" ]]; then
+        log_error "brew outdated failed (exit code: ${brew_exit_code}) — skipping Homebrew discovery"
+        return 0
+    fi
+
+    homebrew_clear_discovered
+
+    local queued_casks=0 queued_formulae=0
+    local pkg_name installed_ver current_ver
+
+    if [[ "${homebrew_cask_enabled_option}" == "TRUE" ]]; then
+        while IFS='|' read -r pkg_name installed_ver current_ver; do
+            [[ -z "${pkg_name}" ]] && continue
+            homebrew_queue_package cask "${pkg_name}" "${installed_ver}" "${current_ver}" && (( queued_casks++ ))
+        done <<< "$(homebrew_parse_outdated_json "${brew_outdated_json}" casks)"
+    fi
+
+    if [[ "${homebrew_formula_enabled_option}" == "TRUE" ]]; then
+        while IFS='|' read -r pkg_name installed_ver current_ver; do
+            [[ -z "${pkg_name}" ]] && continue
+            homebrew_queue_package formula "${pkg_name}" "${installed_ver}" "${current_ver}" && (( queued_formulae++ ))
+        done <<< "$(homebrew_parse_outdated_json "${brew_outdated_json}" formulae)"
+    fi
+
+    log_notice "Homebrew discovery complete — queued ${queued_casks} cask(s), ${queued_formulae} formula(e)"
+    return 0
+}
+
+homebrew_restore_queue() {
+    # On DiscoveryFrequency-skipped runs the in-memory maps are empty. Rebuild them from
+    # HomebrewDiscoveredPackages. Version data restores separately from the report PLIST, which
+    # main() already reads for Installomator labels.
+    [[ "${homebrew_enabled_option}" != "TRUE" ]] && return 0
+
+    local brew_label pkg_name pkg_type display_suffix restored=0
+    while IFS= read -r brew_label; do
+        [[ -z "${brew_label}" ]] && continue
+        if [[ "${brew_label}" == brewcask__* ]]; then
+            pkg_name="${brew_label#brewcask__}"; pkg_type="cask";    display_suffix="Homebrew Cask"
+        else
+            pkg_name="${brew_label#brewformula__}"; pkg_type="formula"; display_suffix="Homebrew Formula"
+        fi
+        brewDisplayNames[$brew_label]="${pkg_name} (${display_suffix})"
+        brewIconPaths[$brew_label]=$(resolve_brew_icon_path "${pkg_type}" "${pkg_name}")
+        labelsArray+="${brew_label} "
+        (( restored++ ))
+    done < <(homebrew_read_discovered)
+
+    (( restored > 0 )) && log_info "Restored ${restored} Homebrew package(s) from the persisted queue"
+    return 0
+}
+
 # ==== END HOMEBREW ====
 
 _resolve_label_staging_info() {
@@ -10065,7 +10202,9 @@ main() {
     # (which tracks the new/available version). Used to populate listitem subtitles in the
     # deferral/hard-deadline dialogs with "Current Version" / "New Version" text.
     typeset -gA AAPInstalledVersionByLabel=()
-    
+    typeset -gA brewDisplayNames=()
+    typeset -gA brewIconPaths=()
+
     # Determine if discovery should run based on workflow_disable_app_discovery_option and DiscoveryFrequency
     local run_discovery="FALSE"
     local discovery_skip_reason=""
@@ -10141,6 +10280,9 @@ main() {
             AAPVersionByLabel[$_qLabel]="${_qNew}"
             AAPInstalledVersionByLabel[$_qLabel]="${_qInstalled}"
         done < <(get_aap_report_entries)
+
+        # Discovery did not run, so rebuild the Homebrew queue from its persisted key.
+        homebrew_restore_queue
     else
         log_notice "**** App Auto-Patch ${scriptVersion} - RUN APP DISCOVERY WORKFLOW ****"
         
@@ -10350,6 +10492,10 @@ main() {
 
         # Label fragment parsing is finished; everything below relies on normal word splitting.
         IFS=$discovery_saved_IFS
+
+        # Homebrew discovery runs after Installomator so labelsArray is populated and the
+        # priority/conflict rules can see which packages Installomator already covers.
+        homebrew_discovery
 
         # Close our bouncing progress swiftDialog window
         swiftDialogCompleteDialogDiscover
