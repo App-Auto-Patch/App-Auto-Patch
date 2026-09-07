@@ -8184,7 +8184,7 @@ homebrew_parse_outdated_json() {
     local json="$1"
     local kind="$2"
     local tmp
-    tmp=$(mktemp /private/tmp/aap_brew_XXXXXX.plist) || return 1
+    tmp=$(mktemp /private/tmp/aap_brew_XXXXXX) || return 1
 
     if ! printf '%s' "${json}" | /usr/bin/plutil -convert xml1 -o "${tmp}" - 2> /dev/null; then
         rm -f "${tmp}"
