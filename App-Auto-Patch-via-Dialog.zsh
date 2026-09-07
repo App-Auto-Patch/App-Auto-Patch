@@ -8173,6 +8173,36 @@ is_brew_label() {
     [[ "$1" == brewcask__* || "$1" == brewformula__* ]]
 }
 
+homebrew_parse_outdated_json() {
+    # Parses `brew outdated --json=v2` output without any third-party tooling. plutil reads
+    # JSON natively and PlistBuddy walks the converted plist, so this needs nothing beyond
+    # what ships with macOS — notably NOT /usr/bin/python3, which is an Xcode CLT stub on a
+    # clean managed Mac and would trigger an install prompt from a root LaunchDaemon.
+    #
+    # Usage: homebrew_parse_outdated_json "<json>" casks|formulae
+    # Output: one "name|installed_version|current_version" line per entry.
+    local json="$1"
+    local kind="$2"
+    local tmp
+    tmp=$(mktemp /private/tmp/aap_brew_XXXXXX.plist) || return 1
+
+    if ! printf '%s' "${json}" | /usr/bin/plutil -convert xml1 -o "${tmp}" - 2> /dev/null; then
+        rm -f "${tmp}"
+        return 1
+    fi
+
+    local i=0 pkg_name installed current
+    while pkg_name=$(/usr/libexec/PlistBuddy -c "Print :${kind}:${i}:name" "${tmp}" 2> /dev/null); do
+        installed=$(/usr/libexec/PlistBuddy -c "Print :${kind}:${i}:installed_versions:0" "${tmp}" 2> /dev/null)
+        current=$(/usr/libexec/PlistBuddy -c "Print :${kind}:${i}:current_version" "${tmp}" 2> /dev/null)
+        printf '%s|%s|%s\n' "${pkg_name}" "${installed}" "${current}"
+        (( i++ ))
+    done
+
+    rm -f "${tmp}"
+    return 0
+}
+
 # ==== END HOMEBREW ====
 
 _resolve_label_staging_info() {
