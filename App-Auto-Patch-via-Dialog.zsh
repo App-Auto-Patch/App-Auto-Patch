@@ -8557,6 +8557,46 @@ homebrew_restore_queue() {
     return 0
 }
 
+brew_install_package() {
+    # Upgrades a single Homebrew package identified by its pseudo-label.
+    # Returns brew's own exit status.
+    local brew_label="$1"
+    local is_cask="FALSE"
+    local package_name
+    local brew_exit
+
+    if [[ "${brew_label}" == brewcask__* ]]; then
+        is_cask="TRUE"
+        package_name="${brew_label#brewcask__}"
+    else
+        package_name="${brew_label#brewformula__}"
+    fi
+
+    # A DiscoveryFrequency-skipped run never called get_homebrew_binary during discovery.
+    if [[ -z "${brewBinary}" ]]; then
+        if ! get_homebrew_binary; then
+            log_error "Homebrew binary unavailable; cannot upgrade ${package_name}"
+            return 1
+        fi
+    fi
+
+    # ${pipestatus[1]} must be captured immediately after the pipe, still inside this branch:
+    # zsh treats the enclosing if/fi as a compound command and collapses pipestatus to that
+    # command's own single exit status once the fi closes, so reading it after the if/else
+    # (as opposed to inside each branch) would silently discard brew's real exit code.
+    if [[ "${is_cask}" == "TRUE" ]]; then
+        log_install "Homebrew upgrading ${package_name} (cask)"
+        # HOMEBREW_NO_AUTO_UPDATE: discovery already ran `brew update`.
+        HOMEBREW_NO_AUTO_UPDATE=1 brew_as_user upgrade --cask "${package_name}" 2>&1 | tee -a "${appAutoPatchLog}"
+        brew_exit=${pipestatus[1]}
+    else
+        log_install "Homebrew upgrading ${package_name} (formula)"
+        HOMEBREW_NO_AUTO_UPDATE=1 brew_as_user upgrade "${package_name}" 2>&1 | tee -a "${appAutoPatchLog}"
+        brew_exit=${pipestatus[1]}
+    fi
+    return ${brew_exit}
+}
+
 # ==== END HOMEBREW ====
 
 _resolve_label_staging_info() {
@@ -9099,7 +9139,20 @@ workflow_do_Installations() {
             fi
         done
 
-        if [[ ${zoom_call_active_check_option} == "TRUE" && ${label} == "zoom"* ]] ; then
+        if is_brew_label "${label}"; then
+            # Homebrew upgrade path — no Installomator, no staged installer, no blocking process.
+            brew_install_package "${label}"
+            installomatorExitCode=$?
+            if [[ ${installomatorExitCode} -ne 0 ]]; then
+                log_error "Error upgrading Homebrew package ${label}. Exit code ${installomatorExitCode}"
+                swiftDialogUpdate "listitem: index: $i, status: fail"
+                let errorCount++
+            else
+                remove_aap_report_item "${label}"
+                homebrew_remove_discovered "${label}"
+            fi
+            write_aap_receipt "${label}" "${AAPVersionByLabel[$label]:-}" "${installomatorExitCode}"
+        elif [[ ${zoom_call_active_check_option} == "TRUE" && ${label} == "zoom"* ]] ; then
 
 	        CPTHOSTPID=$(pgrep CptHost)
 	        AOMHOSTPID=$(pgrep aomhost)
