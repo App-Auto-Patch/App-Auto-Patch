@@ -8329,6 +8329,58 @@ resolve_label_display_name() {
     awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh"
 }
 
+# Homebrew pseudo-labels are persisted here rather than in DiscoveredLabels. main() reads
+# DiscoveredLabels back through `tr -c -d "[:alnum:][:space:][\-_]"`, which deletes @, . and +
+# — turning brewformula__openssl@3 into brewformula__openssl3 and handing `brew upgrade` a
+# package that does not exist. These four helpers use PlistBuddy exclusively, so names are
+# preserved byte for byte.
+
+homebrew_clear_discovered() {
+    local plistFile="${appAutoPatchLocalPLIST}.plist"
+    if /usr/libexec/PlistBuddy -c 'Print :HomebrewDiscoveredPackages' "${plistFile}" &> /dev/null; then
+        /usr/libexec/PlistBuddy -c 'Delete :HomebrewDiscoveredPackages' "${plistFile}" 2> /dev/null
+    fi
+    /usr/libexec/PlistBuddy -c 'Add :HomebrewDiscoveredPackages array' "${plistFile}" 2> /dev/null
+}
+
+homebrew_record_discovered() {
+    local label="$1"
+    local plistFile="${appAutoPatchLocalPLIST}.plist"
+    /usr/libexec/PlistBuddy -c 'Print :HomebrewDiscoveredPackages' "${plistFile}" &> /dev/null \
+        || /usr/libexec/PlistBuddy -c 'Add :HomebrewDiscoveredPackages array' "${plistFile}" 2> /dev/null
+    /usr/libexec/PlistBuddy -c "Add :HomebrewDiscoveredPackages: string '${label}'" "${plistFile}" 2> /dev/null
+}
+
+homebrew_read_discovered() {
+    local plistFile="${appAutoPatchLocalPLIST}.plist"
+    [[ -f "${plistFile}" ]] || return 0
+    local i=0 entry
+    while entry=$(/usr/libexec/PlistBuddy -c "Print :HomebrewDiscoveredPackages:${i}" "${plistFile}" 2> /dev/null); do
+        printf '%s\n' "${entry}"
+        (( i++ ))
+    done
+    return 0
+}
+
+homebrew_remove_discovered() {
+    # Deletes one label by exact match. Called after a successful upgrade so a
+    # DiscoveryFrequency-skipped run never re-queues an already-patched package.
+    local label="$1"
+    local plistFile="${appAutoPatchLocalPLIST}.plist"
+    [[ -f "${plistFile}" ]] || return 0
+
+    local i=0 entry
+    while entry=$(/usr/libexec/PlistBuddy -c "Print :HomebrewDiscoveredPackages:${i}" "${plistFile}" 2> /dev/null); do
+        if [[ "${entry}" == "${label}" ]]; then
+            /usr/libexec/PlistBuddy -c "Delete :HomebrewDiscoveredPackages:${i}" "${plistFile}" 2> /dev/null
+            log_verbose "Removed '${label}' from HomebrewDiscoveredPackages"
+            return 0
+        fi
+        (( i++ ))
+    done
+    return 0
+}
+
 # ==== END HOMEBREW ====
 
 _resolve_label_staging_info() {
