@@ -10724,6 +10724,19 @@ main() {
         fi
     fi
 
+    # Drop Installomator labels that Homebrew won during priority/conflict resolution. This must
+    # run after both the ignoredLabelsArray subtraction and the ignore-all rebuild above, since
+    # that rebuild would otherwise reintroduce a superseded label.
+    if [[ -n "${brewSupersedingLabels}" ]]; then
+        local -a _superseded_arr
+        local _sup
+        _superseded_arr=(${=brewSupersedingLabels})
+        for _sup in "${_superseded_arr[@]}"; do
+            labelsArray=(${labelsArray:#${_sup}})
+            log_notice "Homebrew supersedes Installomator label: ${_sup}"
+        done
+    fi
+
     appNamesArray=()
     # Get App Names for each label in labelsArray
     queuedLabelsForNames=("${(@s/ /)labelsArray}")
