@@ -8203,6 +8203,79 @@ homebrew_parse_outdated_json() {
     return 0
 }
 
+get_homebrew_binary() {
+    # Locates a usable Homebrew installation and decides which account brew runs as.
+    # Sets ${brewBinary} and ${brewBrewUser} on success.
+    #
+    # Homebrew refuses to run as root, so AAP (a root LaunchDaemon) must drop privileges. The
+    # account it drops to is the OWNER OF THE PREFIX, not whoever happens to be at the console:
+    # running brew as a non-owner makes Homebrew rewrite permissions across the whole prefix.
+    brewBinary=""
+    brewBrewUser=""
+
+    local candidate=""
+    if [[ -n "${homebrew_binary_path_option}" ]]; then
+        if [[ -x "${homebrew_binary_path_option}" ]]; then
+            candidate="${homebrew_binary_path_option}"
+            log_verbose "Homebrew binary (admin-specified): ${candidate}"
+        else
+            log_warning "Homebrew binary not found or not executable at the configured path: ${homebrew_binary_path_option}"
+            return 1
+        fi
+    else
+        local probe
+        for probe in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+            if [[ -x "${probe}" ]]; then
+                candidate="${probe}"
+                log_verbose "Homebrew binary (auto-detected): ${candidate}"
+                break
+            fi
+        done
+    fi
+
+    if [[ -z "${candidate}" ]]; then
+        log_warning "No Homebrew installation found at /opt/homebrew or /usr/local."
+        return 1
+    fi
+
+    # The prefix is the grandparent of the binary: /opt/homebrew/bin/brew -> /opt/homebrew
+    local prefix owner
+    prefix="${candidate:h:h}"
+    owner=$(/usr/bin/stat -f %Su "${prefix}" 2> /dev/null)
+
+    if [[ -z "${owner}" ]]; then
+        log_warning "Unable to determine the owner of the Homebrew prefix ${prefix}; skipping Homebrew."
+        return 1
+    fi
+    if [[ "${owner}" == "root" ]]; then
+        log_warning "Homebrew prefix ${prefix} is owned by root (installed under sudo); skipping Homebrew."
+        return 1
+    fi
+    if [[ "${owner}" != "${currentUserAccountName}" ]]; then
+        log_warning "Homebrew prefix ${prefix} is owned by '${owner}' but the console user is '${currentUserAccountName:-none}'; skipping Homebrew."
+        return 1
+    fi
+
+    brewBinary="${candidate}"
+    brewBrewUser="${owner}"
+    log_verbose "Homebrew: using ${brewBinary} as user ${brewBrewUser}"
+    return 0
+}
+
+brew_as_user() {
+    # Runs brew de-privileged with an explicit, minimal environment. NONINTERACTIVE stops brew
+    # from ever prompting (there is no TTY behind a LaunchDaemon), and an explicit HOME keeps
+    # brew from writing caches into root's home.
+    local brew_home
+    brew_home=$(/usr/bin/dscl . -read "/Users/${brewBrewUser}" NFSHomeDirectory 2> /dev/null | awk '{print $2}')
+    /usr/bin/sudo -u "${brewBrewUser}" -H \
+        /usr/bin/env \
+            HOME="${brew_home:-/Users/${brewBrewUser}}" \
+            PATH="${brewBinary:h}:/usr/bin:/bin:/usr/sbin:/sbin" \
+            NONINTERACTIVE=1 \
+        "${brewBinary}" "$@"
+}
+
 # ==== END HOMEBREW ====
 
 _resolve_label_staging_info() {
