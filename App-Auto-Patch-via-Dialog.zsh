@@ -8284,7 +8284,21 @@ get_homebrew_binary() {
     fi
     if [[ "${owner}" != "${currentUserAccountName}" ]]; then
         brewCasksAllowed="FALSE"
-        log_warning "Homebrew prefix ${prefix} is owned by '${owner}' but the console user is '${currentUserAccountName:-none}'; formulae will be managed as '${owner}', casks will not (brew's own cask quit/signal/launchctl teardown runs in '${owner}'s session, which cannot reach a copy of the app running in the console user's session)."
+        # Casks are withheld here whenever the prefix owner differs from the console user -
+        # including when there is NO console user at all (currentUserAccountName == "FALSE": the
+        # login window, a session that just ended, or a system account). That headless case is not
+        # a technical necessity the way the foreign-console-user case is: with nobody logged in, no
+        # application is running, so a cask's own quit/signal/launchctl teardown has nothing to
+        # interrupt in the first place. Casks are held back anyway as a deliberate simplification -
+        # "formulae only whenever the prefix owner is not the console user" is one rule to document
+        # and reason about, rather than one whose safety varies by who happens to be at the screen -
+        # and because some casks perform user-level work in their postinstall step that assumes a
+        # login session exists.
+        if [[ -z "${currentUserAccountName}" ]] || [[ "${currentUserAccountName}" == "FALSE" ]]; then
+            log_warning "Homebrew prefix ${prefix} is owned by '${owner}' but no user is currently logged in; formulae will be managed as '${owner}', casks will not (brew's own cask quit/signal/launchctl teardown needs a session to reach, and none exists right now)."
+        else
+            log_warning "Homebrew prefix ${prefix} is owned by '${owner}' but the console user is '${currentUserAccountName}'; formulae will be managed as '${owner}', casks will not (brew's own cask quit/signal/launchctl teardown runs in '${owner}'s session, which cannot reach a copy of the app running in the console user's session)."
+        fi
     else
         brewCasksAllowed="TRUE"
     fi
@@ -8535,10 +8549,6 @@ homebrew_discovery() {
         # Nothing is queued this run - purge any queue persisted by an earlier run's discovery so
         # a later DiscoveryFrequency-skipped run has nothing stale left to restore.
         homebrew_clear_discovered
-        return 0
-    fi
-    if [[ -z "${currentUserAccountName}" ]] || [[ "${currentUserAccountName}" == "FALSE" ]]; then
-        log_warning "Homebrew discovery skipped: no user logged in"
         return 0
     fi
     if ! get_homebrew_binary; then
