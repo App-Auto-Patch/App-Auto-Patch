@@ -28,7 +28,7 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 	- `<key>HomebrewPreferredPackages</key>` - a space-separated list that inverts `HomebrewPriority` per package. Under `INSTALLOMATOR` priority these packages come from Homebrew; under `HOMEBREW` priority they come from Installomator
 	- `<key>HomebrewBinaryPath</key>` - optional; `/opt/homebrew/bin/brew` and `/usr/local/bin/brew` are probed automatically
 	- `<key>HomebrewIgnoredCasks</key>` / `<key>HomebrewIgnoredFormulae</key>` - space-separated exact package names. Use these rather than `IgnoredLabels`, which cannot represent versioned formula names such as `openssl@3`
-	- Homebrew runs de-privileged as the owner of the Homebrew prefix. If that prefix is owned by root, Homebrew is skipped entirely and the reason is logged. If it is owned by an account other than the logged-in user, formulae are still managed as that owner - only casks are held back, since replacing a cask's application bundle is the part that can interact with a GUI session
+	- Homebrew runs de-privileged as the owner of the Homebrew prefix. If that prefix is owned by root, Homebrew is skipped entirely and the reason is logged. If it is owned by an account other than the logged-in user - including when no one is logged in at all - formulae are still managed as that owner; only casks are held back, since replacing a cask's application bundle is the part that can interact with a GUI session
 	- Casks that update themselves (`auto_updates true` or `version :latest`) are left alone, and casks whose installer requires an administrator password cannot be upgraded unattended
 
 ## New features/Specific Changes in 3.7.1
