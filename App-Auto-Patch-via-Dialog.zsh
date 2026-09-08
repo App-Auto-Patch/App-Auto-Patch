@@ -6567,7 +6567,7 @@ _relaunch_patching_dialog() {
     local label currentDisplay_name iconPath
 
     for label in $queuedLabelsArray; do
-        currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        currentDisplay_name="$(resolve_label_display_name "$label")"
         iconPath=$(resolve_app_icon_path "$label")
         relaunchDisplayNames+=("--listitem")
         if [[ -n "${patchingItemStatus[$idx]}" ]]; then
@@ -6935,7 +6935,7 @@ _aap_mini_progress_item() {
     local total="${4:-0}"
     local display_name icon_path
 
-    display_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh" 2>/dev/null)"
+    display_name="$(resolve_label_display_name "${label}" 2>/dev/null)"
     [[ -z "${display_name}" ]] && display_name="${label}"
     icon_path=$(resolve_app_icon_path "${label}")
     [[ -n "${icon_path}" ]] && swiftDialogUpdate "icon: ${icon_path}"
