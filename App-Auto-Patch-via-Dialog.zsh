@@ -6440,7 +6440,7 @@ resolve_app_icon_path() {
     # Homebrew pseudo-labels have no Installomator fragment; their icon was resolved during
     # discovery. Returning here keeps all eight call sites of this function brew-aware.
     if is_brew_label "${label}"; then
-        echo "${brewIconPaths[$label]:-SF=shippingbox.fill,colour1=#f5a623}"
+        echo "${brewIconPaths[$label]:-SF=shippingbox.fill}"
         return
     fi
     local icon_appName icon_targetDir icon_name icon_path
@@ -8354,7 +8354,7 @@ resolve_brew_icon_path() {
     local pkg_name="$2"
 
     if [[ "${pkg_type}" == "formula" ]]; then
-        echo "SF=terminal,colour1=#f5a623"
+        echo "SF=terminal"
         return
     fi
 
@@ -8377,7 +8377,7 @@ resolve_brew_icon_path() {
         return
     fi
 
-    echo "SF=shippingbox.fill,colour1=#f5a623"
+    echo "SF=shippingbox.fill"
 }
 
 resolve_label_display_name() {
@@ -8586,6 +8586,14 @@ homebrew_discovery() {
 
     log_notice "**** Homebrew Discovery ****"
 
+    # Mirror the Installomator discovery window: without this the dialog sits on whatever text
+    # the last Installomator label left behind while `brew update`/`brew outdated` run, which can
+    # take a while on a queue of dozens of packages and looks hung. Same guard PgetAppVersion uses
+    # for its per-app "Analyzing" update, so nothing is written when there is no discover window.
+    if [ ${InteractiveModeOption} -gt 1 ]; then
+        swiftDialogUpdate "progresstext: ${display_string_discovery_progress} ..."
+    fi
+
     # `brew outdated` does NOT trigger Homebrew's auto-update, so without this it reports against
     # whatever formula data was last fetched. Non-fatal: stale results beat a failed run.
     if ! brew_as_user update --quiet > /dev/null 2>&1; then
@@ -8623,8 +8631,15 @@ homebrew_discovery() {
             log_error "Homebrew: failed to parse 'brew outdated --json=v2' output for casks - aborting Homebrew discovery (this is a parse failure, not brew reporting zero outdated casks)"
             return 1
         fi
+        # Cask-pass icon, set once rather than per-package (resolving a real app icon per package
+        # here would mean an extra mdfind for every outdated cask just to paint a progress window).
+        # Comma-free per the same fix as resolve_brew_icon_path - see Bug 1.
+        [ ${InteractiveModeOption} -gt 1 ] && swiftDialogUpdate "icon: SF=shippingbox.fill"
         while IFS='|' read -r pkg_name installed_ver current_ver; do
             [[ -z "${pkg_name}" ]] && continue
+            if [ ${InteractiveModeOption} -gt 1 ]; then
+                swiftDialogUpdate "message: ${display_string_discovery_action_message} ${pkg_name} (${installed_ver})"
+            fi
             homebrew_queue_package cask "${pkg_name}" "${installed_ver}" "${current_ver}" && (( queued_casks++ ))
         done <<< "${casks_parsed}"
     elif [[ "${homebrew_cask_enabled_option}" == "TRUE" ]]; then
@@ -8636,8 +8651,14 @@ homebrew_discovery() {
             log_error "Homebrew: failed to parse 'brew outdated --json=v2' output for formulae - aborting Homebrew discovery (this is a parse failure, not brew reporting zero outdated formulae)"
             return 1
         fi
+        # Formula-pass icon - distinguishes this pass from the cask pass above without adding any
+        # new dialog text (see the comment on the cask pass icon update).
+        [ ${InteractiveModeOption} -gt 1 ] && swiftDialogUpdate "icon: SF=terminal"
         while IFS='|' read -r pkg_name installed_ver current_ver; do
             [[ -z "${pkg_name}" ]] && continue
+            if [ ${InteractiveModeOption} -gt 1 ]; then
+                swiftDialogUpdate "message: ${display_string_discovery_action_message} ${pkg_name} (${installed_ver})"
+            fi
             homebrew_queue_package formula "${pkg_name}" "${installed_ver}" "${current_ver}" && (( queued_formulae++ ))
         done <<< "${formulae_parsed}"
     fi
