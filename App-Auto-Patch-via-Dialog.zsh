@@ -1446,6 +1446,7 @@ get_preferences() {
         defaults delete "${appAutoPatchLocalPLIST}" ExcludedBackgroundLabels 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" DiscoveredLabels 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" HomebrewDiscoveredPackages 2> /dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" HomebrewSupersededLabels 2> /dev/null
         fi
 
         if [[ "${deferral_timer_reset_all_option}" == "TRUE" ]]; then
@@ -8342,57 +8343,68 @@ resolve_label_display_name() {
     awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh"
 }
 
-# Homebrew pseudo-labels are persisted here rather than in DiscoveredLabels. main() reads
+# Homebrew pseudo-labels (and the superseded-Installomator-labels list, see
+# HomebrewSupersededLabels below) are persisted here rather than in DiscoveredLabels. main() reads
 # DiscoveredLabels back through `tr -c -d "[:alnum:][:space:][\-_]"`, which deletes @, . and +
 # - turning brewformula__openssl@3 into brewformula__openssl3 and handing `brew upgrade` a
 # package that does not exist. These four helpers use PlistBuddy exclusively, so names are
-# preserved byte for byte.
+# preserved byte for byte. They are key-parameterised so any Homebrew string array in the local
+# plist can reuse them; homebrew_clear_discovered / homebrew_record_discovered /
+# homebrew_read_discovered / homebrew_remove_discovered remain as thin wrappers over
+# HomebrewDiscoveredPackages for existing call sites.
 
-homebrew_clear_discovered() {
+homebrew_plist_clear() {
+    local key="$1"
     local plistFile="${appAutoPatchLocalPLIST}.plist"
-    if /usr/libexec/PlistBuddy -c 'Print :HomebrewDiscoveredPackages' "${plistFile}" &> /dev/null; then
-        /usr/libexec/PlistBuddy -c 'Delete :HomebrewDiscoveredPackages' "${plistFile}" &> /dev/null
+    if /usr/libexec/PlistBuddy -c "Print :${key}" "${plistFile}" &> /dev/null; then
+        /usr/libexec/PlistBuddy -c "Delete :${key}" "${plistFile}" &> /dev/null
     fi
-    /usr/libexec/PlistBuddy -c 'Add :HomebrewDiscoveredPackages array' "${plistFile}" &> /dev/null
+    /usr/libexec/PlistBuddy -c "Add :${key} array" "${plistFile}" &> /dev/null
 }
 
-homebrew_record_discovered() {
-    local label="$1"
+homebrew_plist_record() {
+    local key="$1" value="$2"
     local plistFile="${appAutoPatchLocalPLIST}.plist"
-    /usr/libexec/PlistBuddy -c 'Print :HomebrewDiscoveredPackages' "${plistFile}" &> /dev/null \
-        || /usr/libexec/PlistBuddy -c 'Add :HomebrewDiscoveredPackages array' "${plistFile}" &> /dev/null
-    /usr/libexec/PlistBuddy -c "Add :HomebrewDiscoveredPackages: string '${label}'" "${plistFile}" &> /dev/null
+    /usr/libexec/PlistBuddy -c "Print :${key}" "${plistFile}" &> /dev/null \
+        || /usr/libexec/PlistBuddy -c "Add :${key} array" "${plistFile}" &> /dev/null
+    /usr/libexec/PlistBuddy -c "Add :${key}: string '${value}'" "${plistFile}" &> /dev/null
 }
 
-homebrew_read_discovered() {
+homebrew_plist_read() {
+    local key="$1"
     local plistFile="${appAutoPatchLocalPLIST}.plist"
     [[ -f "${plistFile}" ]] || return 0
     local i=0 entry
-    while entry=$(/usr/libexec/PlistBuddy -c "Print :HomebrewDiscoveredPackages:${i}" "${plistFile}" 2> /dev/null); do
+    while entry=$(/usr/libexec/PlistBuddy -c "Print :${key}:${i}" "${plistFile}" 2> /dev/null); do
         printf '%s\n' "${entry}"
         (( i++ ))
     done
     return 0
 }
 
-homebrew_remove_discovered() {
-    # Deletes one label by exact match. Called after a successful upgrade so a
+homebrew_plist_remove() {
+    # Deletes one value by exact match. Called after a successful upgrade so a
     # DiscoveryFrequency-skipped run never re-queues an already-patched package.
-    local label="$1"
+    local key="$1" value="$2"
     local plistFile="${appAutoPatchLocalPLIST}.plist"
     [[ -f "${plistFile}" ]] || return 0
 
     local i=0 entry
-    while entry=$(/usr/libexec/PlistBuddy -c "Print :HomebrewDiscoveredPackages:${i}" "${plistFile}" 2> /dev/null); do
-        if [[ "${entry}" == "${label}" ]]; then
-            /usr/libexec/PlistBuddy -c "Delete :HomebrewDiscoveredPackages:${i}" "${plistFile}" &> /dev/null
-            log_verbose "Removed '${label}' from HomebrewDiscoveredPackages"
+    while entry=$(/usr/libexec/PlistBuddy -c "Print :${key}:${i}" "${plistFile}" 2> /dev/null); do
+        if [[ "${entry}" == "${value}" ]]; then
+            /usr/libexec/PlistBuddy -c "Delete :${key}:${i}" "${plistFile}" &> /dev/null
+            log_verbose "Removed '${value}' from ${key}"
             return 0
         fi
         (( i++ ))
     done
     return 0
 }
+
+homebrew_clear_discovered() { homebrew_plist_clear HomebrewDiscoveredPackages }
+homebrew_record_discovered() { homebrew_plist_record HomebrewDiscoveredPackages "$1" }
+homebrew_read_discovered() { homebrew_plist_read HomebrewDiscoveredPackages }
+homebrew_remove_discovered() { homebrew_plist_remove HomebrewDiscoveredPackages "$1" }
 
 homebrew_should_queue() {
     # Decides whether an outdated Homebrew package should be queued, and whether queueing it
@@ -8470,6 +8482,7 @@ homebrew_queue_package() {
     fi
     if [[ "${decision}" == "QUEUE_SUPERSEDE" ]] && [[ "${in_installomator}" == "TRUE" ]]; then
         brewSupersedingLabels+="${pkg_name} "
+        homebrew_plist_record HomebrewSupersededLabels "${pkg_name}"
     fi
 
     local brew_label display_suffix
@@ -8529,6 +8542,7 @@ homebrew_discovery() {
     fi
 
     homebrew_clear_discovered
+    homebrew_plist_clear HomebrewSupersededLabels
 
     local queued_casks=0 queued_formulae=0
     local pkg_name installed_ver current_ver
@@ -8570,6 +8584,16 @@ homebrew_restore_queue() {
         labelsArray+="${brew_label} "
         (( restored++ ))
     done < <(homebrew_read_discovered)
+
+    # brewSupersedingLabels (the Installomator labels a prior discovery decided Homebrew should
+    # replace) is only ever populated in-memory by homebrew_queue_package, so a skipped run starts
+    # with it empty. Rebuild it from HomebrewSupersededLabels so homebrew_drop_superseded_labels
+    # has the same view here that discovery had when it made the decision.
+    local _sup
+    while IFS= read -r _sup; do
+        [[ -z "${_sup}" ]] && continue
+        brewSupersedingLabels+="${_sup} "
+    done < <(homebrew_plist_read HomebrewSupersededLabels)
 
     (( restored > 0 )) && log_info "Restored ${restored} Homebrew package(s) from the persisted queue"
     return 0
@@ -8645,14 +8669,18 @@ homebrew_drop_superseded_labels() {
     # brewSupersedingLabels (HomebrewPriority=HOMEBREW, package present under both managers) from
     # the global $labelsArray, and also scrubs it from the persisted report and DiscoveredLabels.
     #
-    # That second part matters beyond tidiness: brewSupersedingLabels is populated only during
-    # discovery (homebrew_queue_package) and is never itself persisted. On a DiscoveryFrequency-
-    # skipped run it starts empty, so this function's own $labelsArray filter would have nothing
-    # to remove - but if the superseded label is still sitting in DiscoveredLabels from a prior
-    # run, main() restores it right back into labelsArray via labelsFromConfig, and it installs
-    # a second time alongside its Homebrew replacement. Removing it from DiscoveredLabels here,
-    # at the moment it is superseded, is what keeps a skipped run from ever seeing it again. A
-    # full discovery re-adds it if the admin flips HomebrewPriority back to INSTALLOMATOR.
+    # brewSupersedingLabels itself is only ever populated in-memory by homebrew_queue_package
+    # during discovery, so on a DiscoveryFrequency-skipped run it would start empty - but
+    # homebrew_restore_queue rebuilds it from the persisted HomebrewSupersededLabels key before
+    # main() reaches this call, so a skipped run has the same view a discovery run had.
+    #
+    # Scrubbing DiscoveredLabels matters beyond tidiness too: main() unconditionally re-adds
+    # RequiredLabels/ConvertedLabels config entries to labelsArray on every run (independent of
+    # DiscoveredLabels), so if a superseded label were still sitting in either RequiredLabels'
+    # persisted plist entry or DiscoveredLabels from a prior run, it would install a second time
+    # alongside its Homebrew replacement. Removing it from DiscoveredLabels here, at the moment
+    # it is superseded, keeps a skipped run from re-queuing it via that channel. A full discovery
+    # re-adds it if the admin flips HomebrewPriority back to INSTALLOMATOR.
     #
     # Must run after both the ignoredLabelsArray subtraction and the ignore-all rebuild in the
     # caller, since that rebuild would otherwise reintroduce a superseded label.
