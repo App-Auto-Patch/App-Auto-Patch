@@ -2,8 +2,8 @@
 
 # Version 3
 
-## Version 3.9.0
-### 07-Sep-2026 (1) - Build 3.9.0.2609071200
+## Version 3.8.0
+### 08-Sep-2026 (1) - Build 3.8.0.2609081200
 - Homebrew cask and formula support, ported from the `3.6.0_Homebrew` branch onto the 3.8.0 line and reworked for the machinery added since:
 	- Outdated packages are queued as pseudo-labels (`brewcask__<name>` / `brewformula__<name>`) at the end of discovery, so deferral, hard deadlines, the unified dialog list, notifications, the Dock badge and `ExcludedBackgroundLabels` all apply to them without special-casing
 	- Queue persisted in a dedicated `HomebrewDiscoveredPackages` array rather than `DiscoveredLabels`. `DiscoveredLabels` is read back through `tr -c -d "[:alnum:][:space:][\-_]"`, which strips `@`, `.` and `+` and would rewrite `brewformula__openssl@3` as `brewformula__openssl3` - a package name that does not exist. The new key is written and read with `PlistBuddy` only
