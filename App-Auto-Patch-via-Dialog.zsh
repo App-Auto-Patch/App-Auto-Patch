@@ -572,7 +572,7 @@ set_defaults() {
     VersionComparisonInstallomatorFallback="TRUE"
 
     # Homebrew runtime state. The eight Homebrew *preference* options are deliberately NOT
-    # defaulted here — they must stay empty until manage_parameter_options so the
+    # defaulted here - they must stay empty until manage_parameter_options so the
     # managed > CLI > local precedence chain in get_preferences works (see zoom_call_active_check).
     brewBinary=""
     brewBrewUser=""
@@ -8175,7 +8175,7 @@ function queueLabel() {
 # This convention is load-bearing for a test harness that lives outside this repository: the
 # harness extracts everything between "# ==== BEGIN HOMEBREW ====" and "# ==== END HOMEBREW ===="
 # with an exact-anchored `sed` match on those two literal lines. Adding trailing whitespace (or
-# any other character) to either marker line breaks that anchor silently — the `sed` match simply
+# any other character) to either marker line breaks that anchor silently - the `sed` match simply
 # fails to find the line, so the extract comes back empty and the external test suite starts
 # testing nothing without erroring. Do not rename, reformat, or move the markers, and put every
 # new Homebrew function inside this block, not just the ones this comment happens to describe.
@@ -8190,7 +8190,7 @@ is_brew_label() {
 homebrew_parse_outdated_json() {
     # Parses `brew outdated --json=v2` output without any third-party tooling. plutil reads
     # JSON natively and PlistBuddy walks the converted plist, so this needs nothing beyond
-    # what ships with macOS — notably NOT /usr/bin/python3, which is an Xcode CLT stub on a
+    # what ships with macOS - notably NOT /usr/bin/python3, which is an Xcode CLT stub on a
     # clean managed Mac and would trigger an install prompt from a root LaunchDaemon.
     #
     # Usage: homebrew_parse_outdated_json "<json>" casks|formulae
@@ -8284,7 +8284,7 @@ brew_as_user() {
     # first space), so HOME is deliberately left for sudo to set rather than overridden here.
     # HOMEBREW_NO_AUTO_UPDATE=1 is hardcoded (not just prefixed on the calling command) because
     # sudo's default env_reset strips everything outside its whitelist before this env ever runs
-    # — a caller-side prefix assignment never survives the sudo call. Discovery's own `brew
+    # - a caller-side prefix assignment never survives the sudo call. Discovery's own `brew
     # update` already refreshes brew's index, so suppressing auto-update here unconditionally is
     # correct even on a run where that `brew update` failed.
     /usr/bin/sudo -u "${brewBrewUser}" -H \
@@ -8344,7 +8344,7 @@ resolve_label_display_name() {
 
 # Homebrew pseudo-labels are persisted here rather than in DiscoveredLabels. main() reads
 # DiscoveredLabels back through `tr -c -d "[:alnum:][:space:][\-_]"`, which deletes @, . and +
-# — turning brewformula__openssl@3 into brewformula__openssl3 and handing `brew upgrade` a
+# - turning brewformula__openssl@3 into brewformula__openssl3 and handing `brew upgrade` a
 # package that does not exist. These four helpers use PlistBuddy exclusively, so names are
 # preserved byte for byte.
 
@@ -8407,7 +8407,7 @@ homebrew_should_queue() {
     local in_installomator="$2"
 
     # Exact-element membership. The substring form `[[ " $list " == *" $x "* ]]` is IFS-dependent
-    # and partial-matches (it would treat node@22 as preferred when only node is listed) — fix
+    # and partial-matches (it would treat node@22 as preferred when only node is listed) - fix
     # #254 removed that pattern from the rest of this script.
     local -a preferred_arr
     preferred_arr=(${=homebrew_preferred_packages_option})
@@ -8508,7 +8508,7 @@ homebrew_discovery() {
         return 0
     fi
     if ! get_homebrew_binary; then
-        log_warning "Homebrew binary unusable — skipping Homebrew discovery"
+        log_warning "Homebrew binary unusable - skipping Homebrew discovery"
         return 0
     fi
 
@@ -8524,7 +8524,7 @@ homebrew_discovery() {
     brew_outdated_json=$(brew_as_user outdated --json=v2 2> /dev/null)
     local brew_exit_code=$?
     if [[ ${brew_exit_code} -ne 0 ]] || [[ -z "${brew_outdated_json}" ]]; then
-        log_error "brew outdated failed (exit code: ${brew_exit_code}) — skipping Homebrew discovery"
+        log_error "brew outdated failed (exit code: ${brew_exit_code}) - skipping Homebrew discovery"
         return 0
     fi
 
@@ -8547,7 +8547,7 @@ homebrew_discovery() {
         done <<< "$(homebrew_parse_outdated_json "${brew_outdated_json}" formulae)"
     fi
 
-    log_notice "Homebrew discovery complete — queued ${queued_casks} cask(s), ${queued_formulae} formula(e)"
+    log_notice "Homebrew discovery complete - queued ${queued_casks} cask(s), ${queued_formulae} formula(e)"
     return 0
 }
 
@@ -8604,7 +8604,7 @@ brew_install_package() {
     # (as opposed to inside each branch) would silently discard brew's real exit code.
     if [[ "${is_cask}" == "TRUE" ]]; then
         log_install "Homebrew upgrading ${package_name} (cask)"
-        # HOMEBREW_NO_AUTO_UPDATE is set inside brew_as_user's own env list — a prefix assignment
+        # HOMEBREW_NO_AUTO_UPDATE is set inside brew_as_user's own env list - a prefix assignment
         # here would never survive sudo's env_reset, so it is not repeated on this call.
         brew_as_user upgrade --cask "${package_name}" 2>&1 | tee -a "${appAutoPatchLog}"
         brew_exit=${pipestatus[1]}
@@ -8629,7 +8629,7 @@ brew_cask_app_is_running() {
     [[ -d "${icon}" ]] || return 1
 
     # ${icon:t:r} is the bundle basename, which equals the running process name only when
-    # CFBundleExecutable happens to match the bundle name — false for many Electron/Java casks
+    # CFBundleExecutable happens to match the bundle name - false for many Electron/Java casks
     # (e.g. "Visual Studio Code.app" runs as "Code" or "Electron"). Read the real executable name
     # from Info.plist first, and fall back to the basename if that lookup fails.
     local app_process
@@ -8648,7 +8648,7 @@ homebrew_drop_superseded_labels() {
     # That second part matters beyond tidiness: brewSupersedingLabels is populated only during
     # discovery (homebrew_queue_package) and is never itself persisted. On a DiscoveryFrequency-
     # skipped run it starts empty, so this function's own $labelsArray filter would have nothing
-    # to remove — but if the superseded label is still sitting in DiscoveredLabels from a prior
+    # to remove - but if the superseded label is still sitting in DiscoveredLabels from a prior
     # run, main() restores it right back into labelsArray via labelsFromConfig, and it installs
     # a second time alongside its Homebrew replacement. Removing it from DiscoveredLabels here,
     # at the moment it is superseded, is what keeps a skipped run from ever seeing it again. A
@@ -9285,7 +9285,7 @@ workflow_do_Installations() {
         done
 
         if is_brew_label "${label}"; then
-            # Homebrew upgrade path — no Installomator, no staged installer, no blocking process.
+            # Homebrew upgrade path - no Installomator, no staged installer, no blocking process.
             brew_install_package "${label}"
             installomatorExitCode=$?
             if [[ ${installomatorExitCode} -ne 0 ]]; then
@@ -9294,7 +9294,7 @@ workflow_do_Installations() {
                 let errorCount++
             else
                 # Homebrew never touches DIALOG_CMD_FILE the way Installomator does, so nothing
-                # else ever flips this listitem out of "wait/Checking …" on success — it would
+                # else ever flips this listitem out of "wait/Checking …" on success - it would
                 # spin for the rest of the dialog even though the upgrade succeeded.
                 [ ${InteractiveModeOption} -ge 1 ] && swiftDialogUpdate "listitem: index: $i, status: success"
                 remove_aap_report_item "${label}"

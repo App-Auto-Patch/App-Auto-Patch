@@ -17,12 +17,12 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 ## New features/Specific Changes in 3.9.0
 
 - **Homebrew Support**: App Auto-Patch can now discover and upgrade outdated Homebrew casks and formulae in the same run as Installomator labels. Packages appear in the same patching dialog, honour the same deferral timers and hard deadlines, and are written to the same report. Disabled by default.
-	- `<key>HomebrewEnabled</key>` `<true/>` | `<false/>` — default `false`
-	- `<key>HomebrewCaskEnabled</key>` / `<key>HomebrewFormulaEnabled</key>` — default `true` for both
-	- `<key>HomebrewPriority</key>` `<string>INSTALLOMATOR</string>` (default) or `<string>HOMEBREW</string>` — which tool wins when the same software is available from both
-	- `<key>HomebrewPreferredPackages</key>` — a space-separated list that inverts `HomebrewPriority` per package. Under `INSTALLOMATOR` priority these packages come from Homebrew; under `HOMEBREW` priority they come from Installomator
-	- `<key>HomebrewBinaryPath</key>` — optional; `/opt/homebrew/bin/brew` and `/usr/local/bin/brew` are probed automatically
-	- `<key>HomebrewIgnoredCasks</key>` / `<key>HomebrewIgnoredFormulae</key>` — space-separated exact package names. Use these rather than `IgnoredLabels`, which cannot represent versioned formula names such as `openssl@3`
+	- `<key>HomebrewEnabled</key>` `<true/>` | `<false/>` - default `false`
+	- `<key>HomebrewCaskEnabled</key>` / `<key>HomebrewFormulaEnabled</key>` - default `true` for both
+	- `<key>HomebrewPriority</key>` `<string>INSTALLOMATOR</string>` (default) or `<string>HOMEBREW</string>` - which tool wins when the same software is available from both
+	- `<key>HomebrewPreferredPackages</key>` - a space-separated list that inverts `HomebrewPriority` per package. Under `INSTALLOMATOR` priority these packages come from Homebrew; under `HOMEBREW` priority they come from Installomator
+	- `<key>HomebrewBinaryPath</key>` - optional; `/opt/homebrew/bin/brew` and `/usr/local/bin/brew` are probed automatically
+	- `<key>HomebrewIgnoredCasks</key>` / `<key>HomebrewIgnoredFormulae</key>` - space-separated exact package names. Use these rather than `IgnoredLabels`, which cannot represent versioned formula names such as `openssl@3`
 	- Homebrew runs de-privileged as the owner of the Homebrew prefix. If that prefix is owned by root, or by an account other than the logged-in user, Homebrew is skipped and the reason is logged
 	- Casks that update themselves (`auto_updates true` or `version :latest`) are left alone, and casks whose installer requires an administrator password cannot be upgraded unattended
 
