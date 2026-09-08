@@ -8719,8 +8719,15 @@ _resolve_label_staging_info() {
     # The subprocess sources the Installomator helper-functions fragment (which provides
     # downloadURLFromGit, downloadURLFromSparkle, versionFromGit, etc.) before wrapping
     # the label in a case statement and executing it.
+    # No .sh suffix: BSD mktemp only substitutes a trailing run of X's when it is the FINAL
+    # path component. A ".sh" suffix after XXXXXX left the X's un-substituted, yielding the
+    # same literal, world-guessable path on every call (a predictable file in world-writable
+    # /private/tmp written by a root daemon, and self-colliding: a skipped `rm -f` left the file
+    # behind and every later call failed with "mkstemp failed: File exists"). The script is
+    # always executed by path (`zsh --no-rcs "$tmpScript"`, never by extension), so the missing
+    # suffix is not load-bearing.
     local tmpScript
-    tmpScript=$(mktemp /private/tmp/aap_lbl_XXXXXX.sh) || return 1
+    tmpScript=$(mktemp /private/tmp/aap_lbl_XXXXXX) || return 1
 
     {
         echo '#!/bin/zsh --no-rcs'
