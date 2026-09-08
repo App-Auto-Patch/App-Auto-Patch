@@ -31,6 +31,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 **Fixes**
 
 - Fixed: the temporary wrapper script used when resolving a label's download URL was created at a fixed, predictable path in world-writable `/private/tmp` instead of a randomised one, because a trailing `.sh` in the `mktemp` template stops BSD `mktemp` from substituting the placeholder. That path was written by a root LaunchDaemon, and a crash that left the file behind made every later staging attempt fail until it was removed by hand. Present since 3.6.0 RC3 and shipped in every release since; unrelated to Homebrew support
+- Fixed: the "Preparing updates" progress window could stay on screen for the rest of the run, overlapping the pending-updates dialog and every dialog after it. It only happens when both `WorkflowStageUpdates` and `WorkflowBackgroundPatchClosedApps` are disabled, since the window closed itself before the dialog it belongs to had finished starting up. Present in the 3.7.x line; unrelated to Homebrew support
 
 ## Version 3.7.1
 ### 02-Sep-2026

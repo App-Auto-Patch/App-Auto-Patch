@@ -11107,8 +11107,15 @@ main() {
     # progress window over both steps with per-app status and a determinate progress bar.
     # stagingWindowOpened tracks whether it was opened, since countOfElementsArray can end up
     # empty afterward (all apps patched silently) even though the window still needs closing.
+    # Only open the window when one of the two workflows it is a progress indicator for will
+    # actually run. If neither WorkflowStageUpdatesOption nor WorkflowBackgroundPatchClosedAppsOption
+    # is TRUE, the two blocks below are both skipped and the window would be closed immediately
+    # after opening; the immediate "quit:" then races swiftDialog's own startup (it launches
+    # backgrounded via "&") and is written and the command file removed before swiftDialog has
+    # started reading it, so the window never quits and lingers on screen for the rest of the run.
     stagingWindowOpened="FALSE"
-    if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+    if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]] \
+       && { [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] || [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]]; }; then
         swiftDialogStagingWindow
         stagingWindowOpened="TRUE"
     fi
