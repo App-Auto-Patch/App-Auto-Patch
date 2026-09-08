@@ -15,12 +15,6 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.8.0
-- **Schedule Workflow Active** — Restrict discovery/dialogs/patching to weekday time windows (SUPER-compatible `DAY:hh:mm-hh:mm`). Outside a window, AAP only reschedules `NextAutoLaunch` to the next window start unless Silent Outside is enabled. Deferrals and monthly cadence relaunches are clamped into the schedule. Install-now / preview bypass; overdue hard deadlines bypass by default. (#166)
-	- Managed Preference Key: `<key>ScheduleWorkflowActive</key>` `<string>MON:17:00-23:59,...</string>`
-	- Managed Preference Key: `<key>ScheduleWorkflowActiveRespectHardDeadline</key>` `<true/>` | `<false/>` (default `false`)
-	- Managed Preference Key: `<key>ScheduleWorkflowActiveSilentOutside</key>` `<true/>` | `<false/>` (default `false`) — outside window: discovery + closed-apps-only silent patch; no dialogs; open apps wait for next window
-	- CLI: `--schedule-workflow-active=` / `--schedule-workflow-active-respect-hard-deadline` / `-off` / `--schedule-workflow-active-silent-outside` / `-off`
-- Fixed: ignored labels disregarded on discovery runs, and `IgnoredLabels="*"` no longer expands into ~1,200 local preference writes that could blank `AAPPatchingStartDate`. Ported from 3.7.0 (#254)
 - **Homebrew Support**: App Auto-Patch can now discover and upgrade outdated Homebrew casks and formulae in the same run as Installomator labels. Packages appear in the same patching dialog, honour the same deferral timers and hard deadlines, and are written to the same report. Disabled by default.
 	- `<key>HomebrewEnabled</key>` `<true/>` | `<false/>` - default `false`
 	- `<key>HomebrewCaskEnabled</key>` / `<key>HomebrewFormulaEnabled</key>` - default `true` for both

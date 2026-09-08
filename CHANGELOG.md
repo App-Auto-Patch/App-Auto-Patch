@@ -9,11 +9,6 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 **New Features**
 
-- **Schedule Workflow Active** — Restrict discovery, dialogs, and patching to weekday time windows (SUPER-compatible `DAY:hh:mm-hh:mm` format). Outside a window, AAP only reschedules `NextAutoLaunch` to the next window start — no discovery/dialogs/Installomator — unless Silent Outside is enabled. Deferral and monthly-cadence relaunches are clamped into the next allowed window. Install-now / preview-deferral-dialog bypass the schedule. Overdue hard deadlines bypass by default; set `ScheduleWorkflowActiveRespectHardDeadline` to `true` for strict “never outside hours” mode. (#166)
-	- Managed Preference Key: `<key>ScheduleWorkflowActive</key>` `<string>MON:17:00-23:59,TUE:17:00-23:59,...</string>` — empty/unset = always active
-	- Managed Preference Key: `<key>ScheduleWorkflowActiveRespectHardDeadline</key>` `<true/>` | `<false/>` — default: `false` (hard deadline bypasses the window)
-	- Managed Preference Key: `<key>ScheduleWorkflowActiveSilentOutside</key>` `<true/>` | `<false/>` — default: `false`. When `true`, outside a window AAP still runs discovery and silently patches **closed apps only** (no dialogs, even if InteractiveMode is 1/2). Open/blocked apps stay queued and wait for the next window.
-	- CLI: `--schedule-workflow-active=...` / `--schedule-workflow-active-respect-hard-deadline` / `-off` / `--schedule-workflow-active-silent-outside` / `-off`
 - **Homebrew Support** - Discover and upgrade outdated Homebrew casks and formulae alongside Installomator labels, in the same discovery run, the same user dialog, and the same deferral/deadline/reporting flow. Opt-in; disabled by default. Homebrew runs de-privileged as the owner of the Homebrew prefix. A root-owned prefix disables Homebrew entirely. A prefix owned by someone other than the console user - including when no one is logged in at all - still has its formulae managed as that owner; only casks are held back, since replacing a cask's application bundle is the part that can interact with a GUI session.
 	- Managed Preference Key: `<key>HomebrewEnabled</key>` `<true/>` | `<false/>` - default: `false`
 	- Managed Preference Key: `<key>HomebrewCaskEnabled</key>` `<true/>` | `<false/>` - default: `true`
