@@ -8229,11 +8229,17 @@ get_homebrew_binary() {
     # running brew as a non-owner makes Homebrew rewrite permissions across the whole prefix.
     #
     # The prefix owner need not be the console user for brew itself to work - `sudo -u <owner> -H
-    # brew upgrade <formula>` needs no GUI session at all. Only cask upgrades can touch a GUI
-    # session (replacing an application bundle while it may be showing on someone's screen), so
-    # when the owner differs from whoever is logged in, formulae still proceed and only casks are
-    # held back via brewCasksAllowed. The real "app is currently running" risk is handled
-    # separately by brew_cask_app_is_running, which checks system-wide regardless of session.
+    # brew upgrade <formula>` needs no GUI session at all. `brew upgrade --cask` is different: it
+    # uninstalls then reinstalls, and the cask's own `uninstall quit:`/`signal:`/`launchctl:`
+    # stanzas run as the brew user against THAT user's Aqua session and launchd domain. When the
+    # brew user has no GUI session, those stanzas cannot reach a copy of the app running in the
+    # console user's session - Homebrew logs a warning and replaces the bundle underneath it
+    # anyway. That loss of Homebrew's own teardown safety net is why, when the owner differs from
+    # whoever is logged in, formulae still proceed and only casks are held back via
+    # brewCasksAllowed. brew_cask_app_is_running only guards the silent background patching path
+    # (workflow_silent_patch_closed_apps); the interactive dialog-driven install has no running-
+    # app check of its own and relies entirely on Homebrew's quit stanza - which is exactly what
+    # does not work across sessions.
     brewBinary=""
     brewBrewUser=""
     brewCasksAllowed=""
@@ -8278,7 +8284,7 @@ get_homebrew_binary() {
     fi
     if [[ "${owner}" != "${currentUserAccountName}" ]]; then
         brewCasksAllowed="FALSE"
-        log_info "Homebrew prefix ${prefix} is owned by '${owner}' but the console user is '${currentUserAccountName:-none}'; formulae will be managed as '${owner}', casks will not (replacing a cask's app bundle can interact with a GUI session, and '${owner}' is not the logged-in user)."
+        log_warning "Homebrew prefix ${prefix} is owned by '${owner}' but the console user is '${currentUserAccountName:-none}'; formulae will be managed as '${owner}', casks will not (brew's own cask quit/signal/launchctl teardown runs in '${owner}'s session, which cannot reach a copy of the app running in the console user's session)."
     else
         brewCasksAllowed="TRUE"
     fi
@@ -8526,6 +8532,9 @@ homebrew_discovery() {
     fi
     if [[ "${homebrew_cask_enabled_option}" != "TRUE" ]] && [[ "${homebrew_formula_enabled_option}" != "TRUE" ]]; then
         log_info "Homebrew cask and formula management both disabled"
+        # Nothing is queued this run - purge any queue persisted by an earlier run's discovery so
+        # a later DiscoveryFrequency-skipped run has nothing stale left to restore.
+        homebrew_clear_discovered
         return 0
     fi
     if [[ -z "${currentUserAccountName}" ]] || [[ "${currentUserAccountName}" == "FALSE" ]]; then
@@ -8543,6 +8552,9 @@ homebrew_discovery() {
     # a pointless `brew update` + `brew outdated` round trip.
     if [[ "${homebrew_formula_enabled_option}" != "TRUE" ]] && [[ "${brewCasksAllowed}" != "TRUE" ]]; then
         log_info "Homebrew formula management disabled and casks are not allowed for prefix owner '${brewBrewUser}' (not the console user) - nothing to discover"
+        # Same reasoning as the "both disabled" early return above: purge any persisted queue so
+        # it is not restored stale on a later DiscoveryFrequency-skipped run.
+        homebrew_clear_discovered
         return 0
     fi
 
@@ -8594,10 +8606,29 @@ homebrew_restore_queue() {
     # main() already reads for Installomator labels.
     [[ "${homebrew_enabled_option}" != "TRUE" ]] && return 0
 
-    local brew_label pkg_name pkg_type display_suffix restored=0
+    # A DiscoveryFrequency-skipped run never calls homebrew_discovery, so get_homebrew_binary -
+    # the only place brewCasksAllowed is set - never ran in this process. Without this,
+    # brewCasksAllowed would still be its startup-empty value below, and every restored
+    # brewcask__* entry would be judged against that instead of the prefix owner's actual,
+    # current standing.
+    [[ -z "${brewCasksAllowed}" ]] && get_homebrew_binary
+
+    local brew_label pkg_name pkg_type display_suffix restored=0 dropped=0
     while IFS= read -r brew_label; do
         [[ -z "${brew_label}" ]] && continue
         if [[ "${brew_label}" == brewcask__* ]]; then
+            if [[ "${brewCasksAllowed}" != "TRUE" ]]; then
+                # Casks are not (or no longer) allowed for this prefix owner. Restoring the entry
+                # anyway would show it as pending in the dialog, have the user approve it, and
+                # only then fail in brew_install_package - which counts as an install error and
+                # skips remove_aap_report_item, so appsUpToDate() trips a false webhook failure
+                # alert on every skipped run until the next full discovery. Scrub it now instead
+                # so the queue self-heals in one run.
+                homebrew_remove_discovered "${brew_label}"
+                remove_aap_report_item "${brew_label}"
+                (( dropped++ ))
+                continue
+            fi
             pkg_name="${brew_label#brewcask__}"; pkg_type="cask";    display_suffix="Homebrew Cask"
         else
             pkg_name="${brew_label#brewformula__}"; pkg_type="formula"; display_suffix="Homebrew Formula"
@@ -8606,7 +8637,9 @@ homebrew_restore_queue() {
         brewIconPaths[$brew_label]=$(resolve_brew_icon_path "${pkg_type}" "${pkg_name}")
         labelsArray+="${brew_label} "
         (( restored++ ))
-    done < <(homebrew_read_discovered)
+    done <<< "$(homebrew_read_discovered)"
+
+    (( dropped > 0 )) && log_warning "Homebrew: dropped ${dropped} previously-queued cask(s) from the restored queue - casks are not allowed for the current prefix owner"
 
     # brewSupersedingLabels (the Installomator labels a prior discovery decided Homebrew should
     # replace) is only ever populated in-memory by homebrew_queue_package, so a skipped run starts
