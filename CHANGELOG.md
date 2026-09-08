@@ -23,6 +23,10 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 	- Casks installed from a `.pkg` that requires an administrator password cannot be upgraded unattended; the failure is logged and counted, and does not abort the run
 	- `--reset-labels` clears the discovered Homebrew queue alongside the other label lists
 
+**Fixes**
+
+- Fixed: the temporary wrapper script used when resolving a label's download URL was created at a fixed, predictable path in world-writable `/private/tmp` instead of a randomised one, because a trailing `.sh` in the `mktemp` template stops BSD `mktemp` from substituting the placeholder. That path was written by a root LaunchDaemon, and a crash that left the file behind made every later staging attempt fail until it was removed by hand. Pre-existing; unrelated to Homebrew support
+
 ## Version 3.7.1
 ### 02-Sep-2026
 

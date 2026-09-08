@@ -8494,7 +8494,7 @@ homebrew_queue_package() {
         display_suffix="Homebrew Formula"
     fi
 
-    log_notice "Homebrew: queuing ${pkg_type} ${pkg_name} (${installed_ver} → ${current_ver})"
+    log_notice "Homebrew: queuing ${pkg_type} ${pkg_name} (${installed_ver} -> ${current_ver})"
     brewDisplayNames[$brew_label]="${pkg_name} (${display_suffix})"
     brewIconPaths[$brew_label]=$(resolve_brew_icon_path "${pkg_type}" "${pkg_name}")
     AAPVersionByLabel[$brew_label]="${current_ver}"
@@ -9329,7 +9329,7 @@ workflow_do_Installations() {
                 let errorCount++
             else
                 # Homebrew never touches DIALOG_CMD_FILE the way Installomator does, so nothing
-                # else ever flips this listitem out of "wait/Checking …" on success - it would
+                # else ever flips this listitem out of "wait/Checking ..." on success - it would
                 # spin for the rest of the dialog even though the upgrade succeeded.
                 [ ${InteractiveModeOption} -ge 1 ] && swiftDialogUpdate "listitem: index: $i, status: success"
                 remove_aap_report_item "${label}"

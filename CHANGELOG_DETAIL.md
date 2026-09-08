@@ -15,7 +15,12 @@
 	- Fixed in the port: the superseded-label removal used `labelsArray=(${labelsArray:#${_sup}})`, but `labelsArray` is a scalar string at that point in `main()`, and `${scalar:#pattern}` is a whole-string anchored match rather than the per-element filter `${array:#pattern}` performs - so the block removed nothing while still logging that it had, and Installomator and Homebrew would both have patched the same application in the same run
 	- New `resolve_label_display_name` replaces seven identical copies of the label-fragment `name=` lookup, and `resolve_app_icon_path` gained a Homebrew branch, so the display/icon call sites in `swiftDialogPatchingWindow`, `workflow_silent_patch_closed_apps`, `workflow_do_Installations` and `main()` needed no per-site changes
 	- Staging is skipped for Homebrew packages; silent background patching upgrades them, except a cask whose application is currently running, which is left for the interactive dialog
+	- The list of Installomator labels that Homebrew superseded is persisted in a second array key, `HomebrewSupersededLabels`, written and read with `PlistBuddy` alongside `HomebrewDiscoveredPackages`. Without it the list existed only in memory during discovery, so on a `DiscoveryFrequency`-skipped run it was empty while `main()` still re-added `RequiredLabels` / `ConvertedLabels` to the queue from the managed configuration - a restore path independent of `DiscoveredLabels`. The superseded application was then patched by Installomator and Homebrew in the same run. Both keys are cleared by `--reset-labels`
 	- iMazing + Jamf manifests, All-Options examples and the Intune manifest updated
+
+**Fixes**
+
+- Fixed: `_resolve_label_staging_info` created its temporary wrapper script with `mktemp /private/tmp/aap_lbl_XXXXXX.sh`. BSD `mktemp` only substitutes `XXXXXX` when it is the final component of the template, so the trailing `.sh` left the placeholder literal and every invocation used the same fixed, world-guessable path in world-writable `/private/tmp`, written by a root LaunchDaemon. It also self-collided: any crash that skipped the `rm -f` left the file behind and made every later call fail with `mkstemp failed: File exists` until it was deleted by hand. The suffix has been removed so the path is randomised. Pre-existing since the staging workflow was introduced; not related to Homebrew support
 
 ## Version 3.7.1
 ### 02-Sep-2026 (1) - Build 3.7.1.2609021118
