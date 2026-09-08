@@ -20,7 +20,15 @@
 
 **Fixes**
 
-- Fixed: `_resolve_label_staging_info` created its temporary wrapper script with `mktemp /private/tmp/aap_lbl_XXXXXX.sh`. BSD `mktemp` only substitutes `XXXXXX` when it is the final component of the template, so the trailing `.sh` left the placeholder literal and every invocation used the same fixed, world-guessable path in world-writable `/private/tmp`, written by a root LaunchDaemon. It also self-collided: any crash that skipped the `rm -f` left the file behind and made every later call fail with `mkstemp failed: File exists` until it was deleted by hand. The suffix has been removed so the path is randomised. Pre-existing since the staging workflow was introduced; not related to Homebrew support
+- Fixed: `_resolve_label_staging_info` created its temporary wrapper script with `mktemp /private/tmp/aap_lbl_XXXXXX.sh`. BSD `mktemp` only substitutes `XXXXXX` when it is the final component of the template, so the trailing `.sh` left the placeholder literal and every invocation used the same fixed path:
+	```
+	$ mktemp /private/tmp/aap_lbl_XXXXXX.sh
+	/private/tmp/aap_lbl_XXXXXX.sh          <- placeholder not substituted
+	$ mktemp /private/tmp/aap_lbl_XXXXXX.sh   # second call, file still present
+	mktemp: mkstemp failed on /private/tmp/aap_lbl_XXXXXX.sh: File exists
+	```
+	- Two consequences. First, a predictable, world-guessable path in world-writable `/private/tmp`, written by a root LaunchDaemon - the same class of exposure the script already hardens `workflow_stage_updates` against. Severity is bounded: `mktemp` uses `O_EXCL` and the resulting file is root-owned `0600` in a sticky directory, so an attacker cannot substitute its contents after creation. The realistic exposure is a denial of the staging feature by squatting the fixed name. Second, self-collision: any crash or interrupt that skips the `rm -f` leaves the file behind, and every later call then fails until someone deletes it by hand, surfacing as staging silently declining to resolve any label
+	- Provenance: introduced by `ee69c56` (3.6.0 RC3, 08-Jul-2026) and shipped in every release since, so this is a live defect in 3.6.x and 3.7.x, not something the 3.8.0 line introduced. It is unrelated to Homebrew support and was found while reviewing the identical defect in the new `homebrew_parse_outdated_json`, which was fixed earlier on this branch. Fix is the same: drop the suffix so the placeholder is the final component. The `.sh` extension was never load-bearing, since the file is executed as `zsh --no-rcs "$tmpScript"` rather than by path
 
 ## Version 3.7.1
 ### 02-Sep-2026 (1) - Build 3.7.1.2609021118

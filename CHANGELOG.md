@@ -30,7 +30,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 **Fixes**
 
-- Fixed: the temporary wrapper script used when resolving a label's download URL was created at a fixed, predictable path in world-writable `/private/tmp` instead of a randomised one, because a trailing `.sh` in the `mktemp` template stops BSD `mktemp` from substituting the placeholder. That path was written by a root LaunchDaemon, and a crash that left the file behind made every later staging attempt fail until it was removed by hand. Pre-existing; unrelated to Homebrew support
+- Fixed: the temporary wrapper script used when resolving a label's download URL was created at a fixed, predictable path in world-writable `/private/tmp` instead of a randomised one, because a trailing `.sh` in the `mktemp` template stops BSD `mktemp` from substituting the placeholder. That path was written by a root LaunchDaemon, and a crash that left the file behind made every later staging attempt fail until it was removed by hand. Present since 3.6.0 RC3 and shipped in every release since; unrelated to Homebrew support
 
 ## Version 3.7.1
 ### 02-Sep-2026
