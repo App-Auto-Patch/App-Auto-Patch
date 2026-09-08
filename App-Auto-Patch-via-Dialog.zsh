@@ -8171,6 +8171,14 @@ function queueLabel() {
 # Every Homebrew function lives between the BEGIN/END markers below so the block can be
 # extracted and exercised in isolation, without running main(). Do not move functions out of
 # this block, and do not change the marker lines.
+#
+# This convention is load-bearing for a test harness that lives outside this repository: the
+# harness extracts everything between "# ==== BEGIN HOMEBREW ====" and "# ==== END HOMEBREW ===="
+# with an exact-anchored `sed` match on those two literal lines. Adding trailing whitespace (or
+# any other character) to either marker line breaks that anchor silently — the `sed` match simply
+# fails to find the line, so the extract comes back empty and the external test suite starts
+# testing nothing without erroring. Do not rename, reformat, or move the markers, and put every
+# new Homebrew function inside this block, not just the ones this comment happens to describe.
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # ==== BEGIN HOMEBREW ====
 
@@ -8270,15 +8278,20 @@ get_homebrew_binary() {
 
 brew_as_user() {
     # Runs brew de-privileged with an explicit, minimal environment. NONINTERACTIVE stops brew
-    # from ever prompting (there is no TTY behind a LaunchDaemon), and an explicit HOME keeps
-    # brew from writing caches into root's home.
-    local brew_home
-    brew_home=$(/usr/bin/dscl . -read "/Users/${brewBrewUser}" NFSHomeDirectory 2> /dev/null | awk '{print $2}')
+    # from ever prompting (there is no TTY behind a LaunchDaemon). `sudo -H` already sets HOME
+    # correctly from the directory service (and handles a home directory containing a space,
+    # e.g. mobile/AD accounts, which a `dscl ... | awk '{print $2}'` lookup would truncate at the
+    # first space), so HOME is deliberately left for sudo to set rather than overridden here.
+    # HOMEBREW_NO_AUTO_UPDATE=1 is hardcoded (not just prefixed on the calling command) because
+    # sudo's default env_reset strips everything outside its whitelist before this env ever runs
+    # — a caller-side prefix assignment never survives the sudo call. Discovery's own `brew
+    # update` already refreshes brew's index, so suppressing auto-update here unconditionally is
+    # correct even on a run where that `brew update` failed.
     /usr/bin/sudo -u "${brewBrewUser}" -H \
         /usr/bin/env \
-            HOME="${brew_home:-/Users/${brewBrewUser}}" \
             PATH="${brewBinary:h}:/usr/bin:/bin:/usr/sbin:/sbin" \
             NONINTERACTIVE=1 \
+            HOMEBREW_NO_AUTO_UPDATE=1 \
         "${brewBinary}" "$@"
 }
 
@@ -8439,8 +8452,13 @@ homebrew_queue_package() {
         return 1
     fi
 
+    # Union labelsArray (this run's discovery) with requiredLabelsArray and convertedLabelsArray,
+    # both populated by manage_parameter_options() long before discovery runs. Without this, a
+    # RequiredLabels/ConvertedLabels entry that discovery itself did not queue is invisible to
+    # conflict detection, and Installomator + Homebrew both install the same package (or, under
+    # HomebrewPriority=HOMEBREW, the required label is never superseded at all).
     local -a installomator_arr
-    installomator_arr=(${=labelsArray})
+    installomator_arr=(${=labelsArray} ${=requiredLabels} ${requiredLabelsArray[@]} ${convertedLabelsArray[@]})
     local in_installomator="FALSE"
     (( ${installomator_arr[(Ie)${pkg_name}]} )) && in_installomator="TRUE"
 
@@ -8586,12 +8604,13 @@ brew_install_package() {
     # (as opposed to inside each branch) would silently discard brew's real exit code.
     if [[ "${is_cask}" == "TRUE" ]]; then
         log_install "Homebrew upgrading ${package_name} (cask)"
-        # HOMEBREW_NO_AUTO_UPDATE: discovery already ran `brew update`.
-        HOMEBREW_NO_AUTO_UPDATE=1 brew_as_user upgrade --cask "${package_name}" 2>&1 | tee -a "${appAutoPatchLog}"
+        # HOMEBREW_NO_AUTO_UPDATE is set inside brew_as_user's own env list — a prefix assignment
+        # here would never survive sudo's env_reset, so it is not repeated on this call.
+        brew_as_user upgrade --cask "${package_name}" 2>&1 | tee -a "${appAutoPatchLog}"
         brew_exit=${pipestatus[1]}
     else
         log_install "Homebrew upgrading ${package_name} (formula)"
-        HOMEBREW_NO_AUTO_UPDATE=1 brew_as_user upgrade "${package_name}" 2>&1 | tee -a "${appAutoPatchLog}"
+        brew_as_user upgrade "${package_name}" 2>&1 | tee -a "${appAutoPatchLog}"
         brew_exit=${pipestatus[1]}
     fi
     return ${brew_exit}
@@ -8609,8 +8628,49 @@ brew_cask_app_is_running() {
     [[ "${icon}" == /*.app ]] || return 1
     [[ -d "${icon}" ]] || return 1
 
-    local app_process="${icon:t:r}"
-    /usr/bin/pgrep -x "${app_process}" > /dev/null 2>&1
+    # ${icon:t:r} is the bundle basename, which equals the running process name only when
+    # CFBundleExecutable happens to match the bundle name — false for many Electron/Java casks
+    # (e.g. "Visual Studio Code.app" runs as "Code" or "Electron"). Read the real executable name
+    # from Info.plist first, and fall back to the basename if that lookup fails.
+    local app_process
+    app_process=$(/usr/bin/defaults read "${icon}/Contents/Info.plist" CFBundleExecutable 2>/dev/null)
+    [[ -z "${app_process}" ]] && app_process="${icon:t:r}"
+
+    /usr/bin/pgrep -x "${app_process}" > /dev/null 2>&1 && return 0
+    /usr/bin/pgrep -f "${icon}/Contents/MacOS/" > /dev/null 2>&1
+}
+
+homebrew_drop_superseded_labels() {
+    # Removes every Installomator label that homebrew_queue_package recorded in
+    # brewSupersedingLabels (HomebrewPriority=HOMEBREW, package present under both managers) from
+    # the global $labelsArray, and also scrubs it from the persisted report and DiscoveredLabels.
+    #
+    # That second part matters beyond tidiness: brewSupersedingLabels is populated only during
+    # discovery (homebrew_queue_package) and is never itself persisted. On a DiscoveryFrequency-
+    # skipped run it starts empty, so this function's own $labelsArray filter would have nothing
+    # to remove — but if the superseded label is still sitting in DiscoveredLabels from a prior
+    # run, main() restores it right back into labelsArray via labelsFromConfig, and it installs
+    # a second time alongside its Homebrew replacement. Removing it from DiscoveredLabels here,
+    # at the moment it is superseded, is what keeps a skipped run from ever seeing it again. A
+    # full discovery re-adds it if the admin flips HomebrewPriority back to INSTALLOMATOR.
+    #
+    # Must run after both the ignoredLabelsArray subtraction and the ignore-all rebuild in the
+    # caller, since that rebuild would otherwise reintroduce a superseded label.
+    [[ -n "${brewSupersedingLabels}" ]] || return 0
+
+    local -a _labelsArr _superseded_arr
+    local _sup
+    _labelsArr=(${(s/ /)labelsArray})
+    _superseded_arr=(${=brewSupersedingLabels})
+    for _sup in "${_superseded_arr[@]}"; do
+        if (( ${_labelsArr[(Ie)${_sup}]} )); then
+            _labelsArr=(${_labelsArr:#${_sup}})
+            log_notice "Homebrew supersedes Installomator label: ${_sup}"
+            remove_aap_report_item "${_sup}"
+            remove_discovered_label "${_sup}"
+        fi
+    done
+    labelsArray="${_labelsArr[*]}"
 }
 
 # ==== END HOMEBREW ====
@@ -9233,6 +9293,10 @@ workflow_do_Installations() {
                 swiftDialogUpdate "listitem: index: $i, status: fail"
                 let errorCount++
             else
+                # Homebrew never touches DIALOG_CMD_FILE the way Installomator does, so nothing
+                # else ever flips this listitem out of "wait/Checking …" on success — it would
+                # spin for the rest of the dialog even though the upgrade succeeded.
+                [ ${InteractiveModeOption} -ge 1 ] && swiftDialogUpdate "listitem: index: $i, status: success"
                 remove_aap_report_item "${label}"
                 homebrew_remove_discovered "${label}"
             fi
@@ -10726,20 +10790,9 @@ main() {
 
     # Drop Installomator labels that Homebrew won during priority/conflict resolution. This must
     # run after both the ignoredLabelsArray subtraction and the ignore-all rebuild above, since
-    # that rebuild would otherwise reintroduce a superseded label.
-    if [[ -n "${brewSupersedingLabels}" ]]; then
-        local -a _labelsArr _superseded_arr
-        local _sup
-        _labelsArr=(${(s/ /)labelsArray})
-        _superseded_arr=(${=brewSupersedingLabels})
-        for _sup in "${_superseded_arr[@]}"; do
-            if (( ${_labelsArr[(Ie)${_sup}]} )); then
-                _labelsArr=(${_labelsArr:#${_sup}})
-                log_notice "Homebrew supersedes Installomator label: ${_sup}"
-            fi
-        done
-        labelsArray="${_labelsArr[*]}"
-    fi
+    # that rebuild would otherwise reintroduce a superseded label. See the function definition
+    # (Homebrew marker block) for why it also scrubs DiscoveredLabels, not just $labelsArray.
+    homebrew_drop_superseded_labels
 
     appNamesArray=()
     # Get App Names for each label in labelsArray
