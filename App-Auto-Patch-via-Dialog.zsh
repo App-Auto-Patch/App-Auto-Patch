@@ -577,6 +577,7 @@ set_defaults() {
     brewBinary=""
     brewBrewUser=""
     brewSupersedingLabels=""
+    brewCasksAllowed=""
 
     # InteractiveMode 1 or 2 only (not 0): When TRUE (default), apps that are NOT currently open
     # are silently patched in the background before the user dialog is shown. Only apps with
@@ -8220,13 +8221,22 @@ homebrew_parse_outdated_json() {
 
 get_homebrew_binary() {
     # Locates a usable Homebrew installation and decides which account brew runs as.
-    # Sets ${brewBinary} and ${brewBrewUser} on success.
+    # Sets ${brewBinary} and ${brewBrewUser} on success, and ${brewCasksAllowed} on every path
+    # that reaches the final `return 0`.
     #
     # Homebrew refuses to run as root, so AAP (a root LaunchDaemon) must drop privileges. The
     # account it drops to is the OWNER OF THE PREFIX, not whoever happens to be at the console:
     # running brew as a non-owner makes Homebrew rewrite permissions across the whole prefix.
+    #
+    # The prefix owner need not be the console user for brew itself to work - `sudo -u <owner> -H
+    # brew upgrade <formula>` needs no GUI session at all. Only cask upgrades can touch a GUI
+    # session (replacing an application bundle while it may be showing on someone's screen), so
+    # when the owner differs from whoever is logged in, formulae still proceed and only casks are
+    # held back via brewCasksAllowed. The real "app is currently running" risk is handled
+    # separately by brew_cask_app_is_running, which checks system-wide regardless of session.
     brewBinary=""
     brewBrewUser=""
+    brewCasksAllowed=""
 
     local candidate=""
     if [[ -n "${homebrew_binary_path_option}" ]]; then
@@ -8267,13 +8277,15 @@ get_homebrew_binary() {
         return 1
     fi
     if [[ "${owner}" != "${currentUserAccountName}" ]]; then
-        log_warning "Homebrew prefix ${prefix} is owned by '${owner}' but the console user is '${currentUserAccountName:-none}'; skipping Homebrew."
-        return 1
+        brewCasksAllowed="FALSE"
+        log_info "Homebrew prefix ${prefix} is owned by '${owner}' but the console user is '${currentUserAccountName:-none}'; formulae will be managed as '${owner}', casks will not (replacing a cask's app bundle can interact with a GUI session, and '${owner}' is not the logged-in user)."
+    else
+        brewCasksAllowed="TRUE"
     fi
 
     brewBinary="${candidate}"
     brewBrewUser="${owner}"
-    log_verbose "Homebrew: using ${brewBinary} as user ${brewBrewUser}"
+    log_verbose "Homebrew: using ${brewBinary} as user ${brewBrewUser} (casks allowed: ${brewCasksAllowed})"
     return 0
 }
 
@@ -8525,6 +8537,15 @@ homebrew_discovery() {
         return 0
     fi
 
+    # Formulae disabled by config AND casks blocked by prefix ownership (brewCasksAllowed set by
+    # get_homebrew_binary above) leaves nothing this run could possibly queue - same reasoning as
+    # the "both disabled" early return above, just discovered one step later. Returning here skips
+    # a pointless `brew update` + `brew outdated` round trip.
+    if [[ "${homebrew_formula_enabled_option}" != "TRUE" ]] && [[ "${brewCasksAllowed}" != "TRUE" ]]; then
+        log_info "Homebrew formula management disabled and casks are not allowed for prefix owner '${brewBrewUser}' (not the console user) - nothing to discover"
+        return 0
+    fi
+
     log_notice "**** Homebrew Discovery ****"
 
     # `brew outdated` does NOT trigger Homebrew's auto-update, so without this it reports against
@@ -8547,11 +8568,13 @@ homebrew_discovery() {
     local queued_casks=0 queued_formulae=0
     local pkg_name installed_ver current_ver
 
-    if [[ "${homebrew_cask_enabled_option}" == "TRUE" ]]; then
+    if [[ "${homebrew_cask_enabled_option}" == "TRUE" ]] && [[ "${brewCasksAllowed}" == "TRUE" ]]; then
         while IFS='|' read -r pkg_name installed_ver current_ver; do
             [[ -z "${pkg_name}" ]] && continue
             homebrew_queue_package cask "${pkg_name}" "${installed_ver}" "${current_ver}" && (( queued_casks++ ))
         done <<< "$(homebrew_parse_outdated_json "${brew_outdated_json}" casks)"
+    elif [[ "${homebrew_cask_enabled_option}" == "TRUE" ]]; then
+        log_info "Homebrew: skipping cask discovery - prefix owner '${brewBrewUser}' is not the console user"
     fi
 
     if [[ "${homebrew_formula_enabled_option}" == "TRUE" ]]; then
@@ -8614,12 +8637,25 @@ brew_install_package() {
         package_name="${brew_label#brewformula__}"
     fi
 
-    # A DiscoveryFrequency-skipped run never called get_homebrew_binary during discovery.
+    # A DiscoveryFrequency-skipped run never called get_homebrew_binary during discovery. Whenever
+    # brewBinary is non-empty, get_homebrew_binary has already run (either here or during this
+    # run's own discovery) and set brewCasksAllowed alongside it - so the check just below always
+    # sees a value that matches the current prefix owner, never a stale one from an earlier run.
     if [[ -z "${brewBinary}" ]]; then
         if ! get_homebrew_binary; then
             log_error "Homebrew binary unavailable; cannot upgrade ${package_name}"
             return 1
         fi
+    fi
+
+    # Defensive: homebrew_discovery already withholds casks when the prefix owner is not the
+    # console user, but homebrew_restore_queue repopulates the queue from the persisted plist on a
+    # DiscoveryFrequency-skipped run - a cask queued while the owner WAS at the console could
+    # otherwise still reach here on a later run where they are not. Refuse it rather than upgrade
+    # an application bundle that may be interacting with someone else's GUI session.
+    if [[ "${is_cask}" == "TRUE" ]] && [[ "${brewCasksAllowed}" != "TRUE" ]]; then
+        log_error "Homebrew cask ${package_name} withheld: prefix owner '${brewBrewUser}' is not the console user; casks are not managed in this configuration."
+        return 1
     fi
 
     # ${pipestatus[1]} must be captured immediately after the pipe, still inside this branch:
