@@ -8195,6 +8195,21 @@ homebrew_parse_outdated_json() {
     # what ships with macOS - notably NOT /usr/bin/python3, which is an Xcode CLT stub on a
     # clean managed Mac and would trigger an install prompt from a root LaunchDaemon.
     #
+    # Real `brew outdated --json=v2` output carries "pinned_version": null on every single
+    # entry (pinned_version is only ever non-null for a pinned package). Property lists have
+    # no null type, so plutil rejects a JSON `null` value anywhere in the document - not just
+    # that one field, the WHOLE document, taking every formula and cask down with it. This was
+    # invisible in hand-written test fixtures because none of them included a null.
+    #
+    # The sed below neutralises a JSON null before handing the document to plutil. A JSON
+    # `null` value only ever appears immediately after a colon (as a key's value), and JSON has
+    # no other bareword that begins with "null" - a string value in that position is always
+    # quoted, so ": null" cannot be a false-positive match inside a string. This is deliberately
+    # narrow, not a general JSON rewriter: the fields this function actually reads - name,
+    # installed_versions[0], current_version - are never null in brew's output, so blanking out
+    # null wherever it appears (pinned_version today, potentially other fields brew adds later)
+    # cannot corrupt a value this function depends on.
+    #
     # Usage: homebrew_parse_outdated_json "<json>" casks|formulae
     # Output: one "name|installed_version|current_version" line per entry.
     local json="$1"
@@ -8202,7 +8217,8 @@ homebrew_parse_outdated_json() {
     local tmp
     tmp=$(mktemp /private/tmp/aap_brew_XXXXXX) || return 1
 
-    if ! printf '%s' "${json}" | /usr/bin/plutil -convert xml1 -o "${tmp}" - 2> /dev/null; then
+    if ! printf '%s' "${json}" | /usr/bin/sed -E 's/:([[:space:]]*)null/:\1""/g' \
+            | /usr/bin/plutil -convert xml1 -o "${tmp}" - 2> /dev/null; then
         rm -f "${tmp}"
         return 1
     fi
@@ -8590,20 +8606,40 @@ homebrew_discovery() {
     local queued_casks=0 queued_formulae=0
     local pkg_name installed_ver current_ver
 
+    # Each parse is captured into a variable BEFORE the while-loop consumes it, and its exit
+    # status is checked explicitly. Piping straight into `done <<< "$(...)"` (the previous
+    # shape of this code) discards the command substitution's exit status entirely - a total
+    # plutil/parse failure and "brew genuinely reports nothing outdated" both then produce an
+    # empty loop body and look identical: "queued 0 cask(s), 0 formula(e)" logged at NOTICE as
+    # if it were a healthy no-op. That is exactly how the null-plutil defect above went
+    # undetected on a live run with 72 outdated formulae and 5 outdated casks: discovery never
+    # logged an error, it just silently queued nothing. Treat a parse failure as fatal to this
+    # run's discovery instead - log it at ERROR, name which package type failed, and abort
+    # rather than falling through to the "complete" log line below.
+    local casks_parsed formulae_parsed
+
     if [[ "${homebrew_cask_enabled_option}" == "TRUE" ]] && [[ "${brewCasksAllowed}" == "TRUE" ]]; then
+        if ! casks_parsed=$(homebrew_parse_outdated_json "${brew_outdated_json}" casks); then
+            log_error "Homebrew: failed to parse 'brew outdated --json=v2' output for casks - aborting Homebrew discovery (this is a parse failure, not brew reporting zero outdated casks)"
+            return 1
+        fi
         while IFS='|' read -r pkg_name installed_ver current_ver; do
             [[ -z "${pkg_name}" ]] && continue
             homebrew_queue_package cask "${pkg_name}" "${installed_ver}" "${current_ver}" && (( queued_casks++ ))
-        done <<< "$(homebrew_parse_outdated_json "${brew_outdated_json}" casks)"
+        done <<< "${casks_parsed}"
     elif [[ "${homebrew_cask_enabled_option}" == "TRUE" ]]; then
         log_info "Homebrew: skipping cask discovery - prefix owner '${brewBrewUser}' is not the console user"
     fi
 
     if [[ "${homebrew_formula_enabled_option}" == "TRUE" ]]; then
+        if ! formulae_parsed=$(homebrew_parse_outdated_json "${brew_outdated_json}" formulae); then
+            log_error "Homebrew: failed to parse 'brew outdated --json=v2' output for formulae - aborting Homebrew discovery (this is a parse failure, not brew reporting zero outdated formulae)"
+            return 1
+        fi
         while IFS='|' read -r pkg_name installed_ver current_ver; do
             [[ -z "${pkg_name}" ]] && continue
             homebrew_queue_package formula "${pkg_name}" "${installed_ver}" "${current_ver}" && (( queued_formulae++ ))
-        done <<< "$(homebrew_parse_outdated_json "${brew_outdated_json}" formulae)"
+        done <<< "${formulae_parsed}"
     fi
 
     log_notice "Homebrew discovery complete - queued ${queued_casks} cask(s), ${queued_formulae} formula(e)"
