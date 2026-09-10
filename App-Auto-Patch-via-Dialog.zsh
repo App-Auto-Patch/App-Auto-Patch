@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.7.1"
-scriptDate="2026/09/02"
-scriptBuild="3.7.1.2609021118"
+scriptVersion="3.8.0"
+scriptDate="2026/09/08"
+scriptBuild="3.8.0.2609081200"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -52,6 +52,16 @@ echo "
     [--patch-week-start-day=number]
     [--days-until-reset=number]
     [--zoom-call-active-check-enabled] [--zoom-call-active-check-disabled]
+
+    Homebrew Options:
+    [--homebrew-enabled] [--homebrew-disabled]
+    [--homebrew-cask-enabled] [--homebrew-cask-disabled]
+    [--homebrew-formula-enabled] [--homebrew-formula-disabled]
+    [--homebrew-priority=INSTALLOMATOR|HOMEBREW]
+    [--homebrew-preferred-packages="pkg1 pkg2"]
+    [--homebrew-binary-path=/path/to/brew]
+    [--homebrew-ignored-casks="cask1 cask2"]
+    [--homebrew-ignored-formulae="formula1 formula2"]
 
     App Auto-Patch Self Update Options
     [--force-self-update-check]
@@ -205,6 +215,14 @@ echo "
     <key>DiscoveryFrequency</key> <integer>hours</integer>
     <key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>
     <key>ZoomCallActiveCheck</key> <true/> | <false/>
+    <key>HomebrewEnabled</key> <true/> | <false/>
+    <key>HomebrewCaskEnabled</key> <true/> | <false/>
+    <key>HomebrewFormulaEnabled</key> <true/> | <false/>
+    <key>HomebrewPriority</key> <string>INSTALLOMATOR | HOMEBREW</string>
+    <key>HomebrewPreferredPackages</key> <string>token1 token2 ...</string>
+    <key>HomebrewBinaryPath</key> <string>/opt/homebrew/bin/brew</string>
+    <key>HomebrewIgnoredCasks</key> <string>cask1 cask2 ...</string>
+    <key>HomebrewIgnoredFormulae</key> <string>formula1 formula2 ...</string>
     <key>IgnoreDNDApps</key> <string>App1,App2,App3</string>
 
     ** Detailed documentation can be found at: https://github.com/App-Auto-Patch/App-Auto-Patch/wiki
@@ -552,6 +570,14 @@ set_defaults() {
     # TRUE (default): Allows Installomator Debug Fallback to run
     # FALSE: Does not allow Installomator Debug Fallback to run and will not add the app to the queue for updates
     VersionComparisonInstallomatorFallback="TRUE"
+
+    # Homebrew runtime state. The eight Homebrew *preference* options are deliberately NOT
+    # defaulted here - they must stay empty until manage_parameter_options so the
+    # managed > CLI > local precedence chain in get_preferences works (see zoom_call_active_check).
+    brewBinary=""
+    brewBrewUser=""
+    brewSupersedingLabels=""
+    brewCasksAllowed=""
 
     # InteractiveMode 1 or 2 only (not 0): When TRUE (default), apps that are NOT currently open
     # are silently patched in the background before the user dialog is shown. Only apps with
@@ -1275,6 +1301,39 @@ get_options() {
             --zoom-call-active-check-disabled)
                 zoom_call_active_check_option="FALSE"
             ;;
+            --homebrew-enabled)
+                homebrew_enabled_option="TRUE"
+            ;;
+            --homebrew-disabled)
+                homebrew_enabled_option="FALSE"
+            ;;
+            --homebrew-cask-enabled)
+                homebrew_cask_enabled_option="TRUE"
+            ;;
+            --homebrew-cask-disabled)
+                homebrew_cask_enabled_option="FALSE"
+            ;;
+            --homebrew-formula-enabled)
+                homebrew_formula_enabled_option="TRUE"
+            ;;
+            --homebrew-formula-disabled)
+                homebrew_formula_enabled_option="FALSE"
+            ;;
+            --homebrew-priority=*)
+                homebrew_priority_option="${1#*=}"
+            ;;
+            --homebrew-preferred-packages=*)
+                homebrew_preferred_packages_option="${1#*=}"
+            ;;
+            --homebrew-binary-path=*)
+                homebrew_binary_path_option="${1#*=}"
+            ;;
+            --homebrew-ignored-casks=*)
+                homebrew_ignored_casks_option="${1#*=}"
+            ;;
+            --homebrew-ignored-formulae=*)
+                homebrew_ignored_formulae_option="${1#*=}"
+            ;;
             *)
                 unrecognized_options_array+=("$1")
             ;;  
@@ -1387,6 +1446,8 @@ get_preferences() {
         defaults delete "${appAutoPatchLocalPLIST}" OptionalLabels 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" ExcludedBackgroundLabels 2> /dev/null
         defaults delete "${appAutoPatchLocalPLIST}" DiscoveredLabels 2> /dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" HomebrewDiscoveredPackages 2> /dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" HomebrewSupersededLabels 2> /dev/null
         fi
 
         if [[ "${deferral_timer_reset_all_option}" == "TRUE" ]]; then
@@ -1550,6 +1611,22 @@ get_preferences() {
         version_comparison_installomator_fallback_managed=$(defaults read "${appAutoPatchManagedPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
         local zoom_call_active_check_managed
         zoom_call_active_check_managed=$(defaults read "${appAutoPatchManagedPLIST}" ZoomCallActiveCheck 2> /dev/null)
+        local homebrew_enabled_managed
+        homebrew_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewEnabled 2> /dev/null)
+        local homebrew_cask_enabled_managed
+        homebrew_cask_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewCaskEnabled 2> /dev/null)
+        local homebrew_formula_enabled_managed
+        homebrew_formula_enabled_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewFormulaEnabled 2> /dev/null)
+        local homebrew_priority_managed
+        homebrew_priority_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewPriority 2> /dev/null)
+        local homebrew_preferred_packages_managed
+        homebrew_preferred_packages_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewPreferredPackages 2> /dev/null)
+        local homebrew_binary_path_managed
+        homebrew_binary_path_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewBinaryPath 2> /dev/null)
+        local homebrew_ignored_casks_managed
+        homebrew_ignored_casks_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewIgnoredCasks 2> /dev/null)
+        local homebrew_ignored_formulae_managed
+        homebrew_ignored_formulae_managed=$(defaults read "${appAutoPatchManagedPLIST}" HomebrewIgnoredFormulae 2> /dev/null)
         local ignore_dnd_apps_managed
         ignore_dnd_apps_managed=$(defaults read "${appAutoPatchManagedPLIST}" IgnoreDNDApps 2> /dev/null)
         local workflow_background_patch_closed_apps_managed
@@ -1717,6 +1794,22 @@ get_preferences() {
         version_comparison_installomator_fallback_local=$(defaults read "${appAutoPatchLocalPLIST}" VersionComparisonInstallomatorFallback 2> /dev/null)
         local zoom_call_active_check_local
         zoom_call_active_check_local=$(defaults read "${appAutoPatchLocalPLIST}" ZoomCallActiveCheck 2> /dev/null)
+        local homebrew_enabled_local
+        homebrew_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewEnabled 2> /dev/null)
+        local homebrew_cask_enabled_local
+        homebrew_cask_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewCaskEnabled 2> /dev/null)
+        local homebrew_formula_enabled_local
+        homebrew_formula_enabled_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewFormulaEnabled 2> /dev/null)
+        local homebrew_priority_local
+        homebrew_priority_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewPriority 2> /dev/null)
+        local homebrew_preferred_packages_local
+        homebrew_preferred_packages_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewPreferredPackages 2> /dev/null)
+        local homebrew_binary_path_local
+        homebrew_binary_path_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewBinaryPath 2> /dev/null)
+        local homebrew_ignored_casks_local
+        homebrew_ignored_casks_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewIgnoredCasks 2> /dev/null)
+        local homebrew_ignored_formulae_local
+        homebrew_ignored_formulae_local=$(defaults read "${appAutoPatchLocalPLIST}" HomebrewIgnoredFormulae 2> /dev/null)
         local ignore_dnd_apps_local
         ignore_dnd_apps_local=$(defaults read "${appAutoPatchLocalPLIST}" IgnoreDNDApps 2> /dev/null)
         local workflow_background_patch_closed_apps_local
@@ -1798,6 +1891,23 @@ get_preferences() {
 
     [[ -n "${zoom_call_active_check_managed}" ]] && zoom_call_active_check_option="${zoom_call_active_check_managed}"
     { [[ -z "${zoom_call_active_check_managed}" ]] && [[ -z "${zoom_call_active_check_option}" ]] && [[ -n "${zoom_call_active_check_local}" ]]; } && zoom_call_active_check_option="${zoom_call_active_check_local}"
+
+    [[ -n "${homebrew_enabled_managed}" ]] && homebrew_enabled_option="${homebrew_enabled_managed}"
+    { [[ -z "${homebrew_enabled_managed}" ]] && [[ -z "${homebrew_enabled_option}" ]] && [[ -n "${homebrew_enabled_local}" ]]; } && homebrew_enabled_option="${homebrew_enabled_local}"
+    [[ -n "${homebrew_cask_enabled_managed}" ]] && homebrew_cask_enabled_option="${homebrew_cask_enabled_managed}"
+    { [[ -z "${homebrew_cask_enabled_managed}" ]] && [[ -z "${homebrew_cask_enabled_option}" ]] && [[ -n "${homebrew_cask_enabled_local}" ]]; } && homebrew_cask_enabled_option="${homebrew_cask_enabled_local}"
+    [[ -n "${homebrew_formula_enabled_managed}" ]] && homebrew_formula_enabled_option="${homebrew_formula_enabled_managed}"
+    { [[ -z "${homebrew_formula_enabled_managed}" ]] && [[ -z "${homebrew_formula_enabled_option}" ]] && [[ -n "${homebrew_formula_enabled_local}" ]]; } && homebrew_formula_enabled_option="${homebrew_formula_enabled_local}"
+    [[ -n "${homebrew_priority_managed}" ]] && homebrew_priority_option="${homebrew_priority_managed}"
+    { [[ -z "${homebrew_priority_managed}" ]] && [[ -z "${homebrew_priority_option}" ]] && [[ -n "${homebrew_priority_local}" ]]; } && homebrew_priority_option="${homebrew_priority_local}"
+    [[ -n "${homebrew_preferred_packages_managed}" ]] && homebrew_preferred_packages_option="${homebrew_preferred_packages_managed}"
+    { [[ -z "${homebrew_preferred_packages_managed}" ]] && [[ -z "${homebrew_preferred_packages_option}" ]] && [[ -n "${homebrew_preferred_packages_local}" ]]; } && homebrew_preferred_packages_option="${homebrew_preferred_packages_local}"
+    [[ -n "${homebrew_binary_path_managed}" ]] && homebrew_binary_path_option="${homebrew_binary_path_managed}"
+    { [[ -z "${homebrew_binary_path_managed}" ]] && [[ -z "${homebrew_binary_path_option}" ]] && [[ -n "${homebrew_binary_path_local}" ]]; } && homebrew_binary_path_option="${homebrew_binary_path_local}"
+    [[ -n "${homebrew_ignored_casks_managed}" ]] && homebrew_ignored_casks_option="${homebrew_ignored_casks_managed}"
+    { [[ -z "${homebrew_ignored_casks_managed}" ]] && [[ -z "${homebrew_ignored_casks_option}" ]] && [[ -n "${homebrew_ignored_casks_local}" ]]; } && homebrew_ignored_casks_option="${homebrew_ignored_casks_local}"
+    [[ -n "${homebrew_ignored_formulae_managed}" ]] && homebrew_ignored_formulae_option="${homebrew_ignored_formulae_managed}"
+    { [[ -z "${homebrew_ignored_formulae_managed}" ]] && [[ -z "${homebrew_ignored_formulae_option}" ]] && [[ -n "${homebrew_ignored_formulae_local}" ]]; } && homebrew_ignored_formulae_option="${homebrew_ignored_formulae_local}"
 
     [[ -n "${ignore_dnd_apps_managed}" ]] && ignoreDNDAppsOption="${ignore_dnd_apps_managed}"
     { [[ -z "${ignore_dnd_apps_managed}" ]] && [[ -z "${ignoreDNDAppsOption}" ]] && [[ -n "${ignore_dnd_apps_local}" ]]; } && ignoreDNDAppsOption="${ignore_dnd_apps_local}"
@@ -1996,6 +2106,14 @@ get_preferences() {
     log_verbose "monthly_patching_cadence_start_time: $monthly_patching_cadence_start_time"
     log_verbose "version_comparison_method_option: $version_comparison_method_option"
     log_verbose "zoom_call_active_check_option: $zoom_call_active_check_option"
+    log_verbose "homebrew_enabled_option: $homebrew_enabled_option"
+    log_verbose "homebrew_cask_enabled_option: $homebrew_cask_enabled_option"
+    log_verbose "homebrew_formula_enabled_option: $homebrew_formula_enabled_option"
+    log_verbose "homebrew_priority_option: $homebrew_priority_option"
+    log_verbose "homebrew_preferred_packages_option: $homebrew_preferred_packages_option"
+    log_verbose "homebrew_binary_path_option: $homebrew_binary_path_option"
+    log_verbose "homebrew_ignored_casks_option: $homebrew_ignored_casks_option"
+    log_verbose "homebrew_ignored_formulae_option: $homebrew_ignored_formulae_option"
     log_verbose "ignoreDNDAppsOption: $ignoreDNDAppsOption"
     log_verbose "WorkflowBackgroundPatchClosedAppsOption: $WorkflowBackgroundPatchClosedAppsOption"
     log_verbose "WorkflowStageUpdatesOption: $WorkflowStageUpdatesOption"
@@ -2630,6 +2748,73 @@ manage_parameter_options() {
         defaults write "${appAutoPatchLocalPLIST}" ZoomCallActiveCheck -bool false
     fi
     { [[ -n "${zoom_call_active_check_option}" ]]; } && log_verbose "zoom_call_active_check_option is: ${zoom_call_active_check_option}"
+
+    # Manage Homebrew settings and save to ${appAutoPatchLocalPLIST}. Defaults are applied here,
+    # not in set_defaults, so the managed > CLI > local precedence chain above can distinguish
+    # "not specified" from "specified as FALSE".
+    if [[ "${homebrew_enabled_option}" -eq 1 ]] || [[ "${homebrew_enabled_option}" == "TRUE" ]]; then
+        homebrew_enabled_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewEnabled -bool true
+    else
+        homebrew_enabled_option="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewEnabled -bool false
+    fi
+    log_verbose "homebrew_enabled_option is: ${homebrew_enabled_option}"
+
+    if [[ "${homebrew_cask_enabled_option}" -eq 1 ]] || [[ "${homebrew_cask_enabled_option}" == "TRUE" ]] || [[ -z "${homebrew_cask_enabled_option}" ]]; then
+        homebrew_cask_enabled_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewCaskEnabled -bool true
+    else
+        homebrew_cask_enabled_option="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewCaskEnabled -bool false
+    fi
+    log_verbose "homebrew_cask_enabled_option is: ${homebrew_cask_enabled_option}"
+
+    if [[ "${homebrew_formula_enabled_option}" -eq 1 ]] || [[ "${homebrew_formula_enabled_option}" == "TRUE" ]] || [[ -z "${homebrew_formula_enabled_option}" ]]; then
+        homebrew_formula_enabled_option="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewFormulaEnabled -bool true
+    else
+        homebrew_formula_enabled_option="FALSE"
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewFormulaEnabled -bool false
+    fi
+    log_verbose "homebrew_formula_enabled_option is: ${homebrew_formula_enabled_option}"
+
+    # HomebrewPriority accepts only INSTALLOMATOR or HOMEBREW; anything else falls back with a warning.
+    case "${homebrew_priority_option:u}" in
+        HOMEBREW)
+            homebrew_priority_option="HOMEBREW"
+        ;;
+        INSTALLOMATOR|"")
+            homebrew_priority_option="INSTALLOMATOR"
+        ;;
+        *)
+            log_warning "HomebrewPriority '${homebrew_priority_option}' is not recognised; falling back to INSTALLOMATOR."
+            homebrew_priority_option="INSTALLOMATOR"
+        ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" HomebrewPriority -string "${homebrew_priority_option}"
+    log_verbose "homebrew_priority_option is: ${homebrew_priority_option}"
+
+    if [[ -n "${homebrew_preferred_packages_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewPreferredPackages -string "${homebrew_preferred_packages_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" HomebrewPreferredPackages 2> /dev/null
+    fi
+    if [[ -n "${homebrew_binary_path_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewBinaryPath -string "${homebrew_binary_path_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" HomebrewBinaryPath 2> /dev/null
+    fi
+    if [[ -n "${homebrew_ignored_casks_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewIgnoredCasks -string "${homebrew_ignored_casks_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" HomebrewIgnoredCasks 2> /dev/null
+    fi
+    if [[ -n "${homebrew_ignored_formulae_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" HomebrewIgnoredFormulae -string "${homebrew_ignored_formulae_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" HomebrewIgnoredFormulae 2> /dev/null
+    fi
 
     # Manage ${ignoreDNDAppsOption} — store the raw comma-separated string to the local plist
     # so it persists for reporting; no boolean coercion needed.
@@ -4516,22 +4701,22 @@ get_logged_in_user() {
 
     # Make sure we have a "normal" logged in user.
     if [[ -z "${currentUserAccountName_response}" ]]; then
-        { [[ $(id -u) -eq 0 ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; } && log_status "No GUI user currently logged in."
-        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${AAP_LOG_FOLDER}" ]]; } && log_echo "Status: No GUI user currently logged in."
+        { [[ $(id -u) -eq 0 ]] && [[ -d "${appAutoPatchLogFolder}" ]]; } && log_status "No GUI user currently logged in."
+        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${appAutoPatchLogFolder}" ]]; } && log_echo "Status: No GUI user currently logged in."
     elif [[ "${currentUserAccountName_response}" = "root" ]] || [[ "${currentUserAccountName_response}" = "_mbsetupuser" ]] || [[ "${currentUserAccountName_response}" = "loginwindow" ]]; then
-        { [[ $(id -u) -eq 0 ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; } && log_status "Current GUI user is system account: ${currentUserAccountName_response}"
-        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${AAP_LOG_FOLDER}" ]]; } && log_echo "Status: Current GUI user is system account: ${currentUserAccountName_response}"
+        { [[ $(id -u) -eq 0 ]] && [[ -d "${appAutoPatchLogFolder}" ]]; } && log_status "Current GUI user is system account: ${currentUserAccountName_response}"
+        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${appAutoPatchLogFolder}" ]]; } && log_echo "Status: Current GUI user is system account: ${currentUserAccountName_response}"
     else # Normal locally logged in user.
         currentUserAccountName="${currentUserAccountName_response}"
         currentUserID=$(id -u "${currentUserAccountName}" 2> /dev/null)
-        { [[ $(id -u) -eq 0 ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; } && log_status "Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
-        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${AAP_LOG_FOLDER}" ]]; } && log_echo "Status: Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
+        { [[ $(id -u) -eq 0 ]] && [[ -d "${appAutoPatchLogFolder}" ]]; } && log_status "Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
+        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${appAutoPatchLogFolder}" ]]; } && log_echo "Status: Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
     fi
     log_verbose  "currentUserAccountName is: ${currentUserAccountName}"
     log_verbose  "currentUserID is: ${currentUserID}"
 
     # Only collect user details if it's a "normal" GUI user.
-    if [[ "${currentUserAccountName}" != "FALSE" ]] && [[ "${currentUserID}" != "FALSE" ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; then
+    if [[ "${currentUserAccountName}" != "FALSE" ]] && [[ "${currentUserID}" != "FALSE" ]] && [[ -d "${appAutoPatchLogFolder}" ]]; then
         current_user_guid=$(dscl . read "/Users/${currentUserAccountName}" GeneratedUID 2> /dev/null | awk '{print $2;}')
         current_user_real_name=$(dscl . read "/Users/${currentUserAccountName}" RealName 2> /dev/null | tail -1 | sed -e 's/^RealName: //g' -e 's/^ //g')
         log_verbose  "current_user_guid is: ${current_user_guid}"
@@ -6252,6 +6437,12 @@ swiftDialogCommand(){
 # Returns the app path, or $logoImage as a fallback.
 resolve_app_icon_path() {
     local label="$1"
+    # Homebrew pseudo-labels have no Installomator fragment; their icon was resolved during
+    # discovery. Returning here keeps all eight call sites of this function brew-aware.
+    if is_brew_label "${label}"; then
+        echo "${brewIconPaths[$label]:-SF=shippingbox.fill}"
+        return
+    fi
     local icon_appName icon_targetDir icon_name icon_path
     local name folderName targetDir appName  # Variables that may be referenced in label fragment
     
@@ -6335,7 +6526,7 @@ swiftDialogPatchingWindow(){
         displayNames=()
         for label in $queuedLabelsArray; do
             # Get display name from label fragment
-            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            currentDisplay_name="$(resolve_label_display_name "$label")"
             
             # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
             iconPath=$(resolve_app_icon_path "$label")
@@ -6376,7 +6567,7 @@ _relaunch_patching_dialog() {
     local label currentDisplay_name iconPath
 
     for label in $queuedLabelsArray; do
-        currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        currentDisplay_name="$(resolve_label_display_name "$label")"
         iconPath=$(resolve_app_icon_path "$label")
         relaunchDisplayNames+=("--listitem")
         if [[ -n "${patchingItemStatus[$idx]}" ]]; then
@@ -6744,7 +6935,7 @@ _aap_mini_progress_item() {
     local total="${4:-0}"
     local display_name icon_path
 
-    display_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh" 2>/dev/null)"
+    display_name="$(resolve_label_display_name "${label}" 2>/dev/null)"
     [[ -z "${display_name}" ]] && display_name="${label}"
     icon_path=$(resolve_app_icon_path "${label}")
     [[ -n "${icon_path}" ]] && swiftDialogUpdate "icon: ${icon_path}"
@@ -7976,6 +8167,678 @@ function queueLabel() {
     write_aap_report_item "$label_name" "$name" "$previousVersion" "$appNewVersion"
 }
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Homebrew Related Functions
+#
+# Every Homebrew function lives between the BEGIN/END markers below so the block can be
+# extracted and exercised in isolation, without running main(). Do not move functions out of
+# this block, and do not change the marker lines.
+#
+# This convention is load-bearing for a test harness that lives outside this repository: the
+# harness extracts everything between "# ==== BEGIN HOMEBREW ====" and "# ==== END HOMEBREW ===="
+# with an exact-anchored `sed` match on those two literal lines. Adding trailing whitespace (or
+# any other character) to either marker line breaks that anchor silently - the `sed` match simply
+# fails to find the line, so the extract comes back empty and the external test suite starts
+# testing nothing without erroring. Do not rename, reformat, or move the markers, and put every
+# new Homebrew function inside this block, not just the ones this comment happens to describe.
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# ==== BEGIN HOMEBREW ====
+
+is_brew_label() {
+    # True when the label is a Homebrew pseudo-label rather than an Installomator label.
+    [[ "$1" == brewcask__* || "$1" == brewformula__* ]]
+}
+
+homebrew_parse_outdated_json() {
+    # Parses `brew outdated --json=v2` output without any third-party tooling. plutil reads
+    # JSON natively and PlistBuddy walks the converted plist, so this needs nothing beyond
+    # what ships with macOS - notably NOT /usr/bin/python3, which is an Xcode CLT stub on a
+    # clean managed Mac and would trigger an install prompt from a root LaunchDaemon.
+    #
+    # Real `brew outdated --json=v2` output carries "pinned_version": null on every single
+    # entry (pinned_version is only ever non-null for a pinned package). Property lists have
+    # no null type, so plutil rejects a JSON `null` value anywhere in the document - not just
+    # that one field, the WHOLE document, taking every formula and cask down with it. This was
+    # invisible in hand-written test fixtures because none of them included a null.
+    #
+    # The sed below neutralises a JSON null before handing the document to plutil. A JSON
+    # `null` value only ever appears immediately after a colon (as a key's value), and JSON has
+    # no other bareword that begins with "null" - a string value in that position is always
+    # quoted, so ": null" cannot be a false-positive match inside a string. This is deliberately
+    # narrow, not a general JSON rewriter: the fields this function actually reads - name,
+    # installed_versions[0], current_version - are never null in brew's output, so blanking out
+    # null wherever it appears (pinned_version today, potentially other fields brew adds later)
+    # cannot corrupt a value this function depends on.
+    #
+    # Usage: homebrew_parse_outdated_json "<json>" casks|formulae
+    # Output: one "name|installed_version|current_version" line per entry.
+    local json="$1"
+    local kind="$2"
+    local tmp
+    tmp=$(mktemp /private/tmp/aap_brew_XXXXXX) || return 1
+
+    if ! printf '%s' "${json}" | /usr/bin/sed -E 's/:([[:space:]]*)null/:\1""/g' \
+            | /usr/bin/plutil -convert xml1 -o "${tmp}" - 2> /dev/null; then
+        rm -f "${tmp}"
+        return 1
+    fi
+
+    local i=0 pkg_name installed current
+    while pkg_name=$(/usr/libexec/PlistBuddy -c "Print :${kind}:${i}:name" "${tmp}" 2> /dev/null); do
+        installed=$(/usr/libexec/PlistBuddy -c "Print :${kind}:${i}:installed_versions:0" "${tmp}" 2> /dev/null)
+        current=$(/usr/libexec/PlistBuddy -c "Print :${kind}:${i}:current_version" "${tmp}" 2> /dev/null)
+        printf '%s|%s|%s\n' "${pkg_name}" "${installed}" "${current}"
+        (( i++ ))
+    done
+
+    rm -f "${tmp}"
+    return 0
+}
+
+get_homebrew_binary() {
+    # Locates a usable Homebrew installation and decides which account brew runs as.
+    # Sets ${brewBinary} and ${brewBrewUser} on success, and ${brewCasksAllowed} on every path
+    # that reaches the final `return 0`.
+    #
+    # Homebrew refuses to run as root, so AAP (a root LaunchDaemon) must drop privileges. The
+    # account it drops to is the OWNER OF THE PREFIX, not whoever happens to be at the console:
+    # running brew as a non-owner makes Homebrew rewrite permissions across the whole prefix.
+    #
+    # The prefix owner need not be the console user for brew itself to work - `sudo -u <owner> -H
+    # brew upgrade <formula>` needs no GUI session at all. `brew upgrade --cask` is different: it
+    # uninstalls then reinstalls, and the cask's own `uninstall quit:`/`signal:`/`launchctl:`
+    # stanzas run as the brew user against THAT user's Aqua session and launchd domain. When the
+    # brew user has no GUI session, those stanzas cannot reach a copy of the app running in the
+    # console user's session - Homebrew logs a warning and replaces the bundle underneath it
+    # anyway. That loss of Homebrew's own teardown safety net is why, when the owner differs from
+    # whoever is logged in, formulae still proceed and only casks are held back via
+    # brewCasksAllowed. brew_cask_app_is_running only guards the silent background patching path
+    # (workflow_silent_patch_closed_apps); the interactive dialog-driven install has no running-
+    # app check of its own and relies entirely on Homebrew's quit stanza - which is exactly what
+    # does not work across sessions.
+    brewBinary=""
+    brewBrewUser=""
+    brewCasksAllowed=""
+
+    local candidate=""
+    if [[ -n "${homebrew_binary_path_option}" ]]; then
+        if [[ -x "${homebrew_binary_path_option}" ]]; then
+            candidate="${homebrew_binary_path_option}"
+            log_verbose "Homebrew binary (admin-specified): ${candidate}"
+        else
+            log_warning "Homebrew binary not found or not executable at the configured path: ${homebrew_binary_path_option}"
+            return 1
+        fi
+    else
+        local probe
+        for probe in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+            if [[ -x "${probe}" ]]; then
+                candidate="${probe}"
+                log_verbose "Homebrew binary (auto-detected): ${candidate}"
+                break
+            fi
+        done
+    fi
+
+    if [[ -z "${candidate}" ]]; then
+        log_warning "No Homebrew installation found at /opt/homebrew or /usr/local."
+        return 1
+    fi
+
+    # The prefix is the grandparent of the binary: /opt/homebrew/bin/brew -> /opt/homebrew
+    local prefix owner
+    prefix="${candidate:h:h}"
+    owner=$(/usr/bin/stat -f %Su "${prefix}" 2> /dev/null)
+
+    if [[ -z "${owner}" ]]; then
+        log_warning "Unable to determine the owner of the Homebrew prefix ${prefix}; skipping Homebrew."
+        return 1
+    fi
+    if [[ "${owner}" == "root" ]]; then
+        log_warning "Homebrew prefix ${prefix} is owned by root (installed under sudo); skipping Homebrew."
+        return 1
+    fi
+    if [[ "${owner}" != "${currentUserAccountName}" ]]; then
+        brewCasksAllowed="FALSE"
+        # Casks are withheld here whenever the prefix owner differs from the console user -
+        # including when there is NO console user at all (currentUserAccountName == "FALSE": the
+        # login window, a session that just ended, or a system account). That headless case is not
+        # a technical necessity the way the foreign-console-user case is: with nobody logged in, no
+        # application is running, so a cask's own quit/signal/launchctl teardown has nothing to
+        # interrupt in the first place. Casks are held back anyway as a deliberate simplification -
+        # "formulae only whenever the prefix owner is not the console user" is one rule to document
+        # and reason about, rather than one whose safety varies by who happens to be at the screen -
+        # and because some casks perform user-level work in their postinstall step that assumes a
+        # login session exists.
+        if [[ -z "${currentUserAccountName}" ]] || [[ "${currentUserAccountName}" == "FALSE" ]]; then
+            log_warning "Homebrew prefix ${prefix} is owned by '${owner}' but no user is currently logged in; formulae will be managed as '${owner}', casks will not (brew's own cask quit/signal/launchctl teardown needs a session to reach, and none exists right now)."
+        else
+            log_warning "Homebrew prefix ${prefix} is owned by '${owner}' but the console user is '${currentUserAccountName}'; formulae will be managed as '${owner}', casks will not (brew's own cask quit/signal/launchctl teardown runs in '${owner}'s session, which cannot reach a copy of the app running in the console user's session)."
+        fi
+    else
+        brewCasksAllowed="TRUE"
+    fi
+
+    brewBinary="${candidate}"
+    brewBrewUser="${owner}"
+    log_verbose "Homebrew: using ${brewBinary} as user ${brewBrewUser} (casks allowed: ${brewCasksAllowed})"
+    return 0
+}
+
+brew_as_user() {
+    # Runs brew de-privileged with an explicit, minimal environment. NONINTERACTIVE stops brew
+    # from ever prompting (there is no TTY behind a LaunchDaemon). `sudo -H` already sets HOME
+    # correctly from the directory service (and handles a home directory containing a space,
+    # e.g. mobile/AD accounts, which a `dscl ... | awk '{print $2}'` lookup would truncate at the
+    # first space), so HOME is deliberately left for sudo to set rather than overridden here.
+    # HOMEBREW_NO_AUTO_UPDATE=1 is hardcoded (not just prefixed on the calling command) because
+    # sudo's default env_reset strips everything outside its whitelist before this env ever runs
+    # - a caller-side prefix assignment never survives the sudo call. Discovery's own `brew
+    # update` already refreshes brew's index, so suppressing auto-update here unconditionally is
+    # correct even on a run where that `brew update` failed.
+    /usr/bin/sudo -u "${brewBrewUser}" -H \
+        /usr/bin/env \
+            PATH="${brewBinary:h}:/usr/bin:/bin:/usr/sbin:/sbin" \
+            NONINTERACTIVE=1 \
+            HOMEBREW_NO_AUTO_UPDATE=1 \
+        "${brewBinary}" "$@"
+}
+
+resolve_brew_icon_path() {
+    # Best-effort icon for a Homebrew package. Formulae are command-line software and get a
+    # generic SF Symbol; casks are matched against an installed application bundle so the
+    # dialog shows the real app icon.
+    #
+    # Usage: resolve_brew_icon_path cask|formula "package-name"
+    local pkg_type="$1"
+    local pkg_name="$2"
+
+    if [[ "${pkg_type}" == "formula" ]]; then
+        echo "SF=terminal"
+        return
+    fi
+
+    local cap_name
+    cap_name="$(echo "${pkg_name}" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
+
+    if [[ -d "/Applications/${cap_name}.app" ]]; then
+        echo "/Applications/${cap_name}.app"
+        return
+    fi
+    if [[ -d "/Applications/${pkg_name}.app" ]]; then
+        echo "/Applications/${pkg_name}.app"
+        return
+    fi
+
+    local mdfind_result
+    mdfind_result=$(mdfind "kMDItemFSName == '${cap_name}.app' && kMDItemContentType == 'com.apple.application-bundle'" -0 2> /dev/null | tr -d '\0' | head -c 4096)
+    if [[ -n "${mdfind_result}" && -d "${mdfind_result}" ]]; then
+        echo "${mdfind_result}"
+        return
+    fi
+
+    echo "SF=shippingbox.fill"
+}
+
+resolve_label_display_name() {
+    # Single source of truth for a queued item's display name. Replaces seven identical copies
+    # of the awk fragment lookup, and keeps every one of those call sites brew-aware for free.
+    local label="$1"
+    if is_brew_label "${label}"; then
+        echo "${brewDisplayNames[$label]:-${label}}"
+        return
+    fi
+    awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh"
+}
+
+# Homebrew pseudo-labels (and the superseded-Installomator-labels list, see
+# HomebrewSupersededLabels below) are persisted here rather than in DiscoveredLabels. main() reads
+# DiscoveredLabels back through `tr -c -d "[:alnum:][:space:][\-_]"`, which deletes @, . and +
+# - turning brewformula__openssl@3 into brewformula__openssl3 and handing `brew upgrade` a
+# package that does not exist. These four helpers use PlistBuddy exclusively, so names are
+# preserved byte for byte. They are key-parameterised so any Homebrew string array in the local
+# plist can reuse them; homebrew_clear_discovered / homebrew_record_discovered /
+# homebrew_read_discovered / homebrew_remove_discovered remain as thin wrappers over
+# HomebrewDiscoveredPackages for existing call sites.
+
+homebrew_plist_clear() {
+    local key="$1"
+    local plistFile="${appAutoPatchLocalPLIST}.plist"
+    if /usr/libexec/PlistBuddy -c "Print :${key}" "${plistFile}" &> /dev/null; then
+        /usr/libexec/PlistBuddy -c "Delete :${key}" "${plistFile}" &> /dev/null
+    fi
+    /usr/libexec/PlistBuddy -c "Add :${key} array" "${plistFile}" &> /dev/null
+}
+
+homebrew_plist_record() {
+    local key="$1" value="$2"
+    local plistFile="${appAutoPatchLocalPLIST}.plist"
+    /usr/libexec/PlistBuddy -c "Print :${key}" "${plistFile}" &> /dev/null \
+        || /usr/libexec/PlistBuddy -c "Add :${key} array" "${plistFile}" &> /dev/null
+    /usr/libexec/PlistBuddy -c "Add :${key}: string '${value}'" "${plistFile}" &> /dev/null
+}
+
+homebrew_plist_read() {
+    local key="$1"
+    local plistFile="${appAutoPatchLocalPLIST}.plist"
+    [[ -f "${plistFile}" ]] || return 0
+    local i=0 entry
+    while entry=$(/usr/libexec/PlistBuddy -c "Print :${key}:${i}" "${plistFile}" 2> /dev/null); do
+        printf '%s\n' "${entry}"
+        (( i++ ))
+    done
+    return 0
+}
+
+homebrew_plist_remove() {
+    # Deletes one value by exact match. Called after a successful upgrade so a
+    # DiscoveryFrequency-skipped run never re-queues an already-patched package.
+    local key="$1" value="$2"
+    local plistFile="${appAutoPatchLocalPLIST}.plist"
+    [[ -f "${plistFile}" ]] || return 0
+
+    local i=0 entry
+    while entry=$(/usr/libexec/PlistBuddy -c "Print :${key}:${i}" "${plistFile}" 2> /dev/null); do
+        if [[ "${entry}" == "${value}" ]]; then
+            /usr/libexec/PlistBuddy -c "Delete :${key}:${i}" "${plistFile}" &> /dev/null
+            log_verbose "Removed '${value}' from ${key}"
+            return 0
+        fi
+        (( i++ ))
+    done
+    return 0
+}
+
+homebrew_clear_discovered() { homebrew_plist_clear HomebrewDiscoveredPackages }
+homebrew_record_discovered() { homebrew_plist_record HomebrewDiscoveredPackages "$1" }
+homebrew_read_discovered() { homebrew_plist_read HomebrewDiscoveredPackages }
+homebrew_remove_discovered() { homebrew_plist_remove HomebrewDiscoveredPackages "$1" }
+
+homebrew_should_queue() {
+    # Decides whether an outdated Homebrew package should be queued, and whether queueing it
+    # supersedes an Installomator label for the same software.
+    #
+    # Usage: homebrew_should_queue "package-name" TRUE|FALSE   (second arg: also an Installomator label?)
+    # Prints: QUEUE | QUEUE_SUPERSEDE | SKIP
+    #
+    # Note the asymmetry under HOMEBREW priority: HomebrewPreferredPackages inverts and names
+    # the packages for which Installomator should win instead.
+    local pkg_name="$1"
+    local in_installomator="$2"
+
+    # Exact-element membership. The substring form `[[ " $list " == *" $x "* ]]` is IFS-dependent
+    # and partial-matches (it would treat node@22 as preferred when only node is listed) - fix
+    # #254 removed that pattern from the rest of this script.
+    local -a preferred_arr
+    preferred_arr=(${=homebrew_preferred_packages_option})
+    local in_preferred="FALSE"
+    (( ${preferred_arr[(Ie)${pkg_name}]} )) && in_preferred="TRUE"
+
+    if [[ "${homebrew_priority_option}" == "HOMEBREW" ]]; then
+        if [[ "${in_preferred}" == "TRUE" ]]; then
+            [[ "${in_installomator}" == "TRUE" ]] && echo "SKIP" || echo "QUEUE"
+        else
+            [[ "${in_installomator}" == "TRUE" ]] && echo "QUEUE_SUPERSEDE" || echo "QUEUE"
+        fi
+        return
+    fi
+
+    # INSTALLOMATOR priority (the default)
+    if [[ "${in_preferred}" == "TRUE" ]]; then
+        echo "QUEUE_SUPERSEDE"
+    elif [[ "${in_installomator}" == "TRUE" ]]; then
+        echo "SKIP"
+    else
+        echo "QUEUE"
+    fi
+}
+
+homebrew_queue_package() {
+    # Applies the ignore list and the priority rules to one outdated package, and queues it if
+    # it survives both. Shared by the cask and formula passes.
+    #
+    # Usage: homebrew_queue_package cask|formula "name" "installed_version" "current_version"
+    # Returns 0 when the package was queued, 1 when it was skipped.
+    local pkg_type="$1" pkg_name="$2" installed_ver="$3" current_ver="$4"
+
+    local -a ignored_arr
+    if [[ "${pkg_type}" == "cask" ]]; then
+        ignored_arr=(${=homebrew_ignored_casks_option})
+    else
+        ignored_arr=(${=homebrew_ignored_formulae_option})
+    fi
+    if (( ${ignored_arr[(Ie)${pkg_name}]} )); then
+        log_verbose "Homebrew: ignoring ${pkg_type} ${pkg_name}"
+        return 1
+    fi
+
+    # Union labelsArray (this run's discovery) with requiredLabelsArray and convertedLabelsArray,
+    # both populated by manage_parameter_options() long before discovery runs. Without this, a
+    # RequiredLabels/ConvertedLabels entry that discovery itself did not queue is invisible to
+    # conflict detection, and Installomator + Homebrew both install the same package (or, under
+    # HomebrewPriority=HOMEBREW, the required label is never superseded at all).
+    local -a installomator_arr
+    installomator_arr=(${=labelsArray} ${=requiredLabels} ${requiredLabelsArray[@]} ${convertedLabelsArray[@]})
+    local in_installomator="FALSE"
+    (( ${installomator_arr[(Ie)${pkg_name}]} )) && in_installomator="TRUE"
+
+    local decision
+    decision=$(homebrew_should_queue "${pkg_name}" "${in_installomator}")
+    if [[ "${decision}" == "SKIP" ]]; then
+        log_notice "Homebrew: skipping ${pkg_type} ${pkg_name} (Installomator preferred for this package)"
+        return 1
+    fi
+    if [[ "${decision}" == "QUEUE_SUPERSEDE" ]] && [[ "${in_installomator}" == "TRUE" ]]; then
+        brewSupersedingLabels+="${pkg_name} "
+        homebrew_plist_record HomebrewSupersededLabels "${pkg_name}"
+    fi
+
+    local brew_label display_suffix
+    if [[ "${pkg_type}" == "cask" ]]; then
+        brew_label="brewcask__${pkg_name}"
+        display_suffix="Homebrew Cask"
+    else
+        brew_label="brewformula__${pkg_name}"
+        display_suffix="Homebrew Formula"
+    fi
+
+    log_notice "Homebrew: queuing ${pkg_type} ${pkg_name} (${installed_ver} -> ${current_ver})"
+    brewDisplayNames[$brew_label]="${pkg_name} (${display_suffix})"
+    brewIconPaths[$brew_label]=$(resolve_brew_icon_path "${pkg_type}" "${pkg_name}")
+    AAPVersionByLabel[$brew_label]="${current_ver}"
+    AAPInstalledVersionByLabel[$brew_label]="${installed_ver}"
+    homebrew_record_discovered "${brew_label}"
+    write_aap_report_item "${brew_label}" "${brewDisplayNames[$brew_label]}" "${installed_ver}" "${current_ver}"
+    labelsArray+="${brew_label} "
+    return 0
+}
+
+homebrew_discovery() {
+    # Discovers outdated Homebrew packages and queues them as pseudo-labels. Called from main()
+    # after Installomator discovery, so labelsArray is populated and conflict detection is valid.
+    if [[ "${homebrew_enabled_option}" != "TRUE" ]]; then
+        log_info "Homebrew management disabled"
+        return 0
+    fi
+    if [[ "${homebrew_cask_enabled_option}" != "TRUE" ]] && [[ "${homebrew_formula_enabled_option}" != "TRUE" ]]; then
+        log_info "Homebrew cask and formula management both disabled"
+        # Nothing is queued this run - purge any queue persisted by an earlier run's discovery so
+        # a later DiscoveryFrequency-skipped run has nothing stale left to restore.
+        homebrew_clear_discovered
+        return 0
+    fi
+    if ! get_homebrew_binary; then
+        log_warning "Homebrew binary unusable - skipping Homebrew discovery"
+        return 0
+    fi
+
+    # Formulae disabled by config AND casks blocked by prefix ownership (brewCasksAllowed set by
+    # get_homebrew_binary above) leaves nothing this run could possibly queue - same reasoning as
+    # the "both disabled" early return above, just discovered one step later. Returning here skips
+    # a pointless `brew update` + `brew outdated` round trip.
+    if [[ "${homebrew_formula_enabled_option}" != "TRUE" ]] && [[ "${brewCasksAllowed}" != "TRUE" ]]; then
+        log_info "Homebrew formula management disabled and casks are not allowed for prefix owner '${brewBrewUser}' (not the console user) - nothing to discover"
+        # Same reasoning as the "both disabled" early return above: purge any persisted queue so
+        # it is not restored stale on a later DiscoveryFrequency-skipped run.
+        homebrew_clear_discovered
+        return 0
+    fi
+
+    log_notice "**** Homebrew Discovery ****"
+
+    # Mirror the Installomator discovery window: without this the dialog sits on whatever text
+    # the last Installomator label left behind while `brew update`/`brew outdated` run, which can
+    # take a while on a queue of dozens of packages and looks hung. Same guard PgetAppVersion uses
+    # for its per-app "Analyzing" update, so nothing is written when there is no discover window.
+    if [ ${InteractiveModeOption} -gt 1 ]; then
+        swiftDialogUpdate "progresstext: ${display_string_discovery_progress} ..."
+    fi
+
+    # `brew outdated` does NOT trigger Homebrew's auto-update, so without this it reports against
+    # whatever formula data was last fetched. Non-fatal: stale results beat a failed run.
+    if ! brew_as_user update --quiet > /dev/null 2>&1; then
+        log_warning "brew update failed; continuing with possibly stale package data"
+    fi
+
+    local brew_outdated_json
+    brew_outdated_json=$(brew_as_user outdated --json=v2 2> /dev/null)
+    local brew_exit_code=$?
+    if [[ ${brew_exit_code} -ne 0 ]] || [[ -z "${brew_outdated_json}" ]]; then
+        log_error "brew outdated failed (exit code: ${brew_exit_code}) - skipping Homebrew discovery"
+        return 0
+    fi
+
+    homebrew_clear_discovered
+    homebrew_plist_clear HomebrewSupersededLabels
+
+    local queued_casks=0 queued_formulae=0
+    local pkg_name installed_ver current_ver
+
+    # Each parse is captured into a variable BEFORE the while-loop consumes it, and its exit
+    # status is checked explicitly. Piping straight into `done <<< "$(...)"` (the previous
+    # shape of this code) discards the command substitution's exit status entirely - a total
+    # plutil/parse failure and "brew genuinely reports nothing outdated" both then produce an
+    # empty loop body and look identical: "queued 0 cask(s), 0 formula(e)" logged at NOTICE as
+    # if it were a healthy no-op. That is exactly how the null-plutil defect above went
+    # undetected on a live run with 72 outdated formulae and 5 outdated casks: discovery never
+    # logged an error, it just silently queued nothing. Treat a parse failure as fatal to this
+    # run's discovery instead - log it at ERROR, name which package type failed, and abort
+    # rather than falling through to the "complete" log line below.
+    local casks_parsed formulae_parsed
+
+    if [[ "${homebrew_cask_enabled_option}" == "TRUE" ]] && [[ "${brewCasksAllowed}" == "TRUE" ]]; then
+        if ! casks_parsed=$(homebrew_parse_outdated_json "${brew_outdated_json}" casks); then
+            log_error "Homebrew: failed to parse 'brew outdated --json=v2' output for casks - aborting Homebrew discovery (this is a parse failure, not brew reporting zero outdated casks)"
+            return 1
+        fi
+        # Cask-pass icon, set once rather than per-package (resolving a real app icon per package
+        # here would mean an extra mdfind for every outdated cask just to paint a progress window).
+        # Comma-free per the same fix as resolve_brew_icon_path - see Bug 1.
+        [ ${InteractiveModeOption} -gt 1 ] && swiftDialogUpdate "icon: SF=shippingbox.fill"
+        while IFS='|' read -r pkg_name installed_ver current_ver; do
+            [[ -z "${pkg_name}" ]] && continue
+            if [ ${InteractiveModeOption} -gt 1 ]; then
+                swiftDialogUpdate "message: ${display_string_discovery_action_message} ${pkg_name} (${installed_ver})"
+            fi
+            homebrew_queue_package cask "${pkg_name}" "${installed_ver}" "${current_ver}" && (( queued_casks++ ))
+        done <<< "${casks_parsed}"
+    elif [[ "${homebrew_cask_enabled_option}" == "TRUE" ]]; then
+        log_info "Homebrew: skipping cask discovery - prefix owner '${brewBrewUser}' is not the console user"
+    fi
+
+    if [[ "${homebrew_formula_enabled_option}" == "TRUE" ]]; then
+        if ! formulae_parsed=$(homebrew_parse_outdated_json "${brew_outdated_json}" formulae); then
+            log_error "Homebrew: failed to parse 'brew outdated --json=v2' output for formulae - aborting Homebrew discovery (this is a parse failure, not brew reporting zero outdated formulae)"
+            return 1
+        fi
+        # Formula-pass icon - distinguishes this pass from the cask pass above without adding any
+        # new dialog text (see the comment on the cask pass icon update).
+        [ ${InteractiveModeOption} -gt 1 ] && swiftDialogUpdate "icon: SF=terminal"
+        while IFS='|' read -r pkg_name installed_ver current_ver; do
+            [[ -z "${pkg_name}" ]] && continue
+            if [ ${InteractiveModeOption} -gt 1 ]; then
+                swiftDialogUpdate "message: ${display_string_discovery_action_message} ${pkg_name} (${installed_ver})"
+            fi
+            homebrew_queue_package formula "${pkg_name}" "${installed_ver}" "${current_ver}" && (( queued_formulae++ ))
+        done <<< "${formulae_parsed}"
+    fi
+
+    log_notice "Homebrew discovery complete - queued ${queued_casks} cask(s), ${queued_formulae} formula(e)"
+    return 0
+}
+
+homebrew_restore_queue() {
+    # On DiscoveryFrequency-skipped runs the in-memory maps are empty. Rebuild them from
+    # HomebrewDiscoveredPackages. Version data restores separately from the report PLIST, which
+    # main() already reads for Installomator labels.
+    [[ "${homebrew_enabled_option}" != "TRUE" ]] && return 0
+
+    # A DiscoveryFrequency-skipped run never calls homebrew_discovery, so get_homebrew_binary -
+    # the only place brewCasksAllowed is set - never ran in this process. Without this,
+    # brewCasksAllowed would still be its startup-empty value below, and every restored
+    # brewcask__* entry would be judged against that instead of the prefix owner's actual,
+    # current standing.
+    [[ -z "${brewCasksAllowed}" ]] && get_homebrew_binary
+
+    local brew_label pkg_name pkg_type display_suffix restored=0 dropped=0
+    while IFS= read -r brew_label; do
+        [[ -z "${brew_label}" ]] && continue
+        if [[ "${brew_label}" == brewcask__* ]]; then
+            if [[ "${brewCasksAllowed}" != "TRUE" ]]; then
+                # Casks are not (or no longer) allowed for this prefix owner. Restoring the entry
+                # anyway would show it as pending in the dialog, have the user approve it, and
+                # only then fail in brew_install_package - which counts as an install error and
+                # skips remove_aap_report_item, so appsUpToDate() trips a false webhook failure
+                # alert on every skipped run until the next full discovery. Scrub it now instead
+                # so the queue self-heals in one run.
+                homebrew_remove_discovered "${brew_label}"
+                remove_aap_report_item "${brew_label}"
+                (( dropped++ ))
+                continue
+            fi
+            pkg_name="${brew_label#brewcask__}"; pkg_type="cask";    display_suffix="Homebrew Cask"
+        else
+            pkg_name="${brew_label#brewformula__}"; pkg_type="formula"; display_suffix="Homebrew Formula"
+        fi
+        brewDisplayNames[$brew_label]="${pkg_name} (${display_suffix})"
+        brewIconPaths[$brew_label]=$(resolve_brew_icon_path "${pkg_type}" "${pkg_name}")
+        labelsArray+="${brew_label} "
+        (( restored++ ))
+    done <<< "$(homebrew_read_discovered)"
+
+    (( dropped > 0 )) && log_warning "Homebrew: dropped ${dropped} previously-queued cask(s) from the restored queue - casks are not allowed for the current prefix owner"
+
+    # brewSupersedingLabels (the Installomator labels a prior discovery decided Homebrew should
+    # replace) is only ever populated in-memory by homebrew_queue_package, so a skipped run starts
+    # with it empty. Rebuild it from HomebrewSupersededLabels so homebrew_drop_superseded_labels
+    # has the same view here that discovery had when it made the decision.
+    local _sup
+    while IFS= read -r _sup; do
+        [[ -z "${_sup}" ]] && continue
+        brewSupersedingLabels+="${_sup} "
+    done < <(homebrew_plist_read HomebrewSupersededLabels)
+
+    (( restored > 0 )) && log_info "Restored ${restored} Homebrew package(s) from the persisted queue"
+    return 0
+}
+
+brew_install_package() {
+    # Upgrades a single Homebrew package identified by its pseudo-label.
+    # Returns brew's own exit status.
+    local brew_label="$1"
+    local is_cask="FALSE"
+    local package_name
+    local brew_exit
+
+    if [[ "${brew_label}" == brewcask__* ]]; then
+        is_cask="TRUE"
+        package_name="${brew_label#brewcask__}"
+    else
+        package_name="${brew_label#brewformula__}"
+    fi
+
+    # A DiscoveryFrequency-skipped run never called get_homebrew_binary during discovery. Whenever
+    # brewBinary is non-empty, get_homebrew_binary has already run (either here or during this
+    # run's own discovery) and set brewCasksAllowed alongside it - so the check just below always
+    # sees a value that matches the current prefix owner, never a stale one from an earlier run.
+    if [[ -z "${brewBinary}" ]]; then
+        if ! get_homebrew_binary; then
+            log_error "Homebrew binary unavailable; cannot upgrade ${package_name}"
+            return 1
+        fi
+    fi
+
+    # Defensive: homebrew_discovery already withholds casks when the prefix owner is not the
+    # console user, but homebrew_restore_queue repopulates the queue from the persisted plist on a
+    # DiscoveryFrequency-skipped run - a cask queued while the owner WAS at the console could
+    # otherwise still reach here on a later run where they are not. Refuse it rather than upgrade
+    # an application bundle that may be interacting with someone else's GUI session.
+    if [[ "${is_cask}" == "TRUE" ]] && [[ "${brewCasksAllowed}" != "TRUE" ]]; then
+        log_error "Homebrew cask ${package_name} withheld: prefix owner '${brewBrewUser}' is not the console user; casks are not managed in this configuration."
+        return 1
+    fi
+
+    # ${pipestatus[1]} must be captured immediately after the pipe, still inside this branch:
+    # zsh treats the enclosing if/fi as a compound command and collapses pipestatus to that
+    # command's own single exit status once the fi closes, so reading it after the if/else
+    # (as opposed to inside each branch) would silently discard brew's real exit code.
+    if [[ "${is_cask}" == "TRUE" ]]; then
+        log_install "Homebrew upgrading ${package_name} (cask)"
+        # HOMEBREW_NO_AUTO_UPDATE is set inside brew_as_user's own env list - a prefix assignment
+        # here would never survive sudo's env_reset, so it is not repeated on this call.
+        brew_as_user upgrade --cask "${package_name}" 2>&1 | tee -a "${appAutoPatchLog}"
+        brew_exit=${pipestatus[1]}
+    else
+        log_install "Homebrew upgrading ${package_name} (formula)"
+        brew_as_user upgrade "${package_name}" 2>&1 | tee -a "${appAutoPatchLog}"
+        brew_exit=${pipestatus[1]}
+    fi
+    return ${brew_exit}
+}
+
+brew_cask_app_is_running() {
+    # True when a cask pseudo-label maps to an application bundle that is currently running.
+    # Used to keep a silent background upgrade from replacing an app underneath the user; those
+    # packages are left queued for the interactive dialog instead.
+    # Formulae, and casks whose icon fell back to an SF Symbol, always return false.
+    local brew_label="$1"
+    [[ "${brew_label}" == brewcask__* ]] || return 1
+
+    local icon="${brewIconPaths[$brew_label]:-}"
+    [[ "${icon}" == /*.app ]] || return 1
+    [[ -d "${icon}" ]] || return 1
+
+    # ${icon:t:r} is the bundle basename, which equals the running process name only when
+    # CFBundleExecutable happens to match the bundle name - false for many Electron/Java casks
+    # (e.g. "Visual Studio Code.app" runs as "Code" or "Electron"). Read the real executable name
+    # from Info.plist first, and fall back to the basename if that lookup fails.
+    local app_process
+    app_process=$(/usr/bin/defaults read "${icon}/Contents/Info.plist" CFBundleExecutable 2>/dev/null)
+    [[ -z "${app_process}" ]] && app_process="${icon:t:r}"
+
+    /usr/bin/pgrep -x "${app_process}" > /dev/null 2>&1 && return 0
+    /usr/bin/pgrep -f "${icon}/Contents/MacOS/" > /dev/null 2>&1
+}
+
+homebrew_drop_superseded_labels() {
+    # Removes every Installomator label that homebrew_queue_package recorded in
+    # brewSupersedingLabels (HomebrewPriority=HOMEBREW, package present under both managers) from
+    # the global $labelsArray, and also scrubs it from the persisted report and DiscoveredLabels.
+    #
+    # brewSupersedingLabels itself is only ever populated in-memory by homebrew_queue_package
+    # during discovery, so on a DiscoveryFrequency-skipped run it would start empty - but
+    # homebrew_restore_queue rebuilds it from the persisted HomebrewSupersededLabels key before
+    # main() reaches this call, so a skipped run has the same view a discovery run had.
+    #
+    # Scrubbing DiscoveredLabels matters beyond tidiness too: main() unconditionally re-adds
+    # RequiredLabels/ConvertedLabels config entries to labelsArray on every run (independent of
+    # DiscoveredLabels), so if a superseded label were still sitting in either RequiredLabels'
+    # persisted plist entry or DiscoveredLabels from a prior run, it would install a second time
+    # alongside its Homebrew replacement. Removing it from DiscoveredLabels here, at the moment
+    # it is superseded, keeps a skipped run from re-queuing it via that channel. A full discovery
+    # re-adds it if the admin flips HomebrewPriority back to INSTALLOMATOR.
+    #
+    # Must run after both the ignoredLabelsArray subtraction and the ignore-all rebuild in the
+    # caller, since that rebuild would otherwise reintroduce a superseded label.
+    [[ -n "${brewSupersedingLabels}" ]] || return 0
+
+    local -a _labelsArr _superseded_arr
+    local _sup
+    _labelsArr=(${(s/ /)labelsArray})
+    _superseded_arr=(${=brewSupersedingLabels})
+    for _sup in "${_superseded_arr[@]}"; do
+        if (( ${_labelsArr[(Ie)${_sup}]} )); then
+            _labelsArr=(${_labelsArr:#${_sup}})
+            log_notice "Homebrew supersedes Installomator label: ${_sup}"
+            remove_aap_report_item "${_sup}"
+            remove_discovered_label "${_sup}"
+        fi
+    done
+    labelsArray="${_labelsArr[*]}"
+}
+
+# ==== END HOMEBREW ====
+
 _resolve_label_staging_info() {
     # Executes a label fragment in an isolated subshell to resolve the downloadURL and related
     # variables that may be computed dynamically (API calls, GitHub release lookups, etc.).
@@ -7992,8 +8855,15 @@ _resolve_label_staging_info() {
     # The subprocess sources the Installomator helper-functions fragment (which provides
     # downloadURLFromGit, downloadURLFromSparkle, versionFromGit, etc.) before wrapping
     # the label in a case statement and executing it.
+    # No .sh suffix: BSD mktemp only substitutes a trailing run of X's when it is the FINAL
+    # path component. A ".sh" suffix after XXXXXX left the X's un-substituted, yielding the
+    # same literal, world-guessable path on every call (a predictable file in world-writable
+    # /private/tmp written by a root daemon, and self-colliding: a skipped `rm -f` left the file
+    # behind and every later call failed with "mkstemp failed: File exists"). The script is
+    # always executed by path (`zsh --no-rcs "$tmpScript"`, never by extension), so the missing
+    # suffix is not load-bearing.
     local tmpScript
-    tmpScript=$(mktemp /private/tmp/aap_lbl_XXXXXX.sh) || return 1
+    tmpScript=$(mktemp /private/tmp/aap_lbl_XXXXXX) || return 1
 
     {
         echo '#!/bin/zsh --no-rcs'
@@ -8140,6 +9010,16 @@ workflow_stage_updates() {
     _aap_mini_progress_begin "${progressTotal}" "${display_string_staging_progress}" "${display_string_staging_message}"
 
     for label in $queuedLabelsArray; do
+        # Homebrew packages have no Installomator fragment and nothing to pre-download;
+        # without this, _resolve_label_staging_info fails once per package and floods the log.
+        # Counted as completed so the determinate progress bar still reaches progressTotal.
+        if is_brew_label "${label}"; then
+            log_verbose "Skipping staging for Homebrew package '${label}'"
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
+            continue
+        fi
+
         _aap_heartbeat "staging:${label}"
         _ensure_preparation_dialog "staging"
         _aap_mini_progress_item "${label}" "${display_string_staging_progress}" "${progressCompleted}" "${progressTotal}"
@@ -8301,13 +9181,72 @@ workflow_silent_patch_closed_apps() {
         _ensure_preparation_dialog "staging"
         _aap_mini_progress_item "${label}" "${display_string_silent_patch_progress}" "${progressCompleted}" "${progressTotal}"
 
+        # Homebrew upgrades are silent by nature, so they run here too - that keeps behaviour
+        # consistent across InteractiveModes. A cask whose application is currently running is
+        # left queued for the dialog rather than replaced underneath the user.
+        if is_brew_label "${label}"; then
+            if is_excluded_background_label "${label}"; then
+                log_info "Skipping silent background upgrade of '${label}' (listed in ExcludedBackgroundLabels); adding to user dialog queue."
+                remainingLabels+=("${label}")
+                _compute_version_subtitle "${label}"
+                newAppNamesArray+=("--listitem")
+                if [[ -n "$versionSubtitle" ]]; then
+                    newAppNamesArray+=("$(resolve_label_display_name "${label}"),icon=$(resolve_app_icon_path "${label}"),subtitle=${versionSubtitle}")
+                else
+                    newAppNamesArray+=("$(resolve_label_display_name "${label}"),icon=$(resolve_app_icon_path "${label}")")
+                fi
+                progressCompleted=$((progressCompleted + 1))
+                _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
+                continue
+            fi
+            if brew_cask_app_is_running "${label}"; then
+                log_info "Application for '${label}' is running; adding to user dialog queue."
+                remainingLabels+=("${label}")
+                _compute_version_subtitle "${label}"
+                newAppNamesArray+=("--listitem")
+                if [[ -n "$versionSubtitle" ]]; then
+                    newAppNamesArray+=("$(resolve_label_display_name "${label}"),icon=$(resolve_app_icon_path "${label}"),subtitle=${versionSubtitle}")
+                else
+                    newAppNamesArray+=("$(resolve_label_display_name "${label}"),icon=$(resolve_app_icon_path "${label}")")
+                fi
+                progressCompleted=$((progressCompleted + 1))
+                _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
+                continue
+            fi
+
+            log_info "Silent background upgrade for Homebrew package: ${label}"
+            brew_install_package "${label}"
+            local brewSilentExit=$?
+            if [[ ${brewSilentExit} -eq 0 ]]; then
+                log_notice "Silent background upgrade succeeded for: ${label}"
+                silent_patch_success_count=$((silent_patch_success_count + 1))
+                write_aap_receipt "${label}" "${AAPVersionByLabel[$label]:-}" "${brewSilentExit}"
+                remove_aap_report_item "${label}"
+                homebrew_remove_discovered "${label}"
+            else
+                log_warning "Silent background upgrade failed for '${label}' (exit ${brewSilentExit}); adding to user dialog queue."
+                silentPatchErrors=$((silentPatchErrors + 1))
+                remainingLabels+=("${label}")
+                _compute_version_subtitle "${label}"
+                newAppNamesArray+=("--listitem")
+                if [[ -n "$versionSubtitle" ]]; then
+                    newAppNamesArray+=("$(resolve_label_display_name "${label}"),icon=$(resolve_app_icon_path "${label}"),subtitle=${versionSubtitle}")
+                else
+                    newAppNamesArray+=("$(resolve_label_display_name "${label}"),icon=$(resolve_app_icon_path "${label}")")
+                fi
+            fi
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
+            continue
+        fi
+
         # ExcludedBackgroundLabels: discover/report but do not silently patch. Leave in the
         # remaining queue so InteractiveMode 1/2 can still offer Install Now / hard-deadline.
         if is_excluded_background_label "${label}"; then
             log_info "Skipping silent background patch of '${label}' (listed in ExcludedBackgroundLabels); adding to user dialog queue."
             remainingLabels+=("${label}")
             local _dname _ipath
-            _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+            _dname="$(resolve_label_display_name "${label}")"
             _ipath=$(resolve_app_icon_path "${label}")
             _compute_version_subtitle "${label}"
             newAppNamesArray+=("--listitem")
@@ -8330,7 +9269,7 @@ workflow_silent_patch_closed_apps() {
                 log_info "Zoom meeting in progress. Skipping silent patch of '${label}'; adding to user dialog queue."
                 remainingLabels+=("${label}")
                 local _dname _ipath
-                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _dname="$(resolve_label_display_name "${label}")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
                 newAppNamesArray+=("--listitem")
@@ -8388,7 +9327,7 @@ workflow_silent_patch_closed_apps() {
                 log_info "Blocking process detected for '${label}' (exit 12). Adding to user dialog queue."
                 remainingLabels+=("${label}")
                 local _dname _ipath
-                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _dname="$(resolve_label_display_name "${label}")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
                 newAppNamesArray+=("--listitem")
@@ -8404,7 +9343,7 @@ workflow_silent_patch_closed_apps() {
                 silentPatchErrors=$((silentPatchErrors + 1))
                 remainingLabels+=("${label}")
                 local _dname _ipath
-                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _dname="$(resolve_label_display_name "${label}")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
                 newAppNamesArray+=("--listitem")
@@ -8487,7 +9426,7 @@ workflow_do_Installations() {
         swiftDialogOptions=()
         if [ ${InteractiveModeOption} -ge 1 ] && [[ "${dialogPatchingContinueBackground}" != "TRUE" ]]; then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
-            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            currentDisplay_name="$(resolve_label_display_name "$label")"
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplay_name}"\')
             sleep .5
 
@@ -8516,7 +9455,24 @@ workflow_do_Installations() {
             fi
         done
 
-        if [[ ${zoom_call_active_check_option} == "TRUE" && ${label} == "zoom"* ]] ; then
+        if is_brew_label "${label}"; then
+            # Homebrew upgrade path - no Installomator, no staged installer, no blocking process.
+            brew_install_package "${label}"
+            installomatorExitCode=$?
+            if [[ ${installomatorExitCode} -ne 0 ]]; then
+                log_error "Error upgrading Homebrew package ${label}. Exit code ${installomatorExitCode}"
+                swiftDialogUpdate "listitem: index: $i, status: fail"
+                let errorCount++
+            else
+                # Homebrew never touches DIALOG_CMD_FILE the way Installomator does, so nothing
+                # else ever flips this listitem out of "wait/Checking ..." on success - it would
+                # spin for the rest of the dialog even though the upgrade succeeded.
+                [ ${InteractiveModeOption} -ge 1 ] && swiftDialogUpdate "listitem: index: $i, status: success"
+                remove_aap_report_item "${label}"
+                homebrew_remove_discovered "${label}"
+            fi
+            write_aap_receipt "${label}" "${AAPVersionByLabel[$label]:-}" "${installomatorExitCode}"
+        elif [[ ${zoom_call_active_check_option} == "TRUE" && ${label} == "zoom"* ]] ; then
 
 	        CPTHOSTPID=$(pgrep CptHost)
 	        AOMHOSTPID=$(pgrep aomhost)
@@ -9619,7 +10575,9 @@ main() {
     # (which tracks the new/available version). Used to populate listitem subtitles in the
     # deferral/hard-deadline dialogs with "Current Version" / "New Version" text.
     typeset -gA AAPInstalledVersionByLabel=()
-    
+    typeset -gA brewDisplayNames=()
+    typeset -gA brewIconPaths=()
+
     # Determine if discovery should run based on workflow_disable_app_discovery_option and DiscoveryFrequency
     local run_discovery="FALSE"
     local discovery_skip_reason=""
@@ -9695,6 +10653,9 @@ main() {
             AAPVersionByLabel[$_qLabel]="${_qNew}"
             AAPInstalledVersionByLabel[$_qLabel]="${_qInstalled}"
         done < <(get_aap_report_entries)
+
+        # Discovery did not run, so rebuild the Homebrew queue from its persisted key.
+        homebrew_restore_queue
     else
         log_notice "**** App Auto-Patch ${scriptVersion} - RUN APP DISCOVERY WORKFLOW ****"
         
@@ -9905,6 +10866,10 @@ main() {
         # Label fragment parsing is finished; everything below relies on normal word splitting.
         IFS=$discovery_saved_IFS
 
+        # Homebrew discovery runs after Installomator so labelsArray is populated and the
+        # priority/conflict rules can see which packages Installomator already covers.
+        homebrew_discovery
+
         # Close our bouncing progress swiftDialog window
         swiftDialogCompleteDialogDiscover
         
@@ -9994,6 +10959,12 @@ main() {
         fi
     fi
 
+    # Drop Installomator labels that Homebrew won during priority/conflict resolution. This must
+    # run after both the ignoredLabelsArray subtraction and the ignore-all rebuild above, since
+    # that rebuild would otherwise reintroduce a superseded label. See the function definition
+    # (Homebrew marker block) for why it also scrubs DiscoveredLabels, not just $labelsArray.
+    homebrew_drop_superseded_labels
+
     appNamesArray=()
     # Get App Names for each label in labelsArray
     queuedLabelsForNames=("${(@s/ /)labelsArray}")
@@ -10001,8 +10972,8 @@ main() {
         log_verbose "Obtaining proper name for $label"
         
         # Get display name from label fragment
-        currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-        
+        currentDisplay_name="$(resolve_label_display_name "$label")"
+
         # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
         iconPath=$(resolve_app_icon_path "$label")
         log_verbose "Resolved icon path: $iconPath"
@@ -10136,8 +11107,15 @@ main() {
     # progress window over both steps with per-app status and a determinate progress bar.
     # stagingWindowOpened tracks whether it was opened, since countOfElementsArray can end up
     # empty afterward (all apps patched silently) even though the window still needs closing.
+    # Only open the window when one of the two workflows it is a progress indicator for will
+    # actually run. If neither WorkflowStageUpdatesOption nor WorkflowBackgroundPatchClosedAppsOption
+    # is TRUE, the two blocks below are both skipped and the window would be closed immediately
+    # after opening; the immediate "quit:" then races swiftDialog's own startup (it launches
+    # backgrounded via "&") and is written and the command file removed before swiftDialog has
+    # started reading it, so the window never quits and lingers on screen for the rest of the run.
     stagingWindowOpened="FALSE"
-    if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+    if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]] \
+       && { [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] || [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]]; }; then
         swiftDialogStagingWindow
         stagingWindowOpened="TRUE"
     fi

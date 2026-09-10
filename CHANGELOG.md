@@ -4,6 +4,31 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 # Version 3
 
+## Version 3.8.0
+### 08-Sep-2026
+
+**New Features**
+
+- **Homebrew Support** - Discover and upgrade outdated Homebrew casks and formulae alongside Installomator labels, in the same discovery run, the same user dialog, and the same deferral/deadline/reporting flow. Opt-in; disabled by default. Homebrew runs de-privileged as the owner of the Homebrew prefix. A root-owned prefix disables Homebrew entirely. A prefix owned by someone other than the console user - including when no one is logged in at all - still has its formulae managed as that owner; only casks are held back, since replacing a cask's application bundle is the part that can interact with a GUI session.
+	- Managed Preference Key: `<key>HomebrewEnabled</key>` `<true/>` | `<false/>` - default: `false`
+	- Managed Preference Key: `<key>HomebrewCaskEnabled</key>` `<true/>` | `<false/>` - default: `true`
+	- Managed Preference Key: `<key>HomebrewFormulaEnabled</key>` `<true/>` | `<false/>` - default: `true`
+	- Managed Preference Key: `<key>HomebrewPriority</key>` `<string>INSTALLOMATOR | HOMEBREW</string>` - default: `INSTALLOMATOR`. Decides which tool wins when a package is available from both.
+	- Managed Preference Key: `<key>HomebrewPreferredPackages</key>` `<string>pkg1 pkg2</string>` - per-package override of `HomebrewPriority`. Under `INSTALLOMATOR` priority these packages are taken from Homebrew instead; under `HOMEBREW` priority they are taken from Installomator instead.
+	- Managed Preference Key: `<key>HomebrewBinaryPath</key>` `<string>/opt/homebrew/bin/brew</string>` - optional; auto-detected when unset
+	- Managed Preference Key: `<key>HomebrewIgnoredCasks</key>` `<string>cask1 cask2</string>`
+	- Managed Preference Key: `<key>HomebrewIgnoredFormulae</key>` `<string>formula1 formula2</string>`
+	- CLI: `--homebrew-enabled` / `-disabled`, `--homebrew-cask-enabled` / `-disabled`, `--homebrew-formula-enabled` / `-disabled`, `--homebrew-priority=`, `--homebrew-preferred-packages=`, `--homebrew-binary-path=`, `--homebrew-ignored-casks=`, `--homebrew-ignored-formulae=`
+	- Casks that declare `auto_updates true` or `version :latest` are not managed - they update themselves
+	- Casks installed from a `.pkg` that requires an administrator password cannot be upgraded unattended; the failure is logged and counted, and does not abort the run
+	- `--reset-labels` clears the discovered Homebrew queue alongside the other label lists
+
+**Fixes**
+
+- Fixed: the temporary wrapper script used when resolving a label's download URL was created at a fixed, predictable path in world-writable `/private/tmp` instead of a randomised one, because a trailing `.sh` in the `mktemp` template stops BSD `mktemp` from substituting the placeholder. That path was written by a root LaunchDaemon, and a crash that left the file behind made every later staging attempt fail until it was removed by hand. Present since 3.6.0 RC3 and shipped in every release since; unrelated to Homebrew support
+- Fixed: the "Preparing updates" progress window could stay on screen for the rest of the run, overlapping the pending-updates dialog and every dialog after it. It only happens when both `WorkflowStageUpdates` and `WorkflowBackgroundPatchClosedApps` are disabled, since the window closed itself before the dialog it belongs to had finished starting up. Present in the 3.7.x line; unrelated to Homebrew support
+- Fixed: the currently logged-in user was reported to the terminal with a misleading `Not Logged:` prefix and never written to `aap.log`, because the check that chooses between the two used a variable name that is never set anywhere in the script in place of the log folder path. The same variable also skipped collection of the console user's GUID, real name and admin / secure-token / volume-owner status, so those details were missing from the verbose log on every run. Diagnostic only - no patching behaviour changes. Pre-existing in 3.8.0
+
 ## Version 3.7.1
 ### 02-Sep-2026
 
