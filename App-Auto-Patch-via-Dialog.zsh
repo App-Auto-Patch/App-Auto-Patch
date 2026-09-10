@@ -4701,22 +4701,22 @@ get_logged_in_user() {
 
     # Make sure we have a "normal" logged in user.
     if [[ -z "${currentUserAccountName_response}" ]]; then
-        { [[ $(id -u) -eq 0 ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; } && log_status "No GUI user currently logged in."
-        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${AAP_LOG_FOLDER}" ]]; } && log_echo "Status: No GUI user currently logged in."
+        { [[ $(id -u) -eq 0 ]] && [[ -d "${appAutoPatchLogFolder}" ]]; } && log_status "No GUI user currently logged in."
+        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${appAutoPatchLogFolder}" ]]; } && log_echo "Status: No GUI user currently logged in."
     elif [[ "${currentUserAccountName_response}" = "root" ]] || [[ "${currentUserAccountName_response}" = "_mbsetupuser" ]] || [[ "${currentUserAccountName_response}" = "loginwindow" ]]; then
-        { [[ $(id -u) -eq 0 ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; } && log_status "Current GUI user is system account: ${currentUserAccountName_response}"
-        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${AAP_LOG_FOLDER}" ]]; } && log_echo "Status: Current GUI user is system account: ${currentUserAccountName_response}"
+        { [[ $(id -u) -eq 0 ]] && [[ -d "${appAutoPatchLogFolder}" ]]; } && log_status "Current GUI user is system account: ${currentUserAccountName_response}"
+        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${appAutoPatchLogFolder}" ]]; } && log_echo "Status: Current GUI user is system account: ${currentUserAccountName_response}"
     else # Normal locally logged in user.
         currentUserAccountName="${currentUserAccountName_response}"
         currentUserID=$(id -u "${currentUserAccountName}" 2> /dev/null)
-        { [[ $(id -u) -eq 0 ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; } && log_status "Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
-        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${AAP_LOG_FOLDER}" ]]; } && log_echo "Status: Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
+        { [[ $(id -u) -eq 0 ]] && [[ -d "${appAutoPatchLogFolder}" ]]; } && log_status "Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
+        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${appAutoPatchLogFolder}" ]]; } && log_echo "Status: Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
     fi
     log_verbose  "currentUserAccountName is: ${currentUserAccountName}"
     log_verbose  "currentUserID is: ${currentUserID}"
 
     # Only collect user details if it's a "normal" GUI user.
-    if [[ "${currentUserAccountName}" != "FALSE" ]] && [[ "${currentUserID}" != "FALSE" ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; then
+    if [[ "${currentUserAccountName}" != "FALSE" ]] && [[ "${currentUserID}" != "FALSE" ]] && [[ -d "${appAutoPatchLogFolder}" ]]; then
         current_user_guid=$(dscl . read "/Users/${currentUserAccountName}" GeneratedUID 2> /dev/null | awk '{print $2;}')
         current_user_real_name=$(dscl . read "/Users/${currentUserAccountName}" RealName 2> /dev/null | tail -1 | sed -e 's/^RealName: //g' -e 's/^ //g')
         log_verbose  "current_user_guid is: ${current_user_guid}"
