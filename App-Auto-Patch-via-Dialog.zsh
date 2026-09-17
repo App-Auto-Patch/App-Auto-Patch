@@ -7586,6 +7586,10 @@ function PgetAppVersion() {
         elif ([[ "$applist" == *"/Applications/Edge Apps.localized/"* ]]); then
             log_info "App found in the Edge PWA app folder: $applist, ignoring"
             applist=""
+        # Setapp apps are licensed and updated through Setapp; patching them installs an unlicensed vendor copy in /Applications
+        elif ([[ "$applist" == *"/Applications/Setapp/"* ]]); then
+            log_info "App found in the Setapp folder: $applist, ignoring"
+            applist=""
         elif ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "TRUE" ]]); then
             log_verbose "App found in User directory: $applist, coverting to default directory"
             # Adding the label to the converted labels
