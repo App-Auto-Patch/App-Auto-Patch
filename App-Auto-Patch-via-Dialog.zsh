@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.1"
 scriptDate="2026/09/30"
-scriptBuild="3.7.1.2609301520"
+scriptBuild="3.7.1.2609301545"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -7697,6 +7697,93 @@ function PgetAppVersion() {
     
 }
 
+_aap_eval_label_fragment() {
+    # Evaluate an Installomator label without letting it exit the AAP process.
+    # cleanupAndExit ends in exit. The pique label calls it when installedOSversion
+    # is unset, which used to kill discovery and leave the Dock icon behind. (#275)
+    local fragment="$1"
+    local case_statement output rc=0 frag_block line
+    local abort="" abort_msg=""
+    local frag_name frag_appName frag_appNewVersion frag_type frag_packageID
+    local frag_expectedTeamID frag_targetDir frag_folderName frag_versionKey
+    local frag_downloadURL frag_appCustomVersion
+
+    case_statement="
+    case ${label_name} in
+        ${fragment}
+        *)
+            print -r -- \"${label_name} did not match anything in the case block - weird.\"
+        ;;
+    esac
+    "
+
+    output=$(
+        installedOSversion="$(/usr/bin/sw_vers -productVersion 2>/dev/null)"
+        cleanupAndExit() {
+            printf '\n--AAPFRAG--\n'
+            printf 'abort=%s\n' "${1:-1}"
+            printf 'abort_msg=%s\n' "${2:-}"
+            exit 0
+        }
+        eval "$case_statement"
+        printf '\n--AAPFRAG--\n'
+        printf 'abort=0\n'
+        printf 'name=%s\n' "${name}"
+        printf 'appName=%s\n' "${appName}"
+        printf 'appNewVersion=%s\n' "${appNewVersion}"
+        printf 'type=%s\n' "${type}"
+        printf 'packageID=%s\n' "${packageID}"
+        printf 'expectedTeamID=%s\n' "${expectedTeamID}"
+        printf 'targetDir=%s\n' "${targetDir}"
+        printf 'folderName=%s\n' "${folderName}"
+        printf 'versionKey=%s\n' "${versionKey}"
+        printf 'downloadURL=%s\n' "${downloadURL}"
+        printf 'appCustomVersion=%s\n' "${appCustomVersion}"
+    ) || rc=$?
+
+    if [[ "$output" != *"--AAPFRAG--"* ]]; then
+        log_error "Label ${label_name} ended its version check unexpectedly (status ${rc}). Skipping."
+        return 1
+    fi
+
+    frag_block="${output##*$'\n'--AAPFRAG--$'\n'}"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        case "$line" in
+            abort=*) abort="${line#abort=}" ;;
+            abort_msg=*) abort_msg="${line#abort_msg=}" ;;
+            name=*) frag_name="${line#name=}" ;;
+            appName=*) frag_appName="${line#appName=}" ;;
+            appNewVersion=*) frag_appNewVersion="${line#appNewVersion=}" ;;
+            type=*) frag_type="${line#type=}" ;;
+            packageID=*) frag_packageID="${line#packageID=}" ;;
+            expectedTeamID=*) frag_expectedTeamID="${line#expectedTeamID=}" ;;
+            targetDir=*) frag_targetDir="${line#targetDir=}" ;;
+            folderName=*) frag_folderName="${line#folderName=}" ;;
+            versionKey=*) frag_versionKey="${line#versionKey=}" ;;
+            downloadURL=*) frag_downloadURL="${line#downloadURL=}" ;;
+            appCustomVersion=*) frag_appCustomVersion="${line#appCustomVersion=}" ;;
+        esac
+    done <<< "$frag_block"
+
+    if [[ "$abort" != "0" ]]; then
+        log_notice "Label ${label_name} stopped its version check (${abort}${abort_msg:+: ${abort_msg}}). Skipping."
+        return 1
+    fi
+
+    name="$frag_name"
+    appName="$frag_appName"
+    appNewVersion="$frag_appNewVersion"
+    type="$frag_type"
+    packageID="$frag_packageID"
+    expectedTeamID="$frag_expectedTeamID"
+    targetDir="$frag_targetDir"
+    folderName="$frag_folderName"
+    versionKey="$frag_versionKey"
+    downloadURL="$frag_downloadURL"
+    appCustomVersion="$frag_appCustomVersion"
+    return 0
+}
+
 function verifyApp() {
     
     appPath=$1
@@ -7746,16 +7833,9 @@ function verifyApp() {
         source "${functionsPath}"
         
         fragment=$(cat ${fragmentsPath}/labels/${label_name}.sh)
-        
-        caseStatement="
-        case $label_name in
-            $fragment
-            *)
-                echo \"$label_name didn't match anything in the case block - weird.\"
-            ;;
-        esac
-        "
-        eval $caseStatement
+        if ! _aap_eval_label_fragment "$fragment"; then
+            return
+        fi
         
         if [[ -n $name ]]; then
             # Exact-element membership; a "${array[@]}" substring match depends on IFS and can also

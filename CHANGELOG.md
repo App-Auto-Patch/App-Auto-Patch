@@ -15,6 +15,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 **Fixes**
 
+- Fixed: a label that calls Installomator's `cleanupAndExit` no longer ends the whole App Auto-Patch run. The `pique` label does that when `installedOSversion` is unset, so discovery died after `Found Pique.app` and the LaunchDaemon started another run. Non-silent runs also left an App Auto-Patch icon in the Dock. The version check now runs in a subshell, with the Mac's OS version filled in, and a label abort skips that label only. (#275)
 - Fixed: discovery no longer treats a Setapp copy as the installed app. Spotlight matches under `/Applications/Setapp/` (including a standard-user install at `~/Applications/Setapp/`) and `/Users/Shared/Apps/Setapp/` are ignored, so AAP does not queue the label and install an unlicensed vendor build next to the Setapp copy. A regular copy directly in `/Applications` is still patched. (#270)
 - Fixed: Update Staging no longer prints a raw variable dump (`labelInfo`, `stagingType`, download URL, and the rest) to the Jamf policy log between apps. zsh reprints a variable when `local` is used again inside a loop, so the dump was the previous label, and it never went through the logger. (#265)
 - Fixed: log timestamps no longer change with the Mac's language. Every `aap.log` line and the LaunchDaemon helper now use `YYYY-MM-DD HH:MM:SS`, so a German scheduled run and the pending-apps process started from a banner notification no longer mix `Mi. Sep. 16` with `Wed Sep 16`. (#272)

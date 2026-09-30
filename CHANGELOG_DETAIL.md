@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.1
+### 30-Sep-2026 (5) - Build 3.7.1.2609301545
+- [#275](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/275): `verifyApp` `eval`s the Installomator label in the main shell. The current `pique` label calls `cleanupAndExit` (which `exit`s) when `installedOSversion` is unset or the Mac is not Apple Silicon. AAP never set `installedOSversion`, so every discovery died after `Found Pique.app`. `aap-starter` then logged `Removing dead AAP PID` and started again. Runs that were not fully silent left the discovery window's Dock icon behind, because that `exit` does not hit the `HUP`/`INT`/`TERM` cleanup trap. `_aap_eval_label_fragment` now runs the fragment in a subshell, sets `installedOSversion` from `sw_vers -productVersion`, and turns `cleanupAndExit` into a recorded skip. A finished fragment still copies `name`, `appNewVersion`, and the other label variables back. Adding `pique` to `IgnoredLabels` remains a workaround for Macs that should not patch it.
+
 ### 30-Sep-2026 (4) - Build 3.7.1.2609301520
 - [#270](https://github.com/App-Auto-Patch/App-Auto-Patch/pull/270): `PgetAppVersion()` Spotlight search ignored Chrome/Edge PWA, Parallels, and Jamf Composer folders, but not Setapp. `/Applications/Setapp/BusyCal.app` passed the `${targetDir}*` filter (`targetDir` defaults to `/`), so AAP read the Setapp version, queued the label, and Installomator installed the vendor build into `/Applications`. Discovery now ignores `/Applications/Setapp/` (which also matches `~/Applications/Setapp/` for a standard user) and `/Users/Shared/Apps/Setapp/` (Setapp Spotlight preview shortcuts). A copy already in `/Applications`, `/Applications/Utilities`, or `targetDir` is still found before Spotlight runs.
 
