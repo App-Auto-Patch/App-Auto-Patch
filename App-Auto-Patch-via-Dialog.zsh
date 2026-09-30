@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.1"
-scriptDate="2026/09/02"
-scriptBuild="3.7.1.2609021118"
+scriptDate="2026/09/30"
+scriptBuild="3.7.1.2609301350"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -111,7 +111,7 @@ echo "
     
     Webhook Options:
     [--webhook-feature-all] [--webhook-feature-failures] [--webhook-feature-off]
-    [--webhook-url-slack=URL] [--webhook-url-teams=URL]
+    [--webhook-url-slack=URL] [--webhook-url-teams=URL] [--webhook-url-google-chat=URL]
     [--mosyle-console-url=URL]
 
     Troubleshooting Options:
@@ -185,6 +185,7 @@ echo "
     <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
     <key>WebhookURLSlack</key> <string>URL</string>
     <key>WebhookURLTeams</key> <string>URL</string>
+    <key>WebhookURLGoogleChat</key> <string>URL</string>
     <key>MosyleConsoleURL</key> <string>https://mybusiness.mosyle.com</string>
     <key>WorkflowBackgroundPatchClosedApps</key> <true/> | <false/>
     <key>WorkflowStageUpdates</key> <true/> | <false/>
@@ -1257,6 +1258,9 @@ get_options() {
             --webhook-url-teams=*)
                 webhook_url_teams_option="${1##*=}"
             ;;
+            --webhook-url-google-chat=*)
+                webhook_url_google_chat_option="${1##*=}"
+            ;;
             --mosyle-console-url=*)
                 mosyle_console_url_option="${1##*=}"
             ;;
@@ -1460,6 +1464,8 @@ get_preferences() {
         webhook_url_slack_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLSlack 2> /dev/null)
         local webhook_url_teams_managed
         webhook_url_teams_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLTeams 2> /dev/null)
+        local webhook_url_google_chat_managed
+        webhook_url_google_chat_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLGoogleChat 2> /dev/null)
         local mosyle_console_url_managed
         mosyle_console_url_managed=$(defaults read "${appAutoPatchManagedPLIST}" MosyleConsoleURL 2> /dev/null)
         local ignored_labels_managed
@@ -1629,6 +1635,8 @@ get_preferences() {
         webhook_url_slack_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLSlack 2> /dev/null)
         local webhook_url_teams_local
         webhook_url_teams_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLTeams 2> /dev/null)
+        local webhook_url_google_chat_local
+        webhook_url_google_chat_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLGoogleChat 2> /dev/null)
         local mosyle_console_url_local
         mosyle_console_url_local=$(defaults read "${appAutoPatchLocalPLIST}" MosyleConsoleURL 2> /dev/null)
         local ignored_labels_local
@@ -1785,6 +1793,8 @@ get_preferences() {
     { [[ -z "${webhook_url_slack_managed}" ]] && [[ -z "${webhook_url_slack_option}" ]] && [[ -n "${webhook_url_slack_local}" ]]; } && webhook_url_slack_option="${webhook_url_slack_local}"
     [[ -n "${webhook_url_teams_managed}" ]] && webhook_url_teams_option="${webhook_url_teams_managed}"
     { [[ -z "${webhook_url_teams_managed}" ]] && [[ -z "${webhook_url_teams_option}" ]] && [[ -n "${webhook_url_teams_local}" ]]; } && webhook_url_teams_option="${webhook_url_teams_local}"
+    [[ -n "${webhook_url_google_chat_managed}" ]] && webhook_url_google_chat_option="${webhook_url_google_chat_managed}"
+    { [[ -z "${webhook_url_google_chat_managed}" ]] && [[ -z "${webhook_url_google_chat_option}" ]] && [[ -n "${webhook_url_google_chat_local}" ]]; } && webhook_url_google_chat_option="${webhook_url_google_chat_local}"
     [[ -n "${mosyle_console_url_managed}" ]] && mosyle_console_url_option="${mosyle_console_url_managed}"
     { [[ -z "${mosyle_console_url_managed}" ]] && [[ -z "${mosyle_console_url_option}" ]] && [[ -n "${mosyle_console_url_local}" ]]; } && mosyle_console_url_option="${mosyle_console_url_local}"
     [[ -n "${ignored_labels_managed}" ]] && ignored_labels_option="${ignored_labels_managed}"
@@ -1952,6 +1962,7 @@ get_preferences() {
     log_verbose "WebhookFeature: $webhook_feature_option"
     log_verbose "WebhookURLSlack: $webhook_url_slack_option"
     log_verbose "WebhookURLTeams: $webhook_url_teams_option"
+    log_verbose "WebhookURLGoogleChat: $webhook_url_google_chat_option"
     log_verbose "MosyleConsoleURL: $mosyle_console_url_option"
     log_verbose "IgnoredLabels: $ignored_labels_option"
     log_verbose "RequiredLabels: $required_labels_option"
@@ -2888,6 +2899,13 @@ manage_parameter_options() {
         defaults delete "${appAutoPatchLocalPLIST}" WebhookURLTeams 2> /dev/null
     fi
 
+    # Manage ${webhook_url_google_chat_option} and save to ${appAutoPatchLocalPLIST}.
+    if [[ -n "${webhook_url_google_chat_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" WebhookURLGoogleChat -string "${webhook_url_google_chat_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" WebhookURLGoogleChat 2> /dev/null
+    fi
+
     # Manage ${mosyle_console_url_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ -n "${mosyle_console_url_option}" ]]; then
         defaults write "${appAutoPatchLocalPLIST}" MosyleConsoleURL -string "${mosyle_console_url_option}"
@@ -2898,6 +2916,7 @@ manage_parameter_options() {
     { [[ -n "${webhook_feature_option}" ]]; } && log_verbose "webhook_feature_option is: ${webhook_feature_option}"
     { [[ -n "${webhook_url_slack_option}" ]]; } && log_verbose "webhook_url_slack_option is: ${webhook_url_slack_option}"
     { [[ -n "${webhook_url_teams_option}" ]]; } && log_verbose "webhook_url_teams_option is: ${webhook_url_teams_option}"
+    { [[ -n "${webhook_url_google_chat_option}" ]]; } && log_verbose "webhook_url_google_chat_option is: ${webhook_url_google_chat_option}"
     { [[ -n "${mosyle_console_url_option}" ]]; } && log_verbose "mosyle_console_url_option is: ${mosyle_console_url_option}"
 
     # SelfUpdateEnabled/SelfUpdateFrequency are already resolved, normalized, and saved by
@@ -9024,6 +9043,114 @@ webHookMessage() {
         
         # Send the JSON payload using curl
         curlResult=$(curl -s -X POST -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_teams_option")
+        log_verbose "Webhook result: $curlResult"
+    fi
+
+    # Google Chat incoming webhook (cardsV2). Adapted from #93 for the current
+    # webhook payload: same status, device, labels, errors, and MDM link as Slack/Teams.
+    if [[ -z "${webhook_url_google_chat_option}" ]]; then
+        log_info "No Google Chat webhook configured"
+    else
+        if defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url &> /dev/null; then
+            jamfProURL=$(/usr/bin/defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url)
+            mdmComputerURL="${jamfProURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
+        elif [[ "$(profiles show | grep -A4 "Management Profile" | sed -n -e 's/^.*profileIdentifier: //p')" == "Microsoft.Profiles.MDM" ]]; then
+            mdmURL="https://intune.microsoft.com/#view/Microsoft_Intune_Devices/DeviceSettingsMenuBlade/~/overview/mdmDeviceId"
+            mdmComputerID="$(grep -rnwi '/Library/Logs/Microsoft/Intune' -e 'DeviceId:' | head -1 | grep -E -o 'DeviceId.{0,38}' | cut -d ' ' -f2)"
+            if [[ -n "$mdmComputerID" ]]; then
+                mdmComputerURL="${mdmURL}/${mdmComputerID}"
+            else
+                mdmComputerURL="https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMacOsMenu/~/macOsDevices"
+            fi
+        elif [[ $mdmName == "Jumpcloud" ]]; then
+            mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
+        elif [[ $mdmName == "Workspace One" ]]; then
+            if [[ -n "$server_url" ]]; then
+                base_url=$(echo "$server_url" | sed -n 's/\(https:\/\/[^\/]*\).*/\1/p')
+                mdmComputerURL="${base_url}/AirWatch/#/AirWatch/Devices/List/"
+            else
+                mdmComputerURL="https://console.workspace.one"
+            fi
+        elif [[ $mdmName == "Mosyle" ]]; then
+            mdmComputerURL="${mosyleComputerURL}"
+        else
+            log_info "No MDM determined - Google Chat webhook will omit the device link"
+            mdmComputerURL=""
+        fi
+
+        local googleChatButton=""
+        if [[ -n "${mdmComputerURL}" && -n "${mdmName}" ]]; then
+            googleChatButton=',
+                            {
+                                "buttonList": {
+                                    "buttons": [
+                                        {
+                                            "text": "View in '"${mdmName}"'",
+                                            "onClick": {
+                                                "openLink": {
+                                                    "url": "'"${mdmComputerURL}"'"
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            }'
+        fi
+
+        log_info "Sending Google Chat WebHook"
+        jsonPayload='{
+            "text": "'"${webhookStatus}"' — '"${serialNumber}"'",
+            "cardsV2": [
+                {
+                    "cardId": "appautopatch",
+                    "card": {
+                        "header": {
+                            "title": "'"${appTitle}"'",
+                            "subtitle": "'"${webhookStatus}"'",
+                            "imageUrl": "https://raw.githubusercontent.com/App-Auto-Patch/App-Auto-Patch/main/Images/AAPLogo.png",
+                            "imageType": "SQUARE"
+                        },
+                        "sections": [
+                            {
+                                "widgets": [
+                                    {
+                                        "decoratedText": {
+                                            "topLabel": "Serial Number",
+                                            "text": "'"${serialNumber}"'",
+                                            "bottomLabel": "'"${modelName}"'"
+                                        }
+                                    },
+                                    {
+                                        "decoratedText": {
+                                            "topLabel": "Current User",
+                                            "text": "'"${currentUserAccountName}"'"
+                                        }
+                                    },
+                                    {
+                                        "decoratedText": {
+                                            "topLabel": "Versions",
+                                            "text": "AAP '"${scriptVersion}"' · OS '"${osVersion}"'"
+                                        }
+                                    },
+                                    {
+                                        "textParagraph": {
+                                            "text": "<b>Label(s)</b><br>'"${formatted_result}"'"
+                                        }
+                                    },
+                                    {
+                                        "textParagraph": {
+                                            "text": "<b>Error(s)</b><br>'"${formatted_error_result}"'"
+                                        }
+                                    }'"${googleChatButton}"'
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        }'
+
+        curlResult=$(curl -s -X POST -H "Content-Type: application/json; charset=UTF-8" -d "$jsonPayload" "$webhook_url_google_chat_option")
         log_verbose "Webhook result: $curlResult"
     fi
     

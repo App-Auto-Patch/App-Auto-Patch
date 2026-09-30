@@ -15,6 +15,9 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.7.1
+- **Google Chat webhooks** — Post the same patch-result card used for Slack and Teams to a Google Chat incoming webhook when `WebhookFeature` is `ALL` or `FAILURES`. (#273)
+	- Managed Preference Key: `<key>WebhookURLGoogleChat</key>` `<string>https://chat.googleapis.com/v1/spaces/...</string>`
+	- CLI: `--webhook-url-google-chat=`
 - Fixed: Mosyle webhook **View in Mosyle** links use the admin console (`mybusiness.mosyle.com` for Business, `my.mosyle.com` for Education) instead of the enrollment `ServerURL`. Optional `MosyleConsoleURL` override. (#267)
 - Fixed: console user detection now resolves the `scutil` ConsoleUser UID to the account RecordName with `id -un`, instead of using the `Name` field (which can be a login alias) or `stat /dev/console`. (#264)
 

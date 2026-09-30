@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.1
+### 30-Sep-2026 (1) - Build 3.7.1.2609301350
+- [#273](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/273): added Google Chat incoming-webhook support, adapted from the 2.x PR [#93](https://github.com/App-Auto-Patch/App-Auto-Patch/pull/93). New managed/CLI/local key `WebhookURLGoogleChat` / `--webhook-url-google-chat=`. `webHookMessage()` posts a `cardsV2` card with the same status, serial, model, user, labels, errors, and MDM device link already used for Slack and Teams. The device button is omitted when no MDM URL can be resolved. The 2.x snippet was not copied as-is: it sat outside `webHookMessage()`, contained an invalid JSON comment, mismatched `googlechatURL`/`googleChatURL`, and linked only to Jamf Pro.
+
 ### 02-Sep-2026 (1) - Build 3.7.1.2609021118
 - [#267](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/267): Mosyle webhook device links no longer use `get_mdm()` enrollment `server_url` (e.g. `https://biz-1234.mosyle.com`). That host is the MDM check-in endpoint, not the admin console. `resolve_mosyle_console_base_url()` maps `biz-*` / `*business.mosyle*` to `https://mybusiness.mosyle.com` and other Mosyle enrollments to `https://my.mosyle.com`. Optional managed/CLI/local `MosyleConsoleURL` / `--mosyle-console-url=` overrides the host. Manifests, All-Options example, Intune XML, README, and wiki updated.
 

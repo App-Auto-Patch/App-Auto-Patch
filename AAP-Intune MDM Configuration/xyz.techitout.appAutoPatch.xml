@@ -64,6 +64,8 @@
 <string>longURL</string>
 <key>WebhookURLTeams</key>
 <string>longerURL</string>
+<key>WebhookURLGoogleChat</key>
+<string>https://chat.googleapis.com/v1/spaces/SPACE/messages</string>
 <key>MosyleConsoleURL</key>
 <string>https://mybusiness.mosyle.com</string>
 <key>SupportTeamName</key>

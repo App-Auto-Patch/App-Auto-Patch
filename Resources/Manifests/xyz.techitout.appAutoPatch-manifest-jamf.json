@@ -1153,6 +1153,18 @@
             ],
             "property_order": 185
         },
+        "WebhookURLGoogleChat": {
+            "type": "string",
+            "title": "Google Chat Webhook URL",
+            "description": "The Google Chat incoming webhook URL to use if WebhookFeature is set to ALL or FAILURES. The card includes the same status, serial, user, labels, errors, and MDM device link as the Slack and Teams webhooks.",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#webhookurlgooglechat"
+                }
+            ],
+            "property_order": 186
+        },
         "MosyleConsoleURL": {
             "type": "string",
             "title": "Mosyle Console URL",
@@ -1163,7 +1175,7 @@
                     "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#mosyleconsoleurl"
                 }
             ],
-            "property_order": 186
+            "property_order": 187
         },
         "WorkflowDisableAppDiscovery": {
             "type": "string",

@@ -5,6 +5,14 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 # Version 3
 
 ## Version 3.7.1
+### 30-Sep-2026
+
+**New Features**
+
+- **Google Chat webhooks** — When `WebhookFeature` is `ALL` or `FAILURES`, AAP can post the same patch result to a Google Chat incoming webhook. The card includes status, serial number, model, user, labels, errors, and the MDM device link used by Slack and Teams. (#273)
+	- Managed Preference Key: `<key>WebhookURLGoogleChat</key>` `<string>https://chat.googleapis.com/v1/spaces/...</string>`
+	- CLI: `--webhook-url-google-chat=`
+
 ### 02-Sep-2026
 
 **Fixes**
