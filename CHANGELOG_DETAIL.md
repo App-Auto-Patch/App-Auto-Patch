@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.1
+### 30-Sep-2026 (3) - Build 3.7.1.2609301455
+- [#265](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/265): Update Staging printed a raw `typeset`-style dump (`labelInfo`, `stagingType`, `stagingURL`, version, Team ID, curl options, `fileExt`) to stdout between apps, with no log prefix, so it showed up in Jamf policy logs and not in `aap.log`. The values belonged to the previous label. zsh `local` is function-scoped, and a second `local name` with no assignment prints the current value. Those declarations now happen once, before the staging loop. The same bare `local` in the silent closed-app patch loop (`_dname`, `_ipath`, Zoom process IDs) is hoisted for the same reason.
+
 ### 30-Sep-2026 (2) - Build 3.7.1.2609301433
 - [#272](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/272): log lines and `aap-starter` now use `YYYY-MM-DD HH:MM:SS` instead of `%a %b %d %T`. That weekday/month form follows `LC_TIME`, so a scheduled run or Terminal session on a German Mac logged `Mi. Sep. 16` while the pending-apps process started by the notification LaunchDaemon (C/English locale) logged `Wed Sep 16`. Process start-time checks now run `ps`/`date` under `LC_TIME=C` so the same locale split cannot fail the parse. Console-user language is read with `launchctl asuser` before falling back to `su -`, because a login shell from that LaunchDaemon can fail and leave `langUser` empty (English built-in dialog and notification strings). Banner text still comes from the matching `dialogElements` language entry; there is no separate automatic translation.
 

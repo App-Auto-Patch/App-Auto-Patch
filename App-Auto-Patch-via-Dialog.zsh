@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.1"
 scriptDate="2026/09/30"
-scriptBuild="3.7.1.2609301433"
+scriptBuild="3.7.1.2609301455"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -8125,6 +8125,13 @@ workflow_stage_updates() {
 
     log_info "Staging pending updates before displaying user dialog..."
 
+    # Declare once. zsh `local` is function-scoped, and repeating `local name` with no
+    # assignment inside a loop prints the previous value straight to stdout. (#265)
+    local _stageOwner stagedEntry stagedLabel stillQueued ql
+    local label labelInfo stagingType stagingURL stagingVersion stagingTeamID stagingCurlOpts
+    local fileExt stagedFile stagedVersionFile stagedTypeFile existingVersion
+    local -a curlArgs
+
     # Harden the staging directory. It lives under world-writable /private/tmp, so an
     # unprivileged local user could pre-create it (and own it) before this root run, then drop
     # malicious installers named <label>.pkg/.dmg that we'd later trust via downloadURL=file://.
@@ -8135,7 +8142,6 @@ workflow_stage_updates() {
         rm -f "${AAPStagingFolder}" 2>/dev/null
     fi
     if [[ -d "${AAPStagingFolder}" ]]; then
-        local _stageOwner
         _stageOwner=$(/usr/bin/stat -f '%u' "${AAPStagingFolder}" 2>/dev/null)
         if [[ "${_stageOwner}" != "0" ]]; then
             log_warning "Staging folder ${AAPStagingFolder} is not root-owned (uid=${_stageOwner:-unknown}) — recreating."
@@ -8154,9 +8160,8 @@ workflow_stage_updates() {
     # accumulating on disk across multiple runs.
     if [[ -d "${AAPStagingFolder}" ]]; then
         for stagedEntry in "${AAPStagingFolder}"/*.{dmg,pkg,zip,tbz,bin}(N); do
-            local stagedLabel
             stagedLabel="${stagedEntry:t:r}"   # filename without extension
-            local stillQueued="FALSE"
+            stillQueued="FALSE"
             for ql in $queuedLabelsArray; do
                 [[ "$ql" == "$stagedLabel" ]] && stillQueued="TRUE" && break
             done
@@ -8195,7 +8200,6 @@ workflow_stage_updates() {
         log_info "Resolving download info for staging: ${label}"
 
         # Resolve the label's downloadURL and related vars in an isolated subprocess
-        local labelInfo
         labelInfo=$(_resolve_label_staging_info "$label")
         if [[ $? -ne 0 ]] || [[ -z "$labelInfo" ]]; then
             log_error "Could not resolve download info for '${label}'. Skipping staging."
@@ -8206,7 +8210,6 @@ workflow_stage_updates() {
         fi
 
         # Parse KEY=VALUE output — use cut -d= -f2- to preserve URLs that contain '='
-        local stagingType stagingURL stagingVersion stagingTeamID stagingCurlOpts
         stagingType=$(echo "$labelInfo"    | grep '^TYPE='            | cut -d= -f2-)
         stagingURL=$(echo "$labelInfo"     | grep '^DOWNLOAD_URL='    | cut -d= -f2-)
         stagingVersion=$(echo "$labelInfo" | grep '^APP_NEW_VERSION=' | cut -d= -f2-)
@@ -8231,7 +8234,6 @@ workflow_stage_updates() {
         fi
 
         # Map install type to the correct file extension for the staged file
-        local fileExt
         case "$stagingType" in
             dmg|pkgInDmg)                   fileExt="dmg" ;;
             pkg)                             fileExt="pkg" ;;
@@ -8240,13 +8242,12 @@ workflow_stage_updates() {
             *)                               fileExt="bin" ;;
         esac
 
-        local stagedFile="${AAPStagingFolder}/${label}.${fileExt}"
-        local stagedVersionFile="${AAPStagingFolder}/${label}.version"
-        local stagedTypeFile="${AAPStagingFolder}/${label}.type"
+        stagedFile="${AAPStagingFolder}/${label}.${fileExt}"
+        stagedVersionFile="${AAPStagingFolder}/${label}.version"
+        stagedTypeFile="${AAPStagingFolder}/${label}.type"
 
         # Check whether a valid staged file already exists for this version
         if [[ -f "$stagedFile" && -f "$stagedVersionFile" ]]; then
-            local existingVersion
             existingVersion=$(< "$stagedVersionFile")
             if [[ -n "$stagingVersion" && "$existingVersion" == "$stagingVersion" ]]; then
                 log_notice "Already staged: '${label}' at version ${stagingVersion}. Skipping download."
@@ -8275,7 +8276,7 @@ workflow_stage_updates() {
         # Fail a connection attempt promptly and abort a transfer that receives no data for five
         # minutes. Active downloads are unrestricted; this only prevents a dead socket from holding
         # the entire AAP workflow indefinitely.
-        local curlArgs=("--location" "--silent" "--fail" "--show-error" "--connect-timeout" "30" "--speed-limit" "1" "--speed-time" "300")
+        curlArgs=("--location" "--silent" "--fail" "--show-error" "--connect-timeout" "30" "--speed-limit" "1" "--speed-time" "300")
         [[ -n "$stagingCurlOpts" ]] && curlArgs+=($=stagingCurlOpts)
         curlArgs+=("-o" "$stagedFile" "$stagingURL")
 
@@ -8331,6 +8332,8 @@ workflow_silent_patch_closed_apps() {
     local silentPatchErrors=0
     local progressTotal=${#queuedLabelsArray[@]}
     local progressCompleted=0
+    # Same zsh behavior as workflow_stage_updates: a bare `local` inside the loop reprints the last value. (#265)
+    local _dname _ipath _cpthostpid _aomhostpid
 
     _aap_mini_progress_begin "${progressTotal}" "${display_string_silent_patch_progress}" "${display_string_staging_message}"
 
@@ -8344,7 +8347,6 @@ workflow_silent_patch_closed_apps() {
         if is_excluded_background_label "${label}"; then
             log_info "Skipping silent background patch of '${label}' (listed in ExcludedBackgroundLabels); adding to user dialog queue."
             remainingLabels+=("${label}")
-            local _dname _ipath
             _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
             _ipath=$(resolve_app_icon_path "${label}")
             _compute_version_subtitle "${label}"
@@ -8361,13 +8363,11 @@ workflow_silent_patch_closed_apps() {
 
         # Respect Zoom call active check for zoom labels
         if [[ "${zoom_call_active_check_option}" == "TRUE" && "${label}" == "zoom"* ]]; then
-            local _cpthostpid _aomhostpid
             _cpthostpid=$(pgrep CptHost 2>/dev/null)
             _aomhostpid=$(pgrep aomhost 2>/dev/null)
             if [[ -n "${_cpthostpid}" || -n "${_aomhostpid}" ]]; then
                 log_info "Zoom meeting in progress. Skipping silent patch of '${label}'; adding to user dialog queue."
                 remainingLabels+=("${label}")
-                local _dname _ipath
                 _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
@@ -8425,7 +8425,6 @@ workflow_silent_patch_closed_apps() {
                 # Installomator found a blocking process — app is open, needs user interaction
                 log_info "Blocking process detected for '${label}' (exit 12). Adding to user dialog queue."
                 remainingLabels+=("${label}")
-                local _dname _ipath
                 _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
@@ -8441,7 +8440,6 @@ workflow_silent_patch_closed_apps() {
                 log_error "Silent patch for '${label}' returned exit code ${silentExitCode}. Adding to user dialog queue."
                 silentPatchErrors=$((silentPatchErrors + 1))
                 remainingLabels+=("${label}")
-                local _dname _ipath
                 _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"

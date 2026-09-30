@@ -15,6 +15,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 **Fixes**
 
+- Fixed: Update Staging no longer prints a raw variable dump (`labelInfo`, `stagingType`, download URL, and the rest) to the Jamf policy log between apps. zsh reprints a variable when `local` is used again inside a loop, so the dump was the previous label, and it never went through the logger. (#265)
 - Fixed: log timestamps no longer change with the Mac's language. Every `aap.log` line and the LaunchDaemon helper now use `YYYY-MM-DD HH:MM:SS`, so a German scheduled run and the pending-apps process started from a banner notification no longer mix `Mi. Sep. 16` with `Wed Sep 16`. (#272)
 
 ### 02-Sep-2026

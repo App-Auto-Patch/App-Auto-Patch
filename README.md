@@ -18,6 +18,7 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 - **Google Chat webhooks** — Post the same patch-result card used for Slack and Teams to a Google Chat incoming webhook when `WebhookFeature` is `ALL` or `FAILURES`. (#273)
 	- Managed Preference Key: `<key>WebhookURLGoogleChat</key>` `<string>https://chat.googleapis.com/v1/spaces/...</string>`
 	- CLI: `--webhook-url-google-chat=`
+- Fixed: Update Staging no longer writes a raw variable dump of the previous label to the policy log between apps. (#265)
 - Fixed: log timestamps use `YYYY-MM-DD HH:MM:SS` on every run, including the pending-apps process started from a banner notification. (#272)
 - Fixed: Mosyle webhook **View in Mosyle** links use the admin console (`mybusiness.mosyle.com` for Business, `my.mosyle.com` for Education) instead of the enrollment `ServerURL`. Optional `MosyleConsoleURL` override. (#267)
 - Fixed: console user detection now resolves the `scutil` ConsoleUser UID to the account RecordName with `id -un`, instead of using the `Name` field (which can be a login alias) or `stat /dev/console`. (#264)
