@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.1
+### 30-Sep-2026 (2) - Build 3.7.1.2609301433
+- [#272](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/272): log lines and `aap-starter` now use `YYYY-MM-DD HH:MM:SS` instead of `%a %b %d %T`. That weekday/month form follows `LC_TIME`, so a scheduled run or Terminal session on a German Mac logged `Mi. Sep. 16` while the pending-apps process started by the notification LaunchDaemon (C/English locale) logged `Wed Sep 16`. Process start-time checks now run `ps`/`date` under `LC_TIME=C` so the same locale split cannot fail the parse. Console-user language is read with `launchctl asuser` before falling back to `su -`, because a login shell from that LaunchDaemon can fail and leave `langUser` empty (English built-in dialog and notification strings). Banner text still comes from the matching `dialogElements` language entry; there is no separate automatic translation.
+
 ### 30-Sep-2026 (1) - Build 3.7.1.2609301350
 - [#273](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/273): added Google Chat incoming-webhook support, adapted from the 2.x PR [#93](https://github.com/App-Auto-Patch/App-Auto-Patch/pull/93). New managed/CLI/local key `WebhookURLGoogleChat` / `--webhook-url-google-chat=`. `webHookMessage()` posts a `cardsV2` card with the same status, serial, model, user, labels, errors, and MDM device link already used for Slack and Teams. The device button is omitted when no MDM URL can be resolved. The 2.x snippet was not copied as-is: it sat outside `webHookMessage()`, contained an invalid JSON comment, mismatched `googlechatURL`/`googleChatURL`, and linked only to Jamf Pro.
 

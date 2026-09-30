@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.1"
 scriptDate="2026/09/30"
-scriptBuild="3.7.1.2609301350"
+scriptBuild="3.7.1.2609301433"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -1353,8 +1353,22 @@ get_preferences() {
     
     # Get current local user
     currentUserAccountName=$(get_console_user_account_name)
-    # Get language setting for current local user
-    langUser=$(su - ${currentUserAccountName} -c "/usr/bin/defaults read -g AppleLocale | cut -d'_' -f1")
+    # Language for dialog/notification strings. Read the console user's AppleLocale in
+    # their GUI session. `su -` login shells are not reliable from a LaunchDaemon
+    # (including the pending-apps notification trigger), which left langUser empty and
+    # kept the English built-in strings. (#272)
+    langUser=""
+    if [[ -n "${currentUserAccountName}" && "${currentUserAccountName}" != "root" && "${currentUserAccountName}" != "loginwindow" && "${currentUserAccountName}" != "_mbsetupuser" ]]; then
+        local langUserID appleLocale
+        langUserID=$(id -u "${currentUserAccountName}" 2>/dev/null)
+        if [[ -n "${langUserID}" ]]; then
+            appleLocale=$(launchctl asuser "${langUserID}" sudo -u "${currentUserAccountName}" /usr/bin/defaults read -g AppleLocale 2>/dev/null)
+        fi
+        if [[ -z "${appleLocale}" ]]; then
+            appleLocale=$(su - "${currentUserAccountName}" -c "/usr/bin/defaults read -g AppleLocale" 2>/dev/null)
+        fi
+        langUser="${appleLocale%%_*}"
+    fi
     if [[ "${reset_defaults_option}" == "TRUE" ]]; then
         log_status "Resetting defaults for App Auto Patch"
 
@@ -3892,7 +3906,7 @@ install_app_auto_patch() {
 #
 
 log_line() {
-    echo "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: $*" >> "__AAP_LOG__"
+    echo "$(date +"%Y-%m-%d %H:%M:%S") $(hostname -s) $(basename "$0")[$$]: $*" >> "__AAP_LOG__"
 }
 
 # Match the program AAP was launched as, skipping any privilege wrapper or interpreter in front of
@@ -3920,9 +3934,10 @@ command_invokes_aap() {
 
 process_start_epoch() {
     local lstart
-    lstart="$(ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')"
+    # ps lstart follows LC_TIME. Force C so the parser matches on non-English Macs.
+    lstart="$(LC_TIME=C ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')"
     [[ -n "$lstart" ]] || return 1
-    date -j -f "%a %b %d %T %Y" "$lstart" +%s 2>/dev/null
+    LC_TIME=C date -j -f "%a %b %d %T %Y" "$lstart" +%s 2>/dev/null
 }
 
 is_expected_aap_process() {
@@ -4141,7 +4156,7 @@ if (( force_launch == 0 )) && [[ -n "$next_epoch" ]]; then
 fi
 
 # Launch App Auto-Patch
-echo "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: **** App Auto-Patch __SCRIPT_VERSION__ - LAUNCHDAEMON ****" \
+echo "$(date +"%Y-%m-%d %H:%M:%S") $(hostname -s) $(basename "$0")[$$]: **** App Auto-Patch __SCRIPT_VERSION__ - LAUNCHDAEMON ****" \
     | tee -a "__AAP_LOG__"
 
 "__AAP_FOLDER__/appautopatch" &
@@ -5674,9 +5689,11 @@ _aap_command_invokes_aap() {
 
 _aap_process_start_epoch() {
     local lstart
-    lstart=$(ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')
+    # ps lstart follows LC_TIME. Force C so a German (or other) locale cannot
+    # make the start-time parse fail. (#272)
+    lstart=$(LC_TIME=C ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')
     [[ -n "${lstart}" ]] || return 1
-    date -j -f "%a %b %d %T %Y" "${lstart}" +%s 2>/dev/null
+    LC_TIME=C date -j -f "%a %b %d %T %Y" "${lstart}" +%s 2>/dev/null
 }
 
 # Only AAP writes the heartbeat, and only for its own PID, so a recent record naming ${1} proves
@@ -6056,9 +6073,11 @@ _aap_reopen_log_fds() {
     _aap_ensure_log_fds
 }
 
-# Format one log line. Uses zsh's built-in %D strftime (no date(1) subprocess) plus cached host/script.
+# Format one log line. Numeric timestamp only: %a/%b follow LC_TIME, so a LaunchDaemon
+# (often C/English) and a Terminal session (for example de_DE) wrote different prefixes
+# for the same instant. (#272)
 _aap_format_log_line() {
-    print -r -- "$(print -P '%D{%a %b %d %T}') ${_aap_log_host} ${_aap_log_script}[$$]: $*"
+    print -r -- "$(print -P '%D{%Y-%m-%d %H:%M:%S}') ${_aap_log_host} ${_aap_log_script}[$$]: $*"
 }
 
 # Resolve VerboseMode from managed → CLI → local (same precedence as before), early enough that

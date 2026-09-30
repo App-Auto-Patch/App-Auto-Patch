@@ -13,6 +13,10 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 	- Managed Preference Key: `<key>WebhookURLGoogleChat</key>` `<string>https://chat.googleapis.com/v1/spaces/...</string>`
 	- CLI: `--webhook-url-google-chat=`
 
+**Fixes**
+
+- Fixed: log timestamps no longer change with the Mac's language. Every `aap.log` line and the LaunchDaemon helper now use `YYYY-MM-DD HH:MM:SS`, so a German scheduled run and the pending-apps process started from a banner notification no longer mix `Mi. Sep. 16` with `Wed Sep 16`. (#272)
+
 ### 02-Sep-2026
 
 **Fixes**
