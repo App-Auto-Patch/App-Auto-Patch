@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.1"
 scriptDate="2026/09/30"
-scriptBuild="3.7.1.2609301455"
+scriptBuild="3.7.1.2609301520"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -7624,9 +7624,14 @@ function PgetAppVersion() {
         elif ([[ "$applist" == *"/Applications/Edge Apps.localized/"* ]]); then
             log_info "App found in the Edge PWA app folder: $applist, ignoring"
             applist=""
-        # Setapp apps are licensed and updated through Setapp; patching them installs an unlicensed vendor copy in /Applications
+        # Setapp apps are licensed and updated through Setapp; patching them installs an unlicensed vendor copy in /Applications.
+        # /Applications/Setapp/ also matches a standard-user install at ~/Applications/Setapp/.
+        # /Users/Shared/Apps/Setapp/ holds Spotlight preview shortcuts for apps that are not installed.
         elif ([[ "$applist" == *"/Applications/Setapp/"* ]]); then
             log_info "App found in the Setapp folder: $applist, ignoring"
+            applist=""
+        elif ([[ "$applist" == *"/Users/Shared/Apps/Setapp/"* ]]); then
+            log_info "App found in the Setapp shared preview folder: $applist, ignoring"
             applist=""
         elif ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "TRUE" ]]); then
             log_verbose "App found in User directory: $applist, coverting to default directory"

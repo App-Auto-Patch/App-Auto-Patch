@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.1
+### 30-Sep-2026 (4) - Build 3.7.1.2609301520
+- [#270](https://github.com/App-Auto-Patch/App-Auto-Patch/pull/270): `PgetAppVersion()` Spotlight search ignored Chrome/Edge PWA, Parallels, and Jamf Composer folders, but not Setapp. `/Applications/Setapp/BusyCal.app` passed the `${targetDir}*` filter (`targetDir` defaults to `/`), so AAP read the Setapp version, queued the label, and Installomator installed the vendor build into `/Applications`. Discovery now ignores `/Applications/Setapp/` (which also matches `~/Applications/Setapp/` for a standard user) and `/Users/Shared/Apps/Setapp/` (Setapp Spotlight preview shortcuts). A copy already in `/Applications`, `/Applications/Utilities`, or `targetDir` is still found before Spotlight runs.
+
 ### 30-Sep-2026 (3) - Build 3.7.1.2609301455
 - [#265](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/265): Update Staging printed a raw `typeset`-style dump (`labelInfo`, `stagingType`, `stagingURL`, version, Team ID, curl options, `fileExt`) to stdout between apps, with no log prefix, so it showed up in Jamf policy logs and not in `aap.log`. The values belonged to the previous label. zsh `local` is function-scoped, and a second `local name` with no assignment prints the current value. Those declarations now happen once, before the staging loop. The same bare `local` in the silent closed-app patch loop (`_dname`, `_ipath`, Zoom process IDs) is hoisted for the same reason.
 
