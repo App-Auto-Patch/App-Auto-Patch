@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.1"
-scriptDate="2026/10/01"
-scriptBuild="3.7.1.2610011900"
+scriptDate="2026/10/02"
+scriptBuild="3.7.1.2610021025"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -5216,6 +5216,25 @@ business_hours_defer_until_clear_and_exit() {
 # pending-apps dialog as root. Choosing Install Now inside that dialog starts
 # --workflow-install-now. Also removes the legacy InstallNow WatchPaths daemon from earlier
 # 3.7.0 builds that jumped straight to --workflow-install-now.
+_aap_ancestry_includes() {
+    # True when a parent process was started from $1 (a command-line fragment).
+    # The current process is skipped so this script's own text cannot match.
+    local needle="$1"
+    local pid parent args
+    local -i guard=0
+    pid="$(ps -p "$$" -o ppid= 2>/dev/null)"
+    pid="${pid//[[:space:]]/}"
+    while [[ -n "$pid" && "$pid" != "0" && "$pid" != "1" ]] && (( guard++ < 30 )); do
+        args="$(ps -p "$pid" -o args= 2>/dev/null)"
+        [[ "$args" == *"${needle}"* ]] && return 0
+        parent="$(ps -p "$pid" -o ppid= 2>/dev/null)"
+        parent="${parent//[[:space:]]/}"
+        [[ -z "$parent" || "$parent" == "$pid" ]] && break
+        pid="$parent"
+    done
+    return 1
+}
+
 ensure_aap_pending_apps_dialog_trigger() {
     [[ $(id -u) -ne 0 ]] && return 0
 
@@ -5274,9 +5293,16 @@ EOF
 EOF
     chown root:wheel "${trigger_plist}"
     chmod 644 "${trigger_plist}"
-    launchctl bootout system "${trigger_plist}" >/dev/null 2>&1
-    launchctl bootstrap system "${trigger_plist}" >/dev/null 2>&1
-    log_verbose "Pending-apps dialog notification trigger ready at ${aapPendingAppsTriggerFile}"
+    # launchctl bootout waits until the job exits. This run is that job when Install Now
+    # on a banner started us, so bootout waits on ourselves and startup never continues.
+    # A Terminal `appautopatch --pending-apps-dialog` is not inside the job, so it is fine. (#276)
+    if _aap_ancestry_includes "aap-pending-apps-dialog-trigger"; then
+        log_verbose "Not reloading the pending-apps LaunchDaemon from the run it started."
+    else
+        launchctl bootout system "${trigger_plist}" >/dev/null 2>&1
+        launchctl bootstrap system "${trigger_plist}" >/dev/null 2>&1
+        log_verbose "Pending-apps dialog notification trigger ready at ${aapPendingAppsTriggerFile}"
+    fi
 
     # Remove legacy Install Now WatchPaths daemon/helper from earlier 3.7.0 builds.
     local legacy_plist="/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist"

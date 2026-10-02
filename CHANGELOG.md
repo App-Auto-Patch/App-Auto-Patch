@@ -5,6 +5,12 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 # Version 3
 
 ## Version 3.7.1
+### 02-Oct-2026
+
+**Fixes**
+
+- Fixed: the queued-apps banner **Install Now** button opens the Pending Apps window again. The click starts AAP from the pending-apps LaunchDaemon, and startup then unloaded that daemon with `launchctl bootout`, which waits until the job exits. The job was this run, so it stalled after `manage_parameter_options` with no further log line. A Terminal `--pending-apps-dialog` run is not part of that job and was not affected. (#276)
+
 ### 01-Oct-2026
 
 **Fixes**
