@@ -9,6 +9,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 **Fixes**
 
+- Fixed: the new `appautopatch` Installomator label is ignored during discovery and background patching, the same way `swiftdialog` and `dialog` already are. App Auto-Patch itself is updated only by the self-update check.
 - Fixed: the queued-apps banner **Install Now** button opens the Pending Apps window again. The click starts AAP from the pending-apps LaunchDaemon, and startup then unloaded that daemon with `launchctl bootout`, which waits until the job exits. The job was this run, so it stalled after `manage_parameter_options` with no further log line. A Terminal `--pending-apps-dialog` run is not part of that job and was not affected. (#276)
 
 ### 01-Oct-2026

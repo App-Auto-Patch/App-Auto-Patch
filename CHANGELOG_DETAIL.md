@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.1
+### 02-Oct-2026 (2) - Build 3.7.1.2610021055
+- The new Installomator `appautopatch` label is added to `IgnoredLabels` during preference setup, alongside `swiftdialog` and `dialog`. Discovery and background patching no longer queue or install that label. The separate self-update check remains the path that updates App Auto-Patch.
+
 ### 02-Oct-2026 (1) - Build 3.7.1.2610021025
 - [#276](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/276): banner **Install Now** touches `Triggers/PendingAppsDialog`, and `xyz.techitout.aap.pendingAppsDialogTrigger` runs `appautopatch --pending-apps-dialog`. Startup then calls `ensure_aap_pending_apps_dialog_trigger`, which `launchctl bootout`s that same daemon. `bootout` waits until the job exits, and the job is waiting on this process, so the run stalls after `manage_parameter_options` and never opens the Pending Apps window. `sudo appautopatch --pending-apps-dialog` from Terminal is not a child of that daemon, so the reload succeeds and the dialog appears. The reload is now skipped when process ancestry includes `aap-pending-apps-dialog-trigger`.
 

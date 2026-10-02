@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.1"
 scriptDate="2026/10/02"
-scriptBuild="3.7.1.2610021025"
+scriptBuild="3.7.1.2610021055"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -2306,6 +2306,15 @@ get_preferences() {
         log_verbose "Ignoring dialog"
         /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"dialog\"" "${appAutoPatchLocalPLIST}.plist"
         ignoredLabelsArray+=("dialog")
+    fi
+    # Ignore appautopatch so discovery and background patching do not install it.
+    # The self-update check is the only path that should update this label.
+    if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- appautopatch; then
+        log_verbose "appautopatch is already ignored"
+    else
+        log_verbose "Ignoring appautopatch"
+        /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"appautopatch\"" "${appAutoPatchLocalPLIST}.plist"
+        ignoredLabelsArray+=("appautopatch")
     fi
     
     write_status "Completed: Collecting preferences"
