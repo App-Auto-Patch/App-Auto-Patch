@@ -18,6 +18,7 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 - **Google Chat webhooks** — Post the same patch-result card used for Slack and Teams to a Google Chat incoming webhook when `WebhookFeature` is `ALL` or `FAILURES`. (#273)
 	- Managed Preference Key: `<key>WebhookURLGoogleChat</key>` `<string>https://chat.googleapis.com/v1/spaces/...</string>`
 	- CLI: `--webhook-url-google-chat=`
+- Fixed: `--uninstall` removes staged downloads in `/private/tmp/AAPStage`. (#277)
 - Fixed: an Installomator label that calls `cleanupAndExit` (current `pique`) no longer exits App Auto-Patch during discovery or leaves extra Dock icons behind. The version check runs in a subshell and a label abort skips that label only. (#275)
 - Fixed: discovery ignores Setapp copies under `/Applications/Setapp/` and `/Users/Shared/Apps/Setapp/`, so AAP does not install an unlicensed vendor build next to a Setapp app. A regular copy in `/Applications` is still patched. (#270)
 - Fixed: Update Staging no longer writes a raw variable dump of the previous label to the policy log between apps. (#265)

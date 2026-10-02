@@ -5,6 +5,12 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 # Version 3
 
 ## Version 3.7.1
+### 01-Oct-2026
+
+**Fixes**
+
+- Fixed: `--uninstall` now removes staged downloads in `/private/tmp/AAPStage`. A symlink at that path is removed without following it. (#277)
+
 ### 30-Sep-2026
 
 **New Features**

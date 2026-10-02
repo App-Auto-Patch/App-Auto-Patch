@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.1
+### 01-Oct-2026 (1) - Build 3.7.1.2610011900
+- [#277](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/277): `--uninstall` removed the AAP folder and LaunchDaemons but left staged installers in `/private/tmp/AAPStage`. Uninstall now deletes that directory. A symlink at the path is removed with `rm -f` and is not followed.
+
 ### 30-Sep-2026 (5) - Build 3.7.1.2609301545
 - [#275](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/275): `verifyApp` `eval`s the Installomator label in the main shell. The current `pique` label calls `cleanupAndExit` (which `exit`s) when `installedOSversion` is unset or the Mac is not Apple Silicon. AAP never set `installedOSversion`, so every discovery died after `Found Pique.app`. `aap-starter` then logged `Removing dead AAP PID` and started again. Runs that were not fully silent left the discovery window's Dock icon behind, because that `exit` does not hit the `HUP`/`INT`/`TERM` cleanup trap. `_aap_eval_label_fragment` now runs the fragment in a subshell, sets `installedOSversion` from `sw_vers -productVersion`, and turns `cleanupAndExit` into a recorded skip. A finished fragment still copies `name`, `appNewVersion`, and the other label variables back. Adding `pique` to `IgnoredLabels` remains a workaround for Macs that should not patch it.
 

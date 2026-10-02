@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.1"
-scriptDate="2026/09/30"
-scriptBuild="3.7.1.2609301545"
+scriptDate="2026/10/01"
+scriptBuild="3.7.1.2610011900"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -4286,6 +4286,17 @@ function uninstall_app_auto_patch() {
     # Remove the App Auto Patch Folder
     log_uninstall "Removing ${appAutoPatchFolder}"
     rm -rf ${appAutoPatchFolder}
+
+    # Staged installers live in /private/tmp, outside the AAP folder. Remove only a real
+    # directory at the known path so a symlink cannot redirect the delete. (#277)
+    if [[ "${AAPStagingFolder}" == "/private/tmp/AAPStage" ]]; then
+        log_uninstall "Removing staged downloads: ${AAPStagingFolder}"
+        if [[ -L "${AAPStagingFolder}" ]]; then
+            rm -f "${AAPStagingFolder}" 2>/dev/null
+        elif [[ -d "${AAPStagingFolder}" ]]; then
+            rm -rf "${AAPStagingFolder}" 2>/dev/null
+        fi
+    fi
 
     exit 0
 }
