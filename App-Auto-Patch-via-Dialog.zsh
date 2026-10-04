@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.1"
-scriptDate="2026/10/02"
-scriptBuild="3.7.1.2610021055"
+scriptDate="2026/10/04"
+scriptBuild="3.7.1.2610040915"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -10000,8 +10000,9 @@ main() {
         # Call the bouncing progress SwiftDialog window
         swiftDialogDiscoverWindow
         
-        # Start of label pattern
-        label_re='^([a-z0-9\_-]*)(\))$'
+        # Start of label pattern. '|' is a same-line alias (chatgpt|codex)).
+        # The capture may contain '|'; the filename fallback below remains the label name. (#279)
+        label_re='^([a-z0-9\_|-]*)(\))$'
 
         # ignore comments
         comment_re='^\#$'

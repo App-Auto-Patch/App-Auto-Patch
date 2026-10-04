@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.1
+### 04-Oct-2026 (1) - Build 3.7.1.2610040915
+- [#279](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/279): `label_re` was `^([a-z0-9_-]*)(\))$`, so a header such as `chatgpt|codex)` never opened the fragment. Discovery wrote no log and never called `PgetAppVersion`, so an optional `chatgpt` label was not queued. The pattern now allows `|`. The captured text can be `chatgpt|codex`, which does not match the filename, and the existing fallback still sets `label_name` to the fragment filename. Continuation headers (`name|\` … `name)`) were already parsed and are unchanged.
+
 ### 02-Oct-2026 (2) - Build 3.7.1.2610021055
 - The new Installomator `appautopatch` label is added to `IgnoredLabels` during preference setup, alongside `swiftdialog` and `dialog`. Discovery and background patching no longer queue or install that label. The separate self-update check remains the path that updates App Auto-Patch.
 
