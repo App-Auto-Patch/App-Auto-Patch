@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.7.0"
-scriptDate="2026/08/19"
-scriptBuild="3.7.0.2608191542"
+scriptVersion="3.7.1"
+scriptDate="2026/10/04"
+scriptBuild="3.7.1.2610040930"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -111,7 +111,8 @@ echo "
     
     Webhook Options:
     [--webhook-feature-all] [--webhook-feature-failures] [--webhook-feature-off]
-    [--webhook-url-slack=URL] [--webhook-url-teams=URL]
+    [--webhook-url-slack=URL] [--webhook-url-teams=URL] [--webhook-url-google-chat=URL]
+    [--mosyle-console-url=URL]
 
     Troubleshooting Options:
     [--verbose-mode] [--verbose-mode-off]
@@ -184,6 +185,8 @@ echo "
     <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
     <key>WebhookURLSlack</key> <string>URL</string>
     <key>WebhookURLTeams</key> <string>URL</string>
+    <key>WebhookURLGoogleChat</key> <string>URL</string>
+    <key>MosyleConsoleURL</key> <string>https://mybusiness.mosyle.com</string>
     <key>WorkflowBackgroundPatchClosedApps</key> <true/> | <false/>
     <key>WorkflowStageUpdates</key> <true/> | <false/>
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
@@ -1255,6 +1258,12 @@ get_options() {
             --webhook-url-teams=*)
                 webhook_url_teams_option="${1##*=}"
             ;;
+            --webhook-url-google-chat=*)
+                webhook_url_google_chat_option="${1##*=}"
+            ;;
+            --mosyle-console-url=*)
+                mosyle_console_url_option="${1##*=}"
+            ;;
             --uninstall)
                 uninstall_app_auto_patch
             ;;
@@ -1319,14 +1328,131 @@ parse_labels_option() {
     done
 }
 
+# Console user short name from SystemConfiguration, then Directory Services.
+# scutil ConsoleUser "Name" can be a login alias (Jamf Connect / IDP) rather than
+# the account RecordName, which then breaks su/id lookups (#264).
+# Do not use stat /dev/console: at the login window it returns root and cannot
+# distinguish loginwindow from an actual root GUI session.
+# https://scriptingosx.com/2020/02/getting-the-current-user-in-macos-update/
+get_console_user_account_name() {
+    local scutil_out consoleName consoleUID consoleUser
+    scutil_out=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser")
+    consoleName=$(print -r -- "${scutil_out}" | awk '/^[[:space:]]*Name :/ && ! /loginwindow/ { print $3; exit }')
+    [[ -z "${consoleName}" ]] && return 0
+    consoleUID=$(print -r -- "${scutil_out}" | awk '/^[[:space:]]*UID :/ { print $3; exit }')
+    if [[ -n "${consoleUID}" ]]; then
+        consoleUser=$(/usr/bin/id -un "${consoleUID}" 2>/dev/null)
+        [[ -n "${consoleUser}" ]] && echo "${consoleUser}" && return 0
+    fi
+    echo "${consoleName}"
+}
+
+# Installomator case headers can name a label that does not match the fragment
+# filename (visualstudiocode in microsoftvisualstudiocode.sh, codex in chatgpt.sh).
+# Required, optional, ignored, and excluded-background lists are later matched and
+# loaded as labels/<name>.sh, so store the filename. An exact filename always wins.
+# Wildcards are left unchanged. The header scan runs only when a configured name
+# has no fragment of its own. (#279)
+_aap_label_header_alias_cache_build() {
+    [[ -n "${_aap_label_alias_cache_ready}" ]] && return 0
+    typeset -gA _aap_label_alias_to_file
+    _aap_label_alias_to_file=()
+    if [[ ! -d "${fragmentsPath}/labels" ]]; then
+        typeset -g _aap_label_alias_cache_ready=1
+        return 0
+    fi
+    setopt local_options null_glob
+    local fragment base line scrubbed token key part
+    local -a parts
+    for fragment in "${fragmentsPath}"/labels/*.sh; do
+        [[ -f "$fragment" ]] || continue
+        base="${fragment:t:r}"
+        _aap_label_alias_to_file[${base:l}]="$base"
+        while IFS= read -r line; do
+            scrubbed="${line#"${line%%[![:space:]]*}"}"
+            scrubbed="${scrubbed%"${scrubbed##*[![:space:]]}"}"
+            [[ -z "$scrubbed" || "$scrubbed" == \#* ]] && continue
+            [[ "$scrubbed" == ';;'* ]] && break
+            if [[ "$scrubbed" == *'|\' ]]; then
+                token="${scrubbed%|\\}"
+            elif [[ "$scrubbed" == *')' ]]; then
+                token="${scrubbed%)}"
+            else
+                break
+            fi
+            [[ "$token" =~ '^[A-Za-z0-9_-]+(\|[A-Za-z0-9_-]+)*$' ]] || break
+            parts=("${(@s/|/)token}")
+            for part in "${parts[@]}"; do
+                key="${part:l}"
+                if [[ "$key" == "${base:l}" || -z "${_aap_label_alias_to_file[$key]}" ]]; then
+                    _aap_label_alias_to_file[$key]="$base"
+                fi
+            done
+            [[ "$scrubbed" == *')' ]] && break
+        done < "$fragment"
+    done
+    typeset -g _aap_label_alias_cache_ready=1
+}
+
+_aap_resolve_label_alias_lists() {
+    local array_name name key filename needs=0
+    local -a names resolved
+    for array_name in optionalLabelsArray requiredLabelsArray ignoredLabelsArray excludedBackgroundLabelsArray; do
+        for name in "${(@P)array_name}"; do
+            [[ -z "$name" || "$name" == *'*'* ]] && continue
+            [[ -f "${fragmentsPath}/labels/${name}.sh" ]] && continue
+            needs=1
+            break
+        done
+        (( needs )) && break
+    done
+    if (( needs == 0 )); then
+        return 0
+    fi
+    _aap_label_header_alias_cache_build
+    for array_name in optionalLabelsArray requiredLabelsArray ignoredLabelsArray excludedBackgroundLabelsArray; do
+        names=("${(@P)array_name}")
+        resolved=()
+        for name in "${names[@]}"; do
+            if [[ -z "$name" || "$name" == *'*'* || -f "${fragmentsPath}/labels/${name}.sh" ]]; then
+                resolved+=("$name")
+                continue
+            fi
+            key="${name:l}"
+            filename="${_aap_label_alias_to_file[$key]}"
+            if [[ -n "$filename" && -f "${fragmentsPath}/labels/${filename}.sh" ]]; then
+                log_verbose "${name} is an alias of ${filename}"
+                resolved+=("$filename")
+            else
+                resolved+=("$name")
+            fi
+        done
+        set -A "$array_name" "${resolved[@]}"
+    done
+}
+
 get_preferences() {
 
     write_status "Running: Collecting preferences"
     
     # Get current local user
-    currentUserAccountName=$(scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ {$1=$2="";print $0;}' | xargs)
-    # Get language setting for current local user
-    langUser=$(su - ${currentUserAccountName} -c "/usr/bin/defaults read -g AppleLocale | cut -d'_' -f1")
+    currentUserAccountName=$(get_console_user_account_name)
+    # Language for dialog/notification strings. Read the console user's AppleLocale in
+    # their GUI session. `su -` login shells are not reliable from a LaunchDaemon
+    # (including the pending-apps notification trigger), which left langUser empty and
+    # kept the English built-in strings. (#272)
+    langUser=""
+    if [[ -n "${currentUserAccountName}" && "${currentUserAccountName}" != "root" && "${currentUserAccountName}" != "loginwindow" && "${currentUserAccountName}" != "_mbsetupuser" ]]; then
+        local langUserID appleLocale
+        langUserID=$(id -u "${currentUserAccountName}" 2>/dev/null)
+        if [[ -n "${langUserID}" ]]; then
+            appleLocale=$(launchctl asuser "${langUserID}" sudo -u "${currentUserAccountName}" /usr/bin/defaults read -g AppleLocale 2>/dev/null)
+        fi
+        if [[ -z "${appleLocale}" ]]; then
+            appleLocale=$(su - "${currentUserAccountName}" -c "/usr/bin/defaults read -g AppleLocale" 2>/dev/null)
+        fi
+        langUser="${appleLocale%%_*}"
+    fi
     if [[ "${reset_defaults_option}" == "TRUE" ]]; then
         log_status "Resetting defaults for App Auto Patch"
 
@@ -1436,6 +1562,10 @@ get_preferences() {
         webhook_url_slack_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLSlack 2> /dev/null)
         local webhook_url_teams_managed
         webhook_url_teams_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLTeams 2> /dev/null)
+        local webhook_url_google_chat_managed
+        webhook_url_google_chat_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLGoogleChat 2> /dev/null)
+        local mosyle_console_url_managed
+        mosyle_console_url_managed=$(defaults read "${appAutoPatchManagedPLIST}" MosyleConsoleURL 2> /dev/null)
         local ignored_labels_managed
         ignored_labels_managed=$(defaults read "${appAutoPatchManagedPLIST}" IgnoredLabels 2> /dev/null)
         local required_labels_managed
@@ -1603,6 +1733,10 @@ get_preferences() {
         webhook_url_slack_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLSlack 2> /dev/null)
         local webhook_url_teams_local
         webhook_url_teams_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLTeams 2> /dev/null)
+        local webhook_url_google_chat_local
+        webhook_url_google_chat_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLGoogleChat 2> /dev/null)
+        local mosyle_console_url_local
+        mosyle_console_url_local=$(defaults read "${appAutoPatchLocalPLIST}" MosyleConsoleURL 2> /dev/null)
         local ignored_labels_local
         ignored_labels_local=$(defaults read "${appAutoPatchLocalPLIST}" IgnoredLabels 2> /dev/null)
         local required_labels_local
@@ -1757,6 +1891,10 @@ get_preferences() {
     { [[ -z "${webhook_url_slack_managed}" ]] && [[ -z "${webhook_url_slack_option}" ]] && [[ -n "${webhook_url_slack_local}" ]]; } && webhook_url_slack_option="${webhook_url_slack_local}"
     [[ -n "${webhook_url_teams_managed}" ]] && webhook_url_teams_option="${webhook_url_teams_managed}"
     { [[ -z "${webhook_url_teams_managed}" ]] && [[ -z "${webhook_url_teams_option}" ]] && [[ -n "${webhook_url_teams_local}" ]]; } && webhook_url_teams_option="${webhook_url_teams_local}"
+    [[ -n "${webhook_url_google_chat_managed}" ]] && webhook_url_google_chat_option="${webhook_url_google_chat_managed}"
+    { [[ -z "${webhook_url_google_chat_managed}" ]] && [[ -z "${webhook_url_google_chat_option}" ]] && [[ -n "${webhook_url_google_chat_local}" ]]; } && webhook_url_google_chat_option="${webhook_url_google_chat_local}"
+    [[ -n "${mosyle_console_url_managed}" ]] && mosyle_console_url_option="${mosyle_console_url_managed}"
+    { [[ -z "${mosyle_console_url_managed}" ]] && [[ -z "${mosyle_console_url_option}" ]] && [[ -n "${mosyle_console_url_local}" ]]; } && mosyle_console_url_option="${mosyle_console_url_local}"
     [[ -n "${ignored_labels_managed}" ]] && ignored_labels_option="${ignored_labels_managed}"
     { [[ -z "${ignored_labels_managed}" ]] && [[ -z "${ignored_labels_option}" ]] && [[ -n "${ignored_labels_local}" ]]; } && ignored_labels_option="${ignored_labels_local}"
     [[ -n "${required_labels_managed}" ]] && required_labels_option="${required_labels_managed}"
@@ -1922,6 +2060,8 @@ get_preferences() {
     log_verbose "WebhookFeature: $webhook_feature_option"
     log_verbose "WebhookURLSlack: $webhook_url_slack_option"
     log_verbose "WebhookURLTeams: $webhook_url_teams_option"
+    log_verbose "WebhookURLGoogleChat: $webhook_url_google_chat_option"
+    log_verbose "MosyleConsoleURL: $mosyle_console_url_option"
     log_verbose "IgnoredLabels: $ignored_labels_option"
     log_verbose "RequiredLabels: $required_labels_option"
     log_verbose "OptionalLabels: $optional_labels_option"
@@ -2049,6 +2189,7 @@ get_preferences() {
     parse_labels_option "${optional_labels_option}"; optionalLabelsArray=("${parsed_labels_option[@]}")
     parse_labels_option "${excluded_background_labels_option}"; excludedBackgroundLabelsArray=("${parsed_labels_option[@]}")
     parse_labels_option "${convertedLabels}"; convertedLabelsArray=("${parsed_labels_option[@]}")
+    _aap_resolve_label_alias_lists
 
     log_status "Clearing previously set labels"
     defaults delete "${appAutoPatchLocalPLIST}" ConvertedLabels 2> /dev/null
@@ -2250,6 +2391,15 @@ get_preferences() {
         log_verbose "Ignoring dialog"
         /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"dialog\"" "${appAutoPatchLocalPLIST}.plist"
         ignoredLabelsArray+=("dialog")
+    fi
+    # Ignore appautopatch so discovery and background patching do not install it.
+    # The self-update check is the only path that should update this label.
+    if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- appautopatch; then
+        log_verbose "appautopatch is already ignored"
+    else
+        log_verbose "Ignoring appautopatch"
+        /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"appautopatch\"" "${appAutoPatchLocalPLIST}.plist"
+        ignoredLabelsArray+=("appautopatch")
     fi
     
     write_status "Completed: Collecting preferences"
@@ -2856,10 +3006,26 @@ manage_parameter_options() {
     else
         defaults delete "${appAutoPatchLocalPLIST}" WebhookURLTeams 2> /dev/null
     fi
+
+    # Manage ${webhook_url_google_chat_option} and save to ${appAutoPatchLocalPLIST}.
+    if [[ -n "${webhook_url_google_chat_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" WebhookURLGoogleChat -string "${webhook_url_google_chat_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" WebhookURLGoogleChat 2> /dev/null
+    fi
+
+    # Manage ${mosyle_console_url_option} and save to ${appAutoPatchLocalPLIST}.
+    if [[ -n "${mosyle_console_url_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" MosyleConsoleURL -string "${mosyle_console_url_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" MosyleConsoleURL 2> /dev/null
+    fi
     
     { [[ -n "${webhook_feature_option}" ]]; } && log_verbose "webhook_feature_option is: ${webhook_feature_option}"
     { [[ -n "${webhook_url_slack_option}" ]]; } && log_verbose "webhook_url_slack_option is: ${webhook_url_slack_option}"
     { [[ -n "${webhook_url_teams_option}" ]]; } && log_verbose "webhook_url_teams_option is: ${webhook_url_teams_option}"
+    { [[ -n "${webhook_url_google_chat_option}" ]]; } && log_verbose "webhook_url_google_chat_option is: ${webhook_url_google_chat_option}"
+    { [[ -n "${mosyle_console_url_option}" ]]; } && log_verbose "mosyle_console_url_option is: ${mosyle_console_url_option}"
 
     # SelfUpdateEnabled/SelfUpdateFrequency are already resolved, normalized, and saved by
     # resolve_self_update_preferences() before self_update() runs earlier in workflow_startup() -
@@ -3834,7 +4000,7 @@ install_app_auto_patch() {
 #
 
 log_line() {
-    echo "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: $*" >> "__AAP_LOG__"
+    echo "$(date +"%Y-%m-%d %H:%M:%S") $(hostname -s) $(basename "$0")[$$]: $*" >> "__AAP_LOG__"
 }
 
 # Match the program AAP was launched as, skipping any privilege wrapper or interpreter in front of
@@ -3862,9 +4028,10 @@ command_invokes_aap() {
 
 process_start_epoch() {
     local lstart
-    lstart="$(ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')"
+    # ps lstart follows LC_TIME. Force C so the parser matches on non-English Macs.
+    lstart="$(LC_TIME=C ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')"
     [[ -n "$lstart" ]] || return 1
-    date -j -f "%a %b %d %T %Y" "$lstart" +%s 2>/dev/null
+    LC_TIME=C date -j -f "%a %b %d %T %Y" "$lstart" +%s 2>/dev/null
 }
 
 is_expected_aap_process() {
@@ -4083,7 +4250,7 @@ if (( force_launch == 0 )) && [[ -n "$next_epoch" ]]; then
 fi
 
 # Launch App Auto-Patch
-echo "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: **** App Auto-Patch __SCRIPT_VERSION__ - LAUNCHDAEMON ****" \
+echo "$(date +"%Y-%m-%d %H:%M:%S") $(hostname -s) $(basename "$0")[$$]: **** App Auto-Patch __SCRIPT_VERSION__ - LAUNCHDAEMON ****" \
     | tee -a "__AAP_LOG__"
 
 "__AAP_FOLDER__/appautopatch" &
@@ -4213,6 +4380,17 @@ function uninstall_app_auto_patch() {
     # Remove the App Auto Patch Folder
     log_uninstall "Removing ${appAutoPatchFolder}"
     rm -rf ${appAutoPatchFolder}
+
+    # Staged installers live in /private/tmp, outside the AAP folder. Remove only a real
+    # directory at the known path so a symlink cannot redirect the delete. (#277)
+    if [[ "${AAPStagingFolder}" == "/private/tmp/AAPStage" ]]; then
+        log_uninstall "Removing staged downloads: ${AAPStagingFolder}"
+        if [[ -L "${AAPStagingFolder}" ]]; then
+            rm -f "${AAPStagingFolder}" 2>/dev/null
+        elif [[ -d "${AAPStagingFolder}" ]]; then
+            rm -rf "${AAPStagingFolder}" 2>/dev/null
+        fi
+    fi
 
     exit 0
 }
@@ -4457,7 +4635,12 @@ get_logged_in_user() {
     [[ -z "${currentUserAccountName}" ]] && currentUserAccountName="FALSE"
     [[ -z "${currentUserID}" ]] && currentUserID="FALSE"
     local currentUserAccountName_response
-    currentUserAccountName_response=$(scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ {$1=$2="";print $0;}' | xargs)
+    currentUserAccountName_response=$(get_console_user_account_name)
+    local currentUserAccountName_scutil
+    currentUserAccountName_scutil=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/^[[:space:]]*Name :/ && ! /loginwindow/ { print $3; exit }')
+    if [[ -n "${currentUserAccountName_scutil}" && "${currentUserAccountName_response}" != "${currentUserAccountName_scutil}" ]]; then
+        log_verbose "Console user RecordName is ${currentUserAccountName_response}; scutil Name was ${currentUserAccountName_scutil}"
+    fi
     local currentUserID_response
     currentUserID_response=$(id -u "${currentUserAccountName_response}" 2> /dev/null)
     log_verbose  "currentUserAccountName is: ${currentUserAccountName}"
@@ -5127,6 +5310,25 @@ business_hours_defer_until_clear_and_exit() {
 # pending-apps dialog as root. Choosing Install Now inside that dialog starts
 # --workflow-install-now. Also removes the legacy InstallNow WatchPaths daemon from earlier
 # 3.7.0 builds that jumped straight to --workflow-install-now.
+_aap_ancestry_includes() {
+    # True when a parent process was started from $1 (a command-line fragment).
+    # The current process is skipped so this script's own text cannot match.
+    local needle="$1"
+    local pid parent args
+    local -i guard=0
+    pid="$(ps -p "$$" -o ppid= 2>/dev/null)"
+    pid="${pid//[[:space:]]/}"
+    while [[ -n "$pid" && "$pid" != "0" && "$pid" != "1" ]] && (( guard++ < 30 )); do
+        args="$(ps -p "$pid" -o args= 2>/dev/null)"
+        [[ "$args" == *"${needle}"* ]] && return 0
+        parent="$(ps -p "$pid" -o ppid= 2>/dev/null)"
+        parent="${parent//[[:space:]]/}"
+        [[ -z "$parent" || "$parent" == "$pid" ]] && break
+        pid="$parent"
+    done
+    return 1
+}
+
 ensure_aap_pending_apps_dialog_trigger() {
     [[ $(id -u) -ne 0 ]] && return 0
 
@@ -5185,9 +5387,16 @@ EOF
 EOF
     chown root:wheel "${trigger_plist}"
     chmod 644 "${trigger_plist}"
-    launchctl bootout system "${trigger_plist}" >/dev/null 2>&1
-    launchctl bootstrap system "${trigger_plist}" >/dev/null 2>&1
-    log_verbose "Pending-apps dialog notification trigger ready at ${aapPendingAppsTriggerFile}"
+    # launchctl bootout waits until the job exits. This run is that job when Install Now
+    # on a banner started us, so bootout waits on ourselves and startup never continues.
+    # A Terminal `appautopatch --pending-apps-dialog` is not inside the job, so it is fine. (#276)
+    if _aap_ancestry_includes "aap-pending-apps-dialog-trigger"; then
+        log_verbose "Not reloading the pending-apps LaunchDaemon from the run it started."
+    else
+        launchctl bootout system "${trigger_plist}" >/dev/null 2>&1
+        launchctl bootstrap system "${trigger_plist}" >/dev/null 2>&1
+        log_verbose "Pending-apps dialog notification trigger ready at ${aapPendingAppsTriggerFile}"
+    fi
 
     # Remove legacy Install Now WatchPaths daemon/helper from earlier 3.7.0 builds.
     local legacy_plist="/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist"
@@ -5611,9 +5820,11 @@ _aap_command_invokes_aap() {
 
 _aap_process_start_epoch() {
     local lstart
-    lstart=$(ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')
+    # ps lstart follows LC_TIME. Force C so a German (or other) locale cannot
+    # make the start-time parse fail. (#272)
+    lstart=$(LC_TIME=C ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')
     [[ -n "${lstart}" ]] || return 1
-    date -j -f "%a %b %d %T %Y" "${lstart}" +%s 2>/dev/null
+    LC_TIME=C date -j -f "%a %b %d %T %Y" "${lstart}" +%s 2>/dev/null
 }
 
 # Only AAP writes the heartbeat, and only for its own PID, so a recent record naming ${1} proves
@@ -5993,9 +6204,11 @@ _aap_reopen_log_fds() {
     _aap_ensure_log_fds
 }
 
-# Format one log line. Uses zsh's built-in %D strftime (no date(1) subprocess) plus cached host/script.
+# Format one log line. Numeric timestamp only: %a/%b follow LC_TIME, so a LaunchDaemon
+# (often C/English) and a Terminal session (for example de_DE) wrote different prefixes
+# for the same instant. (#272)
 _aap_format_log_line() {
-    print -r -- "$(print -P '%D{%a %b %d %T}') ${_aap_log_host} ${_aap_log_script}[$$]: $*"
+    print -r -- "$(print -P '%D{%Y-%m-%d %H:%M:%S}') ${_aap_log_host} ${_aap_log_script}[$$]: $*"
 }
 
 # Resolve VerboseMode from managed → CLI → local (same precedence as before), early enough that
@@ -6282,7 +6495,7 @@ swiftDialogPatchingWindow(){
     # If we are using SwiftDialog
     if [ ${InteractiveModeOption} -ge 1 ]; then
         # Check if there's a valid logged-in user:
-        currentUser=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
+        currentUser=$(get_console_user_account_name)
         if [ "$currentUser" = "root" ] || [ "$currentUser" = "loginwindow" ] || [ "$currentUser" = "_mbsetupuser" ] || [ -z "$currentUser" ]; then
             return 0
         fi
@@ -6322,7 +6535,7 @@ swiftDialogPatchingWindow(){
 _relaunch_patching_dialog() {
     [[ ${InteractiveModeOption} -lt 1 ]] && return 0
 
-    currentUser=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ { print $3 }')
+    currentUser=$(get_console_user_account_name)
     if [ "$currentUser" = "root" ] || [ "$currentUser" = "loginwindow" ] || [ "$currentUser" = "_mbsetupuser" ] || [ -z "$currentUser" ]; then
         return 0
     fi
@@ -7542,6 +7755,15 @@ function PgetAppVersion() {
         elif ([[ "$applist" == *"/Applications/Edge Apps.localized/"* ]]); then
             log_info "App found in the Edge PWA app folder: $applist, ignoring"
             applist=""
+        # Setapp apps are licensed and updated through Setapp; patching them installs an unlicensed vendor copy in /Applications.
+        # /Applications/Setapp/ also matches a standard-user install at ~/Applications/Setapp/.
+        # /Users/Shared/Apps/Setapp/ holds Spotlight preview shortcuts for apps that are not installed.
+        elif ([[ "$applist" == *"/Applications/Setapp/"* ]]); then
+            log_info "App found in the Setapp folder: $applist, ignoring"
+            applist=""
+        elif ([[ "$applist" == *"/Users/Shared/Apps/Setapp/"* ]]); then
+            log_info "App found in the Setapp shared preview folder: $applist, ignoring"
+            applist=""
         elif ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "TRUE" ]]); then
             log_verbose "App found in User directory: $applist, coverting to default directory"
             # Adding the label to the converted labels
@@ -7606,6 +7828,93 @@ function PgetAppVersion() {
     
 }
 
+_aap_eval_label_fragment() {
+    # Evaluate an Installomator label without letting it exit the AAP process.
+    # cleanupAndExit ends in exit. The pique label calls it when installedOSversion
+    # is unset, which used to kill discovery and leave the Dock icon behind. (#275)
+    local fragment="$1"
+    local case_statement output rc=0 frag_block line
+    local abort="" abort_msg=""
+    local frag_name frag_appName frag_appNewVersion frag_type frag_packageID
+    local frag_expectedTeamID frag_targetDir frag_folderName frag_versionKey
+    local frag_downloadURL frag_appCustomVersion
+
+    case_statement="
+    case ${label_name} in
+        ${fragment}
+        *)
+            print -r -- \"${label_name} did not match anything in the case block - weird.\"
+        ;;
+    esac
+    "
+
+    output=$(
+        installedOSversion="$(/usr/bin/sw_vers -productVersion 2>/dev/null)"
+        cleanupAndExit() {
+            printf '\n--AAPFRAG--\n'
+            printf 'abort=%s\n' "${1:-1}"
+            printf 'abort_msg=%s\n' "${2:-}"
+            exit 0
+        }
+        eval "$case_statement"
+        printf '\n--AAPFRAG--\n'
+        printf 'abort=0\n'
+        printf 'name=%s\n' "${name}"
+        printf 'appName=%s\n' "${appName}"
+        printf 'appNewVersion=%s\n' "${appNewVersion}"
+        printf 'type=%s\n' "${type}"
+        printf 'packageID=%s\n' "${packageID}"
+        printf 'expectedTeamID=%s\n' "${expectedTeamID}"
+        printf 'targetDir=%s\n' "${targetDir}"
+        printf 'folderName=%s\n' "${folderName}"
+        printf 'versionKey=%s\n' "${versionKey}"
+        printf 'downloadURL=%s\n' "${downloadURL}"
+        printf 'appCustomVersion=%s\n' "${appCustomVersion}"
+    ) || rc=$?
+
+    if [[ "$output" != *"--AAPFRAG--"* ]]; then
+        log_error "Label ${label_name} ended its version check unexpectedly (status ${rc}). Skipping."
+        return 1
+    fi
+
+    frag_block="${output##*$'\n'--AAPFRAG--$'\n'}"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        case "$line" in
+            abort=*) abort="${line#abort=}" ;;
+            abort_msg=*) abort_msg="${line#abort_msg=}" ;;
+            name=*) frag_name="${line#name=}" ;;
+            appName=*) frag_appName="${line#appName=}" ;;
+            appNewVersion=*) frag_appNewVersion="${line#appNewVersion=}" ;;
+            type=*) frag_type="${line#type=}" ;;
+            packageID=*) frag_packageID="${line#packageID=}" ;;
+            expectedTeamID=*) frag_expectedTeamID="${line#expectedTeamID=}" ;;
+            targetDir=*) frag_targetDir="${line#targetDir=}" ;;
+            folderName=*) frag_folderName="${line#folderName=}" ;;
+            versionKey=*) frag_versionKey="${line#versionKey=}" ;;
+            downloadURL=*) frag_downloadURL="${line#downloadURL=}" ;;
+            appCustomVersion=*) frag_appCustomVersion="${line#appCustomVersion=}" ;;
+        esac
+    done <<< "$frag_block"
+
+    if [[ "$abort" != "0" ]]; then
+        log_notice "Label ${label_name} stopped its version check (${abort}${abort_msg:+: ${abort_msg}}). Skipping."
+        return 1
+    fi
+
+    name="$frag_name"
+    appName="$frag_appName"
+    appNewVersion="$frag_appNewVersion"
+    type="$frag_type"
+    packageID="$frag_packageID"
+    expectedTeamID="$frag_expectedTeamID"
+    targetDir="$frag_targetDir"
+    folderName="$frag_folderName"
+    versionKey="$frag_versionKey"
+    downloadURL="$frag_downloadURL"
+    appCustomVersion="$frag_appCustomVersion"
+    return 0
+}
+
 function verifyApp() {
     
     appPath=$1
@@ -7655,16 +7964,9 @@ function verifyApp() {
         source "${functionsPath}"
         
         fragment=$(cat ${fragmentsPath}/labels/${label_name}.sh)
-        
-        caseStatement="
-        case $label_name in
-            $fragment
-            *)
-                echo \"$label_name didn't match anything in the case block - weird.\"
-            ;;
-        esac
-        "
-        eval $caseStatement
+        if ! _aap_eval_label_fragment "$fragment"; then
+            return
+        fi
         
         if [[ -n $name ]]; then
             # Exact-element membership; a "${array[@]}" substring match depends on IFS and can also
@@ -8043,6 +8345,13 @@ workflow_stage_updates() {
 
     log_info "Staging pending updates before displaying user dialog..."
 
+    # Declare once. zsh `local` is function-scoped, and repeating `local name` with no
+    # assignment inside a loop prints the previous value straight to stdout. (#265)
+    local _stageOwner stagedEntry stagedLabel stillQueued ql
+    local label labelInfo stagingType stagingURL stagingVersion stagingTeamID stagingCurlOpts
+    local fileExt stagedFile stagedVersionFile stagedTypeFile existingVersion
+    local -a curlArgs
+
     # Harden the staging directory. It lives under world-writable /private/tmp, so an
     # unprivileged local user could pre-create it (and own it) before this root run, then drop
     # malicious installers named <label>.pkg/.dmg that we'd later trust via downloadURL=file://.
@@ -8053,7 +8362,6 @@ workflow_stage_updates() {
         rm -f "${AAPStagingFolder}" 2>/dev/null
     fi
     if [[ -d "${AAPStagingFolder}" ]]; then
-        local _stageOwner
         _stageOwner=$(/usr/bin/stat -f '%u' "${AAPStagingFolder}" 2>/dev/null)
         if [[ "${_stageOwner}" != "0" ]]; then
             log_warning "Staging folder ${AAPStagingFolder} is not root-owned (uid=${_stageOwner:-unknown}) — recreating."
@@ -8072,9 +8380,8 @@ workflow_stage_updates() {
     # accumulating on disk across multiple runs.
     if [[ -d "${AAPStagingFolder}" ]]; then
         for stagedEntry in "${AAPStagingFolder}"/*.{dmg,pkg,zip,tbz,bin}(N); do
-            local stagedLabel
             stagedLabel="${stagedEntry:t:r}"   # filename without extension
-            local stillQueued="FALSE"
+            stillQueued="FALSE"
             for ql in $queuedLabelsArray; do
                 [[ "$ql" == "$stagedLabel" ]] && stillQueued="TRUE" && break
             done
@@ -8113,7 +8420,6 @@ workflow_stage_updates() {
         log_info "Resolving download info for staging: ${label}"
 
         # Resolve the label's downloadURL and related vars in an isolated subprocess
-        local labelInfo
         labelInfo=$(_resolve_label_staging_info "$label")
         if [[ $? -ne 0 ]] || [[ -z "$labelInfo" ]]; then
             log_error "Could not resolve download info for '${label}'. Skipping staging."
@@ -8124,7 +8430,6 @@ workflow_stage_updates() {
         fi
 
         # Parse KEY=VALUE output — use cut -d= -f2- to preserve URLs that contain '='
-        local stagingType stagingURL stagingVersion stagingTeamID stagingCurlOpts
         stagingType=$(echo "$labelInfo"    | grep '^TYPE='            | cut -d= -f2-)
         stagingURL=$(echo "$labelInfo"     | grep '^DOWNLOAD_URL='    | cut -d= -f2-)
         stagingVersion=$(echo "$labelInfo" | grep '^APP_NEW_VERSION=' | cut -d= -f2-)
@@ -8149,7 +8454,6 @@ workflow_stage_updates() {
         fi
 
         # Map install type to the correct file extension for the staged file
-        local fileExt
         case "$stagingType" in
             dmg|pkgInDmg)                   fileExt="dmg" ;;
             pkg)                             fileExt="pkg" ;;
@@ -8158,13 +8462,12 @@ workflow_stage_updates() {
             *)                               fileExt="bin" ;;
         esac
 
-        local stagedFile="${AAPStagingFolder}/${label}.${fileExt}"
-        local stagedVersionFile="${AAPStagingFolder}/${label}.version"
-        local stagedTypeFile="${AAPStagingFolder}/${label}.type"
+        stagedFile="${AAPStagingFolder}/${label}.${fileExt}"
+        stagedVersionFile="${AAPStagingFolder}/${label}.version"
+        stagedTypeFile="${AAPStagingFolder}/${label}.type"
 
         # Check whether a valid staged file already exists for this version
         if [[ -f "$stagedFile" && -f "$stagedVersionFile" ]]; then
-            local existingVersion
             existingVersion=$(< "$stagedVersionFile")
             if [[ -n "$stagingVersion" && "$existingVersion" == "$stagingVersion" ]]; then
                 log_notice "Already staged: '${label}' at version ${stagingVersion}. Skipping download."
@@ -8193,7 +8496,7 @@ workflow_stage_updates() {
         # Fail a connection attempt promptly and abort a transfer that receives no data for five
         # minutes. Active downloads are unrestricted; this only prevents a dead socket from holding
         # the entire AAP workflow indefinitely.
-        local curlArgs=("--location" "--silent" "--fail" "--show-error" "--connect-timeout" "30" "--speed-limit" "1" "--speed-time" "300")
+        curlArgs=("--location" "--silent" "--fail" "--show-error" "--connect-timeout" "30" "--speed-limit" "1" "--speed-time" "300")
         [[ -n "$stagingCurlOpts" ]] && curlArgs+=($=stagingCurlOpts)
         curlArgs+=("-o" "$stagedFile" "$stagingURL")
 
@@ -8249,6 +8552,8 @@ workflow_silent_patch_closed_apps() {
     local silentPatchErrors=0
     local progressTotal=${#queuedLabelsArray[@]}
     local progressCompleted=0
+    # Same zsh behavior as workflow_stage_updates: a bare `local` inside the loop reprints the last value. (#265)
+    local _dname _ipath _cpthostpid _aomhostpid
 
     _aap_mini_progress_begin "${progressTotal}" "${display_string_silent_patch_progress}" "${display_string_staging_message}"
 
@@ -8262,7 +8567,6 @@ workflow_silent_patch_closed_apps() {
         if is_excluded_background_label "${label}"; then
             log_info "Skipping silent background patch of '${label}' (listed in ExcludedBackgroundLabels); adding to user dialog queue."
             remainingLabels+=("${label}")
-            local _dname _ipath
             _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
             _ipath=$(resolve_app_icon_path "${label}")
             _compute_version_subtitle "${label}"
@@ -8279,13 +8583,11 @@ workflow_silent_patch_closed_apps() {
 
         # Respect Zoom call active check for zoom labels
         if [[ "${zoom_call_active_check_option}" == "TRUE" && "${label}" == "zoom"* ]]; then
-            local _cpthostpid _aomhostpid
             _cpthostpid=$(pgrep CptHost 2>/dev/null)
             _aomhostpid=$(pgrep aomhost 2>/dev/null)
             if [[ -n "${_cpthostpid}" || -n "${_aomhostpid}" ]]; then
                 log_info "Zoom meeting in progress. Skipping silent patch of '${label}'; adding to user dialog queue."
                 remainingLabels+=("${label}")
-                local _dname _ipath
                 _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
@@ -8343,7 +8645,6 @@ workflow_silent_patch_closed_apps() {
                 # Installomator found a blocking process — app is open, needs user interaction
                 log_info "Blocking process detected for '${label}' (exit 12). Adding to user dialog queue."
                 remainingLabels+=("${label}")
-                local _dname _ipath
                 _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
@@ -8359,7 +8660,6 @@ workflow_silent_patch_closed_apps() {
                 log_error "Silent patch for '${label}' returned exit code ${silentExitCode}. Adding to user dialog queue."
                 silentPatchErrors=$((silentPatchErrors + 1))
                 remainingLabels+=("${label}")
-                local _dname _ipath
                 _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
@@ -8689,21 +8989,40 @@ appsUpToDate(){
     
 }
 
+# Mosyle enrollment ServerURL (e.g. https://biz-1234.mosyle.com) is the MDM
+# check-in host, not the human admin console (#267). Map to the shared portal
+# unless MosyleConsoleURL is set: Business → mybusiness.mosyle.com, otherwise
+# Manager/Education → my.mosyle.com.
+resolve_mosyle_console_base_url() {
+    local override="${mosyle_console_url_option:-}"
+    override="${override%/}"
+    if [[ -n "${override}" ]]; then
+        [[ "${override}" != http://* && "${override}" != https://* ]] && override="https://${override}"
+        echo "${override}"
+        return 0
+    fi
+    case "${server_url:l}" in
+        *biz-*|*mybusiness.mosyle*|*business.mosyle*)
+            echo "https://mybusiness.mosyle.com"
+            ;;
+        *)
+            echo "https://my.mosyle.com"
+            ;;
+    esac
+}
+
 webHookMessage() {
 
-    # Resolve Mosyle device deep-link once for Slack/Teams payloads (#240). Prefer the enrolled
-    # MDM host from get_mdm(); fall back to the public Mosyle Business console. Device UDID for
-    # Macs is the Hardware UUID (IOPlatformUUID).
+    # Resolve Mosyle device deep-link once for Slack/Teams payloads (#240, #267).
+    # Device UDID for Macs is the Hardware UUID (IOPlatformUUID).
     local mosyleComputerURL=""
     if [[ "${mdmName}" == "Mosyle" ]]; then
-        local mosyleBaseURL=""
-        if [[ -n "${server_url}" ]]; then
-            mosyleBaseURL=$(echo "${server_url}" | sed -n 's/\(https:\/\/[^\/]*\).*/\1/p')
-        fi
-        [[ -z "${mosyleBaseURL}" ]] && mosyleBaseURL="https://business.mosyle.com"
+        local mosyleBaseURL
+        mosyleBaseURL=$(resolve_mosyle_console_base_url)
         local mosyleHardwareUUID
         mosyleHardwareUUID=$(ioreg -d2 -c IOPlatformExpertDevice | awk -F\" '/IOPlatformUUID/{print $(NF-1)}')
         mosyleComputerURL="${mosyleBaseURL}/#device_${mosyleHardwareUUID}"
+        log_verbose "Mosyle webhook console URL: ${mosyleComputerURL}"
     fi
     
     if [[ $webhook_url_slack_option == "" ]]; then
@@ -8961,6 +9280,114 @@ webHookMessage() {
         
         # Send the JSON payload using curl
         curlResult=$(curl -s -X POST -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_teams_option")
+        log_verbose "Webhook result: $curlResult"
+    fi
+
+    # Google Chat incoming webhook (cardsV2). Adapted from #93 for the current
+    # webhook payload: same status, device, labels, errors, and MDM link as Slack/Teams.
+    if [[ -z "${webhook_url_google_chat_option}" ]]; then
+        log_info "No Google Chat webhook configured"
+    else
+        if defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url &> /dev/null; then
+            jamfProURL=$(/usr/bin/defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url)
+            mdmComputerURL="${jamfProURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
+        elif [[ "$(profiles show | grep -A4 "Management Profile" | sed -n -e 's/^.*profileIdentifier: //p')" == "Microsoft.Profiles.MDM" ]]; then
+            mdmURL="https://intune.microsoft.com/#view/Microsoft_Intune_Devices/DeviceSettingsMenuBlade/~/overview/mdmDeviceId"
+            mdmComputerID="$(grep -rnwi '/Library/Logs/Microsoft/Intune' -e 'DeviceId:' | head -1 | grep -E -o 'DeviceId.{0,38}' | cut -d ' ' -f2)"
+            if [[ -n "$mdmComputerID" ]]; then
+                mdmComputerURL="${mdmURL}/${mdmComputerID}"
+            else
+                mdmComputerURL="https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMacOsMenu/~/macOsDevices"
+            fi
+        elif [[ $mdmName == "Jumpcloud" ]]; then
+            mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
+        elif [[ $mdmName == "Workspace One" ]]; then
+            if [[ -n "$server_url" ]]; then
+                base_url=$(echo "$server_url" | sed -n 's/\(https:\/\/[^\/]*\).*/\1/p')
+                mdmComputerURL="${base_url}/AirWatch/#/AirWatch/Devices/List/"
+            else
+                mdmComputerURL="https://console.workspace.one"
+            fi
+        elif [[ $mdmName == "Mosyle" ]]; then
+            mdmComputerURL="${mosyleComputerURL}"
+        else
+            log_info "No MDM determined - Google Chat webhook will omit the device link"
+            mdmComputerURL=""
+        fi
+
+        local googleChatButton=""
+        if [[ -n "${mdmComputerURL}" && -n "${mdmName}" ]]; then
+            googleChatButton=',
+                            {
+                                "buttonList": {
+                                    "buttons": [
+                                        {
+                                            "text": "View in '"${mdmName}"'",
+                                            "onClick": {
+                                                "openLink": {
+                                                    "url": "'"${mdmComputerURL}"'"
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            }'
+        fi
+
+        log_info "Sending Google Chat WebHook"
+        jsonPayload='{
+            "text": "'"${webhookStatus}"' — '"${serialNumber}"'",
+            "cardsV2": [
+                {
+                    "cardId": "appautopatch",
+                    "card": {
+                        "header": {
+                            "title": "'"${appTitle}"'",
+                            "subtitle": "'"${webhookStatus}"'",
+                            "imageUrl": "https://raw.githubusercontent.com/App-Auto-Patch/App-Auto-Patch/main/Images/AAPLogo.png",
+                            "imageType": "SQUARE"
+                        },
+                        "sections": [
+                            {
+                                "widgets": [
+                                    {
+                                        "decoratedText": {
+                                            "topLabel": "Serial Number",
+                                            "text": "'"${serialNumber}"'",
+                                            "bottomLabel": "'"${modelName}"'"
+                                        }
+                                    },
+                                    {
+                                        "decoratedText": {
+                                            "topLabel": "Current User",
+                                            "text": "'"${currentUserAccountName}"'"
+                                        }
+                                    },
+                                    {
+                                        "decoratedText": {
+                                            "topLabel": "Versions",
+                                            "text": "AAP '"${scriptVersion}"' · OS '"${osVersion}"'"
+                                        }
+                                    },
+                                    {
+                                        "textParagraph": {
+                                            "text": "<b>Label(s)</b><br>'"${formatted_result}"'"
+                                        }
+                                    },
+                                    {
+                                        "textParagraph": {
+                                            "text": "<b>Error(s)</b><br>'"${formatted_error_result}"'"
+                                        }
+                                    }'"${googleChatButton}"'
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        }'
+
+        curlResult=$(curl -s -X POST -H "Content-Type: application/json; charset=UTF-8" -d "$jsonPayload" "$webhook_url_google_chat_option")
         log_verbose "Webhook result: $curlResult"
     fi
     
@@ -9658,8 +10085,9 @@ main() {
         # Call the bouncing progress SwiftDialog window
         swiftDialogDiscoverWindow
         
-        # Start of label pattern
-        label_re='^([a-z0-9\_-]*)(\))$'
+        # Start of label pattern. '|' is a same-line alias (chatgpt|codex)).
+        # The capture may contain '|'; the filename fallback below remains the label name. (#279)
+        label_re='^([a-z0-9\_|-]*)(\))$'
 
         # ignore comments
         comment_re='^\#$'

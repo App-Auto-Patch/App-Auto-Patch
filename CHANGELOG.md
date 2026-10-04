@@ -4,6 +4,49 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 # Version 3
 
+## Version 3.7.1
+### 04-Oct-2026
+
+**Fixes**
+
+- Fixed: discovery now reads Installomator labels whose header names more than one label on a single line, such as `chatgpt|codex)`. Those fragments were skipped with no log, so an optional label like `chatgpt` was never queued. (#279)
+- Fixed: a configured label that is an Installomator alias rather than the fragment filename is saved as that filename. `visualstudiocode` is stored as `microsoftvisualstudiocode`, and `codex` is stored as `chatgpt`. This applies to required, optional, ignored, and excluded-background labels. An exact filename still wins, and wildcards are unchanged. (#279)
+
+### 02-Oct-2026
+
+**Fixes**
+
+- Fixed: the new `appautopatch` Installomator label is ignored during discovery and background patching, the same way `swiftdialog` and `dialog` already are. App Auto-Patch itself is updated only by the self-update check.
+- Fixed: the queued-apps banner **Install Now** button opens the Pending Apps window again. The click starts AAP from the pending-apps LaunchDaemon, and startup then unloaded that daemon with `launchctl bootout`, which waits until the job exits. The job was this run, so it stalled after `manage_parameter_options` with no further log line. A Terminal `--pending-apps-dialog` run is not part of that job and was not affected. (#276)
+
+### 01-Oct-2026
+
+**Fixes**
+
+- Fixed: `--uninstall` now removes staged downloads in `/private/tmp/AAPStage`. A symlink at that path is removed without following it. (#277)
+
+### 30-Sep-2026
+
+**New Features**
+
+- **Google Chat webhooks** — When `WebhookFeature` is `ALL` or `FAILURES`, AAP can post the same patch result to a Google Chat incoming webhook. The card includes status, serial number, model, user, labels, errors, and the MDM device link used by Slack and Teams. (#273)
+	- Managed Preference Key: `<key>WebhookURLGoogleChat</key>` `<string>https://chat.googleapis.com/v1/spaces/...</string>`
+	- CLI: `--webhook-url-google-chat=`
+
+**Fixes**
+
+- Fixed: a label that calls Installomator's `cleanupAndExit` no longer ends the whole App Auto-Patch run. The `pique` label does that when `installedOSversion` is unset, so discovery died after `Found Pique.app` and the LaunchDaemon started another run. Non-silent runs also left an App Auto-Patch icon in the Dock. The version check now runs in a subshell, with the Mac's OS version filled in, and a label abort skips that label only. (#275)
+- Fixed: discovery no longer treats a Setapp copy as the installed app. Spotlight matches under `/Applications/Setapp/` (including a standard-user install at `~/Applications/Setapp/`) and `/Users/Shared/Apps/Setapp/` are ignored, so AAP does not queue the label and install an unlicensed vendor build next to the Setapp copy. A regular copy directly in `/Applications` is still patched. (#270)
+- Fixed: Update Staging no longer prints a raw variable dump (`labelInfo`, `stagingType`, download URL, and the rest) to the Jamf policy log between apps. zsh reprints a variable when `local` is used again inside a loop, so the dump was the previous label, and it never went through the logger. (#265)
+- Fixed: log timestamps no longer change with the Mac's language. Every `aap.log` line and the LaunchDaemon helper now use `YYYY-MM-DD HH:MM:SS`, so a German scheduled run and the pending-apps process started from a banner notification no longer mix `Mi. Sep. 16` with `Wed Sep 16`. (#272)
+
+### 02-Sep-2026
+
+**Fixes**
+
+- Fixed: Mosyle Slack/Teams **View in Mosyle** links no longer use the enrollment `ServerURL` (for example `https://biz-1234.mosyle.com`), which is the MDM check-in host and does not open the admin console. Business enrollments now link to `https://mybusiness.mosyle.com`; other Mosyle enrollments link to `https://my.mosyle.com`. Set `MosyleConsoleURL` or `--mosyle-console-url=` to override. (#267)
+- Fixed: console user detection now takes the ConsoleUser UID from `scutil` and resolves the account RecordName with `id -un`. `scutil`'s `Name` field can be a login alias rather than the short name (for example `nathan` instead of `nathan.beranger`), which then breaks `su`, `id`, and other per-user lookups. Login window still reports no GUI user. (#264)
+
 ## Version 3.7.0
 ### 08-Aug-2026
 

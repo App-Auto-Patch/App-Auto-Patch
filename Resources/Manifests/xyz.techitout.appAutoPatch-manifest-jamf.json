@@ -1153,6 +1153,30 @@
             ],
             "property_order": 185
         },
+        "WebhookURLGoogleChat": {
+            "type": "string",
+            "title": "Google Chat Webhook URL",
+            "description": "The Google Chat incoming webhook URL to use if WebhookFeature is set to ALL or FAILURES. The card includes the same status, serial, user, labels, errors, and MDM device link as the Slack and Teams webhooks.",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#webhookurlgooglechat"
+                }
+            ],
+            "property_order": 186
+        },
+        "MosyleConsoleURL": {
+            "type": "string",
+            "title": "Mosyle Console URL",
+            "description": "Override the Mosyle admin console host used in Slack/Teams View in Mosyle device links. The enrollment ServerURL (for example https://biz-1234.mosyle.com) is the MDM check-in endpoint, not the console. Leave unset to map Business enrollments (biz-* / *business.mosyle*) to https://mybusiness.mosyle.com and other Mosyle enrollments to https://my.mosyle.com (Manager/Education).",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#mosyleconsoleurl"
+                }
+            ],
+            "property_order": 187
+        },
         "WorkflowDisableAppDiscovery": {
             "type": "string",
             "title": "Disable App Discovery Workflow",
