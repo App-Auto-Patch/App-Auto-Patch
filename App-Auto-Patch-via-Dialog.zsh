@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.1"
 scriptDate="2026/10/04"
-scriptBuild="3.7.1.2610040915"
+scriptBuild="3.7.1.2610040930"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -1347,6 +1347,90 @@ get_console_user_account_name() {
     echo "${consoleName}"
 }
 
+# Installomator case headers can name a label that does not match the fragment
+# filename (visualstudiocode in microsoftvisualstudiocode.sh, codex in chatgpt.sh).
+# Required, optional, ignored, and excluded-background lists are later matched and
+# loaded as labels/<name>.sh, so store the filename. An exact filename always wins.
+# Wildcards are left unchanged. The header scan runs only when a configured name
+# has no fragment of its own. (#279)
+_aap_label_header_alias_cache_build() {
+    [[ -n "${_aap_label_alias_cache_ready}" ]] && return 0
+    typeset -gA _aap_label_alias_to_file
+    _aap_label_alias_to_file=()
+    if [[ ! -d "${fragmentsPath}/labels" ]]; then
+        typeset -g _aap_label_alias_cache_ready=1
+        return 0
+    fi
+    setopt local_options null_glob
+    local fragment base line scrubbed token key part
+    local -a parts
+    for fragment in "${fragmentsPath}"/labels/*.sh; do
+        [[ -f "$fragment" ]] || continue
+        base="${fragment:t:r}"
+        _aap_label_alias_to_file[${base:l}]="$base"
+        while IFS= read -r line; do
+            scrubbed="${line#"${line%%[![:space:]]*}"}"
+            scrubbed="${scrubbed%"${scrubbed##*[![:space:]]}"}"
+            [[ -z "$scrubbed" || "$scrubbed" == \#* ]] && continue
+            [[ "$scrubbed" == ';;'* ]] && break
+            if [[ "$scrubbed" == *'|\' ]]; then
+                token="${scrubbed%|\\}"
+            elif [[ "$scrubbed" == *')' ]]; then
+                token="${scrubbed%)}"
+            else
+                break
+            fi
+            [[ "$token" =~ '^[A-Za-z0-9_-]+(\|[A-Za-z0-9_-]+)*$' ]] || break
+            parts=("${(@s/|/)token}")
+            for part in "${parts[@]}"; do
+                key="${part:l}"
+                if [[ "$key" == "${base:l}" || -z "${_aap_label_alias_to_file[$key]}" ]]; then
+                    _aap_label_alias_to_file[$key]="$base"
+                fi
+            done
+            [[ "$scrubbed" == *')' ]] && break
+        done < "$fragment"
+    done
+    typeset -g _aap_label_alias_cache_ready=1
+}
+
+_aap_resolve_label_alias_lists() {
+    local array_name name key filename needs=0
+    local -a names resolved
+    for array_name in optionalLabelsArray requiredLabelsArray ignoredLabelsArray excludedBackgroundLabelsArray; do
+        for name in "${(@P)array_name}"; do
+            [[ -z "$name" || "$name" == *'*'* ]] && continue
+            [[ -f "${fragmentsPath}/labels/${name}.sh" ]] && continue
+            needs=1
+            break
+        done
+        (( needs )) && break
+    done
+    if (( needs == 0 )); then
+        return 0
+    fi
+    _aap_label_header_alias_cache_build
+    for array_name in optionalLabelsArray requiredLabelsArray ignoredLabelsArray excludedBackgroundLabelsArray; do
+        names=("${(@P)array_name}")
+        resolved=()
+        for name in "${names[@]}"; do
+            if [[ -z "$name" || "$name" == *'*'* || -f "${fragmentsPath}/labels/${name}.sh" ]]; then
+                resolved+=("$name")
+                continue
+            fi
+            key="${name:l}"
+            filename="${_aap_label_alias_to_file[$key]}"
+            if [[ -n "$filename" && -f "${fragmentsPath}/labels/${filename}.sh" ]]; then
+                log_verbose "${name} is an alias of ${filename}"
+                resolved+=("$filename")
+            else
+                resolved+=("$name")
+            fi
+        done
+        set -A "$array_name" "${resolved[@]}"
+    done
+}
+
 get_preferences() {
 
     write_status "Running: Collecting preferences"
@@ -2105,6 +2189,7 @@ get_preferences() {
     parse_labels_option "${optional_labels_option}"; optionalLabelsArray=("${parsed_labels_option[@]}")
     parse_labels_option "${excluded_background_labels_option}"; excludedBackgroundLabelsArray=("${parsed_labels_option[@]}")
     parse_labels_option "${convertedLabels}"; convertedLabelsArray=("${parsed_labels_option[@]}")
+    _aap_resolve_label_alias_lists
 
     log_status "Clearing previously set labels"
     defaults delete "${appAutoPatchLocalPLIST}" ConvertedLabels 2> /dev/null

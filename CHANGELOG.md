@@ -10,6 +10,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 **Fixes**
 
 - Fixed: discovery now reads Installomator labels whose header names more than one label on a single line, such as `chatgpt|codex)`. Those fragments were skipped with no log, so an optional label like `chatgpt` was never queued. (#279)
+- Fixed: a configured label that is an Installomator alias rather than the fragment filename is saved as that filename. `visualstudiocode` is stored as `microsoftvisualstudiocode`, and `codex` is stored as `chatgpt`. This applies to required, optional, ignored, and excluded-background labels. An exact filename still wins, and wildcards are unchanged. (#279)
 
 ### 02-Oct-2026
 

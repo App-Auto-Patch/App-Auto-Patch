@@ -19,6 +19,7 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 	- Managed Preference Key: `<key>WebhookURLGoogleChat</key>` `<string>https://chat.googleapis.com/v1/spaces/...</string>`
 	- CLI: `--webhook-url-google-chat=`
 - Fixed: discovery reads Installomator labels with a same-line multi-name header, such as `chatgpt|codex)`. Those fragments were skipped with no log, so an optional `chatgpt` label was never queued. (#279)
+- Fixed: Installomator aliases are stored as the fragment filename. `visualstudiocode` becomes `microsoftvisualstudiocode`, and `codex` becomes `chatgpt`, for required, optional, ignored, and excluded-background labels. (#279)
 - Fixed: the `appautopatch` Installomator label is ignored during discovery and background patching. App Auto-Patch updates itself only through the self-update check.
 - Fixed: the queued-apps banner **Install Now** button opens the Pending Apps window again. That click starts AAP from the pending-apps LaunchDaemon, and startup was unloading that same daemon and waiting for it to exit, so the run stalled after preference setup. `sudo appautopatch --pending-apps-dialog` was unaffected because Terminal is not inside that daemon. (#276)
 - Fixed: `--uninstall` removes staged downloads in `/private/tmp/AAPStage`. (#277)

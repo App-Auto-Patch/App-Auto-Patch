@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.1
+### 04-Oct-2026 (2) - Build 3.7.1.2610040930
+- [#279](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/279): required, optional, ignored, and excluded-background names were accepted only when `labels/<name>.sh` existed. `visualstudiocode` is a case-header name inside `microsoftvisualstudiocode.sh`, so preference setup logged `No such label` and `IgnoredLabels=*` never selected that file. The same applies to aliases such as `codex` (`chatgpt.sh`). When a configured name has no fragment of its own, AAP now reads each label's case header (`name)`, `name|alias)`, and `name|\` continuations) and stores the fragment filename. An exact filename still wins over another file that merely lists that name. Wildcards are not rewritten. The header scan is skipped when every configured name already has a fragment.
+
 ### 04-Oct-2026 (1) - Build 3.7.1.2610040915
 - [#279](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/279): `label_re` was `^([a-z0-9_-]*)(\))$`, so a header such as `chatgpt|codex)` never opened the fragment. Discovery wrote no log and never called `PgetAppVersion`, so an optional `chatgpt` label was not queued. The pattern now allows `|`. The captured text can be `chatgpt|codex`, which does not match the filename, and the existing fallback still sets `label_name` to the fragment filename. Continuation headers (`name|\` … `name)`) were already parsed and are unchanged.
 
