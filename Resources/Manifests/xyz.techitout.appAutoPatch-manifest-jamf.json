@@ -1283,7 +1283,7 @@
             "type": "boolean",
             "title": "Scheduled Discovery Only",
             "default": false,
-            "description": "When WorkflowDisableRelaunch is also enabled, keep periodic headless discovery runs active using DiscoveryFrequency. These runs refresh the pending-app report, optionally stage updates, and can notify users, but never silently patch, show deferral or deadline dialogs, or install apps. Users initiate installation from the pending-apps dialog, Support App, notification action, or another explicit Install Now trigger",
+            "description": "When WorkflowDisableRelaunch is also enabled, keep periodic headless discovery runs active using DiscoveryFrequency. These runs refresh the pending-app report, optionally stage updates, and can notify users. They do not show deferral or deadline dialogs. Closed apps are patched only when WorkflowDiscoveryOnlyBackgroundPatchClosedApps is true. Users initiate remaining installations from the pending-apps dialog, Support App, notification action, or another explicit Install Now trigger",
             "links": [
                 {
                     "rel": "More information",
@@ -1291,6 +1291,19 @@
                 }
             ],
             "property_order": 194
+        },
+        "WorkflowDiscoveryOnlyBackgroundPatchClosedApps": {
+            "type": "boolean",
+            "title": "Discovery Only Background Patch Closed Apps",
+            "default": false,
+            "description": "When true, a discovery-only run (scheduled discovery or --workflow-discovery-only) silently installs updates for apps that are not open. Open or blocked apps, and labels in ExcludedBackgroundLabels, stay in the pending-apps report. There is still no deferral dialog. This does not change WorkflowBackgroundPatchClosedApps, which applies only to the normal interactive workflow. When false (default), discovery-only refreshes the report and does not install anything",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Scheduled-Discovery-and-User-Driven-Patching#background-patch-closed-apps-version-372"
+                }
+            ],
+            "property_order": 195
         },
         "WorkflowDisableRelaunch": {
             "type": "string",
@@ -1313,7 +1326,7 @@
                     "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#disable-automatic-relaunch"
                 }
             ],
-            "property_order": 195
+            "property_order": 196
         },
         "BusinessHours": {
             "type": "string",
@@ -1330,7 +1343,7 @@
                     "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Business-Hours"
                 }
             ],
-            "property_order": 196
+            "property_order": 197
         },
         "BusinessHoursRespectHardDeadline": {
             "type": "boolean",
@@ -1343,7 +1356,7 @@
                     "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Business-Hours#hard-deadlines"
                 }
             ],
-            "property_order": 197
+            "property_order": 198
         },
         "BusinessHoursSilentDuring": {
             "type": "boolean",
@@ -1356,7 +1369,7 @@
                     "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Business-Hours#silently-patch-closed-apps"
                 }
             ],
-            "property_order": 198
+            "property_order": 199
         },
         "BusinessHoursAllowDiscovery": {
             "type": "boolean",
@@ -1369,7 +1382,7 @@
                     "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Business-Hours#allow-discovery-without-patching"
                 }
             ],
-            "property_order": 199
+            "property_order": 200
         },
         "WorkflowInstallNowPatchingStatusAction": {
             "type": "string",
@@ -1394,7 +1407,7 @@
                     "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#workflow-install-now-patching-status-action"
                 }
             ],
-            "property_order": 200
+            "property_order": 201
         },
         "SelfUpdateEnabled": {
             "type": "boolean",
@@ -1407,7 +1420,7 @@
                     "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Self-Update-Function"
                 }
             ],
-            "property_order": 201
+            "property_order": 202
         },
         "SelfUpdateFrequency": {
             "type": "string",
@@ -1432,7 +1445,7 @@
                     "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Self-Update-Function"
                 }
             ],
-            "property_order": 202
+            "property_order": 203
         },
         "VersionComparisonMethod": {
             "type": "string",
@@ -1454,7 +1467,7 @@
                     "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Version-Comparison-Methods#version-comparison-method"
                 }
             ],
-            "property_order": 203
+            "property_order": 204
         },
         "VersionComparisonInstallomatorFallback": {
             "type": "boolean",
@@ -1466,7 +1479,7 @@
                     "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Version-Comparison-Methods#version-comparison-installomator-fallback"
                 }
             ],
-            "property_order": 204
+            "property_order": 205
         },
         "userInterface": {
             "type": "object",
@@ -2261,7 +2274,7 @@
                     ]
                 }
             },
-            "property_order": 205
+            "property_order": 206
         }
     }
 }

@@ -50,6 +50,7 @@ teamsURL	<key>WebhookURLTeams</key> <string>URL</string>	--webhook-url-teams=url
 runDiscovery	<key>WorkflowDisableAppDiscovery</key> <true/> | <false/>	--workflow-disable-app-discovery | --workflow-disable-app-discovery-off
 	<key>WorkflowDisableRelaunch</key> <true/> | <false/>	--workflow-disable-relaunch | --workflow-disable-relaunch-off
 	<key>WorkflowScheduledDiscovery</key> <true/> | <false/>
+	<key>WorkflowDiscoveryOnlyBackgroundPatchClosedApps</key> <true/> | <false/>
 	<key>WorkflowInstallNowPatchingStatusAction</key> <string>NEVER | ALWAYS | SUCCESS</string>	"--workflow-install-now-patching-status-action-never
 --workflow-install-now-patching-status-action-always
 --workflow-install-now-patching-status-action-success"

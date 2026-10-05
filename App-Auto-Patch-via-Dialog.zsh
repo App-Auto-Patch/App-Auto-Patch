@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.2"
 scriptDate="2026/10/05"
-scriptBuild="3.7.2.2610050933"
+scriptBuild="3.7.2.2610050948"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -191,6 +191,7 @@ echo "
     <key>WorkflowStageUpdates</key> <true/> | <false/>
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
     <key>WorkflowScheduledDiscovery</key> <true/> | <false/>
+    <key>WorkflowDiscoveryOnlyBackgroundPatchClosedApps</key> <true/> | <false/>
     <key>WorkflowDisableRelaunch</key> <true/> | <false/>
     <key>BusinessHours</key> <string>MON:09:00-17:00,TUE:09:00-17:00,...</string>
     <key>BusinessHoursRespectHardDeadline</key> <true/> | <false/>
@@ -396,6 +397,9 @@ set_defaults() {
     # User-driven patching mode (#258): when paired with WorkflowDisableRelaunch, keep periodic
     # headless discovery/report refreshes scheduled without showing deferral UI or patching apps.
     WorkflowScheduledDiscoveryOption="" # MDM Enabled; default FALSE
+    # Discovery-only closed-app installs (#283). Independent of WorkflowBackgroundPatchClosedApps.
+    # Default FALSE keeps scheduled discovery and --workflow-discovery-only queue-only.
+    WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="" # MDM Enabled; default FALSE
     workflow_discovery_only_option="FALSE" # one-shot CLI --workflow-discovery-only
     workflow_discovery_only_active="FALSE" # effective runtime mode
 
@@ -1548,6 +1552,8 @@ get_preferences() {
         workflow_disable_relaunch_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
         local workflow_scheduled_discovery_managed
         workflow_scheduled_discovery_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+        local workflow_discovery_only_background_patch_closed_apps_managed
+        workflow_discovery_only_background_patch_closed_apps_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDiscoveryOnlyBackgroundPatchClosedApps 2>/dev/null)
         local business_hours_managed
         business_hours_managed=$(defaults read "${appAutoPatchManagedPLIST}" BusinessHours 2>/dev/null)
         local business_hours_respect_hard_deadline_managed
@@ -1719,6 +1725,8 @@ get_preferences() {
         workflow_disable_relaunch_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
         local workflow_scheduled_discovery_local
         workflow_scheduled_discovery_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+        local workflow_discovery_only_background_patch_closed_apps_local
+        workflow_discovery_only_background_patch_closed_apps_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDiscoveryOnlyBackgroundPatchClosedApps 2>/dev/null)
         local business_hours_local
         business_hours_local=$(defaults read "${appAutoPatchLocalPLIST}" BusinessHours 2>/dev/null)
         local business_hours_respect_hard_deadline_local
@@ -1877,6 +1885,8 @@ get_preferences() {
     { [[ -z "${workflow_disable_relaunch_managed}" ]] && [[ -z "${workflow_disable_relaunch_option}" ]] && [[ -n "${workflow_disable_relaunch_local}" ]]; } && workflow_disable_relaunch_option="${workflow_disable_relaunch_local}"
     [[ -n "${workflow_scheduled_discovery_managed}" ]] && WorkflowScheduledDiscoveryOption="${workflow_scheduled_discovery_managed}"
     { [[ -z "${workflow_scheduled_discovery_managed}" ]] && [[ -z "${WorkflowScheduledDiscoveryOption}" ]] && [[ -n "${workflow_scheduled_discovery_local}" ]]; } && WorkflowScheduledDiscoveryOption="${workflow_scheduled_discovery_local}"
+    [[ -n "${workflow_discovery_only_background_patch_closed_apps_managed}" ]] && WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="${workflow_discovery_only_background_patch_closed_apps_managed}"
+    { [[ -z "${workflow_discovery_only_background_patch_closed_apps_managed}" ]] && [[ -z "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" ]] && [[ -n "${workflow_discovery_only_background_patch_closed_apps_local}" ]]; } && WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="${workflow_discovery_only_background_patch_closed_apps_local}"
     [[ -n "${business_hours_managed}" ]] && business_hours_option="${business_hours_managed}"
     { [[ -z "${business_hours_managed}" ]] && [[ -z "${business_hours_option}" ]] && [[ -n "${business_hours_local}" ]]; } && business_hours_option="${business_hours_local}"
     [[ -n "${business_hours_respect_hard_deadline_managed}" ]] && business_hours_respect_hard_deadline_option="${business_hours_respect_hard_deadline_managed}"
@@ -2053,6 +2063,7 @@ get_preferences() {
     log_verbose "DiscoveryFrequency: $DiscoveryFrequency"
     log_verbose "WorkflowDisableRelaunch: $workflow_disable_relaunch_option"
     log_verbose "WorkflowScheduledDiscovery: ${WorkflowScheduledDiscoveryOption:-<unset>}"
+    log_verbose "WorkflowDiscoveryOnlyBackgroundPatchClosedApps: ${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption:-<unset>}"
     log_verbose "BusinessHours: ${business_hours_option:-<unset>}"
     log_verbose "BusinessHoursRespectHardDeadline: ${business_hours_respect_hard_deadline_option:-<unset>}"
     log_verbose "BusinessHoursSilentDuring: ${business_hours_silent_during_option:-<unset>}"
@@ -2544,6 +2555,17 @@ manage_parameter_options() {
         log_warning "WorkflowScheduledDiscovery is enabled, but WorkflowDisableAppDiscovery takes priority; scheduled runs will retain the existing report without scanning."
     fi
     log_verbose "WorkflowScheduledDiscoveryOption is: ${WorkflowScheduledDiscoveryOption}"
+
+    # Closed-app installs during discovery-only runs only (#283). Does not change the normal
+    # WorkflowBackgroundPatchClosedApps behavior. Unset defaults to FALSE.
+    if [[ "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" -eq 1 ]] || [[ "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" == "TRUE" ]]; then
+        WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowDiscoveryOnlyBackgroundPatchClosedApps -bool true
+    else
+        WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" WorkflowDiscoveryOnlyBackgroundPatchClosedApps 2>/dev/null
+    fi
+    log_verbose "WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption is: ${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}"
     
     # Manage ${workflow_disable_relaunch_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
@@ -3465,7 +3487,7 @@ workflow_startup() {
     elif [[ "${workflow_discovery_only_option}" == "TRUE" ]] \
     || { [[ "${workflow_disable_relaunch_option}" == "TRUE" ]] && [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]]; }; then
         workflow_discovery_only_active="TRUE"
-        if [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]]; then
+        if [[ "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" == "TRUE" ]]; then
             log_status "Discovery-only workflow active: refreshing the report and patching closed apps in the background. Open apps stay queued. No deferral UI."
         else
             log_status "Discovery-only workflow active: report/staging/notification refresh only; no patching or deferral UI."
@@ -10410,15 +10432,15 @@ main() {
     _aap_discard_pre_discovery_report_backup
 
     # User-driven patching mode (#258, #283): refresh discovery/report state and optionally stage
-    # installers. When WorkflowBackgroundPatchClosedApps is enabled, also install updates for apps
-    # that are not open. Open or blocked apps stay in the report for the Pending Apps dialog.
-    # There is still no deferral UI, hard-deadline enforcement, or interactive installation.
+    # installers. When WorkflowDiscoveryOnlyBackgroundPatchClosedApps is enabled, also install
+    # updates for apps that are not open. Open or blocked apps stay in the report for the Pending
+    # Apps dialog. There is still no deferral UI, hard-deadline enforcement, or interactive installation.
     if [[ "${workflow_discovery_only_active}" == "TRUE" ]]; then
         if [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
             log_info "Discovery-only workflow: staging ${#countOfElementsArray[@]} queued update(s)."
             workflow_stage_updates
         fi
-        if [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+        if [[ "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
             log_info "Discovery-only workflow: silently patching closed apps."
             workflow_silent_patch_closed_apps
         fi

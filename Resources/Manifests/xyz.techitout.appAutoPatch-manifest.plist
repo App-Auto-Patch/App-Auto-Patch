@@ -13,7 +13,7 @@
 	<key>pfm_format_version</key>
 	<integer>1</integer>
 	<key>pfm_last_modified</key>
-	<date>2026-10-04T00:00:00Z</date>
+	<date>2026-10-05T00:00:00Z</date>
 	<key>pfm_platforms</key>
 	<array>
 		<string>macOS</string>
@@ -228,6 +228,7 @@ During a profile replacement, the system updates payloads with the same 'Payload
 					<string>WebhookURLGoogleChat</string>
 					<string>WorkflowDisableAppDiscovery</string>
 					<string>WorkflowScheduledDiscovery</string>
+					<string>WorkflowDiscoveryOnlyBackgroundPatchClosedApps</string>
 					<string>WorkflowDisableRelaunch</string>
 					<string>BusinessHours</string>
 					<string>BusinessHoursRespectHardDeadline</string>
@@ -1567,13 +1568,29 @@ During a profile replacement, the system updates payloads with the same 'Payload
 			<key>pfm_default</key>
 			<false/>
 			<key>pfm_description</key>
-			<string>When WorkflowDisableRelaunch is also enabled, keep periodic headless discovery runs active using DiscoveryFrequency. These runs refresh the pending-app report, optionally stage updates, and can notify users, but never silently patch, show deferral or deadline dialogs, or install apps. Users initiate installation from the pending-apps dialog, Support App, notification action, or another explicit Install Now trigger</string>
+			<string>When WorkflowDisableRelaunch is also enabled, keep periodic headless discovery runs active using DiscoveryFrequency. These runs refresh the pending-app report, optionally stage updates, and can notify users. They do not show deferral or deadline dialogs. Closed apps are patched only when WorkflowDiscoveryOnlyBackgroundPatchClosedApps is true. Users initiate remaining installations from the pending-apps dialog, Support App, notification action, or another explicit Install Now trigger</string>
 			<key>pfm_documentation_url</key>
 			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Scheduled-Discovery-and-User-Driven-Patching</string>
 			<key>pfm_name</key>
 			<string>WorkflowScheduledDiscovery</string>
 			<key>pfm_title</key>
 			<string>Scheduled Discovery Only</string>
+			<key>pfm_type</key>
+			<string>boolean</string>
+		</dict>
+		<dict>
+			<key>pfm_app_min</key>
+			<string>3.7.2</string>
+			<key>pfm_default</key>
+			<false/>
+			<key>pfm_description</key>
+			<string>When true, a discovery-only run (scheduled discovery or --workflow-discovery-only) silently installs updates for apps that are not open. Open or blocked apps, and labels in ExcludedBackgroundLabels, stay in the pending-apps report. There is still no deferral dialog. This does not change WorkflowBackgroundPatchClosedApps, which applies only to the normal interactive workflow. When false (default), discovery-only refreshes the report and does not install anything</string>
+			<key>pfm_documentation_url</key>
+			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Scheduled-Discovery-and-User-Driven-Patching#background-patch-closed-apps-version-372</string>
+			<key>pfm_name</key>
+			<string>WorkflowDiscoveryOnlyBackgroundPatchClosedApps</string>
+			<key>pfm_title</key>
+			<string>Discovery Only Background Patch Closed Apps</string>
 			<key>pfm_type</key>
 			<string>boolean</string>
 		</dict>
@@ -2941,6 +2958,6 @@ During a profile replacement, the system updates payloads with the same 'Payload
 	<key>pfm_unique</key>
 	<true/>
 	<key>pfm_version</key>
-	<integer>5</integer>
+	<integer>6</integer>
 </dict>
 </plist>

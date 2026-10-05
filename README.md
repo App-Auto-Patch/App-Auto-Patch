@@ -15,7 +15,7 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.7.2
-- Changed: discovery-only runs patch closed apps in the background when `WorkflowBackgroundPatchClosedApps` is enabled. Open apps stay in the pending-apps report for Install Now. Set the key to `false` to discover and notify without installing. (#283)
+- **Discovery-only background patching** — Set `WorkflowDiscoveryOnlyBackgroundPatchClosedApps` to `true` to install updates for closed apps during scheduled discovery or `--workflow-discovery-only`. Default is `false`. Open apps stay queued. This is separate from `WorkflowBackgroundPatchClosedApps`. (#283)
 
 ## New features/Specific Changes in 3.7.1
 - **Google Chat webhooks** — Post the same patch-result card used for Slack and Teams to a Google Chat incoming webhook when `WebhookFeature` is `ALL` or `FAILURES`. (#273)

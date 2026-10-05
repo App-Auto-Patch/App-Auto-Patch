@@ -3,8 +3,8 @@
 # Version 3
 
 ## Version 3.7.2
-### 05-Oct-2026 (1) - Build 3.7.2.2610050933
-- [#283](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/283): scheduled discovery and `--workflow-discovery-only` exited after the report refresh, so `WorkflowBackgroundPatchClosedApps` never ran and closed apps stayed in the Pending Apps window. When that preference is enabled, discovery-only now calls `workflow_silent_patch_closed_apps` after optional staging. Successful installs are removed from the report. Open apps, blocked apps, and `ExcludedBackgroundLabels` stay queued. Notifications follow the same silent-updated / silent-and-queued / apps-queued rules as a Business Hours silent run. The run still does not show a deferral dialog or mark the regular patch cycle complete. Setting `WorkflowBackgroundPatchClosedApps` to `false` keeps the 3.7.0 and 3.7.1 queue-only behavior.
+### 05-Oct-2026 (1) - Build 3.7.2.2610050948
+- [#283](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/283): scheduled discovery and `--workflow-discovery-only` exited after the report refresh, so closed apps stayed in the Pending Apps window. New managed preference `WorkflowDiscoveryOnlyBackgroundPatchClosedApps` (default `false`) calls `workflow_silent_patch_closed_apps` after optional staging. Successful installs are removed from the report. Open apps, blocked apps, and `ExcludedBackgroundLabels` stay queued. Notifications follow the same silent-updated / silent-and-queued / apps-queued rules as a Business Hours silent run. The run still does not show a deferral dialog or mark the regular patch cycle complete. `WorkflowBackgroundPatchClosedApps` is unchanged and still applies only to the normal interactive workflow. Profile manifest `pfm_version` is 6.
 
 ## Version 3.7.1
 ### 04-Oct-2026 (2) - Build 3.7.1.2610040930
