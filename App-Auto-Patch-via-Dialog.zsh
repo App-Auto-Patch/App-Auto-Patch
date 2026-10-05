@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.7.1"
-scriptDate="2026/10/04"
-scriptBuild="3.7.1.2610040930"
+scriptVersion="3.7.2"
+scriptDate="2026/10/05"
+scriptBuild="3.7.2.2610050933"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -3465,7 +3465,11 @@ workflow_startup() {
     elif [[ "${workflow_discovery_only_option}" == "TRUE" ]] \
     || { [[ "${workflow_disable_relaunch_option}" == "TRUE" ]] && [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]]; }; then
         workflow_discovery_only_active="TRUE"
-        log_status "Discovery-only workflow active: report/staging/notification refresh only; no patching or deferral UI."
+        if [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]]; then
+            log_status "Discovery-only workflow active: refreshing the report and patching closed apps in the background. Open apps stay queued. No deferral UI."
+        else
+            log_status "Discovery-only workflow active: report/staging/notification refresh only; no patching or deferral UI."
+        fi
     fi
 
     
@@ -10405,15 +10409,24 @@ main() {
     # Discovery and queue reconstruction are now complete; the new report is authoritative.
     _aap_discard_pre_discovery_report_backup
 
-    # User-driven patching mode (#258): refresh discovery/report state, optionally stage installers,
-    # optionally notify the user, then exit without silent patching, deferral UI, hard-deadline
-    # enforcement, or installation. Support App / pending-apps dialog remains the install trigger.
+    # User-driven patching mode (#258, #283): refresh discovery/report state and optionally stage
+    # installers. When WorkflowBackgroundPatchClosedApps is enabled, also install updates for apps
+    # that are not open. Open or blocked apps stay in the report for the Pending Apps dialog.
+    # There is still no deferral UI, hard-deadline enforcement, or interactive installation.
     if [[ "${workflow_discovery_only_active}" == "TRUE" ]]; then
         if [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
             log_info "Discovery-only workflow: staging ${#countOfElementsArray[@]} queued update(s)."
             workflow_stage_updates
         fi
-        if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+        if [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            log_info "Discovery-only workflow: silently patching closed apps."
+            workflow_silent_patch_closed_apps
+        fi
+        if [[ ${silent_patch_success_count} -gt 0 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            send_aap_notification_silent_and_queued "${silent_patch_success_count}" "${#countOfElementsArray[@]}"
+        elif [[ ${silent_patch_success_count} -gt 0 ]]; then
+            send_aap_notification_silent_updated "${silent_patch_success_count}"
+        elif [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
             if aap_notification_enabled apps_queued; then
                 send_aap_notification_apps_queued "${#countOfElementsArray[@]}"
             else

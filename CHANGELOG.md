@@ -4,6 +4,13 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 # Version 3
 
+## Version 3.7.2
+### 05-Oct-2026
+
+**Behavior Changes**
+
+- Changed: a discovery-only run now patches closed apps in the background when `WorkflowBackgroundPatchClosedApps` is enabled (the default). Open or blocked apps stay in the pending-apps report, and there is still no deferral dialog. Set `WorkflowBackgroundPatchClosedApps` to `false` to keep the previous queue-only discovery. (#283)
+
 ## Version 3.7.1
 ### 04-Oct-2026
 
