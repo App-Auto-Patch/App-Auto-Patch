@@ -15,7 +15,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#daysuntilreset"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Deferral-Behavior#days-until-reset"
                 }
             ],
             "property_order": 5
@@ -47,7 +47,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#patchweekstartday"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Deferral-Behavior#patch-week-start-day-optional"
                 }
             ],
             "property_order": 10
@@ -65,7 +65,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#deadlinecountfocus"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Count-Deadlines#focus-count-deadline"
                 }
             ],
             "property_order": 15
@@ -83,7 +83,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#deadlinecounthard"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Count-Deadlines#hard-count-deadline"
                 }
             ],
             "property_order": 20
@@ -95,7 +95,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Days-Deadlines"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Days-Deadlines#focus-days-deadline"
                 }
             ],
             "property_order": 25
@@ -107,7 +107,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Days-Deadlines"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Days-Deadlines#hard-days-deadline"
                 }
             ],
             "property_order": 30
@@ -125,7 +125,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#discovery-frequency"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#discovery-frequency-version-36"
                 }
             ],
             "property_order": 32
@@ -143,7 +143,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#deferraltimerdefault"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Deferral-Behavior#deferral-time-default"
                 }
             ],
             "property_order": 35
@@ -161,7 +161,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#deferraltimererror"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Deferral-Behavior#deferral-timer-error"
                 }
             ],
             "property_order": 40
@@ -179,7 +179,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#deferraltimerfocus"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Deferral-Behavior#deferral-timer-focus"
                 }
             ],
             "property_order": 45
@@ -197,7 +197,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#deferraltimermenu"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Deferral-Behavior#deferral-timer-menu"
                 }
             ],
             "property_order": 50
@@ -215,7 +215,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#deferraltimerworkflowrelaunch"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Deferral-Behavior#deferral-timer-workflow-relaunch"
                 }
             ],
             "property_order": 55
@@ -354,7 +354,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://swiftdialog.app/advanced/command-line-options/"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/End-User-Experience#dock-icon-and-quit-behavior-version-37"
                 }
             ],
             "property_order": 62
@@ -367,7 +367,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://swiftdialog.app/"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Notifications-and-Pending-Apps#banner-notifications"
                 }
             ],
             "property_order": 63
@@ -380,7 +380,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://swiftdialog.app/"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Notifications-and-Pending-Apps#notification-preferences"
                 }
             ],
             "property_order": 64
@@ -393,7 +393,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://swiftdialog.app/"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Notifications-and-Pending-Apps#notification-preferences"
                 }
             ],
             "property_order": 65
@@ -406,7 +406,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://swiftdialog.app/"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Notifications-and-Pending-Apps#notification-preferences"
                 }
             ],
             "property_order": 66
@@ -486,6 +486,12 @@
                     "STOP"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Process-Recovery#discovery-and-staging-dock-quit"
+                }
+            ],
             "property_order": 73
         },
         "UnattendedExit": {
@@ -557,7 +563,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/End-User-Experience#dialog-icon"
                 }
             ],
             "property_order": 86
@@ -574,7 +580,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#bannerimage"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/End-User-Experience#banner-image"
                 }
             ],
             "property_order": 87
@@ -591,7 +597,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#bannertitle"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/End-User-Experience#banner-image"
                 }
             ],
             "property_order": 88
@@ -608,7 +614,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#bannerheight"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/End-User-Experience#banner-image"
                 }
             ],
             "property_order": 89
@@ -753,7 +759,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/256"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Installomator-Integration#skip-pre-update-verification-version-37"
                 }
             ],
             "property_order": 116
@@ -771,7 +777,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#installomatoroptions"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Installomator-Integration#blocking-process-action"
                 }
             ],
             "property_order": 120
@@ -791,6 +797,12 @@
                     "FALSE"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Installomator-Integration#installomator-update-disable"
+                }
+            ],
             "property_order": 125
         },
         "GitHubAPIAuthEnabled": {
@@ -811,7 +823,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/249"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#githubapiauthenabled"
                 }
             ],
             "property_order": 126
@@ -828,7 +840,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#githubapitoken"
                 }
             ],
             "property_order": 127
@@ -845,7 +857,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/156"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#prepost-patch-scripts-version-37"
                 }
             ],
             "property_order": 128
@@ -862,7 +874,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/156"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#prepost-patch-scripts-version-37"
                 }
             ],
             "property_order": 129
@@ -882,6 +894,12 @@
                     "CONTINUE"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#prepost-patch-scripts-version-37"
+                }
+            ],
             "property_order": 1291
         },
         "PostPatchScriptFailAction": {
@@ -899,6 +917,12 @@
                     "CONTINUE"
                 ]
             },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#prepost-patch-scripts-version-37"
+                }
+            ],
             "property_order": 1292
         },
         "PatchScriptTimeoutSeconds": {
@@ -906,6 +930,12 @@
             "title": "Patch Script Timeout Seconds",
             "default": 300,
             "description": "Maximum seconds allowed for a PrePatchScript or PostPatchScript run before AAP terminates it (treated as failure).",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#prepost-patch-scripts-version-37"
+                }
+            ],
             "property_order": 1293
         },
         "StaleProcessTimeoutSeconds": {
@@ -918,6 +948,12 @@
                     "placeholder": "3600"
                         }
                     },
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Process-Recovery#stale-process-timeout"
+                }
+            ],
             "property_order": 1294
         },
         "InstallomatorVersion": {
@@ -1124,7 +1160,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#webhookfeature"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Webhooks#when-a-message-is-sent"
                 }
             ],
             "property_order": 175
@@ -1136,7 +1172,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#webhookurlslack"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Webhooks#slack"
                 }
             ],
             "property_order": 180
@@ -1148,10 +1184,22 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Webhooks#microsoft-teams"
                 }
             ],
             "property_order": 185
+        },
+        "WebhookURLGoogleChat": {
+            "type": "string",
+            "title": "Google Chat Webhook URL",
+            "description": "The Google Chat incoming webhook URL to use if WebhookFeature is set to ALL or FAILURES. The card includes the same status, serial, user, labels, errors, and MDM device link as the Slack and Teams webhooks.",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Webhooks#google-chat"
+                }
+            ],
+            "property_order": 186
         },
         "MosyleConsoleURL": {
             "type": "string",
@@ -1160,10 +1208,10 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#mosyleconsoleurl"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Webhooks#mosyle"
                 }
             ],
-            "property_order": 186
+            "property_order": 187
         },
         "WorkflowDisableAppDiscovery": {
             "type": "string",
@@ -1196,7 +1244,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#background-patch-closed-apps"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#background-patch-closed-apps-version-36"
                 }
             ],
             "property_order": 191
@@ -1209,7 +1257,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#update-staging"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#update-staging-version-36"
                 }
             ],
             "property_order": 192
@@ -1239,7 +1287,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/258"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Scheduled-Discovery-and-User-Driven-Patching"
                 }
             ],
             "property_order": 194
@@ -1279,7 +1327,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Business-Hours"
                 }
             ],
             "property_order": 196
@@ -1292,7 +1340,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Business-Hours#hard-deadlines"
                 }
             ],
             "property_order": 197
@@ -1305,7 +1353,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Business-Hours#silently-patch-closed-apps"
                 }
             ],
             "property_order": 198
@@ -1318,7 +1366,7 @@
             "links": [
                 {
                     "rel": "More information",
-                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/issues/166"
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Business-Hours#allow-discovery-without-patching"
                 }
             ],
             "property_order": 199

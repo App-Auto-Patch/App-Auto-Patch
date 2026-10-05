@@ -15,6 +15,18 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.7.1
+- **Google Chat webhooks** — Post the same patch-result card used for Slack and Teams to a Google Chat incoming webhook when `WebhookFeature` is `ALL` or `FAILURES`. (#273)
+	- Managed Preference Key: `<key>WebhookURLGoogleChat</key>` `<string>https://chat.googleapis.com/v1/spaces/...</string>`
+	- CLI: `--webhook-url-google-chat=`
+- Fixed: discovery reads Installomator labels with a same-line multi-name header, such as `chatgpt|codex)`. Those fragments were skipped with no log, so an optional `chatgpt` label was never queued. (#279)
+- Fixed: Installomator aliases are stored as the fragment filename. `visualstudiocode` becomes `microsoftvisualstudiocode`, and `codex` becomes `chatgpt`, for required, optional, ignored, and excluded-background labels. (#279)
+- Fixed: the `appautopatch` Installomator label is ignored during discovery and background patching. App Auto-Patch updates itself only through the self-update check.
+- Fixed: the queued-apps banner **Install Now** button opens the Pending Apps window again. That click starts AAP from the pending-apps LaunchDaemon, and startup was unloading that same daemon and waiting for it to exit, so the run stalled after preference setup. `sudo appautopatch --pending-apps-dialog` was unaffected because Terminal is not inside that daemon. (#276)
+- Fixed: `--uninstall` removes staged downloads in `/private/tmp/AAPStage`. (#277)
+- Fixed: an Installomator label that calls `cleanupAndExit` (current `pique`) no longer exits App Auto-Patch during discovery or leaves extra Dock icons behind. The version check runs in a subshell and a label abort skips that label only. (#275)
+- Fixed: discovery ignores Setapp copies under `/Applications/Setapp/` and `/Users/Shared/Apps/Setapp/`, so AAP does not install an unlicensed vendor build next to a Setapp app. A regular copy in `/Applications` is still patched. (#270)
+- Fixed: Update Staging no longer writes a raw variable dump of the previous label to the policy log between apps. (#265)
+- Fixed: log timestamps use `YYYY-MM-DD HH:MM:SS` on every run, including the pending-apps process started from a banner notification. (#272)
 - Fixed: Mosyle webhook **View in Mosyle** links use the admin console (`mybusiness.mosyle.com` for Business, `my.mosyle.com` for Education) instead of the enrollment `ServerURL`. Optional `MosyleConsoleURL` override. (#267)
 - Fixed: console user detection now resolves the `scutil` ConsoleUser UID to the account RecordName with `id -un`, instead of using the `Name` field (which can be a login alias) or `stat /dev/console`. (#264)
 
