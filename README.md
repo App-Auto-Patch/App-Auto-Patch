@@ -16,6 +16,8 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 
 ## New features/Specific Changes in 3.7.2
 - **Discovery-only background patching** — Set `WorkflowDiscoveryOnlyBackgroundPatchClosedApps` to `true` to install updates for closed apps during scheduled discovery or `--workflow-discovery-only`. Default is `false`. Open apps stay queued. This is separate from `WorkflowBackgroundPatchClosedApps`. (#283)
+- Fixed: AAP enables `xyz.techitout.aap` and `xyz.techitout.aap.pendingAppsDialogTrigger` when launchd has them disabled, and removes `com.apple.quarantine` from those plists so macOS 27 will load them. A failed load is now logged.
+- Fixed: `--uninstall` unloads and removes the pending-apps dialog LaunchDaemon.
 
 ## New features/Specific Changes in 3.7.1
 - **Google Chat webhooks** — Post the same patch-result card used for Slack and Teams to a Google Chat incoming webhook when `WebhookFeature` is `ALL` or `FAILURES`. (#273)

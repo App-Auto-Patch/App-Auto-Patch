@@ -12,6 +12,15 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 - **Discovery-only background patching** — A scheduled discovery or `--workflow-discovery-only` run can silently install updates for apps that are not open. Open or blocked apps stay in the pending-apps report, and there is still no deferral dialog. This is off by default and does not follow `WorkflowBackgroundPatchClosedApps`. (#283)
 	- Managed Preference Key: `<key>WorkflowDiscoveryOnlyBackgroundPatchClosedApps</key>` `<true/>` | `<false/>` — **default: `false`**
 
+### 06-Oct-2026
+
+**Fixes**
+
+- Fixed: if `xyz.techitout.aap` or `xyz.techitout.aap.pendingAppsDialogTrigger` is disabled in launchd, AAP enables it before loading. A disabled service survives reinstall, and `launchctl bootstrap` fails with no log line.
+- Fixed: `com.apple.quarantine` is removed from those LaunchDaemon plists and their helper scripts after they are written. macOS 27 will not load a LaunchDaemon that still has the quarantine flag.
+- Fixed: a failed LaunchDaemon load is written to the log. The previous bootstrap errors were discarded.
+- Fixed: `--uninstall` unloads and removes `xyz.techitout.aap.pendingAppsDialogTrigger`.
+
 ## Version 3.7.1
 ### 04-Oct-2026
 

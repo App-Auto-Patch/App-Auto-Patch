@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.2"
 scriptDate="2026/10/05"
-scriptBuild="3.7.2.2610050948"
+scriptBuild="3.7.2.2610060952"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -3522,6 +3522,13 @@ workflow_startup() {
 		restart_aap_sleep_seconds=5
         restart_aap
 	fi
+
+	# An install from this folder does not call restart_aap. If the main daemon was left
+	# disabled, or macOS 27 refused it because of a quarantine flag, load it now.
+	if [[ -f "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" ]] && ! /bin/launchctl print "system/${appAutoPatchLaunchDaemonLabel}" >/dev/null 2>&1; then
+		log_notice "LaunchDaemon ${appAutoPatchLaunchDaemonLabel} is not loaded; loading it."
+		_aap_bootstrap_system_launchdaemon "${appAutoPatchLaunchDaemonLabel}"
+	fi
 	
 	# Wait for a valid network connection. If there is still no network after two minutes, an automatic deferral is started.
 	# Pending-apps dialog only reads the local report PLIST — skip the network wait so notification /
@@ -3946,6 +3953,63 @@ interactive_interrupt() {
 
 }
 
+# macOS 27 will not bootstrap a LaunchDaemon whose plist still has the quarantine
+# attribute. Files written by a quarantined installer inherit it, so clear it after
+# the plist (and the program it runs) is created.
+_aap_clear_quarantine() {
+    local target="$1"
+    [[ -e "${target}" ]] || return 0
+    if /usr/bin/xattr -p com.apple.quarantine "${target}" >/dev/null 2>&1; then
+        /usr/bin/xattr -d com.apple.quarantine "${target}" 2>/dev/null
+        log_install "Removed com.apple.quarantine from ${target}."
+    fi
+}
+
+# print-disabled lists every service, with "=> enabled" or "=> disabled".
+# A disabled override survives reinstall, and bootstrap then fails with
+# "Bootstrap failed: 5: Input/output error". That failure used to be discarded.
+_aap_launchdaemon_is_disabled() {
+    local label="$1"
+    local line
+    line=$(/bin/launchctl print-disabled system 2>/dev/null | /usr/bin/grep -F "\"${label}\" =>")
+    [[ "${line}" == *" => disabled"* ]]
+}
+
+_aap_prepare_system_launchdaemon() {
+    local label="$1"
+    local plist="/Library/LaunchDaemons/${label}.plist"
+    [[ $(id -u) -eq 0 ]] || return 0
+    [[ -f "${plist}" ]] || return 0
+    _aap_clear_quarantine "${plist}"
+    if _aap_launchdaemon_is_disabled "${label}"; then
+        log_notice "LaunchDaemon ${label} is disabled; enabling it."
+        /bin/launchctl enable "system/${label}"
+    fi
+}
+
+# Bootstraps a system LaunchDaemon after clearing quarantine and re-enabling a
+# disabled service. Skips the bootstrap when the job is already loaded.
+# Logs the launchctl error instead of discarding it.
+_aap_bootstrap_system_launchdaemon() {
+    local label="$1"
+    local plist="/Library/LaunchDaemons/${label}.plist"
+    local bootstrap_err bootstrap_status
+    [[ $(id -u) -eq 0 ]] || return 0
+    [[ -f "${plist}" ]] || return 0
+    _aap_prepare_system_launchdaemon "${label}"
+    if /bin/launchctl print "system/${label}" >/dev/null 2>&1; then
+        return 0
+    fi
+    bootstrap_err=$(/bin/launchctl bootstrap system "${plist}" 2>&1)
+    bootstrap_status=$?
+    if (( bootstrap_status != 0 )); then
+        log_error "Failed to load LaunchDaemon ${label}: ${bootstrap_err}"
+        return "${bootstrap_status}"
+    fi
+    log_install "Loaded LaunchDaemon ${label}."
+    return 0
+}
+
 # Restart AAP via the LaunchDaemon after waiting for ${restart_aap_sleep_seconds} seconds.
 restart_aap() {
 	if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
@@ -3962,7 +4026,7 @@ restart_aap() {
 	{
 		sleep $restart_aap_sleep_seconds
 		launchctl bootout "system/${appAutoPatchLaunchDaemonLabel}" >/dev/null 2>&1
-		launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" >/dev/null 2>&1
+		_aap_bootstrap_system_launchdaemon "${appAutoPatchLaunchDaemonLabel}"
 	} &
 	disown
 	log_verbose "Local preference file at restart exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2>/dev/null)"
@@ -4301,6 +4365,7 @@ EOAS
     "${appAutoPatchFolder}/aap-starter"
     /bin/chmod 755 "${appAutoPatchFolder}/aap-starter"
     /usr/sbin/chown root:wheel "${appAutoPatchFolder}/aap-starter"
+    _aap_clear_quarantine "${appAutoPatchFolder}/aap-starter"
 
     # Create the LaunchDaemon plist if it doesn't exist
 
@@ -4358,6 +4423,7 @@ EOLD
 
     chmod 644 "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
     chown root:wheel "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
+    _aap_prepare_system_launchdaemon "${appAutoPatchLaunchDaemonLabel}"
 
     # User-writable Install Now trigger used by banner notification actions.
     ensure_aap_install_now_trigger
@@ -4398,6 +4464,10 @@ function uninstall_app_auto_patch() {
     log_uninstall "Removing Install Now trigger Launch Daemon: /Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist"
     launchctl bootout system "/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist" 2> /dev/null
     rm -f "/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist" 2> /dev/null
+
+    log_uninstall "Removing pending-apps dialog trigger Launch Daemon: /Library/LaunchDaemons/${aapPendingAppsTriggerLaunchDaemonLabel}.plist"
+    launchctl bootout system "/Library/LaunchDaemons/${aapPendingAppsTriggerLaunchDaemonLabel}.plist" 2> /dev/null
+    rm -f "/Library/LaunchDaemons/${aapPendingAppsTriggerLaunchDaemonLabel}.plist" 2> /dev/null
 
     # Remove the App Auto Patch sym link
     log_uninstall "Removing ${appAutoPatchLink}"
@@ -5378,6 +5448,7 @@ exit 0
 EOF
     chown root:wheel "${aapPendingAppsTriggerScript}"
     chmod 755 "${aapPendingAppsTriggerScript}"
+    _aap_clear_quarantine "${aapPendingAppsTriggerScript}"
 
     # Thin user-context helper for notification button1action (cannot run appautopatch as root).
     local request_script="${appAutoPatchFolder}/aap-notification-request-pending-apps"
@@ -5413,14 +5484,15 @@ EOF
 EOF
     chown root:wheel "${trigger_plist}"
     chmod 644 "${trigger_plist}"
-    # launchctl bootout waits until the job exits. This run is that job when Install Now
-    # on a banner started us, so bootout waits on ourselves and startup never continues.
-    # A Terminal `appautopatch --pending-apps-dialog` is not inside the job, so it is fine. (#276)
+    # Clear quarantine and re-enable a disabled service even when this run cannot
+    # reload the job. bootout below waits until the job exits, so it is skipped
+    # when Install Now on a banner started us. (#276)
+    _aap_prepare_system_launchdaemon "${aapPendingAppsTriggerLaunchDaemonLabel}"
     if _aap_ancestry_includes "aap-pending-apps-dialog-trigger"; then
         log_verbose "Not reloading the pending-apps LaunchDaemon from the run it started."
     else
         launchctl bootout system "${trigger_plist}" >/dev/null 2>&1
-        launchctl bootstrap system "${trigger_plist}" >/dev/null 2>&1
+        _aap_bootstrap_system_launchdaemon "${aapPendingAppsTriggerLaunchDaemonLabel}"
         log_verbose "Pending-apps dialog notification trigger ready at ${aapPendingAppsTriggerFile}"
     fi
 
@@ -5755,7 +5827,7 @@ exit_after_disabled_relaunch() {
     log_aap "Status: ${context} and Automatic Relaunch is disabled. Exiting."
     log_status "Inactive: ${context} and Automatic Relaunch is disabled."
     /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2>/dev/null
-    { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+    { sleep 5; _aap_bootstrap_system_launchdaemon "${appAutoPatchLaunchDaemonLabel}"; } &
     disown
     exit_clean
 }
