@@ -2,6 +2,15 @@
 
 # Version 3
 
+## Version 3.7.2
+### 06-Oct-2026 (1) - Build 3.7.2.2610060952
+- If `launchctl print-disabled system` reports `xyz.techitout.aap` or `xyz.techitout.aap.pendingAppsDialogTrigger` as `=> disabled`, AAP runs `launchctl enable system/<label>` before bootstrap. The disabled override survives a reinstall, and bootstrap then fails with `Bootstrap failed: 5: Input/output error`. That error was discarded. A run from the installed folder also loads `xyz.techitout.aap` when it is not currently loaded.
+- After the LaunchDaemon plists, `aap-starter`, and the pending-apps trigger script are written, AAP removes `com.apple.quarantine`. macOS 27 refuses to load a LaunchDaemon plist that still has that attribute. A quarantined copy of the script can pass the attribute on to files it creates.
+- `--uninstall` now boots out and deletes `/Library/LaunchDaemons/xyz.techitout.aap.pendingAppsDialogTrigger.plist`. It already removed `xyz.techitout.aap` and the legacy Install Now daemon.
+
+### 05-Oct-2026 (1) - Build 3.7.2.2610050948
+- [#283](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/283): scheduled discovery and `--workflow-discovery-only` exited after the report refresh, so closed apps stayed in the Pending Apps window. New managed preference `WorkflowDiscoveryOnlyBackgroundPatchClosedApps` (default `false`) calls `workflow_silent_patch_closed_apps` after optional staging. Successful installs are removed from the report. Open apps, blocked apps, and `ExcludedBackgroundLabels` stay queued. Notifications follow the same silent-updated / silent-and-queued / apps-queued rules as a Business Hours silent run. The run still does not show a deferral dialog or mark the regular patch cycle complete. `WorkflowBackgroundPatchClosedApps` is unchanged and still applies only to the normal interactive workflow. Profile manifest `pfm_version` is 6.
+
 ## Version 3.7.1
 ### 04-Oct-2026 (2) - Build 3.7.1.2610040930
 - [#279](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/279): required, optional, ignored, and excluded-background names were accepted only when `labels/<name>.sh` existed. `visualstudiocode` is a case-header name inside `microsoftvisualstudiocode.sh`, so preference setup logged `No such label` and `IgnoredLabels=*` never selected that file. The same applies to aliases such as `codex` (`chatgpt.sh`). When a configured name has no fragment of its own, AAP now reads each label's case header (`name)`, `name|alias)`, and `name|\` continuations) and stores the fragment filename. An exact filename still wins over another file that merely lists that name. Wildcards are not rewritten. The header scan is skipped when every configured name already has a fragment.

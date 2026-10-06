@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.7.1"
-scriptDate="2026/10/04"
-scriptBuild="3.7.1.2610040930"
+scriptVersion="3.7.2"
+scriptDate="2026/10/05"
+scriptBuild="3.7.2.2610060952"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -191,6 +191,7 @@ echo "
     <key>WorkflowStageUpdates</key> <true/> | <false/>
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
     <key>WorkflowScheduledDiscovery</key> <true/> | <false/>
+    <key>WorkflowDiscoveryOnlyBackgroundPatchClosedApps</key> <true/> | <false/>
     <key>WorkflowDisableRelaunch</key> <true/> | <false/>
     <key>BusinessHours</key> <string>MON:09:00-17:00,TUE:09:00-17:00,...</string>
     <key>BusinessHoursRespectHardDeadline</key> <true/> | <false/>
@@ -396,6 +397,9 @@ set_defaults() {
     # User-driven patching mode (#258): when paired with WorkflowDisableRelaunch, keep periodic
     # headless discovery/report refreshes scheduled without showing deferral UI or patching apps.
     WorkflowScheduledDiscoveryOption="" # MDM Enabled; default FALSE
+    # Discovery-only closed-app installs (#283). Independent of WorkflowBackgroundPatchClosedApps.
+    # Default FALSE keeps scheduled discovery and --workflow-discovery-only queue-only.
+    WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="" # MDM Enabled; default FALSE
     workflow_discovery_only_option="FALSE" # one-shot CLI --workflow-discovery-only
     workflow_discovery_only_active="FALSE" # effective runtime mode
 
@@ -1548,6 +1552,8 @@ get_preferences() {
         workflow_disable_relaunch_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
         local workflow_scheduled_discovery_managed
         workflow_scheduled_discovery_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+        local workflow_discovery_only_background_patch_closed_apps_managed
+        workflow_discovery_only_background_patch_closed_apps_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDiscoveryOnlyBackgroundPatchClosedApps 2>/dev/null)
         local business_hours_managed
         business_hours_managed=$(defaults read "${appAutoPatchManagedPLIST}" BusinessHours 2>/dev/null)
         local business_hours_respect_hard_deadline_managed
@@ -1719,6 +1725,8 @@ get_preferences() {
         workflow_disable_relaunch_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
         local workflow_scheduled_discovery_local
         workflow_scheduled_discovery_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+        local workflow_discovery_only_background_patch_closed_apps_local
+        workflow_discovery_only_background_patch_closed_apps_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDiscoveryOnlyBackgroundPatchClosedApps 2>/dev/null)
         local business_hours_local
         business_hours_local=$(defaults read "${appAutoPatchLocalPLIST}" BusinessHours 2>/dev/null)
         local business_hours_respect_hard_deadline_local
@@ -1877,6 +1885,8 @@ get_preferences() {
     { [[ -z "${workflow_disable_relaunch_managed}" ]] && [[ -z "${workflow_disable_relaunch_option}" ]] && [[ -n "${workflow_disable_relaunch_local}" ]]; } && workflow_disable_relaunch_option="${workflow_disable_relaunch_local}"
     [[ -n "${workflow_scheduled_discovery_managed}" ]] && WorkflowScheduledDiscoveryOption="${workflow_scheduled_discovery_managed}"
     { [[ -z "${workflow_scheduled_discovery_managed}" ]] && [[ -z "${WorkflowScheduledDiscoveryOption}" ]] && [[ -n "${workflow_scheduled_discovery_local}" ]]; } && WorkflowScheduledDiscoveryOption="${workflow_scheduled_discovery_local}"
+    [[ -n "${workflow_discovery_only_background_patch_closed_apps_managed}" ]] && WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="${workflow_discovery_only_background_patch_closed_apps_managed}"
+    { [[ -z "${workflow_discovery_only_background_patch_closed_apps_managed}" ]] && [[ -z "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" ]] && [[ -n "${workflow_discovery_only_background_patch_closed_apps_local}" ]]; } && WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="${workflow_discovery_only_background_patch_closed_apps_local}"
     [[ -n "${business_hours_managed}" ]] && business_hours_option="${business_hours_managed}"
     { [[ -z "${business_hours_managed}" ]] && [[ -z "${business_hours_option}" ]] && [[ -n "${business_hours_local}" ]]; } && business_hours_option="${business_hours_local}"
     [[ -n "${business_hours_respect_hard_deadline_managed}" ]] && business_hours_respect_hard_deadline_option="${business_hours_respect_hard_deadline_managed}"
@@ -2053,6 +2063,7 @@ get_preferences() {
     log_verbose "DiscoveryFrequency: $DiscoveryFrequency"
     log_verbose "WorkflowDisableRelaunch: $workflow_disable_relaunch_option"
     log_verbose "WorkflowScheduledDiscovery: ${WorkflowScheduledDiscoveryOption:-<unset>}"
+    log_verbose "WorkflowDiscoveryOnlyBackgroundPatchClosedApps: ${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption:-<unset>}"
     log_verbose "BusinessHours: ${business_hours_option:-<unset>}"
     log_verbose "BusinessHoursRespectHardDeadline: ${business_hours_respect_hard_deadline_option:-<unset>}"
     log_verbose "BusinessHoursSilentDuring: ${business_hours_silent_during_option:-<unset>}"
@@ -2544,6 +2555,17 @@ manage_parameter_options() {
         log_warning "WorkflowScheduledDiscovery is enabled, but WorkflowDisableAppDiscovery takes priority; scheduled runs will retain the existing report without scanning."
     fi
     log_verbose "WorkflowScheduledDiscoveryOption is: ${WorkflowScheduledDiscoveryOption}"
+
+    # Closed-app installs during discovery-only runs only (#283). Does not change the normal
+    # WorkflowBackgroundPatchClosedApps behavior. Unset defaults to FALSE.
+    if [[ "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" -eq 1 ]] || [[ "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" == "TRUE" ]]; then
+        WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowDiscoveryOnlyBackgroundPatchClosedApps -bool true
+    else
+        WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" WorkflowDiscoveryOnlyBackgroundPatchClosedApps 2>/dev/null
+    fi
+    log_verbose "WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption is: ${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}"
     
     # Manage ${workflow_disable_relaunch_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
@@ -3465,7 +3487,11 @@ workflow_startup() {
     elif [[ "${workflow_discovery_only_option}" == "TRUE" ]] \
     || { [[ "${workflow_disable_relaunch_option}" == "TRUE" ]] && [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]]; }; then
         workflow_discovery_only_active="TRUE"
-        log_status "Discovery-only workflow active: report/staging/notification refresh only; no patching or deferral UI."
+        if [[ "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" == "TRUE" ]]; then
+            log_status "Discovery-only workflow active: refreshing the report and patching closed apps in the background. Open apps stay queued. No deferral UI."
+        else
+            log_status "Discovery-only workflow active: report/staging/notification refresh only; no patching or deferral UI."
+        fi
     fi
 
     
@@ -3495,6 +3521,13 @@ workflow_startup() {
 		log_status "Found that App Auto-Patch is installing, restarting via App Auto-Patch LaunchDaemon..."
 		restart_aap_sleep_seconds=5
         restart_aap
+	fi
+
+	# An install from this folder does not call restart_aap. If the main daemon was left
+	# disabled, or macOS 27 refused it because of a quarantine flag, load it now.
+	if [[ -f "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" ]] && ! /bin/launchctl print "system/${appAutoPatchLaunchDaemonLabel}" >/dev/null 2>&1; then
+		log_notice "LaunchDaemon ${appAutoPatchLaunchDaemonLabel} is not loaded; loading it."
+		_aap_bootstrap_system_launchdaemon "${appAutoPatchLaunchDaemonLabel}"
 	fi
 	
 	# Wait for a valid network connection. If there is still no network after two minutes, an automatic deferral is started.
@@ -3920,6 +3953,63 @@ interactive_interrupt() {
 
 }
 
+# macOS 27 will not bootstrap a LaunchDaemon whose plist still has the quarantine
+# attribute. Files written by a quarantined installer inherit it, so clear it after
+# the plist (and the program it runs) is created.
+_aap_clear_quarantine() {
+    local target="$1"
+    [[ -e "${target}" ]] || return 0
+    if /usr/bin/xattr -p com.apple.quarantine "${target}" >/dev/null 2>&1; then
+        /usr/bin/xattr -d com.apple.quarantine "${target}" 2>/dev/null
+        log_install "Removed com.apple.quarantine from ${target}."
+    fi
+}
+
+# print-disabled lists every service, with "=> enabled" or "=> disabled".
+# A disabled override survives reinstall, and bootstrap then fails with
+# "Bootstrap failed: 5: Input/output error". That failure used to be discarded.
+_aap_launchdaemon_is_disabled() {
+    local label="$1"
+    local line
+    line=$(/bin/launchctl print-disabled system 2>/dev/null | /usr/bin/grep -F "\"${label}\" =>")
+    [[ "${line}" == *" => disabled"* ]]
+}
+
+_aap_prepare_system_launchdaemon() {
+    local label="$1"
+    local plist="/Library/LaunchDaemons/${label}.plist"
+    [[ $(id -u) -eq 0 ]] || return 0
+    [[ -f "${plist}" ]] || return 0
+    _aap_clear_quarantine "${plist}"
+    if _aap_launchdaemon_is_disabled "${label}"; then
+        log_notice "LaunchDaemon ${label} is disabled; enabling it."
+        /bin/launchctl enable "system/${label}"
+    fi
+}
+
+# Bootstraps a system LaunchDaemon after clearing quarantine and re-enabling a
+# disabled service. Skips the bootstrap when the job is already loaded.
+# Logs the launchctl error instead of discarding it.
+_aap_bootstrap_system_launchdaemon() {
+    local label="$1"
+    local plist="/Library/LaunchDaemons/${label}.plist"
+    local bootstrap_err bootstrap_status
+    [[ $(id -u) -eq 0 ]] || return 0
+    [[ -f "${plist}" ]] || return 0
+    _aap_prepare_system_launchdaemon "${label}"
+    if /bin/launchctl print "system/${label}" >/dev/null 2>&1; then
+        return 0
+    fi
+    bootstrap_err=$(/bin/launchctl bootstrap system "${plist}" 2>&1)
+    bootstrap_status=$?
+    if (( bootstrap_status != 0 )); then
+        log_error "Failed to load LaunchDaemon ${label}: ${bootstrap_err}"
+        return "${bootstrap_status}"
+    fi
+    log_install "Loaded LaunchDaemon ${label}."
+    return 0
+}
+
 # Restart AAP via the LaunchDaemon after waiting for ${restart_aap_sleep_seconds} seconds.
 restart_aap() {
 	if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
@@ -3936,7 +4026,7 @@ restart_aap() {
 	{
 		sleep $restart_aap_sleep_seconds
 		launchctl bootout "system/${appAutoPatchLaunchDaemonLabel}" >/dev/null 2>&1
-		launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" >/dev/null 2>&1
+		_aap_bootstrap_system_launchdaemon "${appAutoPatchLaunchDaemonLabel}"
 	} &
 	disown
 	log_verbose "Local preference file at restart exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2>/dev/null)"
@@ -4275,6 +4365,7 @@ EOAS
     "${appAutoPatchFolder}/aap-starter"
     /bin/chmod 755 "${appAutoPatchFolder}/aap-starter"
     /usr/sbin/chown root:wheel "${appAutoPatchFolder}/aap-starter"
+    _aap_clear_quarantine "${appAutoPatchFolder}/aap-starter"
 
     # Create the LaunchDaemon plist if it doesn't exist
 
@@ -4332,6 +4423,7 @@ EOLD
 
     chmod 644 "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
     chown root:wheel "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
+    _aap_prepare_system_launchdaemon "${appAutoPatchLaunchDaemonLabel}"
 
     # User-writable Install Now trigger used by banner notification actions.
     ensure_aap_install_now_trigger
@@ -4372,6 +4464,10 @@ function uninstall_app_auto_patch() {
     log_uninstall "Removing Install Now trigger Launch Daemon: /Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist"
     launchctl bootout system "/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist" 2> /dev/null
     rm -f "/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist" 2> /dev/null
+
+    log_uninstall "Removing pending-apps dialog trigger Launch Daemon: /Library/LaunchDaemons/${aapPendingAppsTriggerLaunchDaemonLabel}.plist"
+    launchctl bootout system "/Library/LaunchDaemons/${aapPendingAppsTriggerLaunchDaemonLabel}.plist" 2> /dev/null
+    rm -f "/Library/LaunchDaemons/${aapPendingAppsTriggerLaunchDaemonLabel}.plist" 2> /dev/null
 
     # Remove the App Auto Patch sym link
     log_uninstall "Removing ${appAutoPatchLink}"
@@ -5352,6 +5448,7 @@ exit 0
 EOF
     chown root:wheel "${aapPendingAppsTriggerScript}"
     chmod 755 "${aapPendingAppsTriggerScript}"
+    _aap_clear_quarantine "${aapPendingAppsTriggerScript}"
 
     # Thin user-context helper for notification button1action (cannot run appautopatch as root).
     local request_script="${appAutoPatchFolder}/aap-notification-request-pending-apps"
@@ -5387,14 +5484,15 @@ EOF
 EOF
     chown root:wheel "${trigger_plist}"
     chmod 644 "${trigger_plist}"
-    # launchctl bootout waits until the job exits. This run is that job when Install Now
-    # on a banner started us, so bootout waits on ourselves and startup never continues.
-    # A Terminal `appautopatch --pending-apps-dialog` is not inside the job, so it is fine. (#276)
+    # Clear quarantine and re-enable a disabled service even when this run cannot
+    # reload the job. bootout below waits until the job exits, so it is skipped
+    # when Install Now on a banner started us. (#276)
+    _aap_prepare_system_launchdaemon "${aapPendingAppsTriggerLaunchDaemonLabel}"
     if _aap_ancestry_includes "aap-pending-apps-dialog-trigger"; then
         log_verbose "Not reloading the pending-apps LaunchDaemon from the run it started."
     else
         launchctl bootout system "${trigger_plist}" >/dev/null 2>&1
-        launchctl bootstrap system "${trigger_plist}" >/dev/null 2>&1
+        _aap_bootstrap_system_launchdaemon "${aapPendingAppsTriggerLaunchDaemonLabel}"
         log_verbose "Pending-apps dialog notification trigger ready at ${aapPendingAppsTriggerFile}"
     fi
 
@@ -5729,7 +5827,7 @@ exit_after_disabled_relaunch() {
     log_aap "Status: ${context} and Automatic Relaunch is disabled. Exiting."
     log_status "Inactive: ${context} and Automatic Relaunch is disabled."
     /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2>/dev/null
-    { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+    { sleep 5; _aap_bootstrap_system_launchdaemon "${appAutoPatchLaunchDaemonLabel}"; } &
     disown
     exit_clean
 }
@@ -10405,15 +10503,24 @@ main() {
     # Discovery and queue reconstruction are now complete; the new report is authoritative.
     _aap_discard_pre_discovery_report_backup
 
-    # User-driven patching mode (#258): refresh discovery/report state, optionally stage installers,
-    # optionally notify the user, then exit without silent patching, deferral UI, hard-deadline
-    # enforcement, or installation. Support App / pending-apps dialog remains the install trigger.
+    # User-driven patching mode (#258, #283): refresh discovery/report state and optionally stage
+    # installers. When WorkflowDiscoveryOnlyBackgroundPatchClosedApps is enabled, also install
+    # updates for apps that are not open. Open or blocked apps stay in the report for the Pending
+    # Apps dialog. There is still no deferral UI, hard-deadline enforcement, or interactive installation.
     if [[ "${workflow_discovery_only_active}" == "TRUE" ]]; then
         if [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
             log_info "Discovery-only workflow: staging ${#countOfElementsArray[@]} queued update(s)."
             workflow_stage_updates
         fi
-        if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+        if [[ "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            log_info "Discovery-only workflow: silently patching closed apps."
+            workflow_silent_patch_closed_apps
+        fi
+        if [[ ${silent_patch_success_count} -gt 0 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            send_aap_notification_silent_and_queued "${silent_patch_success_count}" "${#countOfElementsArray[@]}"
+        elif [[ ${silent_patch_success_count} -gt 0 ]]; then
+            send_aap_notification_silent_updated "${silent_patch_success_count}"
+        elif [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
             if aap_notification_enabled apps_queued; then
                 send_aap_notification_apps_queued "${#countOfElementsArray[@]}"
             else

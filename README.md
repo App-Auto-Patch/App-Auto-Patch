@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.7.1
+# App Auto-Patch 3.7.2
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub pre-release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag&include_prereleases) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch) [![swiftDialog](https://img.shields.io/badge/swiftDialog-Enabled-blue)](https://swiftdialog.app)
 
@@ -13,6 +13,11 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 ## Why Build This
 
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
+
+## New features/Specific Changes in 3.7.2
+- **Discovery-only background patching** — Set `WorkflowDiscoveryOnlyBackgroundPatchClosedApps` to `true` to install updates for closed apps during scheduled discovery or `--workflow-discovery-only`. Default is `false`. Open apps stay queued. This is separate from `WorkflowBackgroundPatchClosedApps`. (#283)
+- Fixed: AAP enables `xyz.techitout.aap` and `xyz.techitout.aap.pendingAppsDialogTrigger` when launchd has them disabled, and removes `com.apple.quarantine` from those plists so macOS 27 will load them. A failed load is now logged.
+- Fixed: `--uninstall` unloads and removes the pending-apps dialog LaunchDaemon.
 
 ## New features/Specific Changes in 3.7.1
 - **Google Chat webhooks** — Post the same patch-result card used for Slack and Teams to a Google Chat incoming webhook when `WebhookFeature` is `ALL` or `FAILURES`. (#273)
