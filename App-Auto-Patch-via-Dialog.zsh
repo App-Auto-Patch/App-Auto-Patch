@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.3"
 scriptDate="2026/10/07"
-scriptBuild="3.7.3.2610071255"
+scriptBuild="3.7.3.2610071411"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -7811,10 +7811,142 @@ EOF
     fi
 }
 
+# One inventory for the whole discovery pass. PgetAppVersion otherwise runs mdfind once per
+# label, which is most of the time spent on labels that are not installed.
+aapDiscoveryIndexReady="FALSE"
+aapPkgReceiptIndexReady="FALSE"
+typeset -gA aapInstalledAppBundles
+typeset -gA aapInstalledPkgReceipts
+discoveryLabelsSkipped=0
+
+_aap_index_app_bundle() {
+    local app_path="$1"
+    local base
+    [[ -n "$app_path" ]] || return 0
+    if [[ "$app_path" == *.app/* ]]; then
+        app_path="${app_path%%.app/*}.app"
+    fi
+    [[ "$app_path" == *.app ]] || return 0
+    # Same copies PgetAppVersion ignores. A real copy in another location is still indexed.
+    case "$app_path" in
+        *"/Daemon Containers/"*|*"/.Trash"*|*"/.Trashes/"*|*"Library/Application Support/JAMF/Composer/"*|*" (Parallels)/"*|*" (Virtual Machines)/"*|*"/Chrome Apps.localized/"*|*"/Edge Apps.localized/"*|*"/Applications/Setapp/"*|*"Users/Shared/Apps/Setapp/"*)
+            return 0
+            ;;
+    esac
+    base="${app_path:t}"
+    aapInstalledAppBundles[${base:l}]=1
+}
+
+_aap_build_discovery_index() {
+    local root path home pkg pkg_list
+    aapInstalledAppBundles=()
+    aapInstalledPkgReceipts=()
+    aapDiscoveryIndexReady="FALSE"
+    aapPkgReceiptIndexReady="FALSE"
+    discoveryLabelsSkipped=0
+
+    for root in /Applications /Applications/Utilities /System/Applications; do
+        [[ -d "$root" ]] || continue
+        while IFS= read -r path; do
+            _aap_index_app_bundle "$path"
+        done < <(/usr/bin/find "$root" -name '*.app' -prune -print 2>/dev/null)
+    done
+    if [[ -n "${currentUserAccountName}" && "${currentUserAccountName}" != "FALSE" ]]; then
+        home=$(dscl . -read "/Users/${currentUserAccountName}" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+        if [[ -n "$home" && -d "${home}/Applications" ]]; then
+            while IFS= read -r path; do
+                _aap_index_app_bundle "$path"
+            done < <(/usr/bin/find "${home}/Applications" -name '*.app' -prune -print 2>/dev/null)
+        fi
+    fi
+    while IFS= read -r -d '' path; do
+        _aap_index_app_bundle "$path"
+    done < <(/usr/bin/mdfind "kMDItemContentType == 'com.apple.application-bundle'" -0 2>/dev/null)
+
+    if (( ${#aapInstalledAppBundles} > 0 )); then
+        aapDiscoveryIndexReady="TRUE"
+    else
+        log_warning "Discovery application index is empty. Every label will be checked."
+    fi
+
+    if pkg_list=$(/usr/sbin/pkgutil --pkgs 2>/dev/null); then
+        aapPkgReceiptIndexReady="TRUE"
+        while IFS= read -r pkg; do
+            [[ -n "$pkg" ]] && aapInstalledPkgReceipts[$pkg]=1
+        done <<< "$pkg_list"
+    fi
+    log_info "Discovery index: ${#aapInstalledAppBundles} application bundle(s), ${#aapInstalledPkgReceipts} package receipt(s)."
+}
+
+_aap_target_dir_is_indexed() {
+    local dir="${1:-/}"
+    dir="${dir%/}"
+    case "$dir" in
+        ""|"/"|"/Applications"|"/Applications/Utilities"|"/System/Applications")
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+_aap_discovery_bundle_name() {
+    local bundle="$appName"
+    if [[ -z "$bundle" ]]; then
+        [[ -n "$name" ]] || return 1
+        bundle="${name}.app"
+    fi
+    # A value that still contains an expansion is not a filename we can look up.
+    [[ "$bundle" == *'$'* || "$bundle" == *'`'* ]] && return 1
+    [[ "$bundle" == *.app ]] || return 1
+    print -r -- "$bundle"
+}
+
+_aap_app_custom_version_is_local_read() {
+    local body="$1"
+    local line nonempty=0
+    [[ -n "${body//[[:space:]]/}" ]] || return 1
+    if [[ "$body" == *'$('* || "$body" == *'`'* || "$body" == *'|'* \
+        || "$body" == *curl* || "$body" == *wget* || "$body" == *http* \
+        || "$body" == *mdfind* || "$body" == *system_profiler* || "$body" == *eval* ]]; then
+        return 1
+    fi
+    while IFS= read -r line; do
+        [[ -z "${line//[[:space:]]/}" ]] && continue
+        [[ "$line" == \#* ]] && continue
+        nonempty=1
+        if [[ "$line" != *defaults[[:space:]]read* && "$line" != *PlistBuddy* && "$line" != *plutil* ]]; then
+            return 1
+        fi
+    done <<< "$body"
+    [[ $nonempty -eq 1 ]]
+}
+
+# Return 0 when the label cannot be installed, so discovery can skip PgetAppVersion.
+# Anything uncertain is checked the same way as before.
+_aap_discovery_label_is_absent() {
+    local bundle
+    [[ "${aapDiscoveryIndexReady}" == "TRUE" ]] || return 1
+    if (( ${requiredLabelsArray[(Ie)${labelFile}]} )) || (( ${requiredLabelsArray[(Ie)${label_name}]} )); then
+        return 1
+    fi
+    [[ -n "$packageID" ]] && return 1
+    bundle=$(_aap_discovery_bundle_name) || return 1
+    _aap_target_dir_is_indexed "$targetDir" || return 1
+    if [[ -n "$appCustomVersionBody" ]] && ! _aap_app_custom_version_is_local_read "$appCustomVersionBody"; then
+        return 1
+    fi
+    [[ -n "${aapInstalledAppBundles[${bundle:l}]}" ]] && return 1
+    return 0
+}
+
 function PgetAppVersion() {
     
     if [[ $packageID != "" ]]; then
-        appversion="$(pkgutil --pkg-info-plist ${packageID} 2>/dev/null | grep -A 1 pkg-version | tail -1 | sed -E 's/.*>([0-9.]*)<.*/\1/g')"
+        if [[ "${aapPkgReceiptIndexReady}" == "TRUE" && -z "${aapInstalledPkgReceipts[$packageID]}" ]]; then
+            appversion=""
+        else
+            appversion="$(pkgutil --pkg-info-plist ${packageID} 2>/dev/null | grep -A 1 pkg-version | tail -1 | sed -E 's/.*>([0-9.]*)<.*/\1/g')"
+        fi
     fi
     
     if [ -z "$appName" ]; then
@@ -10267,28 +10399,12 @@ main() {
         optionalLabelsArray+=($optionalLabelsFromConfig)
         excludedBackgroundLabelsArray+=($excludedBackgroundLabelsFromConfig)
 
+        _aap_build_discovery_index
+
         for labelFragment in "$fragmentsPath"/labels/*.sh; do 
             
             appCustomVersion=""
-            if grep -q '^\s*appCustomVersion\s*()' "$labelFragment"
-            then
-                appCustomVersion=$(grep -E -m1 '^\s*appCustomVersion' "$labelFragment" | sed -E 's/^.*\(\)[[:space:]]*\{[[:space:]]*(.*)[[:space:]]*\}/\1/')
-                
-                if [[ -z "$appCustomVersion" ]] || [[ "$appCustomVersion" == *"{"$ ]]
-                then
-                    appCustomVersion=$(awk '
-                    /^[[:space:]]*appCustomVersion[[:space:]]*\(\)[[:space:]]*\{/ { inside=1; next }
-                    inside {
-                        if ($0 ~ /^[[:space:]]*\}/) { inside=0; exit }
-                        print
-                    }' "$labelFragment")
-                fi
-                if [[ ! "$appCustomVersion" =~ ^[[:space:]]*strings ]]; then
-                    appCustomVersion=$(eval "$appCustomVersion" 2>/dev/null)
-                fi
-            fi
-            
-            
+            appCustomVersionBody=""
             labelFile=$(basename -- "$labelFragment")
             labelFile="${labelFile%.*}"
             
@@ -10306,6 +10422,21 @@ main() {
             && (( ! ${optionalLabelsArray[(Ie)${labelFile}]} )); then
                 log_verbose "Ignoring label $labelFile (IgnoredLabels is '*' and this label is neither required nor optional)."
                 continue
+            fi
+
+            if grep -q '^\s*appCustomVersion\s*()' "$labelFragment"
+            then
+                appCustomVersionBody=$(grep -E -m1 '^\s*appCustomVersion' "$labelFragment" | sed -E 's/^.*\(\)[[:space:]]*\{[[:space:]]*(.*)[[:space:]]*\}/\1/')
+
+                if [[ -z "$appCustomVersionBody" ]] || [[ "$appCustomVersionBody" == *"{"$ ]]
+                then
+                    appCustomVersionBody=$(awk '
+                    /^[[:space:]]*appCustomVersion[[:space:]]*\(\)[[:space:]]*\{/ { inside=1; next }
+                    inside {
+                        if ($0 ~ /^[[:space:]]*\}/) { inside=0; exit }
+                        print
+                    }' "$labelFragment")
+                fi
             fi
             
             exec 3< "${labelFragment}"
@@ -10334,7 +10465,19 @@ main() {
                         # label complete. A valid label includes a Team ID. If we have one, we can check for installed
                         _aap_heartbeat "discovery:${label_name:-${labelFile:-label}}"
                         _ensure_preparation_dialog "discovery"
-                        [[ -n $expectedTeamID ]] && PgetAppVersion
+                        if [[ -n $expectedTeamID ]] && _aap_discovery_label_is_absent; then
+                            log_verbose "Not installed, skipping version check for ${label_name}."
+                            discoveryLabelsSkipped=$(( discoveryLabelsSkipped + 1 ))
+                        elif [[ -n $expectedTeamID ]]; then
+                            if [[ -n "$appCustomVersionBody" ]]; then
+                                if [[ "$appCustomVersionBody" =~ ^[[:space:]]*strings ]]; then
+                                    appCustomVersion="$appCustomVersionBody"
+                                else
+                                    appCustomVersion=$(eval "$appCustomVersionBody" 2>/dev/null)
+                                fi
+                            fi
+                            PgetAppVersion
+                        fi
                         
                         in_label=0
                         packageID=""
@@ -10366,6 +10509,10 @@ main() {
                 fi
             done
         done
+
+        if [[ "${aapDiscoveryIndexReady}" == "TRUE" ]]; then
+            log_info "Discovery skipped ${discoveryLabelsSkipped} label(s) that are not installed."
+        fi
 
         # Label fragment parsing is finished; everything below relies on normal word splitting.
         IFS=$discovery_saved_IFS

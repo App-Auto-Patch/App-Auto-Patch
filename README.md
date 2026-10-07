@@ -15,6 +15,7 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.7.3
+- Discovery skips Installomator labels for plain apps that are not installed, using one inventory instead of a Spotlight search per label. Required labels, package receipts, custom install paths, and version checks that are not a local plist read are still checked individually. (#291)
 - Fixed: console-user status lines are written to `aap.log` instead of the terminal. The check used a log-folder variable that is never set, so the verbose account details were skipped too. (#292)
 - Fixed: label staging creates its temporary script with a randomized path. The old `mktemp` template included `.sh`, which left the name fixed, and a leftover file blocked later staging runs. (#293)
 - Fixed: the Preparing updates window opens only when `WorkflowStageUpdates` or `WorkflowBackgroundPatchClosedApps` is enabled. With both off it stayed on screen over the pending-updates dialog. Pending-apps Install Now still skips the window. (#294)
