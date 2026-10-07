@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.7.2
+# App Auto-Patch 3.7.3
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub pre-release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag&include_prereleases) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch) [![swiftDialog](https://img.shields.io/badge/swiftDialog-Enabled-blue)](https://swiftdialog.app)
 
@@ -13,6 +13,11 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 ## Why Build This
 
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
+
+## New features/Specific Changes in 3.7.3
+- Fixed: console-user status lines are written to `aap.log` instead of the terminal. The check used a log-folder variable that is never set, so the verbose account details were skipped too. (#292)
+- Fixed: label staging creates its temporary script with a randomized path. The old `mktemp` template included `.sh`, which left the name fixed, and a leftover file blocked later staging runs. (#293)
+- Fixed: the Preparing updates window opens only when `WorkflowStageUpdates` or `WorkflowBackgroundPatchClosedApps` is enabled. With both off it stayed on screen over the pending-updates dialog. Pending-apps Install Now still skips the window. (#294)
 
 ## New features/Specific Changes in 3.7.2
 - **Discovery-only background patching** — Set `WorkflowDiscoveryOnlyBackgroundPatchClosedApps` to `true` to install updates for closed apps during scheduled discovery or `--workflow-discovery-only`. Default is `false`. Open apps stay queued. This is separate from `WorkflowBackgroundPatchClosedApps`. (#283)

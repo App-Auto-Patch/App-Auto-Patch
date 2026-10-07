@@ -2,6 +2,12 @@
 
 # Version 3
 
+## Version 3.7.3
+### 07-Oct-2026 (1) - Build 3.7.3.2610071255
+- [#292](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/292): `get_logged_in_user` tested `AAP_LOG_FOLDER`, which is never assigned. The log folder is `appAutoPatchLogFolder`. `[[ -d "" ]]` is always false, so a root run always used `log_echo`. The console-user status was printed to the terminal with a `Not Logged:` prefix and never written to `aap.log`. The same check skipped the console user's GUID, real name, admin status, secure token, and volume-owner status. Those lines are diagnostic only.
+- [#293](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/293): `_resolve_label_staging_info` called `mktemp /private/tmp/aap_lbl_XXXXXX.sh`. BSD `mktemp` only substitutes a trailing run of `X`s when it is the final path component, so every call used `/private/tmp/aap_lbl_XXXXXX.sh`. The wrapper is executed by path, so the suffix is removed and the path is randomized. A crash that left the old fixed file behind made every later staging attempt fail with `mkstemp failed: File exists`.
+- [#294](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/294): in interactive mode 2 the Preparing updates window opened whenever the queue was not empty. With both `WorkflowStageUpdates` and `WorkflowBackgroundPatchClosedApps` disabled, it opened and closed immediately. The `quit:` raced swiftDialog's background startup, so the window stayed up over the pending-updates dialog. The window now also requires one of those two options. The pending-apps Install Now skip is unchanged.
+
 ## Version 3.7.2
 ### 06-Oct-2026 (1) - Build 3.7.2.2610060952
 - If `launchctl print-disabled system` reports `xyz.techitout.aap` or `xyz.techitout.aap.pendingAppsDialogTrigger` as `=> disabled`, AAP runs `launchctl enable system/<label>` before bootstrap. The disabled override survives a reinstall, and bootstrap then fails with `Bootstrap failed: 5: Input/output error`. That error was discarded. A run from the installed folder also loads `xyz.techitout.aap` when it is not currently loaded.

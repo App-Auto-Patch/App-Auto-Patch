@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.7.2"
-scriptDate="2026/10/05"
-scriptBuild="3.7.2.2610060952"
+scriptVersion="3.7.3"
+scriptDate="2026/10/07"
+scriptBuild="3.7.3.2610071255"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -4751,22 +4751,22 @@ get_logged_in_user() {
 
     # Make sure we have a "normal" logged in user.
     if [[ -z "${currentUserAccountName_response}" ]]; then
-        { [[ $(id -u) -eq 0 ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; } && log_status "No GUI user currently logged in."
-        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${AAP_LOG_FOLDER}" ]]; } && log_echo "Status: No GUI user currently logged in."
+        { [[ $(id -u) -eq 0 ]] && [[ -d "${appAutoPatchLogFolder}" ]]; } && log_status "No GUI user currently logged in."
+        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${appAutoPatchLogFolder}" ]]; } && log_echo "Status: No GUI user currently logged in."
     elif [[ "${currentUserAccountName_response}" = "root" ]] || [[ "${currentUserAccountName_response}" = "_mbsetupuser" ]] || [[ "${currentUserAccountName_response}" = "loginwindow" ]]; then
-        { [[ $(id -u) -eq 0 ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; } && log_status "Current GUI user is system account: ${currentUserAccountName_response}"
-        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${AAP_LOG_FOLDER}" ]]; } && log_echo "Status: Current GUI user is system account: ${currentUserAccountName_response}"
+        { [[ $(id -u) -eq 0 ]] && [[ -d "${appAutoPatchLogFolder}" ]]; } && log_status "Current GUI user is system account: ${currentUserAccountName_response}"
+        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${appAutoPatchLogFolder}" ]]; } && log_echo "Status: Current GUI user is system account: ${currentUserAccountName_response}"
     else # Normal locally logged in user.
         currentUserAccountName="${currentUserAccountName_response}"
         currentUserID=$(id -u "${currentUserAccountName}" 2> /dev/null)
-        { [[ $(id -u) -eq 0 ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; } && log_status "Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
-        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${AAP_LOG_FOLDER}" ]]; } && log_echo "Status: Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
+        { [[ $(id -u) -eq 0 ]] && [[ -d "${appAutoPatchLogFolder}" ]]; } && log_status "Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
+        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${appAutoPatchLogFolder}" ]]; } && log_echo "Status: Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
     fi
     log_verbose  "currentUserAccountName is: ${currentUserAccountName}"
     log_verbose  "currentUserID is: ${currentUserID}"
 
     # Only collect user details if it's a "normal" GUI user.
-    if [[ "${currentUserAccountName}" != "FALSE" ]] && [[ "${currentUserID}" != "FALSE" ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; then
+    if [[ "${currentUserAccountName}" != "FALSE" ]] && [[ "${currentUserID}" != "FALSE" ]] && [[ -d "${appAutoPatchLogFolder}" ]]; then
         current_user_guid=$(dscl . read "/Users/${currentUserAccountName}" GeneratedUID 2> /dev/null | awk '{print $2;}')
         current_user_real_name=$(dscl . read "/Users/${currentUserAccountName}" RealName 2> /dev/null | tail -1 | sed -e 's/^RealName: //g' -e 's/^ //g')
         log_verbose  "current_user_guid is: ${current_user_guid}"
@@ -8349,7 +8349,9 @@ _resolve_label_staging_info() {
     # downloadURLFromGit, downloadURLFromSparkle, versionFromGit, etc.) before wrapping
     # the label in a case statement and executing it.
     local tmpScript
-    tmpScript=$(mktemp /private/tmp/aap_lbl_XXXXXX.sh) || return 1
+    # No .sh suffix: BSD mktemp only substitutes a trailing run of X's when it is the final
+    # path component. The wrapper is executed by path, so the extension is not required.
+    tmpScript=$(mktemp /private/tmp/aap_lbl_XXXXXX) || return 1
 
     {
         echo '#!/bin/zsh --no-rcs'
@@ -10608,8 +10610,12 @@ main() {
     # progress window over both steps with per-app status and a determinate progress bar.
     # stagingWindowOpened tracks whether it was opened, since countOfElementsArray can end up
     # empty afterward (all apps patched silently) even though the window still needs closing.
+    # Open it only when staging or background patching will actually run. If neither is enabled,
+    # the window opens and closes immediately, and that quit races swiftDialog's startup so the
+    # window stays on screen for the rest of the run. Pending-apps Install Now still skips it.
     stagingWindowOpened="FALSE"
-    if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+    if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]] \
+       && { [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] || [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]]; }; then
         swiftDialogStagingWindow
         stagingWindowOpened="TRUE"
     fi
