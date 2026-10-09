@@ -1,5 +1,5 @@
 ---
-name: Bug Report
+name: Bug Report - 3.x script (zsh)
 about: Submit a bug report for App Auto-Patch (after having reviewed open Installomator issues if its an app update issue)
 title: ''
 labels: bug,needs-triage
