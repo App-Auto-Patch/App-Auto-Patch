@@ -1,0 +1,37 @@
+name: 4.0 Feature Request
+description: Suggest something AppAutoPatch should do that it doesn't today.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the user / admin pain in concrete terms before jumping to a solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Roughly what should AAP do? UI sketches / managed-key shapes welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Anything you tried first that didn't work, or related tools / scripts that solve part of this.
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Primarily for
+      options:
+        - "Consumers (single-user Macs)"
+        - "Mac admins (managed fleets)"
+        - "Both"
+    validations:
+      required: true
