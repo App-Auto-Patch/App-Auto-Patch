@@ -14,6 +14,12 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 - Fixed: the temporary script used to resolve a label's download URL is created with a randomized path. A trailing `.sh` in the `mktemp` template kept the name fixed, and a leftover file made later staging attempts fail until it was removed by hand. (#293)
 - Fixed: the Preparing updates window stays closed unless `WorkflowStageUpdates` or `WorkflowBackgroundPatchClosedApps` is enabled. With both off, the window opened and closed before swiftDialog started, then stayed on screen over the pending-updates dialog. Pending-apps Install Now still skips the window. (#294)
 
+### 08-Oct-2026
+
+**Fixes**
+
+- Discovery reads each Installomator label in the shell instead of starting `echo` and `sed` for every line. That per-line process was most of the discovery time, including labels the inventory already skips. The same labels are still checked. (#291)
+
 ## Version 3.7.2
 ### 05-Oct-2026
 

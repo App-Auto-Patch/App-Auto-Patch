@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.3"
-scriptDate="2026/10/07"
-scriptBuild="3.7.3.2610071411"
+scriptDate="2026/10/08"
+scriptBuild="3.7.3.2610081937"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -10443,8 +10443,12 @@ main() {
             
             while read -r -u 3 line; do 
                 
-                # Remove spaces and tabs
-                scrubbedLine="$(echo $line | sed -E -e 's/^( |\t)*//g' -e 's/^\s*#.*$//')"
+                # Strip leading spaces and tabs, and drop a full-line comment, without
+                # forking echo and sed. That fork ran once per line of every label file. (#291)
+                scrubbedLine="${line#"${line%%[!$' \t']*}"}"
+                if [[ "${scrubbedLine#"${scrubbedLine%%[![:space:]]*}"}" == \#* ]]; then
+                    scrubbedLine=""
+                fi
                 
                 if [ -n $scrubbedLine ]; then
                     if [[ $in_label -eq 0 && "$scrubbedLine" =~ $label_re ]]; then

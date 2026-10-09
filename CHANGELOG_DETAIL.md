@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.3
+### 08-Oct-2026 (1) - Build 3.7.3.2610081937
+- [#291](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/291): discovery still ran `echo | sed` on every line of every Installomator label, including labels the inventory then skipped. That was two processes per line, about four minutes for 11,915 lines. Leading spaces and tabs are now stripped in the shell, and a full-line comment is dropped the same way. The lines that are checked are unchanged.
+
 ### 07-Oct-2026 (2) - Build 3.7.3.2610071411
 - [#291](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/291): discovery ran `mdfind` once per Installomator label. It now records installed `.app` names from `/Applications`, `/Applications/Utilities`, `/System/Applications`, the console user's `Applications` folder, and one Spotlight query, and records `pkgutil --pkgs` once. A label is skipped only when it is not required, it has no `packageID`, its app name is a literal `.app` filename that is not in the inventory, `targetDir` is `/`, `/Applications`, `/Applications/Utilities`, or `/System/Applications`, and `appCustomVersion` is absent or only a local `defaults`/`PlistBuddy`/`plutil` read. Copies in Trash, Setapp, Parallels, Jamf Composer, and the iPhone Mirroring folder are left out of the inventory, matching the existing ignore rules. An empty application index disables the skip. A receipt that is not in the package list no longer calls `pkgutil --pkg-info-plist` for that label.
 
