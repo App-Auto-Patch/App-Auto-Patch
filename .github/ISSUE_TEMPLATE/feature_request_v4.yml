@@ -1,0 +1,48 @@
+name: Feature request - App Auto-Patch 4 (native app)
+description: Suggest something App Auto-Patch 4, the native macOS app, should do.
+title: "[Feature]: "
+labels: ["enhancement", "needs-review", "version 4"]
+assignees: ["TechTrekkie"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. This form is for **App Auto-Patch 4**, the native macOS app.
+        (For the original zsh script, 3.x, use the other feature request form.)
+
+        Requests on this form are copied to the project's private development tracker so the team can work on them. The title, description and comments are copied; your username is shown there as the reporter.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the problem for users or admins in concrete terms before jumping to a solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Roughly what should App Auto-Patch do? Sketches and setting names are welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you have considered
+      description: Anything you tried first that did not work, or tools that solve part of this.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Primarily for
+      options:
+        - "Individuals (a single Mac)"
+        - "Mac admins (managed fleets)"
+        - "Both"
+    validations:
+      required: true
