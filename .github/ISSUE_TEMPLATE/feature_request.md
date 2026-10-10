@@ -1,5 +1,5 @@
 ---
-name: Feature Request
+name: Feature Request - 3.x script (zsh)
 about: Suggest an idea for App Auto-Patch
 title: ''
 labels: enhancement,needs-review
