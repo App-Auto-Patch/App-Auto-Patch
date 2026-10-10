@@ -15,6 +15,7 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.7.3
+- Discovery still checks a label whose app name includes a subfolder, such as `SketchUp 2026/SketchUp.app`. Those were skipped because the inventory only stores the bundle filename. (#291)
 - Discovery reads each Installomator label in the shell instead of starting `echo` and `sed` for every line. That per-line process was most of the discovery time, including labels the inventory already skips. (#291)
 - Discovery skips Installomator labels for plain apps that are not installed, using one inventory instead of a Spotlight search per label. Required labels, package receipts, custom install paths, and version checks that are not a local plist read are still checked individually. (#291)
 - Fixed: console-user status lines are written to `aap.log` instead of the terminal. The check used a log-folder variable that is never set, so the verbose account details were skipped too. (#292)

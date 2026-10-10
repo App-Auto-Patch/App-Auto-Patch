@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.7.3"
-scriptDate="2026/10/08"
-scriptBuild="3.7.3.2610081937"
+scriptDate="2026/10/10"
+scriptBuild="3.7.3.2610101012"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -7895,8 +7895,10 @@ _aap_discovery_bundle_name() {
         [[ -n "$name" ]] || return 1
         bundle="${name}.app"
     fi
-    # A value that still contains an expansion is not a filename we can look up.
-    [[ "$bundle" == *'$'* || "$bundle" == *'`'* ]] && return 1
+    # An expansion, or a subfolder such as "SketchUp 2026/SketchUp.app", is not a
+    # single bundle filename. The inventory is keyed by filename only, so those
+    # labels stay on the normal search. (#291)
+    [[ "$bundle" == *'$'* || "$bundle" == *'`'* || "$bundle" == *'/'* ]] && return 1
     [[ "$bundle" == *.app ]] || return 1
     print -r -- "$bundle"
 }

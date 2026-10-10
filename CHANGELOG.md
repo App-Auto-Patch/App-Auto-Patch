@@ -20,6 +20,12 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 - Discovery reads each Installomator label in the shell instead of starting `echo` and `sed` for every line. That per-line process was most of the discovery time, including labels the inventory already skips. The same labels are still checked. (#291)
 
+### 10-Oct-2026
+
+**Fixes**
+
+- Discovery still checks a label whose app name includes a subfolder, such as `SketchUp 2026/SketchUp.app`. The inventory only stores the bundle filename, so those labels were skipped even when the app was installed. (#291)
+
 ## Version 3.7.2
 ### 05-Oct-2026
 

@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.3
+### 10-Oct-2026 (1) - Build 3.7.3.2610101012
+- [#291](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/291): the discovery inventory is keyed by bundle filename. A label such as `sketchup2026` sets `appName` to `SketchUp 2026/SketchUp.app`. That string is not an inventory key, so the label was skipped even though `/Applications/SketchUp 2026/SketchUp.app` is the path `PgetAppVersion` already checks. The same applies to ChemDoodle, KiCad, MacVector, PrusaSlicer, Dragonframe, KeyAccess, and the Toon Boom Harmony and Storyboard Pro labels. An app name that contains `/` is no longer eligible for the skip. Computed names, receipts, required labels, custom install paths, and non-local version checks were already excluded.
+
 ### 08-Oct-2026 (1) - Build 3.7.3.2610081937
 - [#291](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/291): discovery still ran `echo | sed` on every line of every Installomator label, including labels the inventory then skipped. That was two processes per line, about four minutes for 11,915 lines. Leading spaces and tabs are now stripped in the shell, and a full-line comment is dropped the same way. The lines that are checked are unchanged.
 
