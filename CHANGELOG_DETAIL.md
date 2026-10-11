@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.4
+### 11-Oct-2026 (2) - Build 3.7.4.2610111508
+- [#304](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/304): the first rewrite called `updateDialog "wait" "Closing..."` after `runAsUser osascript -e 'tell app to quit'`. That AppleEvent does not return while the app is showing a save dialog, so the list row stayed on the last `Downloading...` progress for the whole quit. A Snagit install logged `telling app Snagit to quit` and never logged the quit wait. The status is now written as soon as `checkRunningProcesses` finds the process, before the quit, the prompt, or the poll. An Installomator.sh that already has the first rewrite is updated in place. The one-second poll is unchanged.
+
 ### 11-Oct-2026 (1) - Build 3.7.4.2610111345
 - [#304](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/304): `readDownloadPipe` sets the list row to `Downloading...`. `checkRunningProcesses` then tells a blocking app to quit and runs `sleep 30` with no dialog update, and that sleep always finishes even when the app has already quit. A staged install passes `downloadURL=file://`, so the copy finishes immediately and the row still looks like a download for the whole wait. `quit_kill` can do it twice before switching to `kill`. The same wait is in `quit`, `prompt_user`, `prompt_user_then_kill`, `prompt_user_loop`, and `tell_user` / `tell_user_then_kill`. `get_installomator` now rewrites the local `Installomator.sh`, beside the existing edits, and reapplies the rewrite when Installomator is installed or refreshed. Each of those waits calls `updateDialog "wait" "Closing..."` and then polls `pgrep` once a second for up to 30 seconds. The `kill` branch (`sleep 5`) and the one-hour `prompt_user_loop` delay are unchanged. If the quit-wait lines are not in that Installomator build, the file is left as it was.
 

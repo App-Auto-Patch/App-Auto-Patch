@@ -16,7 +16,7 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
 
 ## New features/Specific Changes in 3.7.4
-- The install dialog shows **Closing...** while Installomator waits for an app to quit, instead of staying on **Downloading...**. The wait checks once a second and continues as soon as the app has closed, and still waits up to 30 seconds so a save dialog can be answered. (#304)
+- The install dialog shows **Closing...** as soon as a blocking app is found, before Installomator tells it to quit. `tell app to quit` does not return while a save dialog is open, and the row was staying on **Downloading...** for that wait. After the app is told to quit, Installomator checks once a second and continues as soon as it has closed, still waiting up to 30 seconds. (#304)
 
 ## New features/Specific Changes in 3.7.3
 - Discovery still checks a label whose app name includes a subfolder, such as `SketchUp 2026/SketchUp.app`. Those were skipped because the inventory only stores the bundle filename. (#291)
