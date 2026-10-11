@@ -2,6 +2,21 @@
 
 # Version 3
 
+## Version 3.7.3
+### 10-Oct-2026 (1) - Build 3.7.3.2610101012
+- [#291](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/291): the discovery inventory is keyed by bundle filename. A label such as `sketchup2026` sets `appName` to `SketchUp 2026/SketchUp.app`. That string is not an inventory key, so the label was skipped even though `/Applications/SketchUp 2026/SketchUp.app` is the path `PgetAppVersion` already checks. The same applies to ChemDoodle, KiCad, MacVector, PrusaSlicer, Dragonframe, KeyAccess, and the Toon Boom Harmony and Storyboard Pro labels. An app name that contains `/` is no longer eligible for the skip. Computed names, receipts, required labels, custom install paths, and non-local version checks were already excluded.
+
+### 08-Oct-2026 (1) - Build 3.7.3.2610081937
+- [#291](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/291): discovery still ran `echo | sed` on every line of every Installomator label, including labels the inventory then skipped. That was two processes per line, about four minutes for 11,915 lines. Leading spaces and tabs are now stripped in the shell, and a full-line comment is dropped the same way. The lines that are checked are unchanged.
+
+### 07-Oct-2026 (2) - Build 3.7.3.2610071411
+- [#291](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/291): discovery ran `mdfind` once per Installomator label. It now records installed `.app` names from `/Applications`, `/Applications/Utilities`, `/System/Applications`, the console user's `Applications` folder, and one Spotlight query, and records `pkgutil --pkgs` once. A label is skipped only when it is not required, it has no `packageID`, its app name is a literal `.app` filename that is not in the inventory, `targetDir` is `/`, `/Applications`, `/Applications/Utilities`, or `/System/Applications`, and `appCustomVersion` is absent or only a local `defaults`/`PlistBuddy`/`plutil` read. Copies in Trash, Setapp, Parallels, Jamf Composer, and the iPhone Mirroring folder are left out of the inventory, matching the existing ignore rules. An empty application index disables the skip. A receipt that is not in the package list no longer calls `pkgutil --pkg-info-plist` for that label.
+
+### 07-Oct-2026 (1) - Build 3.7.3.2610071255
+- [#292](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/292): `get_logged_in_user` tested `AAP_LOG_FOLDER`, which is never assigned. The log folder is `appAutoPatchLogFolder`. `[[ -d "" ]]` is always false, so a root run always used `log_echo`. The console-user status was printed to the terminal with a `Not Logged:` prefix and never written to `aap.log`. The same check skipped the console user's GUID, real name, admin status, secure token, and volume-owner status. Those lines are diagnostic only.
+- [#293](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/293): `_resolve_label_staging_info` called `mktemp /private/tmp/aap_lbl_XXXXXX.sh`. BSD `mktemp` only substitutes a trailing run of `X`s when it is the final path component, so every call used `/private/tmp/aap_lbl_XXXXXX.sh`. The wrapper is executed by path, so the suffix is removed and the path is randomized. A crash that left the old fixed file behind made every later staging attempt fail with `mkstemp failed: File exists`.
+- [#294](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/294): in interactive mode 2 the Preparing updates window opened whenever the queue was not empty. With both `WorkflowStageUpdates` and `WorkflowBackgroundPatchClosedApps` disabled, it opened and closed immediately. The `quit:` raced swiftDialog's background startup, so the window stayed up over the pending-updates dialog. The window now also requires one of those two options. The pending-apps Install Now skip is unchanged.
+
 ## Version 3.7.2
 ### 06-Oct-2026 (1) - Build 3.7.2.2610060952
 - If `launchctl print-disabled system` reports `xyz.techitout.aap` or `xyz.techitout.aap.pendingAppsDialogTrigger` as `=> disabled`, AAP runs `launchctl enable system/<label>` before bootstrap. The disabled override survives a reinstall, and bootstrap then fails with `Bootstrap failed: 5: Input/output error`. That error was discarded. A run from the installed folder also loads `xyz.techitout.aap` when it is not currently loaded.

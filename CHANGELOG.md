@@ -4,6 +4,28 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 # Version 3
 
+## Version 3.7.3
+### 07-Oct-2026
+
+**Fixes**
+
+- Discovery builds one inventory of installed application bundles and package receipts, then skips the per-label search for a plain app that is not in that inventory. Required labels, receipt labels, a computed app name, a custom install path, and a version check that is not a local plist read are still checked one by one. (#291)
+- Fixed: the console-user status lines in `get_logged_in_user` now go to `aap.log`. They checked a log-folder variable that is never set, so a root run printed them to the terminal with a `Not Logged:` prefix and skipped the console user's account details in the verbose log. (#292)
+- Fixed: the temporary script used to resolve a label's download URL is created with a randomized path. A trailing `.sh` in the `mktemp` template kept the name fixed, and a leftover file made later staging attempts fail until it was removed by hand. (#293)
+- Fixed: the Preparing updates window stays closed unless `WorkflowStageUpdates` or `WorkflowBackgroundPatchClosedApps` is enabled. With both off, the window opened and closed before swiftDialog started, then stayed on screen over the pending-updates dialog. Pending-apps Install Now still skips the window. (#294)
+
+### 08-Oct-2026
+
+**Fixes**
+
+- Discovery reads each Installomator label in the shell instead of starting `echo` and `sed` for every line. That per-line process was most of the discovery time, including labels the inventory already skips. The same labels are still checked. (#291)
+
+### 10-Oct-2026
+
+**Fixes**
+
+- Discovery still checks a label whose app name includes a subfolder, such as `SketchUp 2026/SketchUp.app`. The inventory only stores the bundle filename, so those labels were skipped even when the app was installed. (#291)
+
 ## Version 3.7.2
 ### 05-Oct-2026
 

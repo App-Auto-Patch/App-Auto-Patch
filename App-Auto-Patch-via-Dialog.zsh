@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.7.2"
-scriptDate="2026/10/05"
-scriptBuild="3.7.2.2610060952"
+scriptVersion="3.7.3"
+scriptDate="2026/10/10"
+scriptBuild="3.7.3.2610101012"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -4751,22 +4751,22 @@ get_logged_in_user() {
 
     # Make sure we have a "normal" logged in user.
     if [[ -z "${currentUserAccountName_response}" ]]; then
-        { [[ $(id -u) -eq 0 ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; } && log_status "No GUI user currently logged in."
-        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${AAP_LOG_FOLDER}" ]]; } && log_echo "Status: No GUI user currently logged in."
+        { [[ $(id -u) -eq 0 ]] && [[ -d "${appAutoPatchLogFolder}" ]]; } && log_status "No GUI user currently logged in."
+        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${appAutoPatchLogFolder}" ]]; } && log_echo "Status: No GUI user currently logged in."
     elif [[ "${currentUserAccountName_response}" = "root" ]] || [[ "${currentUserAccountName_response}" = "_mbsetupuser" ]] || [[ "${currentUserAccountName_response}" = "loginwindow" ]]; then
-        { [[ $(id -u) -eq 0 ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; } && log_status "Current GUI user is system account: ${currentUserAccountName_response}"
-        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${AAP_LOG_FOLDER}" ]]; } && log_echo "Status: Current GUI user is system account: ${currentUserAccountName_response}"
+        { [[ $(id -u) -eq 0 ]] && [[ -d "${appAutoPatchLogFolder}" ]]; } && log_status "Current GUI user is system account: ${currentUserAccountName_response}"
+        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${appAutoPatchLogFolder}" ]]; } && log_echo "Status: Current GUI user is system account: ${currentUserAccountName_response}"
     else # Normal locally logged in user.
         currentUserAccountName="${currentUserAccountName_response}"
         currentUserID=$(id -u "${currentUserAccountName}" 2> /dev/null)
-        { [[ $(id -u) -eq 0 ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; } && log_status "Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
-        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${AAP_LOG_FOLDER}" ]]; } && log_echo "Status: Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
+        { [[ $(id -u) -eq 0 ]] && [[ -d "${appAutoPatchLogFolder}" ]]; } && log_status "Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
+        { [[ $(id -u) -ne 0 ]] || [[ ! -d "${appAutoPatchLogFolder}" ]]; } && log_echo "Status: Current active GUI user is: ${currentUserAccountName} (${currentUserID})"
     fi
     log_verbose  "currentUserAccountName is: ${currentUserAccountName}"
     log_verbose  "currentUserID is: ${currentUserID}"
 
     # Only collect user details if it's a "normal" GUI user.
-    if [[ "${currentUserAccountName}" != "FALSE" ]] && [[ "${currentUserID}" != "FALSE" ]] && [[ -d "${AAP_LOG_FOLDER}" ]]; then
+    if [[ "${currentUserAccountName}" != "FALSE" ]] && [[ "${currentUserID}" != "FALSE" ]] && [[ -d "${appAutoPatchLogFolder}" ]]; then
         current_user_guid=$(dscl . read "/Users/${currentUserAccountName}" GeneratedUID 2> /dev/null | awk '{print $2;}')
         current_user_real_name=$(dscl . read "/Users/${currentUserAccountName}" RealName 2> /dev/null | tail -1 | sed -e 's/^RealName: //g' -e 's/^ //g')
         log_verbose  "current_user_guid is: ${current_user_guid}"
@@ -7811,10 +7811,144 @@ EOF
     fi
 }
 
+# One inventory for the whole discovery pass. PgetAppVersion otherwise runs mdfind once per
+# label, which is most of the time spent on labels that are not installed.
+aapDiscoveryIndexReady="FALSE"
+aapPkgReceiptIndexReady="FALSE"
+typeset -gA aapInstalledAppBundles
+typeset -gA aapInstalledPkgReceipts
+discoveryLabelsSkipped=0
+
+_aap_index_app_bundle() {
+    local app_path="$1"
+    local base
+    [[ -n "$app_path" ]] || return 0
+    if [[ "$app_path" == *.app/* ]]; then
+        app_path="${app_path%%.app/*}.app"
+    fi
+    [[ "$app_path" == *.app ]] || return 0
+    # Same copies PgetAppVersion ignores. A real copy in another location is still indexed.
+    case "$app_path" in
+        *"/Daemon Containers/"*|*"/.Trash"*|*"/.Trashes/"*|*"Library/Application Support/JAMF/Composer/"*|*" (Parallels)/"*|*" (Virtual Machines)/"*|*"/Chrome Apps.localized/"*|*"/Edge Apps.localized/"*|*"/Applications/Setapp/"*|*"Users/Shared/Apps/Setapp/"*)
+            return 0
+            ;;
+    esac
+    base="${app_path:t}"
+    aapInstalledAppBundles[${base:l}]=1
+}
+
+_aap_build_discovery_index() {
+    local root path home pkg pkg_list
+    aapInstalledAppBundles=()
+    aapInstalledPkgReceipts=()
+    aapDiscoveryIndexReady="FALSE"
+    aapPkgReceiptIndexReady="FALSE"
+    discoveryLabelsSkipped=0
+
+    for root in /Applications /Applications/Utilities /System/Applications; do
+        [[ -d "$root" ]] || continue
+        while IFS= read -r path; do
+            _aap_index_app_bundle "$path"
+        done < <(/usr/bin/find "$root" -name '*.app' -prune -print 2>/dev/null)
+    done
+    if [[ -n "${currentUserAccountName}" && "${currentUserAccountName}" != "FALSE" ]]; then
+        home=$(dscl . -read "/Users/${currentUserAccountName}" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+        if [[ -n "$home" && -d "${home}/Applications" ]]; then
+            while IFS= read -r path; do
+                _aap_index_app_bundle "$path"
+            done < <(/usr/bin/find "${home}/Applications" -name '*.app' -prune -print 2>/dev/null)
+        fi
+    fi
+    while IFS= read -r -d '' path; do
+        _aap_index_app_bundle "$path"
+    done < <(/usr/bin/mdfind "kMDItemContentType == 'com.apple.application-bundle'" -0 2>/dev/null)
+
+    if (( ${#aapInstalledAppBundles} > 0 )); then
+        aapDiscoveryIndexReady="TRUE"
+    else
+        log_warning "Discovery application index is empty. Every label will be checked."
+    fi
+
+    if pkg_list=$(/usr/sbin/pkgutil --pkgs 2>/dev/null); then
+        aapPkgReceiptIndexReady="TRUE"
+        while IFS= read -r pkg; do
+            [[ -n "$pkg" ]] && aapInstalledPkgReceipts[$pkg]=1
+        done <<< "$pkg_list"
+    fi
+    log_info "Discovery index: ${#aapInstalledAppBundles} application bundle(s), ${#aapInstalledPkgReceipts} package receipt(s)."
+}
+
+_aap_target_dir_is_indexed() {
+    local dir="${1:-/}"
+    dir="${dir%/}"
+    case "$dir" in
+        ""|"/"|"/Applications"|"/Applications/Utilities"|"/System/Applications")
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+_aap_discovery_bundle_name() {
+    local bundle="$appName"
+    if [[ -z "$bundle" ]]; then
+        [[ -n "$name" ]] || return 1
+        bundle="${name}.app"
+    fi
+    # An expansion, or a subfolder such as "SketchUp 2026/SketchUp.app", is not a
+    # single bundle filename. The inventory is keyed by filename only, so those
+    # labels stay on the normal search. (#291)
+    [[ "$bundle" == *'$'* || "$bundle" == *'`'* || "$bundle" == *'/'* ]] && return 1
+    [[ "$bundle" == *.app ]] || return 1
+    print -r -- "$bundle"
+}
+
+_aap_app_custom_version_is_local_read() {
+    local body="$1"
+    local line nonempty=0
+    [[ -n "${body//[[:space:]]/}" ]] || return 1
+    if [[ "$body" == *'$('* || "$body" == *'`'* || "$body" == *'|'* \
+        || "$body" == *curl* || "$body" == *wget* || "$body" == *http* \
+        || "$body" == *mdfind* || "$body" == *system_profiler* || "$body" == *eval* ]]; then
+        return 1
+    fi
+    while IFS= read -r line; do
+        [[ -z "${line//[[:space:]]/}" ]] && continue
+        [[ "$line" == \#* ]] && continue
+        nonempty=1
+        if [[ "$line" != *defaults[[:space:]]read* && "$line" != *PlistBuddy* && "$line" != *plutil* ]]; then
+            return 1
+        fi
+    done <<< "$body"
+    [[ $nonempty -eq 1 ]]
+}
+
+# Return 0 when the label cannot be installed, so discovery can skip PgetAppVersion.
+# Anything uncertain is checked the same way as before.
+_aap_discovery_label_is_absent() {
+    local bundle
+    [[ "${aapDiscoveryIndexReady}" == "TRUE" ]] || return 1
+    if (( ${requiredLabelsArray[(Ie)${labelFile}]} )) || (( ${requiredLabelsArray[(Ie)${label_name}]} )); then
+        return 1
+    fi
+    [[ -n "$packageID" ]] && return 1
+    bundle=$(_aap_discovery_bundle_name) || return 1
+    _aap_target_dir_is_indexed "$targetDir" || return 1
+    if [[ -n "$appCustomVersionBody" ]] && ! _aap_app_custom_version_is_local_read "$appCustomVersionBody"; then
+        return 1
+    fi
+    [[ -n "${aapInstalledAppBundles[${bundle:l}]}" ]] && return 1
+    return 0
+}
+
 function PgetAppVersion() {
     
     if [[ $packageID != "" ]]; then
-        appversion="$(pkgutil --pkg-info-plist ${packageID} 2>/dev/null | grep -A 1 pkg-version | tail -1 | sed -E 's/.*>([0-9.]*)<.*/\1/g')"
+        if [[ "${aapPkgReceiptIndexReady}" == "TRUE" && -z "${aapInstalledPkgReceipts[$packageID]}" ]]; then
+            appversion=""
+        else
+            appversion="$(pkgutil --pkg-info-plist ${packageID} 2>/dev/null | grep -A 1 pkg-version | tail -1 | sed -E 's/.*>([0-9.]*)<.*/\1/g')"
+        fi
     fi
     
     if [ -z "$appName" ]; then
@@ -8349,7 +8483,9 @@ _resolve_label_staging_info() {
     # downloadURLFromGit, downloadURLFromSparkle, versionFromGit, etc.) before wrapping
     # the label in a case statement and executing it.
     local tmpScript
-    tmpScript=$(mktemp /private/tmp/aap_lbl_XXXXXX.sh) || return 1
+    # No .sh suffix: BSD mktemp only substitutes a trailing run of X's when it is the final
+    # path component. The wrapper is executed by path, so the extension is not required.
+    tmpScript=$(mktemp /private/tmp/aap_lbl_XXXXXX) || return 1
 
     {
         echo '#!/bin/zsh --no-rcs'
@@ -10265,28 +10401,12 @@ main() {
         optionalLabelsArray+=($optionalLabelsFromConfig)
         excludedBackgroundLabelsArray+=($excludedBackgroundLabelsFromConfig)
 
+        _aap_build_discovery_index
+
         for labelFragment in "$fragmentsPath"/labels/*.sh; do 
             
             appCustomVersion=""
-            if grep -q '^\s*appCustomVersion\s*()' "$labelFragment"
-            then
-                appCustomVersion=$(grep -E -m1 '^\s*appCustomVersion' "$labelFragment" | sed -E 's/^.*\(\)[[:space:]]*\{[[:space:]]*(.*)[[:space:]]*\}/\1/')
-                
-                if [[ -z "$appCustomVersion" ]] || [[ "$appCustomVersion" == *"{"$ ]]
-                then
-                    appCustomVersion=$(awk '
-                    /^[[:space:]]*appCustomVersion[[:space:]]*\(\)[[:space:]]*\{/ { inside=1; next }
-                    inside {
-                        if ($0 ~ /^[[:space:]]*\}/) { inside=0; exit }
-                        print
-                    }' "$labelFragment")
-                fi
-                if [[ ! "$appCustomVersion" =~ ^[[:space:]]*strings ]]; then
-                    appCustomVersion=$(eval "$appCustomVersion" 2>/dev/null)
-                fi
-            fi
-            
-            
+            appCustomVersionBody=""
             labelFile=$(basename -- "$labelFragment")
             labelFile="${labelFile%.*}"
             
@@ -10305,13 +10425,32 @@ main() {
                 log_verbose "Ignoring label $labelFile (IgnoredLabels is '*' and this label is neither required nor optional)."
                 continue
             fi
+
+            if grep -q '^\s*appCustomVersion\s*()' "$labelFragment"
+            then
+                appCustomVersionBody=$(grep -E -m1 '^\s*appCustomVersion' "$labelFragment" | sed -E 's/^.*\(\)[[:space:]]*\{[[:space:]]*(.*)[[:space:]]*\}/\1/')
+
+                if [[ -z "$appCustomVersionBody" ]] || [[ "$appCustomVersionBody" == *"{"$ ]]
+                then
+                    appCustomVersionBody=$(awk '
+                    /^[[:space:]]*appCustomVersion[[:space:]]*\(\)[[:space:]]*\{/ { inside=1; next }
+                    inside {
+                        if ($0 ~ /^[[:space:]]*\}/) { inside=0; exit }
+                        print
+                    }' "$labelFragment")
+                fi
+            fi
             
             exec 3< "${labelFragment}"
             
             while read -r -u 3 line; do 
                 
-                # Remove spaces and tabs
-                scrubbedLine="$(echo $line | sed -E -e 's/^( |\t)*//g' -e 's/^\s*#.*$//')"
+                # Strip leading spaces and tabs, and drop a full-line comment, without
+                # forking echo and sed. That fork ran once per line of every label file. (#291)
+                scrubbedLine="${line#"${line%%[!$' \t']*}"}"
+                if [[ "${scrubbedLine#"${scrubbedLine%%[![:space:]]*}"}" == \#* ]]; then
+                    scrubbedLine=""
+                fi
                 
                 if [ -n $scrubbedLine ]; then
                     if [[ $in_label -eq 0 && "$scrubbedLine" =~ $label_re ]]; then
@@ -10332,7 +10471,19 @@ main() {
                         # label complete. A valid label includes a Team ID. If we have one, we can check for installed
                         _aap_heartbeat "discovery:${label_name:-${labelFile:-label}}"
                         _ensure_preparation_dialog "discovery"
-                        [[ -n $expectedTeamID ]] && PgetAppVersion
+                        if [[ -n $expectedTeamID ]] && _aap_discovery_label_is_absent; then
+                            log_verbose "Not installed, skipping version check for ${label_name}."
+                            discoveryLabelsSkipped=$(( discoveryLabelsSkipped + 1 ))
+                        elif [[ -n $expectedTeamID ]]; then
+                            if [[ -n "$appCustomVersionBody" ]]; then
+                                if [[ "$appCustomVersionBody" =~ ^[[:space:]]*strings ]]; then
+                                    appCustomVersion="$appCustomVersionBody"
+                                else
+                                    appCustomVersion=$(eval "$appCustomVersionBody" 2>/dev/null)
+                                fi
+                            fi
+                            PgetAppVersion
+                        fi
                         
                         in_label=0
                         packageID=""
@@ -10364,6 +10515,10 @@ main() {
                 fi
             done
         done
+
+        if [[ "${aapDiscoveryIndexReady}" == "TRUE" ]]; then
+            log_info "Discovery skipped ${discoveryLabelsSkipped} label(s) that are not installed."
+        fi
 
         # Label fragment parsing is finished; everything below relies on normal word splitting.
         IFS=$discovery_saved_IFS
@@ -10608,8 +10763,12 @@ main() {
     # progress window over both steps with per-app status and a determinate progress bar.
     # stagingWindowOpened tracks whether it was opened, since countOfElementsArray can end up
     # empty afterward (all apps patched silently) even though the window still needs closing.
+    # Open it only when staging or background patching will actually run. If neither is enabled,
+    # the window opens and closes immediately, and that quit races swiftDialog's startup so the
+    # window stays on screen for the rest of the run. Pending-apps Install Now still skips it.
     stagingWindowOpened="FALSE"
-    if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+    if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]] \
+       && { [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] || [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]]; }; then
         swiftDialogStagingWindow
         stagingWindowOpened="TRUE"
     fi
