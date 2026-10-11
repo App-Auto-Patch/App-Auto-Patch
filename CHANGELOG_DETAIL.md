@@ -2,6 +2,10 @@
 
 # Version 3
 
+## Version 3.7.4
+### 11-Oct-2026 (1) - Build 3.7.4.2610111345
+- [#304](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/304): `readDownloadPipe` sets the list row to `Downloading...`. `checkRunningProcesses` then tells a blocking app to quit and runs `sleep 30` with no dialog update, and that sleep always finishes even when the app has already quit. A staged install passes `downloadURL=file://`, so the copy finishes immediately and the row still looks like a download for the whole wait. `quit_kill` can do it twice before switching to `kill`. The same wait is in `quit`, `prompt_user`, `prompt_user_then_kill`, `prompt_user_loop`, and `tell_user` / `tell_user_then_kill`. `get_installomator` now rewrites the local `Installomator.sh`, beside the existing edits, and reapplies the rewrite when Installomator is installed or refreshed. Each of those waits calls `updateDialog "wait" "Closing..."` and then polls `pgrep` once a second for up to 30 seconds. The `kill` branch (`sleep 5`) and the one-hour `prompt_user_loop` delay are unchanged. If the quit-wait lines are not in that Installomator build, the file is left as it was.
+
 ## Version 3.7.3
 ### 10-Oct-2026 (1) - Build 3.7.3.2610101012
 - [#291](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/291): the discovery inventory is keyed by bundle filename. A label such as `sketchup2026` sets `appName` to `SketchUp 2026/SketchUp.app`. That string is not an inventory key, so the label was skipped even though `/Applications/SketchUp 2026/SketchUp.app` is the path `PgetAppVersion` already checks. The same applies to ChemDoodle, KiCad, MacVector, PrusaSlicer, Dragonframe, KeyAccess, and the Toon Boom Harmony and Storyboard Pro labels. An app name that contains `/` is no longer eligible for the skip. Computed names, receipts, required labels, custom install paths, and non-local version checks were already excluded.

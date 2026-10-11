@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.7.3
+# App Auto-Patch 3.7.4
 
 ![Static Badge](https://img.shields.io/badge/AAP4%20Release%20-4.0.0%20(84)-blue)
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub pre-release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag&include_prereleases) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch) [![swiftDialog](https://img.shields.io/badge/swiftDialog-Enabled-blue)](https://swiftdialog.app)
@@ -14,6 +14,9 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 ## Why Build This
 
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
+
+## New features/Specific Changes in 3.7.4
+- The install dialog shows **Closing...** while Installomator waits for an app to quit, instead of staying on **Downloading...**. The wait checks once a second and continues as soon as the app has closed, and still waits up to 30 seconds so a save dialog can be answered. (#304)
 
 ## New features/Specific Changes in 3.7.3
 - Discovery still checks a label whose app name includes a subfolder, such as `SketchUp 2026/SketchUp.app`. Those were skipped because the inventory only stores the bundle filename. (#291)

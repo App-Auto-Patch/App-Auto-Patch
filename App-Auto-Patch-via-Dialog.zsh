@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.7.3"
-scriptDate="2026/10/10"
-scriptBuild="3.7.3.2610101012"
+scriptVersion="3.7.4"
+scriptDate="2026/10/11"
+scriptBuild="3.7.4.2610111345"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -4574,6 +4574,95 @@ get_dialog() {
 
 }
 
+_aap_patch_installomator_quit_wait() {
+    # Installomator writes "Downloading..." while curl runs, then checkRunningProcesses
+    # tells a blocking app to quit and sleeps 30 seconds with no further dialog update.
+    # The sleep always runs the full half minute, including after the app has already
+    # quit. A staged installer is a local file copy, so that wait looks like a long
+    # download. Rewrite the local Installomator.sh here, next to the other edits, so a
+    # later Installomator refresh gets the same change. (#304)
+    if /usr/bin/grep -q '_aap_wait_for_blocking_process()' "$installomatorScript"; then
+        return 0
+    fi
+    if ! /usr/bin/grep -q '^checkRunningProcesses()' "$installomatorScript"; then
+        log_warning "Installomator checkRunningProcesses was not found. Leaving the blocking-process wait unchanged."
+        return 0
+    fi
+    if ! /usr/bin/grep -q 'printlog "waiting 30 seconds for processes to quit"' "$installomatorScript"; then
+        log_warning "Installomator quit wait was not found. Leaving the blocking-process wait unchanged."
+        return 0
+    fi
+
+    local patched originalLines patchedLines replaced
+    patched="$(/usr/bin/mktemp "${TMPDIR:-/tmp}/aap-installomator.XXXXXX")" || {
+        log_warning "Could not prepare the Installomator quit-wait update. Leaving the blocking-process wait unchanged."
+        return 0
+    }
+
+    if ! /usr/bin/awk '
+        BEGIN { skip=0; inserted=0 }
+        /^checkRunningProcesses\(\)/ && !inserted {
+            print "_aap_wait_for_blocking_process() {"
+            print "    # Poll until this blocking process is gone, or 30 seconds pass."
+            print "    # A fixed sleep keeps a staged install on Downloading... after the app has already quit."
+            print "    local processName=\"$1\""
+            print "    local waited=0"
+            print "    while [[ $waited -lt 30 ]]; do"
+            print "        if ! pgrep -xq \"$processName\"; then"
+            print "            return 0"
+            print "        fi"
+            print "        sleep 1"
+            print "        waited=$((waited + 1))"
+            print "    done"
+            print "}"
+            print ""
+            inserted=1
+        }
+        /printlog "waiting 30 seconds for processes to quit"/ {
+            match($0, /^[[:space:]]*/)
+            indent=substr($0, 1, RLENGTH)
+            print indent "updateDialog \"wait\" \"Closing...\""
+            print indent "printlog \"waiting up to 30 seconds for processes to quit\""
+            skip=1
+            next
+        }
+        skip {
+            if ($0 ~ /^[[:space:]]*sleep 30[[:space:]]*$/) {
+                print indent "_aap_wait_for_blocking_process \"$x\""
+                skip=0
+                next
+            }
+            skip=0
+        }
+        { print }
+    ' "$installomatorScript" > "$patched"; then
+        log_warning "Could not update the Installomator quit wait. Leaving the blocking-process wait unchanged."
+        /bin/rm -f "$patched"
+        return 0
+    fi
+
+    originalLines=$(/usr/bin/wc -l < "$installomatorScript" | /usr/bin/tr -d ' ')
+    patchedLines=$(/usr/bin/wc -l < "$patched" | /usr/bin/tr -d ' ')
+    replaced=$(/usr/bin/grep -c '_aap_wait_for_blocking_process "$x"' "$patched" || true)
+    if [[ "$patchedLines" -le "$originalLines" ]] \
+        || [[ "${replaced:-0}" -lt 1 ]] \
+        || ! /usr/bin/grep -q '_aap_wait_for_blocking_process()' "$patched" \
+        || /usr/bin/grep -q 'printlog "waiting 30 seconds for processes to quit"' "$patched"; then
+        log_warning "Installomator quit wait was not updated. Leaving the blocking-process wait unchanged."
+        /bin/rm -f "$patched"
+        return 0
+    fi
+
+    # Keep the existing file mode. A temp file from mktemp is not executable.
+    /bin/cat "$patched" > "$installomatorScript" || {
+        log_warning "Could not write the Installomator quit-wait update. Leaving the blocking-process wait unchanged."
+        /bin/rm -f "$patched"
+        return 0
+    }
+    /bin/rm -f "$patched"
+    log_info "Installomator will show Closing... and keep checking until a blocking app quits, up to 30 seconds."
+}
+
 get_installomator() {
 
     # The latest version of Installomator and collateral will be downloaded to $installomatorPath defined above
@@ -4707,6 +4796,8 @@ get_installomator() {
         /usr/bin/sed -i.backup1 "s|There is no newer version available|same as installed|g" $installomatorScript
         sleep .2
     fi
+
+    _aap_patch_installomator_quit_wait
 
     rm -rf "${installomatorScript}.backup1"
 }
