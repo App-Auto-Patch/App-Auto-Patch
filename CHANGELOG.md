@@ -4,6 +4,14 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 # Version 3
 
+## Version 3.7.4
+### 11-Oct-2026
+
+**Fixes**
+
+- The install dialog shows **Closing...** while Installomator waits for an app to quit, instead of staying on **Downloading...**. The wait checks once a second and continues as soon as the app has closed. It still waits up to 30 seconds so a save dialog can be answered. This applies to `quit`, `quit_kill`, `prompt_user`, `prompt_user_then_kill`, `prompt_user_loop`, and `tell_user` / `tell_user_then_kill`. (#304)
+- Fixed: **Closing...** is sent when the blocking app is found, before Installomator tells it to quit. `tell app to quit` does not return while a save dialog is open, so the row stayed on **Downloading...** for that whole wait. (#304)
+
 ## Version 3.7.3
 ### 07-Oct-2026
 
