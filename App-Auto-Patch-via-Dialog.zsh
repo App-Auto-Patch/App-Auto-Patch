@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.5"
 scriptDate="2026/10/12"
-scriptBuild="3.7.5.2610121953"
+scriptBuild="3.7.5.2610122002"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -419,6 +419,11 @@ set_defaults() {
 
     appAutoPatchLaunchDaemonLabel="xyz.techitout.aap"
     silent_patch_success_count=0
+    silent_patch_success_labels=()
+    install_session_success_labels=()
+    install_session_ran="FALSE"
+    background_webhook_sent="FALSE"
+    webhook_report_scope="session"
 
     WORKFLOW_INSTALL_NOW_FILE="${appAutoPatchFolder}/.WorkflowInstallNow"
     
@@ -9003,6 +9008,7 @@ workflow_silent_patch_closed_apps() {
     local remainingLabels=()
     local newAppNamesArray=()
     silent_patch_success_count=0
+    silent_patch_success_labels=()
     local silentPatchErrors=0
     local progressTotal=${#queuedLabelsArray[@]}
     local progressCompleted=0
@@ -9084,6 +9090,7 @@ workflow_silent_patch_closed_apps() {
                 # DiscoveryFrequency-skipped run never re-queues this now-patched app.
                 log_notice "Silent background patch succeeded for: ${label} (exit 0)"
                 silent_patch_success_count=$((silent_patch_success_count + 1))
+                silent_patch_success_labels+=("${label}")
                 local _newVersion="${AAPVersionByLabel[$label]:-}"
                 write_aap_receipt "${label}" "${_newVersion}" "${silentExitCode}"
                 remove_aap_report_item "${label}"
@@ -9133,6 +9140,7 @@ workflow_silent_patch_closed_apps() {
 
     if [[ $silent_patch_success_count -gt 0 ]]; then
         log_notice "Silent background patching complete: ${silent_patch_success_count} app(s) updated without user interaction."
+        _aap_send_background_patch_webhook
     fi
     if [[ $silentPatchErrors -gt 0 ]]; then
         log_error "Silent background patching encountered ${silentPatchErrors} error(s). Those app(s) will appear in the user dialog."
@@ -9171,6 +9179,8 @@ workflow_do_Installations() {
     
     # Count errors
     errorCount=0
+    install_session_ran="TRUE"
+    install_session_success_labels=()
     patchingItemStatus=()
     
     swiftDialogPatchingWindow # Create our main "list" swiftDialog Window
@@ -9256,6 +9266,7 @@ workflow_do_Installations() {
                 # Remove from both the report PLIST and DiscoveredLabels on success so a future
                 # DiscoveryFrequency-skipped run never re-queues this now-patched app.
                 if [[ $installomatorExitCode -eq 0 ]]; then
+                    install_session_success_labels+=("${label}")
                     remove_aap_report_item "$label"
                     remove_discovered_label "$label"
                 fi
@@ -9301,6 +9312,7 @@ workflow_do_Installations() {
             # Remove from both the report PLIST and DiscoveredLabels on success so a future
             # DiscoveryFrequency-skipped run never re-queues this now-patched app.
             if [[ $installomatorExitCode -eq 0 ]]; then
+                install_session_success_labels+=("${label}")
                 remove_aap_report_item "$label"
                 remove_discovered_label "$label"
             fi
@@ -9407,7 +9419,30 @@ check_and_echo_errors() {
     
 }
 
+_aap_webhook_session_labels() {
+    # Labels that succeeded in the user-facing install. Background successes are reported
+    # by their own webhook and are not part of this list. (#307)
+    if [[ "${install_session_ran}" == "TRUE" ]]; then
+        if [[ ${#install_session_success_labels[@]} -gt 0 ]]; then
+            print -r -- "${(j: :)install_session_success_labels}"
+        else
+            print -r -- "None"
+        fi
+    else
+        print -r -- "$(echo "$queuedLabelsArray")"
+    fi
+}
+
 appsUpToDate(){
+    if [[ "${webhook_report_scope}" == "background" ]]; then
+        log_info "SUCCESS: Background updates were installed: ${(j: :)silent_patch_success_labels}"
+        webhookStatus="✅ Success: Background update(s)"
+        formatted_result="${(j: :)silent_patch_success_labels}"
+        formatted_error_result="None"
+        errorCount="0"
+        return 0
+    fi
+
     # Find the last position text in appAutoPatchLog
     appsUpToDate=$(tail -n 200 "$appAutoPatchLog" | grep 'All apps are up to date. Nothing to do.' | tail -n 1)
     
@@ -9424,14 +9459,14 @@ appsUpToDate(){
     if [[ $errorsCount -le 0 ]] && [[ ! -n $appsUpToDate ]]; then
         log_info "SUCCESS: Applications updates were installed with no errors"
         webhookStatus="✅ Success: App(s) updated"
-        formatted_result=$(echo "$queuedLabelsArray")
+        formatted_result="$(_aap_webhook_session_labels)"
         formatted_error_result="None"
         errorCount="0"
     elif
         [[ $errorsCount -gt 0 ]] && [[ ! -n $appsUpToDate ]]; then
             log_info "FAILURES DETECTED: Applications updates were installed with some errors"
             webhookStatus="❌ Error: Update(s) failed"
-            formatted_result=$(echo "$queuedLabelsArray")
+            formatted_result="$(_aap_webhook_session_labels)"
             check_and_echo_errors
         else
             log_info "SUCCESS: Applications were all up to date, nothing to install"
@@ -9847,7 +9882,35 @@ webHookMessage() {
     
 }
 
+_aap_send_background_patch_webhook() {
+    # Fired when silent background patching finishes, before any user-session install.
+    # Only the labels that exited 0 are included. Open or failed apps stay out of this
+    # notice and can appear later in the user-session webhook. (#307)
+    [[ ${#silent_patch_success_labels[@]} -gt 0 ]] || return 0
+    local saved_status="${webhookStatus:-}"
+    local saved_result="${formatted_result:-}"
+    local saved_error_result="${formatted_error_result:-}"
+    local saved_error_count="${errorCount:-0}"
+    check_webhook background
+    webhookStatus="$saved_status"
+    formatted_result="$saved_result"
+    formatted_error_result="$saved_error_result"
+    errorCount="$saved_error_count"
+    background_webhook_sent="TRUE"
+}
+
 check_webhook(){
+    local report_scope="${1:-session}"
+    # A run that only patched closed apps already sent that list. Do not send a second
+    # notice with an empty user-session list. (#307)
+    if [[ "${report_scope}" == "session" ]] \
+        && [[ "${background_webhook_sent}" == "TRUE" ]] \
+        && [[ "${install_session_ran}" != "TRUE" ]] \
+        && [[ ${errorCount:-0} -le 0 ]]; then
+        log_info "Background patch webhook already sent; no user-session installs to report."
+        return 0
+    fi
+    webhook_report_scope="${report_scope}"
     case ${webhook_feature_option} in
         
         "ALL" ) # Notify on success and failure 
@@ -9876,6 +9939,7 @@ check_webhook(){
         ;;
         
     esac
+    webhook_report_scope="session"
 }
 
 resolve_early_silent_mode() {

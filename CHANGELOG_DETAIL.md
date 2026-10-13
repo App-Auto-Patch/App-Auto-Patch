@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.5
+### 12-Oct-2026 (4) - Build 3.7.5.2610122002
+- [#307](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/307): one completion webhook covered a whole run, so background installs and the later user-facing install were not reported separately. After silent background patching, AAP now sends its own webhook whose status is `Success: Background update(s)` and whose label list is only the labels that exited 0. Apps left open or failed stay out of that notice. The existing completion webhook now lists only labels that succeeded in `workflow_do_Installations`. `WebhookFeature` `FAILURES` still does not send a success notice. A run whose only installs were background patches does not send a second empty user-session notice. Both notices use the configured Slack, Teams, and Google Chat URLs.
+
 ### 12-Oct-2026 (3) - Build 3.7.5.2610121953
 - [#309](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/309): a verbose run used to append to `aap_verbose.log`, so one file held every previous run. At the start of a `VerboseMode` run, before the verbose log is opened, AAP now copies a non-empty `aap_verbose.log` to `logs-verbose-archive/aap_verbose_YYYY-MM-DD-HHMMSS.log` and truncates the live file. The stamp is that file's last-write time, so it identifies the run being filed rather than the run that is starting. Seconds are included so two runs in the same minute do not overwrite each other. A run that errors, restarts, or is stopped is still filed by the next verbose start. `VerboseMode` off leaves `aap_verbose.log` untouched. The existing 10-file cap in `logs-verbose-archive` still deletes the oldest file.
 

@@ -15,6 +15,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 **Changes**
 
 - With `VerboseMode` on, `aap_verbose.log` now holds only the current run. At the start of that run, the previous verbose log is copied to `logs-verbose-archive/aap_verbose_YYYY-MM-DD-HHMMSS.log`. The time is when the previous run last wrote. The archive still keeps the 10 newest files. (#309)
+- Webhooks for a background patch and a later user-facing install are now separate. The background notice lists only the apps that installed successfully in the background. The later notice lists only the apps that installed successfully in that user-facing session. Both use the existing Slack, Teams, and Google Chat webhook URLs. (#307)
 
 ## Version 3.7.4
 ### 11-Oct-2026
