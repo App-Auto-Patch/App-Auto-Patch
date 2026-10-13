@@ -2,6 +2,19 @@
 
 # Version 3
 
+## Version 3.7.5
+### 12-Oct-2026 (4) - Build 3.7.5.2610122002
+- [#307](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/307): one completion webhook covered a whole run, so background installs and the later user-facing install were not reported separately. After silent background patching, AAP now sends its own webhook whose status is `Success: Background update(s)` and whose label list is only the labels that exited 0. Apps left open or failed stay out of that notice. The existing completion webhook now lists only labels that succeeded in `workflow_do_Installations`. `WebhookFeature` `FAILURES` still does not send a success notice. A run whose only installs were background patches does not send a second empty user-session notice. Both notices use the configured Slack, Teams, and Google Chat URLs.
+
+### 12-Oct-2026 (3) - Build 3.7.5.2610121953
+- [#309](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/309): a verbose run used to append to `aap_verbose.log`, so one file held every previous run. At the start of a `VerboseMode` run, before the verbose log is opened, AAP now copies a non-empty `aap_verbose.log` to `logs-verbose-archive/aap_verbose_YYYY-MM-DD-HHMMSS.log` and truncates the live file. The stamp is that file's last-write time, so it identifies the run being filed rather than the run that is starting. Seconds are included so two runs in the same minute do not overwrite each other. A run that errors, restarts, or is stopped is still filed by the next verbose start. `VerboseMode` off leaves `aap_verbose.log` untouched. The existing 10-file cap in `logs-verbose-archive` still deletes the oldest file.
+
+### 12-Oct-2026 (2) - Build 3.7.5.2610121942
+- [#308](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/308): `Using staged installer`, `Silent background patch attempt`, and `Installing` now include `old version` and `new version` in `aap.log`. The old version comes from discovery. The new version comes from discovery, or from the staged `.version` sidecar when discovery was skipped. A missing value is logged as `unknown`.
+
+### 12-Oct-2026 (1) - Build 3.7.5.2610121929
+- [#308](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/308): labels such as `openclouddesktop` and `ollama` assign `appNewVersion="$(versionFromGit ...)"`. When the GitHub lookup fails, Installomator's `versionFromGit` calls `printlog`; `printlog` writes through `tee`, so its timestamped warning is also stdout and becomes the command-substitution result. Its later `appNewVersion=""` assignment occurs inside that subshell and cannot correct the outer assignment. AAP then saw a nonempty version, passed the warning to `is-at-least`, queued the label, stored it in `AAPVersionByLabel`, and displayed it as the new version. Fragment evaluation now preserves Installomator's configured log-file output while suppressing `printlog` stdout inside the fragment subshell. A formatted Installomator log line that still reaches `appNewVersion` is also rejected defensively and treated as an unknown newest version.
+
 ## Version 3.7.4
 ### 11-Oct-2026 (2) - Build 3.7.4.2610111508
 - [#304](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/304): the first rewrite called `updateDialog "wait" "Closing..."` after `runAsUser osascript -e 'tell app to quit'`. That AppleEvent does not return while the app is showing a save dialog, so the list row stayed on the last `Downloading...` progress for the whole quit. A Snagit install logged `telling app Snagit to quit` and never logged the quit wait. The status is now written as soon as `checkRunningProcesses` finds the process, before the quit, the prompt, or the poll. An Installomator.sh that already has the first rewrite is updated in place. The one-second poll is unchanged.
