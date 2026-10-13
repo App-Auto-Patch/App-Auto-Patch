@@ -4,6 +4,14 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 # Version 3
 
+## Version 3.7.6
+### 13-Oct-2026
+
+**Fixes**
+
+- Fixed: a fragment whose filename is not an Installomator label, such as `missiveapp.sh`, is queued and installed as the case name `missive`. When the filename is one of the case names, such as `bracketsio` or `chatgpt`, that filename is still used. (#312)
+- Fixed: a staged installer is kept when the available version is unknown. An empty version is no longer treated as a mismatch that downloads the installer again. (#311)
+
 ## Version 3.7.5
 ### 12-Oct-2026
 

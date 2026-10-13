@@ -2,6 +2,11 @@
 
 # Version 3
 
+## Version 3.7.6
+### 13-Oct-2026 (1) - Build 3.7.6.2610131000
+- [#312](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/312): discovery queued the fragment filename. `missiveapp.sh` contains the case name `missive`, so Installomator reported `label not found` when AAP called `missiveapp`. A multi-name header such as `adobebrackets` / `bracketsio` or `chatgpt` / `codex` should still use the name that matches the filename. The queued name is now the filename when that filename is one of the case names, and otherwise the first case name. Later reads of the fragment, including staging and dialog names, follow that name back to the original file.
+- [#311](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/311): staging treated an empty available version as a mismatch (`cached=` and `available=unknown`) and downloaded the installer again. An existing staged file is kept when the available version is empty. A known version that differs from the staged version is still downloaded again.
+
 ## Version 3.7.5
 ### 12-Oct-2026 (4) - Build 3.7.5.2610122002
 - [#307](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/307): one completion webhook covered a whole run, so background installs and the later user-facing install were not reported separately. After silent background patching, AAP now sends its own webhook whose status is `Success: Background update(s)` and whose label list is only the labels that exited 0. Apps left open or failed stay out of that notice. The existing completion webhook now lists only labels that succeeded in `workflow_do_Installations`. `WebhookFeature` `FAILURES` still does not send a success notice. A run whose only installs were background patches does not send a second empty user-session notice. Both notices use the configured Slack, Teams, and Google Chat URLs.
