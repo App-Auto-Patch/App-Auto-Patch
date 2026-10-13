@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.5"
 scriptDate="2026/10/12"
-scriptBuild="3.7.5.2610121929"
+scriptBuild="3.7.5.2610121942"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -6715,6 +6715,20 @@ _compute_version_subtitle() {
     fi
 }
 
+_aap_install_version_log() {
+    # Old and new versions for aap.log. Discovery stores them by label; a staged
+    # installer keeps the new version in a sidecar when discovery is skipped. (#308)
+    local label="$1"
+    local old="${AAPInstalledVersionByLabel[$label]:-}"
+    local new="${AAPVersionByLabel[$label]:-}"
+    if [[ -z "$new" && -n "${AAPStagingFolder}" && -f "${AAPStagingFolder}/${label}.version" ]]; then
+        new="$(<"${AAPStagingFolder}/${label}.version")"
+    fi
+    [[ -z "$old" ]] && old="unknown"
+    [[ -z "$new" ]] && new="unknown"
+    print -r -- "old version ${old}, new version ${new}"
+}
+
 swiftDialogPatchingWindow(){
     
     # If we are using SwiftDialog
@@ -9006,12 +9020,12 @@ workflow_silent_patch_closed_apps() {
             if [[ -f "$_candidate" ]]; then
                 silentStagedFilePath="$_candidate"
                 silentStagedArg="downloadURL=file://${_candidate}"
-                log_info "Using staged installer for '${label}': ${_candidate}"
+                log_info "Using staged installer for '${label}' ($(_aap_install_version_log "$label")): ${_candidate}"
                 break
             fi
         done
 
-        log_info "Silent background patch attempt for: ${label}"
+        log_info "Silent background patch attempt for ${label}: $(_aap_install_version_log "$label")"
         ${installomatorScript} "${label}" ${silentPatchOptions} ${silentStagedArg}
         local silentExitCode=$?
 
@@ -9128,7 +9142,7 @@ workflow_do_Installations() {
     for label in $queuedLabelsArray; do
         _aap_heartbeat "install:${label}"
         _ensure_patching_dialog
-        log_info "Installing ${label}..."
+        log_info "Installing ${label}: $(_aap_install_version_log "$label")"
         local itemStatus="success"
         
         # Use built-in swiftDialog Installomator integration options (if swiftDialog is being used)
@@ -9159,7 +9173,7 @@ workflow_do_Installations() {
             if [[ -f "$_candidate" ]]; then
                 stagedFilePath="$_candidate"
                 stagedDownloadArg="downloadURL=file://${_candidate}"
-                log_info "Using staged installer for '${label}': ${_candidate}"
+                log_info "Using staged installer for '${label}' ($(_aap_install_version_log "$label")): ${_candidate}"
                 break
             fi
         done

@@ -10,6 +10,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 **Fixes**
 
 - Fixed: when an Installomator version helper fails, its timestamped warning is no longer captured as the publicly available version. The failed lookup is treated as unknown, so AAP does not compare, queue, store, or display the warning as a version. (#308)
+- Silent background patching and the normal install each log the installed version and the version being installed, including `unknown` when discovery could not determine the new version. (#308)
 
 ## Version 3.7.4
 ### 11-Oct-2026
