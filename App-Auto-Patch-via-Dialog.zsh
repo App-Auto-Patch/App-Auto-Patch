@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.7.4"
-scriptDate="2026/10/11"
-scriptBuild="3.7.4.2610111508"
+scriptVersion="3.7.5"
+scriptDate="2026/10/12"
+scriptBuild="3.7.5.2610121929"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -8187,6 +8187,18 @@ function PgetAppVersion() {
     
 }
 
+_aap_value_contains_installomator_log_line() {
+    local value="$1" line
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        case "$line" in
+            [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\ [0-9][0-9]:[0-9][0-9]:[0-9][0-9]\ :\ *\ :\ *)
+                return 0
+                ;;
+        esac
+    done <<< "$value"
+    return 1
+}
+
 _aap_eval_label_fragment() {
     # Evaluate an Installomator label without letting it exit the AAP process.
     # cleanupAndExit ends in exit. The pique label calls it when installedOSversion
@@ -8209,6 +8221,17 @@ _aap_eval_label_fragment() {
 
     output=$(
         installedOSversion="$(/usr/bin/sw_vers -productVersion 2>/dev/null)"
+        # Installomator helpers such as versionFromGit are commonly called inside
+        # command substitutions. On failure they call printlog, whose tee output
+        # is stdout; the label then assigns the complete timestamped warning to
+        # appNewVersion. Preserve printlog's file output, but keep its stdout out
+        # of values returned by the fragment. (#308)
+        if (( $+functions[printlog] )); then
+            functions[_aap_fragment_printlog]="${functions[printlog]}"
+            printlog() {
+                _aap_fragment_printlog "$@" >/dev/null
+            }
+        fi
         cleanupAndExit() {
             printf '\n--AAPFRAG--\n'
             printf 'abort=%s\n' "${1:-1}"
@@ -8258,6 +8281,14 @@ _aap_eval_label_fragment() {
     if [[ "$abort" != "0" ]]; then
         log_notice "Label ${label_name} stopped its version check (${abort}${abort_msg:+: ${abort_msg}}). Skipping."
         return 1
+    fi
+
+    # Defense in depth for an Installomator helper that logs without printlog,
+    # or for a future fragment path that bypasses the wrapper above. A formatted
+    # log line is diagnostic output, never a public version. (#308)
+    if _aap_value_contains_installomator_log_line "$frag_appNewVersion"; then
+        log_warning "Installomator returned log output instead of a public version for ${label_name}; treating the newest version as unknown."
+        frag_appNewVersion=""
     fi
 
     name="$frag_name"

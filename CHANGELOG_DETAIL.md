@@ -2,6 +2,10 @@
 
 # Version 3
 
+## Version 3.7.5
+### 12-Oct-2026 (1) - Build 3.7.5.2610121929
+- [#308](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/308): labels such as `openclouddesktop` and `ollama` assign `appNewVersion="$(versionFromGit ...)"`. When the GitHub lookup fails, Installomator's `versionFromGit` calls `printlog`; `printlog` writes through `tee`, so its timestamped warning is also stdout and becomes the command-substitution result. Its later `appNewVersion=""` assignment occurs inside that subshell and cannot correct the outer assignment. AAP then saw a nonempty version, passed the warning to `is-at-least`, queued the label, stored it in `AAPVersionByLabel`, and displayed it as the new version. Fragment evaluation now preserves Installomator's configured log-file output while suppressing `printlog` stdout inside the fragment subshell. A formatted Installomator log line that still reaches `appNewVersion` is also rejected defensively and treated as an unknown newest version.
+
 ## Version 3.7.4
 ### 11-Oct-2026 (2) - Build 3.7.4.2610111508
 - [#304](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/304): the first rewrite called `updateDialog "wait" "Closing..."` after `runAsUser osascript -e 'tell app to quit'`. That AppleEvent does not return while the app is showing a save dialog, so the list row stayed on the last `Downloading...` progress for the whole quit. A Snagit install logged `telling app Snagit to quit` and never logged the quit wait. The status is now written as soon as `checkRunningProcesses` finds the process, before the quit, the prompt, or the poll. An Installomator.sh that already has the first rewrite is updated in place. The one-second poll is unchanged.

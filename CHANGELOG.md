@@ -4,6 +4,13 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 # Version 3
 
+## Version 3.7.5
+### 12-Oct-2026
+
+**Fixes**
+
+- Fixed: when an Installomator version helper fails, its timestamped warning is no longer captured as the publicly available version. The failed lookup is treated as unknown, so AAP does not compare, queue, store, or display the warning as a version. (#308)
+
 ## Version 3.7.4
 ### 11-Oct-2026
 
