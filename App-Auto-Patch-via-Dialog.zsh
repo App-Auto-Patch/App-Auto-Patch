@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.7.5"
-scriptDate="2026/10/12"
-scriptBuild="3.7.5.2610122002"
+scriptVersion="3.7.6"
+scriptDate="2026/10/13"
+scriptBuild="3.7.6.2610131000"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -6703,10 +6703,10 @@ resolve_app_icon_path() {
     local name folderName targetDir appName  # Variables that may be referenced in label fragment
     
     # Extract raw values from label fragment (these may contain variable references like ${folderName})
-    local raw_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-    local raw_folderName="$(awk -F\" '/^[[:space:]]*folderName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-    local raw_targetDir="$(awk -F\" '/^[[:space:]]*targetDir=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-    local raw_appName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+    local raw_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
+    local raw_folderName="$(awk -F\" '/^[[:space:]]*folderName=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
+    local raw_targetDir="$(awk -F\" '/^[[:space:]]*targetDir=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
+    local raw_appName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
     
     # Evaluate variables in dependency order (folderName first, then appName which may reference it)
     # Using eval to resolve any variable references like ${folderName} in appName
@@ -6796,7 +6796,7 @@ swiftDialogPatchingWindow(){
         displayNames=()
         for label in $queuedLabelsArray; do
             # Get display name from label fragment
-            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
             
             # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
             iconPath=$(resolve_app_icon_path "$label")
@@ -6837,7 +6837,7 @@ _relaunch_patching_dialog() {
     local label currentDisplay_name iconPath
 
     for label in $queuedLabelsArray; do
-        currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
         iconPath=$(resolve_app_icon_path "$label")
         relaunchDisplayNames+=("--listitem")
         if [[ -n "${patchingItemStatus[$idx]}" ]]; then
@@ -7205,7 +7205,7 @@ _aap_mini_progress_item() {
     local total="${4:-0}"
     local display_name icon_path
 
-    display_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh" 2>/dev/null)"
+    display_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")" 2>/dev/null)"
     [[ -z "${display_name}" ]] && display_name="${label}"
     icon_path=$(resolve_app_icon_path "${label}")
     [[ -n "${icon_path}" ]] && swiftDialogUpdate "icon: ${icon_path}"
@@ -8117,6 +8117,93 @@ _aap_app_custom_version_is_local_read() {
     [[ $nonempty -eq 1 ]]
 }
 
+# Installomator case names from a fragment header. A header may be one line
+# (`chatgpt|codex)`) or several (`adobebrackets|\` then `bracketsio)`).
+_aap_installomator_label_aliases() {
+    local header="$1" token
+    header="${header//\\/}"
+    header="${header%%)*}"
+    local IFS='|'
+    for token in ${=header}; do
+        token="${token//[[:space:]]/}"
+        [[ -z "$token" ]] && continue
+        [[ "$token" == *[^a-zA-Z0-9_-]* ]] && continue
+        print -r -- "$token"
+    done
+}
+
+# Prefer the fragment filename when it is one of the case names, so aliases such as
+# `visualstudiocode` stay `microsoftvisualstudiocode`. When the filename is not a case
+# name, use the first case name. `missiveapp.sh` is the label `missive`. (#312)
+_aap_installomator_label_name() {
+    local filename="$1" header="$2" alias
+    local -a aliases
+    aliases=("${(@f)$(_aap_installomator_label_aliases "$header")}")
+    for alias in "${aliases[@]}"; do
+        [[ -z "$alias" ]] && continue
+        if [[ "${alias:l}" == "${filename:l}" ]]; then
+            print -r -- "$filename"
+            return 0
+        fi
+    done
+    if [[ -n "${aliases[1]}" ]]; then
+        print -r -- "${aliases[1]}"
+        return 0
+    fi
+    print -r -- "$filename"
+}
+
+_aap_index_fragment_labels() {
+    [[ "${_aap_fragment_label_index_ready}" == "1" ]] && return 0
+    typeset -gA AAPFragmentPathByLabel
+    typeset -gA AAPLabelNameByFragmentFile
+    local file filename header line resolved alias match
+    local -a aliases
+    for file in "${fragmentsPath}"/labels/*.sh; do
+        [[ -f "$file" ]] || continue
+        filename="${${file:t}%.sh}"
+        header=""
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            line="${line#"${line%%[!$' \t']*}"}"
+            [[ -z "$line" || "$line" == \#* ]] && continue
+            if [[ "$line" =~ '^[a-z0-9_-]+(\|[a-z0-9_-]+)*\|\\?$' ]]; then
+                header+="$line"
+                continue
+            fi
+            if [[ "$line" == *')' ]]; then
+                header+="$line"
+                break
+            fi
+            [[ -n "$header" ]] && break
+        done < "$file"
+        resolved=$(_aap_installomator_label_name "$filename" "$header")
+        AAPLabelNameByFragmentFile[$filename]="$resolved"
+        aliases=("${(@f)$(_aap_installomator_label_aliases "$header")}")
+        for alias in "${aliases[@]}"; do
+            [[ -z "$alias" ]] && continue
+            AAPFragmentPathByLabel[$alias]="$file"
+        done
+        AAPFragmentPathByLabel[$filename]="$file"
+        AAPFragmentPathByLabel[$resolved]="$file"
+    done
+    _aap_fragment_label_index_ready=1
+}
+
+_aap_fragment_path_for_label() {
+    local label="$1"
+    local direct="${fragmentsPath}/labels/${label}.sh"
+    if [[ -f "$direct" ]]; then
+        print -r -- "$direct"
+        return 0
+    fi
+    _aap_index_fragment_labels
+    if [[ -n "${AAPFragmentPathByLabel[$label]}" && -f "${AAPFragmentPathByLabel[$label]}" ]]; then
+        print -r -- "${AAPFragmentPathByLabel[$label]}"
+        return 0
+    fi
+    print -r -- "$direct"
+}
+
 # Return 0 when the label cannot be installed, so discovery can skip PgetAppVersion.
 # Anything uncertain is checked the same way as before.
 _aap_discovery_label_is_absent() {
@@ -8420,7 +8507,11 @@ function verifyApp() {
         functionsPath="$fragmentsPath/functions.sh"
         source "${functionsPath}"
         
-        fragment=$(cat ${fragmentsPath}/labels/${label_name}.sh)
+        if [[ -n "$labelFragment" && -f "$labelFragment" ]]; then
+            fragment=$(cat "$labelFragment")
+        else
+            fragment=$(cat "$(_aap_fragment_path_for_label "$label_name")")
+        fi
         if ! _aap_eval_label_fragment "$fragment"; then
             return
         fi
@@ -8700,7 +8791,8 @@ _resolve_label_staging_info() {
     # Output keys: TYPE  DOWNLOAD_URL  APP_NEW_VERSION  EXPECTED_TEAM_ID  ARCHIVE_NAME  CURL_OPTIONS
 
     local label="$1"
-    local fragmentFile="${fragmentsPath}/labels/${label}.sh"
+    local fragmentFile
+    fragmentFile=$(_aap_fragment_path_for_label "$label")
     [[ ! -f "$fragmentFile" ]] && return 1
 
     # Build a self-contained wrapper script so the label runs in a clean zsh subprocess.
@@ -8925,6 +9017,16 @@ workflow_stage_updates() {
         stagedVersionFile="${AAPStagingFolder}/${label}.version"
         stagedTypeFile="${AAPStagingFolder}/${label}.type"
 
+        # An unknown available version is not a newer installer. Keep the file
+        # already staged instead of downloading it again. (#311)
+        if [[ -f "$stagedFile" && -z "${stagingVersion//[[:space:]]/}" ]]; then
+            log_notice "Already staged: '${label}'. Available version is unknown, so the existing installer will be used."
+            stageSkipCount=$((stageSkipCount + 1))
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
+            continue
+        fi
+
         # Check whether a valid staged file already exists for this version
         if [[ -f "$stagedFile" && -f "$stagedVersionFile" ]]; then
             existingVersion=$(< "$stagedVersionFile")
@@ -8935,16 +9037,9 @@ workflow_stage_updates() {
                 _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
                 continue
             else
-                log_info "Version mismatch for staged '${label}' (cached=${existingVersion}, available=${stagingVersion:-unknown}). Re-staging."
+                log_info "Version mismatch for staged '${label}' (cached=${existingVersion}, available=${stagingVersion}). Re-staging."
                 rm -f "$stagedFile" "$stagedVersionFile" "$stagedTypeFile"
             fi
-        elif [[ -f "$stagedFile" && -z "$stagingVersion" ]]; then
-            # Staged file exists but label has no version string — assume it is still current
-            log_notice "Staged file for '${label}' exists with no version info. Using existing staged file."
-            stageSkipCount=$((stageSkipCount + 1))
-            progressCompleted=$((progressCompleted + 1))
-            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
-            continue
         elif [[ -f "$stagedFile" ]]; then
             # File without version sidecar — remove and re-stage
             log_info "Staged file for '${label}' is missing version sidecar. Re-staging."
@@ -9027,7 +9122,7 @@ workflow_silent_patch_closed_apps() {
         if is_excluded_background_label "${label}"; then
             log_info "Skipping silent background patch of '${label}' (listed in ExcludedBackgroundLabels); adding to user dialog queue."
             remainingLabels+=("${label}")
-            _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+            _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
             _ipath=$(resolve_app_icon_path "${label}")
             _compute_version_subtitle "${label}"
             newAppNamesArray+=("--listitem")
@@ -9048,7 +9143,7 @@ workflow_silent_patch_closed_apps() {
             if [[ -n "${_cpthostpid}" || -n "${_aomhostpid}" ]]; then
                 log_info "Zoom meeting in progress. Skipping silent patch of '${label}'; adding to user dialog queue."
                 remainingLabels+=("${label}")
-                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
                 newAppNamesArray+=("--listitem")
@@ -9106,7 +9201,7 @@ workflow_silent_patch_closed_apps() {
                 # Installomator found a blocking process — app is open, needs user interaction
                 log_info "Blocking process detected for '${label}' (exit 12). Adding to user dialog queue."
                 remainingLabels+=("${label}")
-                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
                 newAppNamesArray+=("--listitem")
@@ -9121,7 +9216,7 @@ workflow_silent_patch_closed_apps() {
                 log_error "Silent patch for '${label}' returned exit code ${silentExitCode}. Adding to user dialog queue."
                 silentPatchErrors=$((silentPatchErrors + 1))
                 remainingLabels+=("${label}")
-                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh")"
+                _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
                 newAppNamesArray+=("--listitem")
@@ -9207,7 +9302,7 @@ workflow_do_Installations() {
         swiftDialogOptions=()
         if [ ${InteractiveModeOption} -ge 1 ] && [[ "${dialogPatchingContinueBackground}" != "TRUE" ]]; then
             swiftDialogOptions+=(DIALOG_CMD_FILE="\"${dialogCommandFile}\"")
-            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+            currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
             swiftDialogOptions+=(DIALOG_LIST_ITEM_NAME=\'"${currentDisplay_name}"\')
             sleep .5
 
@@ -10604,7 +10699,8 @@ main() {
         swiftDialogDiscoverWindow
         
         # Start of label pattern. '|' is a same-line alias (chatgpt|codex)).
-        # The capture may contain '|'; the filename fallback below remains the label name. (#279)
+        # The queued name comes from _aap_index_fragment_labels: the filename when it is
+        # one of the case names, otherwise the first case name. (#279, #312)
         label_re='^([a-z0-9\_|-]*)(\))$'
 
         # ignore comments
@@ -10686,6 +10782,7 @@ main() {
         excludedBackgroundLabelsArray+=($excludedBackgroundLabelsFromConfig)
 
         _aap_build_discovery_index
+        _aap_index_fragment_labels
 
         for labelFragment in "$fragmentsPath"/labels/*.sh; do 
             
@@ -10693,11 +10790,13 @@ main() {
             appCustomVersionBody=""
             labelFile=$(basename -- "$labelFragment")
             labelFile="${labelFile%.*}"
+            fragmentLabelName="${AAPLabelNameByFragmentFile[$labelFile]:-$labelFile}"
             
             # Issue 142 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/142
             # Exact-element membership rather than a "${array[*]}" substring match: the latter joins
             # on the first character of IFS, so it silently matched nothing while IFS was $'\n'.
-            if (( ${ignoredLabelsArray[(Ie)${labelFile}]} )); then
+            # Match either the fragment filename or the Installomator case name. (#312)
+            if (( ${ignoredLabelsArray[(Ie)${labelFile}]} )) || (( ${ignoredLabelsArray[(Ie)${fragmentLabelName}]} )); then
                 log_verbose "Ignoring label $labelFile."
                 continue
             fi
@@ -10705,7 +10804,9 @@ main() {
             # IgnoredLabels="*" means ignore everything that is not explicitly required or optional.
             if [[ "${ignore_all_labels}" == "TRUE" ]] \
             && (( ! ${requiredLabelsArray[(Ie)${labelFile}]} )) \
-            && (( ! ${optionalLabelsArray[(Ie)${labelFile}]} )); then
+            && (( ! ${requiredLabelsArray[(Ie)${fragmentLabelName}]} )) \
+            && (( ! ${optionalLabelsArray[(Ie)${labelFile}]} )) \
+            && (( ! ${optionalLabelsArray[(Ie)${fragmentLabelName}]} )); then
                 log_verbose "Ignoring label $labelFile (IgnoredLabels is '*' and this label is neither required nor optional)."
                 continue
             fi
@@ -10738,13 +10839,13 @@ main() {
                 
                 if [ -n $scrubbedLine ]; then
                     if [[ $in_label -eq 0 && "$scrubbedLine" =~ $label_re ]]; then
-                        label_name=${match[1]}
-                        # Issue 143 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/143
-                        if [[ "${label_name:l}" = "${labelFile:l}" ]]; then
+                        # Filename when it is a case name; otherwise the case name itself.
+                        # missiveapp.sh is queued as missive. bracketsio.sh stays bracketsio. (#312)
+                        label_name="${AAPLabelNameByFragmentFile[$labelFile]:-$labelFile}"
+                        if [[ "${label_name:l}" == "${labelFile:l}" ]]; then
                             log_verbose "label_name: $label_name"
                         else
-                            label_name=$labelFile
-                            log_verbose "Setting label_name to labelFile: $label_name"
+                            log_verbose "Label file ${labelFile}.sh uses Installomator label ${label_name}."
                         fi
 
                         in_label=1
@@ -10903,7 +11004,7 @@ main() {
         log_verbose "Obtaining proper name for $label"
         
         # Get display name from label fragment
-        currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+        currentDisplay_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
         
         # Resolve the icon path using helper function (handles targetDir for non-traditional paths)
         iconPath=$(resolve_app_icon_path "$label")
