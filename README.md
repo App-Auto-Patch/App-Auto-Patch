@@ -18,6 +18,7 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 ## New features/Specific Changes in 3.7.5
 - A failed Installomator version lookup is treated as unknown instead of using its timestamped warning as the publicly available version. The warning is no longer compared, queued, stored, or displayed as a version. (#308)
 - Silent background patching and the normal install log the installed version and the version being installed in `aap.log`. A version discovery could not determine is logged as `unknown`. (#308)
+- With `VerboseMode` on, `aap_verbose.log` holds only the current run. The previous run is copied to `logs-verbose-archive/aap_verbose_YYYY-MM-DD-HHMMSS.log` when the next verbose run starts. The archive keeps the 10 newest files. (#309)
 
 ## New features/Specific Changes in 3.7.4
 - The install dialog shows **Closing...** as soon as a blocking app is found, before Installomator tells it to quit. `tell app to quit` does not return while a save dialog is open, and the row was staying on **Downloading...** for that wait. After the app is told to quit, Installomator checks once a second and continues as soon as it has closed, still waiting up to 30 seconds. (#304)

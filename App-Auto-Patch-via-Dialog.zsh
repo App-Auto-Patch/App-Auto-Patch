@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.5"
 scriptDate="2026/10/12"
-scriptBuild="3.7.5.2610121942"
+scriptBuild="3.7.5.2610121953"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -6383,6 +6383,7 @@ typeset -g _aap_log_host=""
 typeset -g _aap_log_script=""
 typeset -g _aap_log_fd=0
 typeset -g _aap_verbose_log_fd=0
+typeset -g _aap_verbose_run_rotated=0
 
 _aap_init_log_identity() {
     [[ -n "${_aap_log_host}" ]] && return 0
@@ -6436,6 +6437,46 @@ _aap_format_log_line() {
     print -r -- "$(print -P '%D{%Y-%m-%d %H:%M:%S}') ${_aap_log_host} ${_aap_log_script}[$$]: $*"
 }
 
+# Copy the previous verbose run into logs-verbose-archive, then truncate the live file so
+# aap_verbose.log contains only the run that is starting. Done at the beginning, before the
+# verbose file is opened: an error exit, restart, or --stop never reaches an end-of-run copy,
+# and the next start still files that log. The stamp is the previous file's last-write time.
+# (#309)
+_aap_archive_previous_verbose_run() {
+    [[ "${verbose_mode_option}" == "TRUE" ]] || return 0
+    [[ "${_aap_verbose_run_rotated}" == "1" ]] && return 0
+    _aap_verbose_run_rotated=1
+    [[ -s "${appAutoPatchVerboseLog}" ]] || return 0
+
+    _aap_close_log_fds
+
+    local run_stamp archive_path suffix source_size dest_size
+    run_stamp=$(date -r "${appAutoPatchVerboseLog}" '+%Y-%m-%d-%H%M%S' 2>/dev/null)
+    [[ -z "${run_stamp}" ]] && run_stamp=$(date '+%Y-%m-%d-%H%M%S')
+    mkdir -p "${appAutoPatchVerboseLogArchiveFolder}" 2>/dev/null || return 0
+
+    archive_path="${appAutoPatchVerboseLogArchiveFolder}/aap_verbose_${run_stamp}.log"
+    if [[ -f "${archive_path}" ]]; then
+        source_size=$(stat -f%z "${appAutoPatchVerboseLog}" 2>/dev/null)
+        dest_size=$(stat -f%z "${archive_path}" 2>/dev/null)
+        if [[ -n "${source_size}" && "${source_size}" == "${dest_size}" ]]; then
+            : > "${appAutoPatchVerboseLog}"
+            _aap_verbose_archived_path="${archive_path}"
+            return 0
+        fi
+    fi
+    suffix=0
+    while [[ -e "${archive_path}" ]]; do
+        suffix=$((suffix + 1))
+        archive_path="${appAutoPatchVerboseLogArchiveFolder}/aap_verbose_${run_stamp}-${suffix}.log"
+    done
+    if cp "${appAutoPatchVerboseLog}" "${archive_path}"; then
+        chmod a+r "${archive_path}" 2>/dev/null
+        : > "${appAutoPatchVerboseLog}"
+        _aap_verbose_archived_path="${archive_path}"
+    fi
+}
+
 # Resolve VerboseMode from managed → CLI → local (same precedence as before), early enough that
 # every subsequent log_aap / log_verbose call honors the gate for aap_verbose.log.
 resolve_verbose_mode() {
@@ -6465,8 +6506,15 @@ resolve_verbose_mode() {
         defaults delete "${appAutoPatchLocalPLIST}" VerboseMode 2> /dev/null
     fi
 
+    # File the previous verbose run before this run appends to aap_verbose.log. (#309)
+    _aap_archive_previous_verbose_run
+
     # Ensure FDs match the resolved mode (opens verbose FD only when TRUE).
     _aap_ensure_log_fds
+    if [[ -n "${_aap_verbose_archived_path}" ]]; then
+        log_status "Previous verbose log archived to: ${_aap_verbose_archived_path}"
+        _aap_verbose_archived_path=""
+    fi
 }
 
 # Core log writer. Scope decides which files the line lands in:

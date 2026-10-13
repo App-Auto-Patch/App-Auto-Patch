@@ -3,6 +3,9 @@
 # Version 3
 
 ## Version 3.7.5
+### 12-Oct-2026 (3) - Build 3.7.5.2610121953
+- [#309](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/309): a verbose run used to append to `aap_verbose.log`, so one file held every previous run. At the start of a `VerboseMode` run, before the verbose log is opened, AAP now copies a non-empty `aap_verbose.log` to `logs-verbose-archive/aap_verbose_YYYY-MM-DD-HHMMSS.log` and truncates the live file. The stamp is that file's last-write time, so it identifies the run being filed rather than the run that is starting. Seconds are included so two runs in the same minute do not overwrite each other. A run that errors, restarts, or is stopped is still filed by the next verbose start. `VerboseMode` off leaves `aap_verbose.log` untouched. The existing 10-file cap in `logs-verbose-archive` still deletes the oldest file.
+
 ### 12-Oct-2026 (2) - Build 3.7.5.2610121942
 - [#308](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/308): `Using staged installer`, `Silent background patch attempt`, and `Installing` now include `old version` and `new version` in `aap.log`. The old version comes from discovery. The new version comes from discovery, or from the staged `.version` sidecar when discovery was skipped. A missing value is logged as `unknown`.
 
