@@ -143,6 +143,8 @@
 			<string>FALSE</string>
 			<key>WorkflowScheduledDiscovery</key>
 			<false/>
+			<key>WorkflowDiscoveryOnlyBackgroundPatchClosedApps</key>
+			<false/>
 			<key>WorkflowDisableRelaunch</key>
 			<string>FALSE</string>
 			<key>BusinessHours</key>

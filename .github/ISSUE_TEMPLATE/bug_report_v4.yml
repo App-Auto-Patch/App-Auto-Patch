@@ -1,0 +1,104 @@
+name: Bug report - App Auto-Patch 4 (native app)
+description: Something in App Auto-Patch 4, the native macOS app, is not working as expected.
+title: "[Bug]: "
+labels: ["bug", "needs-triage", "version 4"]
+assignees: ["TechTrekkie"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug in **App Auto-Patch 4**, the native macOS app.
+        (For the original zsh script, 3.x, use the other bug report form.)
+
+        **Please attach a diagnostic bundle.** It is the single most useful thing for finding the cause:
+
+        1. Open App Auto-Patch.
+        2. Settings, About, Diagnostics, **Generate Diagnostic Bundle**.
+        3. Drag the `.zip` from your Desktop into this issue.
+
+        The bundle stays on your Mac until you attach it, and webhook URLs are removed from it.
+
+        Reports on this form are copied to the project's private development tracker so the team can work on them. The title, description and comments are copied; your username is shown there as the reporter.
+
+  - type: input
+    id: app-version
+    attributes:
+      label: App Auto-Patch version
+      description: From Settings, About (top of the page).
+      placeholder: "e.g. 4.0.0 (80)"
+    validations:
+      required: true
+
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      description: From the Apple menu, About This Mac, or run `sw_vers -productVersion`.
+      placeholder: "e.g. 15.4"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: hardware
+    attributes:
+      label: Hardware
+      options:
+        - Apple Silicon
+        - Intel
+    validations:
+      required: true
+
+  - type: dropdown
+    id: managed
+    attributes:
+      label: Is this Mac managed with MDM?
+      description: Does it receive an `xyz.techitout.appAutoPatch` configuration profile?
+      options:
+        - "No (a personal or unmanaged Mac)"
+        - "Yes (managed with MDM)"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the unexpected behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps make this much easier to act on.
+      placeholder: |
+        1. Install App Auto-Patch
+        2. Approve the helper
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostic-bundle
+    attributes:
+      label: Diagnostic bundle
+      description: Drag the `AppAutoPatch-Diagnostic-*.zip` file into this box.
+    validations:
+      required: false
+
+  - type: textarea
+    id: extras
+    attributes:
+      label: Anything else
+      description: Screenshots, log excerpts, workarounds you tried.
+    validations:
+      required: false

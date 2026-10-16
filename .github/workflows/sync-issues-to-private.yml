@@ -1,0 +1,70 @@
+name: Sync version 4 issues to the private repo
+
+# App Auto-Patch 4 is developed in a private repository (App-Auto-Patch/AAP4-Swift), but
+# issues are reported here. When an issue here has the "version 4" label, this workflow
+# creates a matching issue in the private repository and keeps the two in sync:
+#   title, body, type labels and comments .... here -> private
+#   open / closed and status labels .......... both ways
+#   private comments that start with /public .. private -> here (handled by the private repo)
+#
+# Everything is done by .github/scripts/issue-sync/sync.mjs, which reads both issues and only
+# writes what differs. The same script runs from the private repository.
+#
+# Needs the repository secret AAP4_SYNC_TOKEN: a fine-grained personal access token with
+# access to App-Auto-Patch/AAP4-Swift only and the Issues (read and write) permission.
+#
+# Security: this workflow runs for issues opened by anyone, so it never checks out or runs
+# anything from an issue or pull request, only this repository's default branch. Issue text
+# is read by the script as data and is never put into a shell command.
+#
+# Run it by hand (Actions > this workflow > Run workflow) with an issue number to resync one
+# issue, for example after adding the "version 4" label to an older issue.
+
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled, closed, reopened]
+  issue_comment:
+    types: [created, edited, deleted]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Number of the public issue to resync"
+        required: true
+        type: string
+
+# One run per issue at a time. Every run reconciles the whole issue, so a run that is
+# replaced while waiting loses nothing.
+concurrency:
+  group: issue-sync-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  sync:
+    name: Sync issue
+    # Only issues with the version 4 label (or that just lost it), and never pull requests.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request == null &&
+        (contains(github.event.issue.labels.*.name, 'version 4') ||
+         github.event.label.name == 'version 4'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out the sync script (default branch only)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: .github/scripts/issue-sync
+          persist-credentials: false
+
+      - name: Sync
+        env:
+          # This repository: acknowledgement comments and status changes, as github-actions[bot].
+          PUBLIC_TOKEN: ${{ github.token }}
+          # The private repository: the mirrored issue and its comments.
+          PRIVATE_TOKEN: ${{ secrets.AAP4_SYNC_TOKEN }}
+        run: node .github/scripts/issue-sync/sync.mjs

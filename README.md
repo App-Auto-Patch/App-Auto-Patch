@@ -3,6 +3,7 @@
 
 # App Auto-Patch 3.8.0
 
+![Static Badge](https://img.shields.io/badge/AAP4%20Release%20-4.0.0%20(88)-blue)
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub pre-release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag&include_prereleases) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch) [![swiftDialog](https://img.shields.io/badge/swiftDialog-Enabled-blue)](https://swiftdialog.app)
 
 ## Introduction
@@ -25,7 +26,45 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 	- Homebrew runs de-privileged as the owner of the Homebrew prefix. If that prefix is owned by root, Homebrew is skipped entirely and the reason is logged. If it is owned by an account other than the logged-in user - including when no one is logged in at all - formulae are still managed as that owner; only casks are held back, since replacing a cask's application bundle is the part that can interact with a GUI session
 	- Casks that update themselves (`auto_updates true` or `version :latest`) are left alone, and casks whose installer requires an administrator password cannot be upgraded unattended
 
+## New features/Specific Changes in 3.7.6
+- A fragment whose filename is not an Installomator label is queued as the case name. `missiveapp.sh` is installed as `missive`. A filename that is one of the case names, such as `bracketsio` or `chatgpt`, is still used. (#312)
+- A staged installer is kept when the available version is unknown, instead of being downloaded again. (#311)
+
+## New features/Specific Changes in 3.7.5
+- A failed Installomator version lookup is treated as unknown instead of using its timestamped warning as the publicly available version. The warning is no longer compared, queued, stored, or displayed as a version. (#308)
+- Silent background patching and the normal install log the installed version and the version being installed in `aap.log`. A version discovery could not determine is logged as `unknown`. (#308)
+- With `VerboseMode` on, `aap_verbose.log` holds only the current run. The previous run is copied to `logs-verbose-archive/aap_verbose_YYYY-MM-DD-HHMMSS.log` when the next verbose run starts. The archive keeps the 10 newest files. (#309)
+- A background patch sends its own webhook listing only the apps that installed successfully in the background. The later user-facing webhook lists only the apps that installed successfully in that session. Both use the existing Slack, Teams, and Google Chat webhook URLs. (#307)
+
+## New features/Specific Changes in 3.7.4
+- The install dialog shows **Closing...** as soon as a blocking app is found, before Installomator tells it to quit. `tell app to quit` does not return while a save dialog is open, and the row was staying on **Downloading...** for that wait. After the app is told to quit, Installomator checks once a second and continues as soon as it has closed, still waiting up to 30 seconds. (#304)
+
+## New features/Specific Changes in 3.7.3
+- Discovery still checks a label whose app name includes a subfolder, such as `SketchUp 2026/SketchUp.app`. Those were skipped because the inventory only stores the bundle filename. (#291)
+- Discovery reads each Installomator label in the shell instead of starting `echo` and `sed` for every line. That per-line process was most of the discovery time, including labels the inventory already skips. (#291)
+- Discovery skips Installomator labels for plain apps that are not installed, using one inventory instead of a Spotlight search per label. Required labels, package receipts, custom install paths, and version checks that are not a local plist read are still checked individually. (#291)
+- Fixed: console-user status lines are written to `aap.log` instead of the terminal. The check used a log-folder variable that is never set, so the verbose account details were skipped too. (#292)
+- Fixed: label staging creates its temporary script with a randomized path. The old `mktemp` template included `.sh`, which left the name fixed, and a leftover file blocked later staging runs. (#293)
+- Fixed: the Preparing updates window opens only when `WorkflowStageUpdates` or `WorkflowBackgroundPatchClosedApps` is enabled. With both off it stayed on screen over the pending-updates dialog. Pending-apps Install Now still skips the window. (#294)
+
+## New features/Specific Changes in 3.7.2
+- **Discovery-only background patching** — Set `WorkflowDiscoveryOnlyBackgroundPatchClosedApps` to `true` to install updates for closed apps during scheduled discovery or `--workflow-discovery-only`. Default is `false`. Open apps stay queued. This is separate from `WorkflowBackgroundPatchClosedApps`. (#283)
+- Fixed: AAP enables `xyz.techitout.aap` and `xyz.techitout.aap.pendingAppsDialogTrigger` when launchd has them disabled, and removes `com.apple.quarantine` from those plists so macOS 27 will load them. A failed load is now logged.
+- Fixed: `--uninstall` unloads and removes the pending-apps dialog LaunchDaemon.
+
 ## New features/Specific Changes in 3.7.1
+- **Google Chat webhooks** — Post the same patch-result card used for Slack and Teams to a Google Chat incoming webhook when `WebhookFeature` is `ALL` or `FAILURES`. (#273)
+	- Managed Preference Key: `<key>WebhookURLGoogleChat</key>` `<string>https://chat.googleapis.com/v1/spaces/...</string>`
+	- CLI: `--webhook-url-google-chat=`
+- Fixed: discovery reads Installomator labels with a same-line multi-name header, such as `chatgpt|codex)`. Those fragments were skipped with no log, so an optional `chatgpt` label was never queued. (#279)
+- Fixed: Installomator aliases are stored as the fragment filename. `visualstudiocode` becomes `microsoftvisualstudiocode`, and `codex` becomes `chatgpt`, for required, optional, ignored, and excluded-background labels. (#279)
+- Fixed: the `appautopatch` Installomator label is ignored during discovery and background patching. App Auto-Patch updates itself only through the self-update check.
+- Fixed: the queued-apps banner **Install Now** button opens the Pending Apps window again. That click starts AAP from the pending-apps LaunchDaemon, and startup was unloading that same daemon and waiting for it to exit, so the run stalled after preference setup. `sudo appautopatch --pending-apps-dialog` was unaffected because Terminal is not inside that daemon. (#276)
+- Fixed: `--uninstall` removes staged downloads in `/private/tmp/AAPStage`. (#277)
+- Fixed: an Installomator label that calls `cleanupAndExit` (current `pique`) no longer exits App Auto-Patch during discovery or leaves extra Dock icons behind. The version check runs in a subshell and a label abort skips that label only. (#275)
+- Fixed: discovery ignores Setapp copies under `/Applications/Setapp/` and `/Users/Shared/Apps/Setapp/`, so AAP does not install an unlicensed vendor build next to a Setapp app. A regular copy in `/Applications` is still patched. (#270)
+- Fixed: Update Staging no longer writes a raw variable dump of the previous label to the policy log between apps. (#265)
+- Fixed: log timestamps use `YYYY-MM-DD HH:MM:SS` on every run, including the pending-apps process started from a banner notification. (#272)
 - Fixed: Mosyle webhook **View in Mosyle** links use the admin console (`mybusiness.mosyle.com` for Business, `my.mosyle.com` for Education) instead of the enrollment `ServerURL`. Optional `MosyleConsoleURL` override. (#267)
 - Fixed: console user detection now resolves the `scutil` ConsoleUser UID to the account RecordName with `id -un`, instead of using the `Name` field (which can be a login alias) or `stat /dev/console`. (#264)
 

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: App Auto-Patch 4 documentation
+    url: https://appautopatch.app
+    about: Install, deploy and configure App Auto-Patch 4, and read the release notes.
+  - name: Installomator
+    url: https://github.com/Installomator/Installomator
+    about: For issues with a specific label (an app not detected, or the latest version not found), please report them upstream.

@@ -25,8 +25,8 @@
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 scriptVersion="3.8.0"
-scriptDate="2026/09/08"
-scriptBuild="3.8.0.2609081200"
+scriptDate="2026/10/16"
+scriptBuild="3.8.0.2610161551"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -121,7 +121,7 @@ echo "
     
     Webhook Options:
     [--webhook-feature-all] [--webhook-feature-failures] [--webhook-feature-off]
-    [--webhook-url-slack=URL] [--webhook-url-teams=URL]
+    [--webhook-url-slack=URL] [--webhook-url-teams=URL] [--webhook-url-google-chat=URL]
     [--mosyle-console-url=URL]
 
     Troubleshooting Options:
@@ -195,11 +195,13 @@ echo "
     <key>WebhookFeature</key> <string>FALSE,ALL,FAILURES</string>
     <key>WebhookURLSlack</key> <string>URL</string>
     <key>WebhookURLTeams</key> <string>URL</string>
+    <key>WebhookURLGoogleChat</key> <string>URL</string>
     <key>MosyleConsoleURL</key> <string>https://mybusiness.mosyle.com</string>
     <key>WorkflowBackgroundPatchClosedApps</key> <true/> | <false/>
     <key>WorkflowStageUpdates</key> <true/> | <false/>
     <key>WorkflowDisableAppDiscovery</key> <true/> | <false/>
     <key>WorkflowScheduledDiscovery</key> <true/> | <false/>
+    <key>WorkflowDiscoveryOnlyBackgroundPatchClosedApps</key> <true/> | <false/>
     <key>WorkflowDisableRelaunch</key> <true/> | <false/>
     <key>BusinessHours</key> <string>MON:09:00-17:00,TUE:09:00-17:00,...</string>
     <key>BusinessHoursRespectHardDeadline</key> <true/> | <false/>
@@ -413,6 +415,9 @@ set_defaults() {
     # User-driven patching mode (#258): when paired with WorkflowDisableRelaunch, keep periodic
     # headless discovery/report refreshes scheduled without showing deferral UI or patching apps.
     WorkflowScheduledDiscoveryOption="" # MDM Enabled; default FALSE
+    # Discovery-only closed-app installs (#283). Independent of WorkflowBackgroundPatchClosedApps.
+    # Default FALSE keeps scheduled discovery and --workflow-discovery-only queue-only.
+    WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="" # MDM Enabled; default FALSE
     workflow_discovery_only_option="FALSE" # one-shot CLI --workflow-discovery-only
     workflow_discovery_only_active="FALSE" # effective runtime mode
 
@@ -432,6 +437,11 @@ set_defaults() {
 
     appAutoPatchLaunchDaemonLabel="xyz.techitout.aap"
     silent_patch_success_count=0
+    silent_patch_success_labels=()
+    install_session_success_labels=()
+    install_session_ran="FALSE"
+    background_webhook_sent="FALSE"
+    webhook_report_scope="session"
 
     WORKFLOW_INSTALL_NOW_FILE="${appAutoPatchFolder}/.WorkflowInstallNow"
     
@@ -1283,6 +1293,9 @@ get_options() {
             --webhook-url-teams=*)
                 webhook_url_teams_option="${1##*=}"
             ;;
+            --webhook-url-google-chat=*)
+                webhook_url_google_chat_option="${1##*=}"
+            ;;
             --mosyle-console-url=*)
                 mosyle_console_url_option="${1##*=}"
             ;;
@@ -1402,14 +1415,112 @@ get_console_user_account_name() {
     echo "${consoleName}"
 }
 
+# Installomator case headers can name a label that does not match the fragment
+# filename (visualstudiocode in microsoftvisualstudiocode.sh, codex in chatgpt.sh).
+# Required, optional, ignored, and excluded-background lists are later matched and
+# loaded as labels/<name>.sh, so store the filename. An exact filename always wins.
+# Wildcards are left unchanged. The header scan runs only when a configured name
+# has no fragment of its own. (#279)
+_aap_label_header_alias_cache_build() {
+    [[ -n "${_aap_label_alias_cache_ready}" ]] && return 0
+    typeset -gA _aap_label_alias_to_file
+    _aap_label_alias_to_file=()
+    if [[ ! -d "${fragmentsPath}/labels" ]]; then
+        typeset -g _aap_label_alias_cache_ready=1
+        return 0
+    fi
+    setopt local_options null_glob
+    local fragment base line scrubbed token key part
+    local -a parts
+    for fragment in "${fragmentsPath}"/labels/*.sh; do
+        [[ -f "$fragment" ]] || continue
+        base="${fragment:t:r}"
+        _aap_label_alias_to_file[${base:l}]="$base"
+        while IFS= read -r line; do
+            scrubbed="${line#"${line%%[![:space:]]*}"}"
+            scrubbed="${scrubbed%"${scrubbed##*[![:space:]]}"}"
+            [[ -z "$scrubbed" || "$scrubbed" == \#* ]] && continue
+            [[ "$scrubbed" == ';;'* ]] && break
+            if [[ "$scrubbed" == *'|\' ]]; then
+                token="${scrubbed%|\\}"
+            elif [[ "$scrubbed" == *')' ]]; then
+                token="${scrubbed%)}"
+            else
+                break
+            fi
+            [[ "$token" =~ '^[A-Za-z0-9_-]+(\|[A-Za-z0-9_-]+)*$' ]] || break
+            parts=("${(@s/|/)token}")
+            for part in "${parts[@]}"; do
+                key="${part:l}"
+                if [[ "$key" == "${base:l}" || -z "${_aap_label_alias_to_file[$key]}" ]]; then
+                    _aap_label_alias_to_file[$key]="$base"
+                fi
+            done
+            [[ "$scrubbed" == *')' ]] && break
+        done < "$fragment"
+    done
+    typeset -g _aap_label_alias_cache_ready=1
+}
+
+_aap_resolve_label_alias_lists() {
+    local array_name name key filename needs=0
+    local -a names resolved
+    for array_name in optionalLabelsArray requiredLabelsArray ignoredLabelsArray excludedBackgroundLabelsArray; do
+        for name in "${(@P)array_name}"; do
+            [[ -z "$name" || "$name" == *'*'* ]] && continue
+            [[ -f "${fragmentsPath}/labels/${name}.sh" ]] && continue
+            needs=1
+            break
+        done
+        (( needs )) && break
+    done
+    if (( needs == 0 )); then
+        return 0
+    fi
+    _aap_label_header_alias_cache_build
+    for array_name in optionalLabelsArray requiredLabelsArray ignoredLabelsArray excludedBackgroundLabelsArray; do
+        names=("${(@P)array_name}")
+        resolved=()
+        for name in "${names[@]}"; do
+            if [[ -z "$name" || "$name" == *'*'* || -f "${fragmentsPath}/labels/${name}.sh" ]]; then
+                resolved+=("$name")
+                continue
+            fi
+            key="${name:l}"
+            filename="${_aap_label_alias_to_file[$key]}"
+            if [[ -n "$filename" && -f "${fragmentsPath}/labels/${filename}.sh" ]]; then
+                log_verbose "${name} is an alias of ${filename}"
+                resolved+=("$filename")
+            else
+                resolved+=("$name")
+            fi
+        done
+        set -A "$array_name" "${resolved[@]}"
+    done
+}
+
 get_preferences() {
 
     write_status "Running: Collecting preferences"
     
     # Get current local user
     currentUserAccountName=$(get_console_user_account_name)
-    # Get language setting for current local user
-    langUser=$(su - ${currentUserAccountName} -c "/usr/bin/defaults read -g AppleLocale | cut -d'_' -f1")
+    # Language for dialog/notification strings. Read the console user's AppleLocale in
+    # their GUI session. `su -` login shells are not reliable from a LaunchDaemon
+    # (including the pending-apps notification trigger), which left langUser empty and
+    # kept the English built-in strings. (#272)
+    langUser=""
+    if [[ -n "${currentUserAccountName}" && "${currentUserAccountName}" != "root" && "${currentUserAccountName}" != "loginwindow" && "${currentUserAccountName}" != "_mbsetupuser" ]]; then
+        local langUserID appleLocale
+        langUserID=$(id -u "${currentUserAccountName}" 2>/dev/null)
+        if [[ -n "${langUserID}" ]]; then
+            appleLocale=$(launchctl asuser "${langUserID}" sudo -u "${currentUserAccountName}" /usr/bin/defaults read -g AppleLocale 2>/dev/null)
+        fi
+        if [[ -z "${appleLocale}" ]]; then
+            appleLocale=$(su - "${currentUserAccountName}" -c "/usr/bin/defaults read -g AppleLocale" 2>/dev/null)
+        fi
+        langUser="${appleLocale%%_*}"
+    fi
     if [[ "${reset_defaults_option}" == "TRUE" ]]; then
         log_status "Resetting defaults for App Auto Patch"
 
@@ -1507,6 +1618,8 @@ get_preferences() {
         workflow_disable_relaunch_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDisableRelaunch 2>/dev/null)
         local workflow_scheduled_discovery_managed
         workflow_scheduled_discovery_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+        local workflow_discovery_only_background_patch_closed_apps_managed
+        workflow_discovery_only_background_patch_closed_apps_managed=$(defaults read "${appAutoPatchManagedPLIST}" WorkflowDiscoveryOnlyBackgroundPatchClosedApps 2>/dev/null)
         local business_hours_managed
         business_hours_managed=$(defaults read "${appAutoPatchManagedPLIST}" BusinessHours 2>/dev/null)
         local business_hours_respect_hard_deadline_managed
@@ -1521,6 +1634,8 @@ get_preferences() {
         webhook_url_slack_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLSlack 2> /dev/null)
         local webhook_url_teams_managed
         webhook_url_teams_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLTeams 2> /dev/null)
+        local webhook_url_google_chat_managed
+        webhook_url_google_chat_managed=$(defaults read "${appAutoPatchManagedPLIST}" WebhookURLGoogleChat 2> /dev/null)
         local mosyle_console_url_managed
         mosyle_console_url_managed=$(defaults read "${appAutoPatchManagedPLIST}" MosyleConsoleURL 2> /dev/null)
         local ignored_labels_managed
@@ -1692,6 +1807,8 @@ get_preferences() {
         workflow_disable_relaunch_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDisableRelaunch 2>/dev/null)
         local workflow_scheduled_discovery_local
         workflow_scheduled_discovery_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowScheduledDiscovery 2>/dev/null)
+        local workflow_discovery_only_background_patch_closed_apps_local
+        workflow_discovery_only_background_patch_closed_apps_local=$(defaults read "${appAutoPatchLocalPLIST}" WorkflowDiscoveryOnlyBackgroundPatchClosedApps 2>/dev/null)
         local business_hours_local
         business_hours_local=$(defaults read "${appAutoPatchLocalPLIST}" BusinessHours 2>/dev/null)
         local business_hours_respect_hard_deadline_local
@@ -1706,6 +1823,8 @@ get_preferences() {
         webhook_url_slack_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLSlack 2> /dev/null)
         local webhook_url_teams_local
         webhook_url_teams_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLTeams 2> /dev/null)
+        local webhook_url_google_chat_local
+        webhook_url_google_chat_local=$(defaults read "${appAutoPatchLocalPLIST}" WebhookURLGoogleChat 2> /dev/null)
         local mosyle_console_url_local
         mosyle_console_url_local=$(defaults read "${appAutoPatchLocalPLIST}" MosyleConsoleURL 2> /dev/null)
         local ignored_labels_local
@@ -1864,6 +1983,8 @@ get_preferences() {
     { [[ -z "${workflow_disable_relaunch_managed}" ]] && [[ -z "${workflow_disable_relaunch_option}" ]] && [[ -n "${workflow_disable_relaunch_local}" ]]; } && workflow_disable_relaunch_option="${workflow_disable_relaunch_local}"
     [[ -n "${workflow_scheduled_discovery_managed}" ]] && WorkflowScheduledDiscoveryOption="${workflow_scheduled_discovery_managed}"
     { [[ -z "${workflow_scheduled_discovery_managed}" ]] && [[ -z "${WorkflowScheduledDiscoveryOption}" ]] && [[ -n "${workflow_scheduled_discovery_local}" ]]; } && WorkflowScheduledDiscoveryOption="${workflow_scheduled_discovery_local}"
+    [[ -n "${workflow_discovery_only_background_patch_closed_apps_managed}" ]] && WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="${workflow_discovery_only_background_patch_closed_apps_managed}"
+    { [[ -z "${workflow_discovery_only_background_patch_closed_apps_managed}" ]] && [[ -z "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" ]] && [[ -n "${workflow_discovery_only_background_patch_closed_apps_local}" ]]; } && WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="${workflow_discovery_only_background_patch_closed_apps_local}"
     [[ -n "${business_hours_managed}" ]] && business_hours_option="${business_hours_managed}"
     { [[ -z "${business_hours_managed}" ]] && [[ -z "${business_hours_option}" ]] && [[ -n "${business_hours_local}" ]]; } && business_hours_option="${business_hours_local}"
     [[ -n "${business_hours_respect_hard_deadline_managed}" ]] && business_hours_respect_hard_deadline_option="${business_hours_respect_hard_deadline_managed}"
@@ -1878,6 +1999,8 @@ get_preferences() {
     { [[ -z "${webhook_url_slack_managed}" ]] && [[ -z "${webhook_url_slack_option}" ]] && [[ -n "${webhook_url_slack_local}" ]]; } && webhook_url_slack_option="${webhook_url_slack_local}"
     [[ -n "${webhook_url_teams_managed}" ]] && webhook_url_teams_option="${webhook_url_teams_managed}"
     { [[ -z "${webhook_url_teams_managed}" ]] && [[ -z "${webhook_url_teams_option}" ]] && [[ -n "${webhook_url_teams_local}" ]]; } && webhook_url_teams_option="${webhook_url_teams_local}"
+    [[ -n "${webhook_url_google_chat_managed}" ]] && webhook_url_google_chat_option="${webhook_url_google_chat_managed}"
+    { [[ -z "${webhook_url_google_chat_managed}" ]] && [[ -z "${webhook_url_google_chat_option}" ]] && [[ -n "${webhook_url_google_chat_local}" ]]; } && webhook_url_google_chat_option="${webhook_url_google_chat_local}"
     [[ -n "${mosyle_console_url_managed}" ]] && mosyle_console_url_option="${mosyle_console_url_managed}"
     { [[ -z "${mosyle_console_url_managed}" ]] && [[ -z "${mosyle_console_url_option}" ]] && [[ -n "${mosyle_console_url_local}" ]]; } && mosyle_console_url_option="${mosyle_console_url_local}"
     [[ -n "${ignored_labels_managed}" ]] && ignored_labels_option="${ignored_labels_managed}"
@@ -2055,6 +2178,7 @@ get_preferences() {
     log_verbose "DiscoveryFrequency: $DiscoveryFrequency"
     log_verbose "WorkflowDisableRelaunch: $workflow_disable_relaunch_option"
     log_verbose "WorkflowScheduledDiscovery: ${WorkflowScheduledDiscoveryOption:-<unset>}"
+    log_verbose "WorkflowDiscoveryOnlyBackgroundPatchClosedApps: ${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption:-<unset>}"
     log_verbose "BusinessHours: ${business_hours_option:-<unset>}"
     log_verbose "BusinessHoursRespectHardDeadline: ${business_hours_respect_hard_deadline_option:-<unset>}"
     log_verbose "BusinessHoursSilentDuring: ${business_hours_silent_during_option:-<unset>}"
@@ -2062,6 +2186,7 @@ get_preferences() {
     log_verbose "WebhookFeature: $webhook_feature_option"
     log_verbose "WebhookURLSlack: $webhook_url_slack_option"
     log_verbose "WebhookURLTeams: $webhook_url_teams_option"
+    log_verbose "WebhookURLGoogleChat: $webhook_url_google_chat_option"
     log_verbose "MosyleConsoleURL: $mosyle_console_url_option"
     log_verbose "IgnoredLabels: $ignored_labels_option"
     log_verbose "RequiredLabels: $required_labels_option"
@@ -2198,6 +2323,7 @@ get_preferences() {
     parse_labels_option "${optional_labels_option}"; optionalLabelsArray=("${parsed_labels_option[@]}")
     parse_labels_option "${excluded_background_labels_option}"; excludedBackgroundLabelsArray=("${parsed_labels_option[@]}")
     parse_labels_option "${convertedLabels}"; convertedLabelsArray=("${parsed_labels_option[@]}")
+    _aap_resolve_label_alias_lists
 
     log_status "Clearing previously set labels"
     defaults delete "${appAutoPatchLocalPLIST}" ConvertedLabels 2> /dev/null
@@ -2400,6 +2526,15 @@ get_preferences() {
         /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"dialog\"" "${appAutoPatchLocalPLIST}.plist"
         ignoredLabelsArray+=("dialog")
     fi
+    # Ignore appautopatch so discovery and background patching do not install it.
+    # The self-update check is the only path that should update this label.
+    if /usr/libexec/PlistBuddy -c "Print :IgnoredLabels:" "${appAutoPatchLocalPLIST}.plist" | sed -e '1d;$d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -Fxq -- appautopatch; then
+        log_verbose "appautopatch is already ignored"
+    else
+        log_verbose "Ignoring appautopatch"
+        /usr/libexec/PlistBuddy -c "add \":IgnoredLabels:\" string \"appautopatch\"" "${appAutoPatchLocalPLIST}.plist"
+        ignoredLabelsArray+=("appautopatch")
+    fi
     
     write_status "Completed: Collecting preferences"
 }
@@ -2543,6 +2678,17 @@ manage_parameter_options() {
         log_warning "WorkflowScheduledDiscovery is enabled, but WorkflowDisableAppDiscovery takes priority; scheduled runs will retain the existing report without scanning."
     fi
     log_verbose "WorkflowScheduledDiscoveryOption is: ${WorkflowScheduledDiscoveryOption}"
+
+    # Closed-app installs during discovery-only runs only (#283). Does not change the normal
+    # WorkflowBackgroundPatchClosedApps behavior. Unset defaults to FALSE.
+    if [[ "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" -eq 1 ]] || [[ "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" == "TRUE" ]]; then
+        WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="TRUE"
+        defaults write "${appAutoPatchLocalPLIST}" WorkflowDiscoveryOnlyBackgroundPatchClosedApps -bool true
+    else
+        WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption="FALSE"
+        defaults delete "${appAutoPatchLocalPLIST}" WorkflowDiscoveryOnlyBackgroundPatchClosedApps 2>/dev/null
+    fi
+    log_verbose "WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption is: ${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}"
     
     # Manage ${workflow_disable_relaunch_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
@@ -3073,6 +3219,13 @@ manage_parameter_options() {
         defaults delete "${appAutoPatchLocalPLIST}" WebhookURLTeams 2> /dev/null
     fi
 
+    # Manage ${webhook_url_google_chat_option} and save to ${appAutoPatchLocalPLIST}.
+    if [[ -n "${webhook_url_google_chat_option}" ]]; then
+        defaults write "${appAutoPatchLocalPLIST}" WebhookURLGoogleChat -string "${webhook_url_google_chat_option}"
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" WebhookURLGoogleChat 2> /dev/null
+    fi
+
     # Manage ${mosyle_console_url_option} and save to ${appAutoPatchLocalPLIST}.
     if [[ -n "${mosyle_console_url_option}" ]]; then
         defaults write "${appAutoPatchLocalPLIST}" MosyleConsoleURL -string "${mosyle_console_url_option}"
@@ -3083,6 +3236,7 @@ manage_parameter_options() {
     { [[ -n "${webhook_feature_option}" ]]; } && log_verbose "webhook_feature_option is: ${webhook_feature_option}"
     { [[ -n "${webhook_url_slack_option}" ]]; } && log_verbose "webhook_url_slack_option is: ${webhook_url_slack_option}"
     { [[ -n "${webhook_url_teams_option}" ]]; } && log_verbose "webhook_url_teams_option is: ${webhook_url_teams_option}"
+    { [[ -n "${webhook_url_google_chat_option}" ]]; } && log_verbose "webhook_url_google_chat_option is: ${webhook_url_google_chat_option}"
     { [[ -n "${mosyle_console_url_option}" ]]; } && log_verbose "mosyle_console_url_option is: ${mosyle_console_url_option}"
 
     # SelfUpdateEnabled/SelfUpdateFrequency are already resolved, normalized, and saved by
@@ -3523,7 +3677,11 @@ workflow_startup() {
     elif [[ "${workflow_discovery_only_option}" == "TRUE" ]] \
     || { [[ "${workflow_disable_relaunch_option}" == "TRUE" ]] && [[ "${WorkflowScheduledDiscoveryOption}" == "TRUE" ]]; }; then
         workflow_discovery_only_active="TRUE"
-        log_status "Discovery-only workflow active: report/staging/notification refresh only; no patching or deferral UI."
+        if [[ "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" == "TRUE" ]]; then
+            log_status "Discovery-only workflow active: refreshing the report and patching closed apps in the background. Open apps stay queued. No deferral UI."
+        else
+            log_status "Discovery-only workflow active: report/staging/notification refresh only; no patching or deferral UI."
+        fi
     fi
 
     
@@ -3553,6 +3711,13 @@ workflow_startup() {
 		log_status "Found that App Auto-Patch is installing, restarting via App Auto-Patch LaunchDaemon..."
 		restart_aap_sleep_seconds=5
         restart_aap
+	fi
+
+	# An install from this folder does not call restart_aap. If the main daemon was left
+	# disabled, or macOS 27 refused it because of a quarantine flag, load it now.
+	if [[ -f "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" ]] && ! /bin/launchctl print "system/${appAutoPatchLaunchDaemonLabel}" >/dev/null 2>&1; then
+		log_notice "LaunchDaemon ${appAutoPatchLaunchDaemonLabel} is not loaded; loading it."
+		_aap_bootstrap_system_launchdaemon "${appAutoPatchLaunchDaemonLabel}"
 	fi
 	
 	# Wait for a valid network connection. If there is still no network after two minutes, an automatic deferral is started.
@@ -3978,6 +4143,63 @@ interactive_interrupt() {
 
 }
 
+# macOS 27 will not bootstrap a LaunchDaemon whose plist still has the quarantine
+# attribute. Files written by a quarantined installer inherit it, so clear it after
+# the plist (and the program it runs) is created.
+_aap_clear_quarantine() {
+    local target="$1"
+    [[ -e "${target}" ]] || return 0
+    if /usr/bin/xattr -p com.apple.quarantine "${target}" >/dev/null 2>&1; then
+        /usr/bin/xattr -d com.apple.quarantine "${target}" 2>/dev/null
+        log_install "Removed com.apple.quarantine from ${target}."
+    fi
+}
+
+# print-disabled lists every service, with "=> enabled" or "=> disabled".
+# A disabled override survives reinstall, and bootstrap then fails with
+# "Bootstrap failed: 5: Input/output error". That failure used to be discarded.
+_aap_launchdaemon_is_disabled() {
+    local label="$1"
+    local line
+    line=$(/bin/launchctl print-disabled system 2>/dev/null | /usr/bin/grep -F "\"${label}\" =>")
+    [[ "${line}" == *" => disabled"* ]]
+}
+
+_aap_prepare_system_launchdaemon() {
+    local label="$1"
+    local plist="/Library/LaunchDaemons/${label}.plist"
+    [[ $(id -u) -eq 0 ]] || return 0
+    [[ -f "${plist}" ]] || return 0
+    _aap_clear_quarantine "${plist}"
+    if _aap_launchdaemon_is_disabled "${label}"; then
+        log_notice "LaunchDaemon ${label} is disabled; enabling it."
+        /bin/launchctl enable "system/${label}"
+    fi
+}
+
+# Bootstraps a system LaunchDaemon after clearing quarantine and re-enabling a
+# disabled service. Skips the bootstrap when the job is already loaded.
+# Logs the launchctl error instead of discarding it.
+_aap_bootstrap_system_launchdaemon() {
+    local label="$1"
+    local plist="/Library/LaunchDaemons/${label}.plist"
+    local bootstrap_err bootstrap_status
+    [[ $(id -u) -eq 0 ]] || return 0
+    [[ -f "${plist}" ]] || return 0
+    _aap_prepare_system_launchdaemon "${label}"
+    if /bin/launchctl print "system/${label}" >/dev/null 2>&1; then
+        return 0
+    fi
+    bootstrap_err=$(/bin/launchctl bootstrap system "${plist}" 2>&1)
+    bootstrap_status=$?
+    if (( bootstrap_status != 0 )); then
+        log_error "Failed to load LaunchDaemon ${label}: ${bootstrap_err}"
+        return "${bootstrap_status}"
+    fi
+    log_install "Loaded LaunchDaemon ${label}."
+    return 0
+}
+
 # Restart AAP via the LaunchDaemon after waiting for ${restart_aap_sleep_seconds} seconds.
 restart_aap() {
 	if [[ "${workflow_disable_relaunch_option}" -eq 1 ]] || [[ "${workflow_disable_relaunch_option}" == "TRUE" ]]; then
@@ -3994,7 +4216,7 @@ restart_aap() {
 	{
 		sleep $restart_aap_sleep_seconds
 		launchctl bootout "system/${appAutoPatchLaunchDaemonLabel}" >/dev/null 2>&1
-		launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist" >/dev/null 2>&1
+		_aap_bootstrap_system_launchdaemon "${appAutoPatchLaunchDaemonLabel}"
 	} &
 	disown
 	log_verbose "Local preference file at restart exit: ${appAutoPatchLocalPLIST}:\n$(defaults read "${appAutoPatchLocalPLIST}" 2>/dev/null)"
@@ -4058,7 +4280,7 @@ install_app_auto_patch() {
 #
 
 log_line() {
-    echo "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: $*" >> "__AAP_LOG__"
+    echo "$(date +"%Y-%m-%d %H:%M:%S") $(hostname -s) $(basename "$0")[$$]: $*" >> "__AAP_LOG__"
 }
 
 # Match the program AAP was launched as, skipping any privilege wrapper or interpreter in front of
@@ -4086,9 +4308,10 @@ command_invokes_aap() {
 
 process_start_epoch() {
     local lstart
-    lstart="$(ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')"
+    # ps lstart follows LC_TIME. Force C so the parser matches on non-English Macs.
+    lstart="$(LC_TIME=C ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')"
     [[ -n "$lstart" ]] || return 1
-    date -j -f "%a %b %d %T %Y" "$lstart" +%s 2>/dev/null
+    LC_TIME=C date -j -f "%a %b %d %T %Y" "$lstart" +%s 2>/dev/null
 }
 
 is_expected_aap_process() {
@@ -4307,7 +4530,7 @@ if (( force_launch == 0 )) && [[ -n "$next_epoch" ]]; then
 fi
 
 # Launch App Auto-Patch
-echo "$(date +"%a %b %d %T") $(hostname -s) $(basename "$0")[$$]: **** App Auto-Patch __SCRIPT_VERSION__ - LAUNCHDAEMON ****" \
+echo "$(date +"%Y-%m-%d %H:%M:%S") $(hostname -s) $(basename "$0")[$$]: **** App Auto-Patch __SCRIPT_VERSION__ - LAUNCHDAEMON ****" \
     | tee -a "__AAP_LOG__"
 
 "__AAP_FOLDER__/appautopatch" &
@@ -4332,6 +4555,7 @@ EOAS
     "${appAutoPatchFolder}/aap-starter"
     /bin/chmod 755 "${appAutoPatchFolder}/aap-starter"
     /usr/sbin/chown root:wheel "${appAutoPatchFolder}/aap-starter"
+    _aap_clear_quarantine "${appAutoPatchFolder}/aap-starter"
 
     # Create the LaunchDaemon plist if it doesn't exist
 
@@ -4389,6 +4613,7 @@ EOLD
 
     chmod 644 "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
     chown root:wheel "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"
+    _aap_prepare_system_launchdaemon "${appAutoPatchLaunchDaemonLabel}"
 
     # User-writable Install Now trigger used by banner notification actions.
     ensure_aap_install_now_trigger
@@ -4430,6 +4655,10 @@ function uninstall_app_auto_patch() {
     launchctl bootout system "/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist" 2> /dev/null
     rm -f "/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist" 2> /dev/null
 
+    log_uninstall "Removing pending-apps dialog trigger Launch Daemon: /Library/LaunchDaemons/${aapPendingAppsTriggerLaunchDaemonLabel}.plist"
+    launchctl bootout system "/Library/LaunchDaemons/${aapPendingAppsTriggerLaunchDaemonLabel}.plist" 2> /dev/null
+    rm -f "/Library/LaunchDaemons/${aapPendingAppsTriggerLaunchDaemonLabel}.plist" 2> /dev/null
+
     # Remove the App Auto Patch sym link
     log_uninstall "Removing ${appAutoPatchLink}"
     rm -rf ${appAutoPatchLink}
@@ -4437,6 +4666,17 @@ function uninstall_app_auto_patch() {
     # Remove the App Auto Patch Folder
     log_uninstall "Removing ${appAutoPatchFolder}"
     rm -rf ${appAutoPatchFolder}
+
+    # Staged installers live in /private/tmp, outside the AAP folder. Remove only a real
+    # directory at the known path so a symlink cannot redirect the delete. (#277)
+    if [[ "${AAPStagingFolder}" == "/private/tmp/AAPStage" ]]; then
+        log_uninstall "Removing staged downloads: ${AAPStagingFolder}"
+        if [[ -L "${AAPStagingFolder}" ]]; then
+            rm -f "${AAPStagingFolder}" 2>/dev/null
+        elif [[ -d "${AAPStagingFolder}" ]]; then
+            rm -rf "${AAPStagingFolder}" 2>/dev/null
+        fi
+    fi
 
     exit 0
 }
@@ -4522,6 +4762,131 @@ get_dialog() {
         fi
     fi
 
+}
+
+_aap_installomator_quit_wait_is_current() {
+    /usr/bin/grep -q '_aap_wait_for_blocking_process()' "$installomatorScript" || return 1
+    /usr/bin/grep -q 'printlog "waiting 30 seconds for processes to quit"' "$installomatorScript" && return 1
+    local closingCount
+    closingCount=$(/usr/bin/grep -c 'updateDialog "wait" "Closing..."' "$installomatorScript" || true)
+    [[ "${closingCount:-0}" == "1" ]] || return 1
+    /usr/bin/awk '
+        /^[[:space:]]*appClosed=1[[:space:]]*$/ { look=1; next }
+        look && /^[[:space:]]*$/ { next }
+        look {
+            if ($0 ~ /^[[:space:]]*updateDialog "wait" "Closing\.\.\."[[:space:]]*$/) ok=1
+            exit
+        }
+        END { exit (ok ? 0 : 1) }
+    ' "$installomatorScript"
+}
+
+_aap_patch_installomator_quit_wait() {
+    # Installomator writes "Downloading..." while curl runs, then tells a blocking app
+    # to quit. "tell app to quit" does not return while a save dialog is open, and the
+    # following wait used to be a fixed 30 seconds. The row stayed on Downloading...
+    # for both. Set Closing... as soon as the process is found, and poll once a second
+    # for up to 30 seconds. Reapply this when Installomator is installed or refreshed,
+    # including over the first rewrite that set the status only after the quit returned. (#304)
+    if ! /usr/bin/grep -q '^checkRunningProcesses()' "$installomatorScript"; then
+        log_warning "Installomator checkRunningProcesses was not found. Leaving the blocking-process wait unchanged."
+        return 0
+    fi
+    if _aap_installomator_quit_wait_is_current; then
+        return 0
+    fi
+    if ! /usr/bin/grep -q '_aap_wait_for_blocking_process()' "$installomatorScript" \
+        && ! /usr/bin/grep -q 'printlog "waiting 30 seconds for processes to quit"' "$installomatorScript"; then
+        log_warning "Installomator quit wait was not found. Leaving the blocking-process wait unchanged."
+        return 0
+    fi
+    if ! /usr/bin/grep -q '^[[:space:]]*appClosed=1[[:space:]]*$' "$installomatorScript"; then
+        log_warning "Installomator blocking-process check was not found. Leaving the blocking-process wait unchanged."
+        return 0
+    fi
+
+    local patched originalLines patchedLines replaced closingCount
+    patched="$(/usr/bin/mktemp "${TMPDIR:-/tmp}/aap-installomator.XXXXXX")" || {
+        log_warning "Could not prepare the Installomator quit-wait update. Leaving the blocking-process wait unchanged."
+        return 0
+    }
+
+    if ! /usr/bin/awk '
+        BEGIN { skip=0 }
+        /^_aap_wait_for_blocking_process\(\)/ { seen_helper=1 }
+        /^checkRunningProcesses\(\)/ && !seen_helper {
+            print "_aap_wait_for_blocking_process() {"
+            print "    # Poll until this blocking process is gone, or 30 seconds pass."
+            print "    # A fixed sleep keeps a staged install on Downloading... after the app has already quit."
+            print "    local processName=\"$1\""
+            print "    local waited=0"
+            print "    while [[ $waited -lt 30 ]]; do"
+            print "        if ! pgrep -xq \"$processName\"; then"
+            print "            return 0"
+            print "        fi"
+            print "        sleep 1"
+            print "        waited=$((waited + 1))"
+            print "    done"
+            print "}"
+            print ""
+            seen_helper=1
+        }
+        /^[[:space:]]*appClosed=1[[:space:]]*$/ {
+            print
+            match($0, /^[[:space:]]*/)
+            print substr($0, 1, RLENGTH) "updateDialog \"wait\" \"Closing...\""
+            next
+        }
+        /^[[:space:]]*updateDialog "wait" "Closing\.\.\."[[:space:]]*$/ { next }
+        /printlog "waiting 30 seconds for processes to quit"/ {
+            match($0, /^[[:space:]]*/)
+            indent=substr($0, 1, RLENGTH)
+            print indent "printlog \"waiting up to 30 seconds for processes to quit\""
+            skip=1
+            next
+        }
+        skip {
+            if ($0 ~ /^[[:space:]]*sleep 30[[:space:]]*$/) {
+                print indent "_aap_wait_for_blocking_process \"$x\""
+                skip=0
+                next
+            }
+            skip=0
+        }
+        { print }
+    ' "$installomatorScript" > "$patched"; then
+        log_warning "Could not update the Installomator quit wait. Leaving the blocking-process wait unchanged."
+        /bin/rm -f "$patched"
+        return 0
+    fi
+
+    originalLines=$(/usr/bin/wc -l < "$installomatorScript" | /usr/bin/tr -d ' ')
+    patchedLines=$(/usr/bin/wc -l < "$patched" | /usr/bin/tr -d ' ')
+    replaced=$(/usr/bin/grep -c '_aap_wait_for_blocking_process "$x"' "$patched" || true)
+    closingCount=$(/usr/bin/grep -c 'updateDialog "wait" "Closing..."' "$patched" || true)
+    if (( patchedLines + 30 < originalLines )) \
+        || [[ "${replaced:-0}" -lt 1 ]] \
+        || [[ "${closingCount:-0}" != "1" ]] \
+        || ! /usr/bin/grep -q '_aap_wait_for_blocking_process()' "$patched" \
+        || /usr/bin/grep -q 'printlog "waiting 30 seconds for processes to quit"' "$patched"; then
+        log_warning "Installomator quit wait was not updated. Leaving the blocking-process wait unchanged."
+        /bin/rm -f "$patched"
+        return 0
+    fi
+    installomatorScript="$patched" _aap_installomator_quit_wait_is_current || {
+        log_warning "Installomator quit wait was not updated. Leaving the blocking-process wait unchanged."
+        /bin/rm -f "$patched"
+        return 0
+    }
+
+    # Keep the existing file mode. A temp file from mktemp is not executable.
+    /bin/cat "$patched" > "$installomatorScript" || {
+        log_warning "Could not write the Installomator quit-wait update. Leaving the blocking-process wait unchanged."
+        /bin/rm -f "$patched"
+        return 0
+    }
+    /bin/rm -f "$patched"
+    log_info "Installomator will show Closing... when a blocking app is found, and keep checking until it quits, up to 30 seconds."
 }
 
 get_installomator() {
@@ -4657,6 +5022,8 @@ get_installomator() {
         /usr/bin/sed -i.backup1 "s|There is no newer version available|same as installed|g" $installomatorScript
         sleep .2
     fi
+
+    _aap_patch_installomator_quit_wait
 
     rm -rf "${installomatorScript}.backup1"
 }
@@ -5356,6 +5723,25 @@ business_hours_defer_until_clear_and_exit() {
 # pending-apps dialog as root. Choosing Install Now inside that dialog starts
 # --workflow-install-now. Also removes the legacy InstallNow WatchPaths daemon from earlier
 # 3.7.0 builds that jumped straight to --workflow-install-now.
+_aap_ancestry_includes() {
+    # True when a parent process was started from $1 (a command-line fragment).
+    # The current process is skipped so this script's own text cannot match.
+    local needle="$1"
+    local pid parent args
+    local -i guard=0
+    pid="$(ps -p "$$" -o ppid= 2>/dev/null)"
+    pid="${pid//[[:space:]]/}"
+    while [[ -n "$pid" && "$pid" != "0" && "$pid" != "1" ]] && (( guard++ < 30 )); do
+        args="$(ps -p "$pid" -o args= 2>/dev/null)"
+        [[ "$args" == *"${needle}"* ]] && return 0
+        parent="$(ps -p "$pid" -o ppid= 2>/dev/null)"
+        parent="${parent//[[:space:]]/}"
+        [[ -z "$parent" || "$parent" == "$pid" ]] && break
+        pid="$parent"
+    done
+    return 1
+}
+
 ensure_aap_pending_apps_dialog_trigger() {
     [[ $(id -u) -ne 0 ]] && return 0
 
@@ -5379,6 +5765,7 @@ exit 0
 EOF
     chown root:wheel "${aapPendingAppsTriggerScript}"
     chmod 755 "${aapPendingAppsTriggerScript}"
+    _aap_clear_quarantine "${aapPendingAppsTriggerScript}"
 
     # Thin user-context helper for notification button1action (cannot run appautopatch as root).
     local request_script="${appAutoPatchFolder}/aap-notification-request-pending-apps"
@@ -5414,9 +5801,17 @@ EOF
 EOF
     chown root:wheel "${trigger_plist}"
     chmod 644 "${trigger_plist}"
-    launchctl bootout system "${trigger_plist}" >/dev/null 2>&1
-    launchctl bootstrap system "${trigger_plist}" >/dev/null 2>&1
-    log_verbose "Pending-apps dialog notification trigger ready at ${aapPendingAppsTriggerFile}"
+    # Clear quarantine and re-enable a disabled service even when this run cannot
+    # reload the job. bootout below waits until the job exits, so it is skipped
+    # when Install Now on a banner started us. (#276)
+    _aap_prepare_system_launchdaemon "${aapPendingAppsTriggerLaunchDaemonLabel}"
+    if _aap_ancestry_includes "aap-pending-apps-dialog-trigger"; then
+        log_verbose "Not reloading the pending-apps LaunchDaemon from the run it started."
+    else
+        launchctl bootout system "${trigger_plist}" >/dev/null 2>&1
+        _aap_bootstrap_system_launchdaemon "${aapPendingAppsTriggerLaunchDaemonLabel}"
+        log_verbose "Pending-apps dialog notification trigger ready at ${aapPendingAppsTriggerFile}"
+    fi
 
     # Remove legacy Install Now WatchPaths daemon/helper from earlier 3.7.0 builds.
     local legacy_plist="/Library/LaunchDaemons/${aapInstallNowTriggerLaunchDaemonLabel}.plist"
@@ -5749,7 +6144,7 @@ exit_after_disabled_relaunch() {
     log_aap "Status: ${context} and Automatic Relaunch is disabled. Exiting."
     log_status "Inactive: ${context} and Automatic Relaunch is disabled."
     /usr/libexec/PlistBuddy -c "Add :NextAutoLaunch string FALSE" "${appAutoPatchLocalPLIST}.plist" 2>/dev/null
-    { sleep 5; launchctl bootstrap system "/Library/LaunchDaemons/${appAutoPatchLaunchDaemonLabel}.plist"; } &
+    { sleep 5; _aap_bootstrap_system_launchdaemon "${appAutoPatchLaunchDaemonLabel}"; } &
     disown
     exit_clean
 }
@@ -5840,9 +6235,11 @@ _aap_command_invokes_aap() {
 
 _aap_process_start_epoch() {
     local lstart
-    lstart=$(ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')
+    # ps lstart follows LC_TIME. Force C so a German (or other) locale cannot
+    # make the start-time parse fail. (#272)
+    lstart=$(LC_TIME=C ps -p "$1" -o lstart= 2>/dev/null | tr -s ' ' | sed -e 's/^ *//' -e 's/ *$//')
     [[ -n "${lstart}" ]] || return 1
-    date -j -f "%a %b %d %T %Y" "${lstart}" +%s 2>/dev/null
+    LC_TIME=C date -j -f "%a %b %d %T %Y" "${lstart}" +%s 2>/dev/null
 }
 
 # Only AAP writes the heartbeat, and only for its own PID, so a recent record naming ${1} proves
@@ -6176,6 +6573,7 @@ typeset -g _aap_log_host=""
 typeset -g _aap_log_script=""
 typeset -g _aap_log_fd=0
 typeset -g _aap_verbose_log_fd=0
+typeset -g _aap_verbose_run_rotated=0
 
 _aap_init_log_identity() {
     [[ -n "${_aap_log_host}" ]] && return 0
@@ -6222,9 +6620,51 @@ _aap_reopen_log_fds() {
     _aap_ensure_log_fds
 }
 
-# Format one log line. Uses zsh's built-in %D strftime (no date(1) subprocess) plus cached host/script.
+# Format one log line. Numeric timestamp only: %a/%b follow LC_TIME, so a LaunchDaemon
+# (often C/English) and a Terminal session (for example de_DE) wrote different prefixes
+# for the same instant. (#272)
 _aap_format_log_line() {
-    print -r -- "$(print -P '%D{%a %b %d %T}') ${_aap_log_host} ${_aap_log_script}[$$]: $*"
+    print -r -- "$(print -P '%D{%Y-%m-%d %H:%M:%S}') ${_aap_log_host} ${_aap_log_script}[$$]: $*"
+}
+
+# Copy the previous verbose run into logs-verbose-archive, then truncate the live file so
+# aap_verbose.log contains only the run that is starting. Done at the beginning, before the
+# verbose file is opened: an error exit, restart, or --stop never reaches an end-of-run copy,
+# and the next start still files that log. The stamp is the previous file's last-write time.
+# (#309)
+_aap_archive_previous_verbose_run() {
+    [[ "${verbose_mode_option}" == "TRUE" ]] || return 0
+    [[ "${_aap_verbose_run_rotated}" == "1" ]] && return 0
+    _aap_verbose_run_rotated=1
+    [[ -s "${appAutoPatchVerboseLog}" ]] || return 0
+
+    _aap_close_log_fds
+
+    local run_stamp archive_path suffix source_size dest_size
+    run_stamp=$(date -r "${appAutoPatchVerboseLog}" '+%Y-%m-%d-%H%M%S' 2>/dev/null)
+    [[ -z "${run_stamp}" ]] && run_stamp=$(date '+%Y-%m-%d-%H%M%S')
+    mkdir -p "${appAutoPatchVerboseLogArchiveFolder}" 2>/dev/null || return 0
+
+    archive_path="${appAutoPatchVerboseLogArchiveFolder}/aap_verbose_${run_stamp}.log"
+    if [[ -f "${archive_path}" ]]; then
+        source_size=$(stat -f%z "${appAutoPatchVerboseLog}" 2>/dev/null)
+        dest_size=$(stat -f%z "${archive_path}" 2>/dev/null)
+        if [[ -n "${source_size}" && "${source_size}" == "${dest_size}" ]]; then
+            : > "${appAutoPatchVerboseLog}"
+            _aap_verbose_archived_path="${archive_path}"
+            return 0
+        fi
+    fi
+    suffix=0
+    while [[ -e "${archive_path}" ]]; do
+        suffix=$((suffix + 1))
+        archive_path="${appAutoPatchVerboseLogArchiveFolder}/aap_verbose_${run_stamp}-${suffix}.log"
+    done
+    if cp "${appAutoPatchVerboseLog}" "${archive_path}"; then
+        chmod a+r "${archive_path}" 2>/dev/null
+        : > "${appAutoPatchVerboseLog}"
+        _aap_verbose_archived_path="${archive_path}"
+    fi
 }
 
 # Resolve VerboseMode from managed → CLI → local (same precedence as before), early enough that
@@ -6256,8 +6696,15 @@ resolve_verbose_mode() {
         defaults delete "${appAutoPatchLocalPLIST}" VerboseMode 2> /dev/null
     fi
 
+    # File the previous verbose run before this run appends to aap_verbose.log. (#309)
+    _aap_archive_previous_verbose_run
+
     # Ensure FDs match the resolved mode (opens verbose FD only when TRUE).
     _aap_ensure_log_fds
+    if [[ -n "${_aap_verbose_archived_path}" ]]; then
+        log_status "Previous verbose log archived to: ${_aap_verbose_archived_path}"
+        _aap_verbose_archived_path=""
+    fi
 }
 
 # Core log writer. Scope decides which files the line lands in:
@@ -6447,10 +6894,10 @@ resolve_app_icon_path() {
     local name folderName targetDir appName  # Variables that may be referenced in label fragment
     
     # Extract raw values from label fragment (these may contain variable references like ${folderName})
-    local raw_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-    local raw_folderName="$(awk -F\" '/^[[:space:]]*folderName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-    local raw_targetDir="$(awk -F\" '/^[[:space:]]*targetDir=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
-    local raw_appName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$fragmentsPath/labels/$label.sh")"
+    local raw_name="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
+    local raw_folderName="$(awk -F\" '/^[[:space:]]*folderName=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
+    local raw_targetDir="$(awk -F\" '/^[[:space:]]*targetDir=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
+    local raw_appName="$(awk -F\" '/^[[:space:]]*appName=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
     
     # Evaluate variables in dependency order (folderName first, then appName which may reference it)
     # Using eval to resolve any variable references like ${folderName} in appName
@@ -6510,6 +6957,20 @@ _compute_version_subtitle() {
     else
         versionSubtitle=""
     fi
+}
+
+_aap_install_version_log() {
+    # Old and new versions for aap.log. Discovery stores them by label; a staged
+    # installer keeps the new version in a sidecar when discovery is skipped. (#308)
+    local label="$1"
+    local old="${AAPInstalledVersionByLabel[$label]:-}"
+    local new="${AAPVersionByLabel[$label]:-}"
+    if [[ -z "$new" && -n "${AAPStagingFolder}" && -f "${AAPStagingFolder}/${label}.version" ]]; then
+        new="$(<"${AAPStagingFolder}/${label}.version")"
+    fi
+    [[ -z "$old" ]] && old="unknown"
+    [[ -z "$new" ]] && new="unknown"
+    print -r -- "old version ${old}, new version ${new}"
 }
 
 swiftDialogPatchingWindow(){
@@ -7735,10 +8196,231 @@ EOF
     fi
 }
 
+# One inventory for the whole discovery pass. PgetAppVersion otherwise runs mdfind once per
+# label, which is most of the time spent on labels that are not installed.
+aapDiscoveryIndexReady="FALSE"
+aapPkgReceiptIndexReady="FALSE"
+typeset -gA aapInstalledAppBundles
+typeset -gA aapInstalledPkgReceipts
+discoveryLabelsSkipped=0
+
+_aap_index_app_bundle() {
+    local app_path="$1"
+    local base
+    [[ -n "$app_path" ]] || return 0
+    if [[ "$app_path" == *.app/* ]]; then
+        app_path="${app_path%%.app/*}.app"
+    fi
+    [[ "$app_path" == *.app ]] || return 0
+    # Same copies PgetAppVersion ignores. A real copy in another location is still indexed.
+    case "$app_path" in
+        *"/Daemon Containers/"*|*"/.Trash"*|*"/.Trashes/"*|*"Library/Application Support/JAMF/Composer/"*|*" (Parallels)/"*|*" (Virtual Machines)/"*|*"/Chrome Apps.localized/"*|*"/Edge Apps.localized/"*|*"/Applications/Setapp/"*|*"Users/Shared/Apps/Setapp/"*)
+            return 0
+            ;;
+    esac
+    base="${app_path:t}"
+    aapInstalledAppBundles[${base:l}]=1
+}
+
+_aap_build_discovery_index() {
+    local root path home pkg pkg_list
+    aapInstalledAppBundles=()
+    aapInstalledPkgReceipts=()
+    aapDiscoveryIndexReady="FALSE"
+    aapPkgReceiptIndexReady="FALSE"
+    discoveryLabelsSkipped=0
+
+    for root in /Applications /Applications/Utilities /System/Applications; do
+        [[ -d "$root" ]] || continue
+        while IFS= read -r path; do
+            _aap_index_app_bundle "$path"
+        done < <(/usr/bin/find "$root" -name '*.app' -prune -print 2>/dev/null)
+    done
+    if [[ -n "${currentUserAccountName}" && "${currentUserAccountName}" != "FALSE" ]]; then
+        home=$(dscl . -read "/Users/${currentUserAccountName}" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+        if [[ -n "$home" && -d "${home}/Applications" ]]; then
+            while IFS= read -r path; do
+                _aap_index_app_bundle "$path"
+            done < <(/usr/bin/find "${home}/Applications" -name '*.app' -prune -print 2>/dev/null)
+        fi
+    fi
+    while IFS= read -r -d '' path; do
+        _aap_index_app_bundle "$path"
+    done < <(/usr/bin/mdfind "kMDItemContentType == 'com.apple.application-bundle'" -0 2>/dev/null)
+
+    if (( ${#aapInstalledAppBundles} > 0 )); then
+        aapDiscoveryIndexReady="TRUE"
+    else
+        log_warning "Discovery application index is empty. Every label will be checked."
+    fi
+
+    if pkg_list=$(/usr/sbin/pkgutil --pkgs 2>/dev/null); then
+        aapPkgReceiptIndexReady="TRUE"
+        while IFS= read -r pkg; do
+            [[ -n "$pkg" ]] && aapInstalledPkgReceipts[$pkg]=1
+        done <<< "$pkg_list"
+    fi
+    log_info "Discovery index: ${#aapInstalledAppBundles} application bundle(s), ${#aapInstalledPkgReceipts} package receipt(s)."
+}
+
+_aap_target_dir_is_indexed() {
+    local dir="${1:-/}"
+    dir="${dir%/}"
+    case "$dir" in
+        ""|"/"|"/Applications"|"/Applications/Utilities"|"/System/Applications")
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+_aap_discovery_bundle_name() {
+    local bundle="$appName"
+    if [[ -z "$bundle" ]]; then
+        [[ -n "$name" ]] || return 1
+        bundle="${name}.app"
+    fi
+    # An expansion, or a subfolder such as "SketchUp 2026/SketchUp.app", is not a
+    # single bundle filename. The inventory is keyed by filename only, so those
+    # labels stay on the normal search. (#291)
+    [[ "$bundle" == *'$'* || "$bundle" == *'`'* || "$bundle" == *'/'* ]] && return 1
+    [[ "$bundle" == *.app ]] || return 1
+    print -r -- "$bundle"
+}
+
+_aap_app_custom_version_is_local_read() {
+    local body="$1"
+    local line nonempty=0
+    [[ -n "${body//[[:space:]]/}" ]] || return 1
+    if [[ "$body" == *'$('* || "$body" == *'`'* || "$body" == *'|'* \
+        || "$body" == *curl* || "$body" == *wget* || "$body" == *http* \
+        || "$body" == *mdfind* || "$body" == *system_profiler* || "$body" == *eval* ]]; then
+        return 1
+    fi
+    while IFS= read -r line; do
+        [[ -z "${line//[[:space:]]/}" ]] && continue
+        [[ "$line" == \#* ]] && continue
+        nonempty=1
+        if [[ "$line" != *defaults[[:space:]]read* && "$line" != *PlistBuddy* && "$line" != *plutil* ]]; then
+            return 1
+        fi
+    done <<< "$body"
+    [[ $nonempty -eq 1 ]]
+}
+
+# Installomator case names from a fragment header. A header may be one line
+# (`chatgpt|codex)`) or several (`adobebrackets|\` then `bracketsio)`).
+_aap_installomator_label_aliases() {
+    local header="$1" token
+    header="${header//\\/}"
+    header="${header%%)*}"
+    local IFS='|'
+    for token in ${=header}; do
+        token="${token//[[:space:]]/}"
+        [[ -z "$token" ]] && continue
+        [[ "$token" == *[^a-zA-Z0-9_-]* ]] && continue
+        print -r -- "$token"
+    done
+}
+
+# Prefer the fragment filename when it is one of the case names, so aliases such as
+# `visualstudiocode` stay `microsoftvisualstudiocode`. When the filename is not a case
+# name, use the first case name. `missiveapp.sh` is the label `missive`. (#312)
+_aap_installomator_label_name() {
+    local filename="$1" header="$2" alias
+    local -a aliases
+    aliases=("${(@f)$(_aap_installomator_label_aliases "$header")}")
+    for alias in "${aliases[@]}"; do
+        [[ -z "$alias" ]] && continue
+        if [[ "${alias:l}" == "${filename:l}" ]]; then
+            print -r -- "$filename"
+            return 0
+        fi
+    done
+    if [[ -n "${aliases[1]}" ]]; then
+        print -r -- "${aliases[1]}"
+        return 0
+    fi
+    print -r -- "$filename"
+}
+
+_aap_index_fragment_labels() {
+    [[ "${_aap_fragment_label_index_ready}" == "1" ]] && return 0
+    typeset -gA AAPFragmentPathByLabel
+    typeset -gA AAPLabelNameByFragmentFile
+    local file filename header line resolved alias match
+    local -a aliases
+    for file in "${fragmentsPath}"/labels/*.sh; do
+        [[ -f "$file" ]] || continue
+        filename="${${file:t}%.sh}"
+        header=""
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            line="${line#"${line%%[!$' \t']*}"}"
+            [[ -z "$line" || "$line" == \#* ]] && continue
+            if [[ "$line" =~ '^[a-z0-9_-]+(\|[a-z0-9_-]+)*\|\\?$' ]]; then
+                header+="$line"
+                continue
+            fi
+            if [[ "$line" == *')' ]]; then
+                header+="$line"
+                break
+            fi
+            [[ -n "$header" ]] && break
+        done < "$file"
+        resolved=$(_aap_installomator_label_name "$filename" "$header")
+        AAPLabelNameByFragmentFile[$filename]="$resolved"
+        aliases=("${(@f)$(_aap_installomator_label_aliases "$header")}")
+        for alias in "${aliases[@]}"; do
+            [[ -z "$alias" ]] && continue
+            AAPFragmentPathByLabel[$alias]="$file"
+        done
+        AAPFragmentPathByLabel[$filename]="$file"
+        AAPFragmentPathByLabel[$resolved]="$file"
+    done
+    _aap_fragment_label_index_ready=1
+}
+
+_aap_fragment_path_for_label() {
+    local label="$1"
+    local direct="${fragmentsPath}/labels/${label}.sh"
+    if [[ -f "$direct" ]]; then
+        print -r -- "$direct"
+        return 0
+    fi
+    _aap_index_fragment_labels
+    if [[ -n "${AAPFragmentPathByLabel[$label]}" && -f "${AAPFragmentPathByLabel[$label]}" ]]; then
+        print -r -- "${AAPFragmentPathByLabel[$label]}"
+        return 0
+    fi
+    print -r -- "$direct"
+}
+
+# Return 0 when the label cannot be installed, so discovery can skip PgetAppVersion.
+# Anything uncertain is checked the same way as before.
+_aap_discovery_label_is_absent() {
+    local bundle
+    [[ "${aapDiscoveryIndexReady}" == "TRUE" ]] || return 1
+    if (( ${requiredLabelsArray[(Ie)${labelFile}]} )) || (( ${requiredLabelsArray[(Ie)${label_name}]} )); then
+        return 1
+    fi
+    [[ -n "$packageID" ]] && return 1
+    bundle=$(_aap_discovery_bundle_name) || return 1
+    _aap_target_dir_is_indexed "$targetDir" || return 1
+    if [[ -n "$appCustomVersionBody" ]] && ! _aap_app_custom_version_is_local_read "$appCustomVersionBody"; then
+        return 1
+    fi
+    [[ -n "${aapInstalledAppBundles[${bundle:l}]}" ]] && return 1
+    return 0
+}
+
 function PgetAppVersion() {
     
     if [[ $packageID != "" ]]; then
-        appversion="$(pkgutil --pkg-info-plist ${packageID} 2>/dev/null | grep -A 1 pkg-version | tail -1 | sed -E 's/.*>([0-9.]*)<.*/\1/g')"
+        if [[ "${aapPkgReceiptIndexReady}" == "TRUE" && -z "${aapInstalledPkgReceipts[$packageID]}" ]]; then
+            appversion=""
+        else
+            appversion="$(pkgutil --pkg-info-plist ${packageID} 2>/dev/null | grep -A 1 pkg-version | tail -1 | sed -E 's/.*>([0-9.]*)<.*/\1/g')"
+        fi
     fi
     
     if [ -z "$appName" ]; then
@@ -7776,6 +8458,15 @@ function PgetAppVersion() {
             applist=""
         elif ([[ "$applist" == *"/Applications/Edge Apps.localized/"* ]]); then
             log_info "App found in the Edge PWA app folder: $applist, ignoring"
+            applist=""
+        # Setapp apps are licensed and updated through Setapp; patching them installs an unlicensed vendor copy in /Applications.
+        # /Applications/Setapp/ also matches a standard-user install at ~/Applications/Setapp/.
+        # /Users/Shared/Apps/Setapp/ holds Spotlight preview shortcuts for apps that are not installed.
+        elif ([[ "$applist" == *"/Applications/Setapp/"* ]]); then
+            log_info "App found in the Setapp folder: $applist, ignoring"
+            applist=""
+        elif ([[ "$applist" == *"/Users/Shared/Apps/Setapp/"* ]]); then
+            log_info "App found in the Setapp shared preview folder: $applist, ignoring"
             applist=""
         elif ([[ "$applist" == *"/Users/"* && "$convertAppsInHomeFolder" == "TRUE" ]]); then
             log_verbose "App found in User directory: $applist, coverting to default directory"
@@ -7841,6 +8532,124 @@ function PgetAppVersion() {
     
 }
 
+_aap_value_contains_installomator_log_line() {
+    local value="$1" line
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        case "$line" in
+            [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\ [0-9][0-9]:[0-9][0-9]:[0-9][0-9]\ :\ *\ :\ *)
+                return 0
+                ;;
+        esac
+    done <<< "$value"
+    return 1
+}
+
+_aap_eval_label_fragment() {
+    # Evaluate an Installomator label without letting it exit the AAP process.
+    # cleanupAndExit ends in exit. The pique label calls it when installedOSversion
+    # is unset, which used to kill discovery and leave the Dock icon behind. (#275)
+    local fragment="$1"
+    local case_statement output rc=0 frag_block line
+    local abort="" abort_msg=""
+    local frag_name frag_appName frag_appNewVersion frag_type frag_packageID
+    local frag_expectedTeamID frag_targetDir frag_folderName frag_versionKey
+    local frag_downloadURL frag_appCustomVersion
+
+    case_statement="
+    case ${label_name} in
+        ${fragment}
+        *)
+            print -r -- \"${label_name} did not match anything in the case block - weird.\"
+        ;;
+    esac
+    "
+
+    output=$(
+        installedOSversion="$(/usr/bin/sw_vers -productVersion 2>/dev/null)"
+        # Installomator helpers such as versionFromGit are commonly called inside
+        # command substitutions. On failure they call printlog, whose tee output
+        # is stdout; the label then assigns the complete timestamped warning to
+        # appNewVersion. Preserve printlog's file output, but keep its stdout out
+        # of values returned by the fragment. (#308)
+        if (( $+functions[printlog] )); then
+            functions[_aap_fragment_printlog]="${functions[printlog]}"
+            printlog() {
+                _aap_fragment_printlog "$@" >/dev/null
+            }
+        fi
+        cleanupAndExit() {
+            printf '\n--AAPFRAG--\n'
+            printf 'abort=%s\n' "${1:-1}"
+            printf 'abort_msg=%s\n' "${2:-}"
+            exit 0
+        }
+        eval "$case_statement"
+        printf '\n--AAPFRAG--\n'
+        printf 'abort=0\n'
+        printf 'name=%s\n' "${name}"
+        printf 'appName=%s\n' "${appName}"
+        printf 'appNewVersion=%s\n' "${appNewVersion}"
+        printf 'type=%s\n' "${type}"
+        printf 'packageID=%s\n' "${packageID}"
+        printf 'expectedTeamID=%s\n' "${expectedTeamID}"
+        printf 'targetDir=%s\n' "${targetDir}"
+        printf 'folderName=%s\n' "${folderName}"
+        printf 'versionKey=%s\n' "${versionKey}"
+        printf 'downloadURL=%s\n' "${downloadURL}"
+        printf 'appCustomVersion=%s\n' "${appCustomVersion}"
+    ) || rc=$?
+
+    if [[ "$output" != *"--AAPFRAG--"* ]]; then
+        log_error "Label ${label_name} ended its version check unexpectedly (status ${rc}). Skipping."
+        return 1
+    fi
+
+    frag_block="${output##*$'\n'--AAPFRAG--$'\n'}"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        case "$line" in
+            abort=*) abort="${line#abort=}" ;;
+            abort_msg=*) abort_msg="${line#abort_msg=}" ;;
+            name=*) frag_name="${line#name=}" ;;
+            appName=*) frag_appName="${line#appName=}" ;;
+            appNewVersion=*) frag_appNewVersion="${line#appNewVersion=}" ;;
+            type=*) frag_type="${line#type=}" ;;
+            packageID=*) frag_packageID="${line#packageID=}" ;;
+            expectedTeamID=*) frag_expectedTeamID="${line#expectedTeamID=}" ;;
+            targetDir=*) frag_targetDir="${line#targetDir=}" ;;
+            folderName=*) frag_folderName="${line#folderName=}" ;;
+            versionKey=*) frag_versionKey="${line#versionKey=}" ;;
+            downloadURL=*) frag_downloadURL="${line#downloadURL=}" ;;
+            appCustomVersion=*) frag_appCustomVersion="${line#appCustomVersion=}" ;;
+        esac
+    done <<< "$frag_block"
+
+    if [[ "$abort" != "0" ]]; then
+        log_notice "Label ${label_name} stopped its version check (${abort}${abort_msg:+: ${abort_msg}}). Skipping."
+        return 1
+    fi
+
+    # Defense in depth for an Installomator helper that logs without printlog,
+    # or for a future fragment path that bypasses the wrapper above. A formatted
+    # log line is diagnostic output, never a public version. (#308)
+    if _aap_value_contains_installomator_log_line "$frag_appNewVersion"; then
+        log_warning "Installomator returned log output instead of a public version for ${label_name}; treating the newest version as unknown."
+        frag_appNewVersion=""
+    fi
+
+    name="$frag_name"
+    appName="$frag_appName"
+    appNewVersion="$frag_appNewVersion"
+    type="$frag_type"
+    packageID="$frag_packageID"
+    expectedTeamID="$frag_expectedTeamID"
+    targetDir="$frag_targetDir"
+    folderName="$frag_folderName"
+    versionKey="$frag_versionKey"
+    downloadURL="$frag_downloadURL"
+    appCustomVersion="$frag_appCustomVersion"
+    return 0
+}
+
 function verifyApp() {
     
     appPath=$1
@@ -7889,17 +8698,14 @@ function verifyApp() {
         functionsPath="$fragmentsPath/functions.sh"
         source "${functionsPath}"
         
-        fragment=$(cat ${fragmentsPath}/labels/${label_name}.sh)
-        
-        caseStatement="
-        case $label_name in
-            $fragment
-            *)
-                echo \"$label_name didn't match anything in the case block - weird.\"
-            ;;
-        esac
-        "
-        eval $caseStatement
+        if [[ -n "$labelFragment" && -f "$labelFragment" ]]; then
+            fragment=$(cat "$labelFragment")
+        else
+            fragment=$(cat "$(_aap_fragment_path_for_label "$label_name")")
+        fi
+        if ! _aap_eval_label_fragment "$fragment"; then
+            return
+        fi
         
         if [[ -n $name ]]; then
             # Exact-element membership; a "${array[@]}" substring match depends on IFS and can also
@@ -8388,7 +9194,7 @@ resolve_label_display_name() {
         echo "${brewDisplayNames[$label]:-${label}}"
         return
     fi
-    awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "${fragmentsPath}/labels/${label}.sh"
+    awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")"
 }
 
 # Homebrew pseudo-labels (and the superseded-Installomator-labels list, see
@@ -8848,21 +9654,17 @@ _resolve_label_staging_info() {
     # Output keys: TYPE  DOWNLOAD_URL  APP_NEW_VERSION  EXPECTED_TEAM_ID  ARCHIVE_NAME  CURL_OPTIONS
 
     local label="$1"
-    local fragmentFile="${fragmentsPath}/labels/${label}.sh"
+    local fragmentFile
+    fragmentFile=$(_aap_fragment_path_for_label "$label")
     [[ ! -f "$fragmentFile" ]] && return 1
 
     # Build a self-contained wrapper script so the label runs in a clean zsh subprocess.
     # The subprocess sources the Installomator helper-functions fragment (which provides
     # downloadURLFromGit, downloadURLFromSparkle, versionFromGit, etc.) before wrapping
     # the label in a case statement and executing it.
-    # No .sh suffix: BSD mktemp only substitutes a trailing run of X's when it is the FINAL
-    # path component. A ".sh" suffix after XXXXXX left the X's un-substituted, yielding the
-    # same literal, world-guessable path on every call (a predictable file in world-writable
-    # /private/tmp written by a root daemon, and self-colliding: a skipped `rm -f` left the file
-    # behind and every later call failed with "mkstemp failed: File exists"). The script is
-    # always executed by path (`zsh --no-rcs "$tmpScript"`, never by extension), so the missing
-    # suffix is not load-bearing.
     local tmpScript
+    # No .sh suffix: BSD mktemp only substitutes a trailing run of X's when it is the final
+    # path component. The wrapper is executed by path, so the extension is not required.
     tmpScript=$(mktemp /private/tmp/aap_lbl_XXXXXX) || return 1
 
     {
@@ -8957,6 +9759,13 @@ workflow_stage_updates() {
 
     log_info "Staging pending updates before displaying user dialog..."
 
+    # Declare once. zsh `local` is function-scoped, and repeating `local name` with no
+    # assignment inside a loop prints the previous value straight to stdout. (#265)
+    local _stageOwner stagedEntry stagedLabel stillQueued ql
+    local label labelInfo stagingType stagingURL stagingVersion stagingTeamID stagingCurlOpts
+    local fileExt stagedFile stagedVersionFile stagedTypeFile existingVersion
+    local -a curlArgs
+
     # Harden the staging directory. It lives under world-writable /private/tmp, so an
     # unprivileged local user could pre-create it (and own it) before this root run, then drop
     # malicious installers named <label>.pkg/.dmg that we'd later trust via downloadURL=file://.
@@ -8967,7 +9776,6 @@ workflow_stage_updates() {
         rm -f "${AAPStagingFolder}" 2>/dev/null
     fi
     if [[ -d "${AAPStagingFolder}" ]]; then
-        local _stageOwner
         _stageOwner=$(/usr/bin/stat -f '%u' "${AAPStagingFolder}" 2>/dev/null)
         if [[ "${_stageOwner}" != "0" ]]; then
             log_warning "Staging folder ${AAPStagingFolder} is not root-owned (uid=${_stageOwner:-unknown}) — recreating."
@@ -8986,9 +9794,8 @@ workflow_stage_updates() {
     # accumulating on disk across multiple runs.
     if [[ -d "${AAPStagingFolder}" ]]; then
         for stagedEntry in "${AAPStagingFolder}"/*.{dmg,pkg,zip,tbz,bin}(N); do
-            local stagedLabel
             stagedLabel="${stagedEntry:t:r}"   # filename without extension
-            local stillQueued="FALSE"
+            stillQueued="FALSE"
             for ql in $queuedLabelsArray; do
                 [[ "$ql" == "$stagedLabel" ]] && stillQueued="TRUE" && break
             done
@@ -9037,7 +9844,6 @@ workflow_stage_updates() {
         log_info "Resolving download info for staging: ${label}"
 
         # Resolve the label's downloadURL and related vars in an isolated subprocess
-        local labelInfo
         labelInfo=$(_resolve_label_staging_info "$label")
         if [[ $? -ne 0 ]] || [[ -z "$labelInfo" ]]; then
             log_error "Could not resolve download info for '${label}'. Skipping staging."
@@ -9048,7 +9854,6 @@ workflow_stage_updates() {
         fi
 
         # Parse KEY=VALUE output — use cut -d= -f2- to preserve URLs that contain '='
-        local stagingType stagingURL stagingVersion stagingTeamID stagingCurlOpts
         stagingType=$(echo "$labelInfo"    | grep '^TYPE='            | cut -d= -f2-)
         stagingURL=$(echo "$labelInfo"     | grep '^DOWNLOAD_URL='    | cut -d= -f2-)
         stagingVersion=$(echo "$labelInfo" | grep '^APP_NEW_VERSION=' | cut -d= -f2-)
@@ -9073,7 +9878,6 @@ workflow_stage_updates() {
         fi
 
         # Map install type to the correct file extension for the staged file
-        local fileExt
         case "$stagingType" in
             dmg|pkgInDmg)                   fileExt="dmg" ;;
             pkg)                             fileExt="pkg" ;;
@@ -9082,13 +9886,22 @@ workflow_stage_updates() {
             *)                               fileExt="bin" ;;
         esac
 
-        local stagedFile="${AAPStagingFolder}/${label}.${fileExt}"
-        local stagedVersionFile="${AAPStagingFolder}/${label}.version"
-        local stagedTypeFile="${AAPStagingFolder}/${label}.type"
+        stagedFile="${AAPStagingFolder}/${label}.${fileExt}"
+        stagedVersionFile="${AAPStagingFolder}/${label}.version"
+        stagedTypeFile="${AAPStagingFolder}/${label}.type"
+
+        # An unknown available version is not a newer installer. Keep the file
+        # already staged instead of downloading it again. (#311)
+        if [[ -f "$stagedFile" && -z "${stagingVersion//[[:space:]]/}" ]]; then
+            log_notice "Already staged: '${label}'. Available version is unknown, so the existing installer will be used."
+            stageSkipCount=$((stageSkipCount + 1))
+            progressCompleted=$((progressCompleted + 1))
+            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
+            continue
+        fi
 
         # Check whether a valid staged file already exists for this version
         if [[ -f "$stagedFile" && -f "$stagedVersionFile" ]]; then
-            local existingVersion
             existingVersion=$(< "$stagedVersionFile")
             if [[ -n "$stagingVersion" && "$existingVersion" == "$stagingVersion" ]]; then
                 log_notice "Already staged: '${label}' at version ${stagingVersion}. Skipping download."
@@ -9097,16 +9910,9 @@ workflow_stage_updates() {
                 _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
                 continue
             else
-                log_info "Version mismatch for staged '${label}' (cached=${existingVersion}, available=${stagingVersion:-unknown}). Re-staging."
+                log_info "Version mismatch for staged '${label}' (cached=${existingVersion}, available=${stagingVersion}). Re-staging."
                 rm -f "$stagedFile" "$stagedVersionFile" "$stagedTypeFile"
             fi
-        elif [[ -f "$stagedFile" && -z "$stagingVersion" ]]; then
-            # Staged file exists but label has no version string — assume it is still current
-            log_notice "Staged file for '${label}' exists with no version info. Using existing staged file."
-            stageSkipCount=$((stageSkipCount + 1))
-            progressCompleted=$((progressCompleted + 1))
-            _aap_mini_progress_advance "${progressCompleted}" "${progressTotal}"
-            continue
         elif [[ -f "$stagedFile" ]]; then
             # File without version sidecar — remove and re-stage
             log_info "Staged file for '${label}' is missing version sidecar. Re-staging."
@@ -9117,7 +9923,7 @@ workflow_stage_updates() {
         # Fail a connection attempt promptly and abort a transfer that receives no data for five
         # minutes. Active downloads are unrestricted; this only prevents a dead socket from holding
         # the entire AAP workflow indefinitely.
-        local curlArgs=("--location" "--silent" "--fail" "--show-error" "--connect-timeout" "30" "--speed-limit" "1" "--speed-time" "300")
+        curlArgs=("--location" "--silent" "--fail" "--show-error" "--connect-timeout" "30" "--speed-limit" "1" "--speed-time" "300")
         [[ -n "$stagingCurlOpts" ]] && curlArgs+=($=stagingCurlOpts)
         curlArgs+=("-o" "$stagedFile" "$stagingURL")
 
@@ -9170,9 +9976,12 @@ workflow_silent_patch_closed_apps() {
     local remainingLabels=()
     local newAppNamesArray=()
     silent_patch_success_count=0
+    silent_patch_success_labels=()
     local silentPatchErrors=0
     local progressTotal=${#queuedLabelsArray[@]}
     local progressCompleted=0
+    # Same zsh behavior as workflow_stage_updates: a bare `local` inside the loop reprints the last value. (#265)
+    local _dname _ipath _cpthostpid _aomhostpid
 
     _aap_mini_progress_begin "${progressTotal}" "${display_string_silent_patch_progress}" "${display_string_staging_message}"
 
@@ -9245,7 +10054,6 @@ workflow_silent_patch_closed_apps() {
         if is_excluded_background_label "${label}"; then
             log_info "Skipping silent background patch of '${label}' (listed in ExcludedBackgroundLabels); adding to user dialog queue."
             remainingLabels+=("${label}")
-            local _dname _ipath
             _dname="$(resolve_label_display_name "${label}")"
             _ipath=$(resolve_app_icon_path "${label}")
             _compute_version_subtitle "${label}"
@@ -9262,13 +10070,11 @@ workflow_silent_patch_closed_apps() {
 
         # Respect Zoom call active check for zoom labels
         if [[ "${zoom_call_active_check_option}" == "TRUE" && "${label}" == "zoom"* ]]; then
-            local _cpthostpid _aomhostpid
             _cpthostpid=$(pgrep CptHost 2>/dev/null)
             _aomhostpid=$(pgrep aomhost 2>/dev/null)
             if [[ -n "${_cpthostpid}" || -n "${_aomhostpid}" ]]; then
                 log_info "Zoom meeting in progress. Skipping silent patch of '${label}'; adding to user dialog queue."
                 remainingLabels+=("${label}")
-                local _dname _ipath
                 _dname="$(resolve_label_display_name "${label}")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
@@ -9295,12 +10101,12 @@ workflow_silent_patch_closed_apps() {
             if [[ -f "$_candidate" ]]; then
                 silentStagedFilePath="$_candidate"
                 silentStagedArg="downloadURL=file://${_candidate}"
-                log_info "Using staged installer for '${label}': ${_candidate}"
+                log_info "Using staged installer for '${label}' ($(_aap_install_version_log "$label")): ${_candidate}"
                 break
             fi
         done
 
-        log_info "Silent background patch attempt for: ${label}"
+        log_info "Silent background patch attempt for ${label}: $(_aap_install_version_log "$label")"
         ${installomatorScript} "${label}" ${silentPatchOptions} ${silentStagedArg}
         local silentExitCode=$?
 
@@ -9311,6 +10117,7 @@ workflow_silent_patch_closed_apps() {
                 # DiscoveryFrequency-skipped run never re-queues this now-patched app.
                 log_notice "Silent background patch succeeded for: ${label} (exit 0)"
                 silent_patch_success_count=$((silent_patch_success_count + 1))
+                silent_patch_success_labels+=("${label}")
                 local _newVersion="${AAPVersionByLabel[$label]:-}"
                 write_aap_receipt "${label}" "${_newVersion}" "${silentExitCode}"
                 remove_aap_report_item "${label}"
@@ -9326,7 +10133,6 @@ workflow_silent_patch_closed_apps() {
                 # Installomator found a blocking process — app is open, needs user interaction
                 log_info "Blocking process detected for '${label}' (exit 12). Adding to user dialog queue."
                 remainingLabels+=("${label}")
-                local _dname _ipath
                 _dname="$(resolve_label_display_name "${label}")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
@@ -9342,7 +10148,6 @@ workflow_silent_patch_closed_apps() {
                 log_error "Silent patch for '${label}' returned exit code ${silentExitCode}. Adding to user dialog queue."
                 silentPatchErrors=$((silentPatchErrors + 1))
                 remainingLabels+=("${label}")
-                local _dname _ipath
                 _dname="$(resolve_label_display_name "${label}")"
                 _ipath=$(resolve_app_icon_path "${label}")
                 _compute_version_subtitle "${label}"
@@ -9362,6 +10167,7 @@ workflow_silent_patch_closed_apps() {
 
     if [[ $silent_patch_success_count -gt 0 ]]; then
         log_notice "Silent background patching complete: ${silent_patch_success_count} app(s) updated without user interaction."
+        _aap_send_background_patch_webhook
     fi
     if [[ $silentPatchErrors -gt 0 ]]; then
         log_error "Silent background patching encountered ${silentPatchErrors} error(s). Those app(s) will appear in the user dialog."
@@ -9400,6 +10206,8 @@ workflow_do_Installations() {
     
     # Count errors
     errorCount=0
+    install_session_ran="TRUE"
+    install_session_success_labels=()
     patchingItemStatus=()
     
     swiftDialogPatchingWindow # Create our main "list" swiftDialog Window
@@ -9419,7 +10227,7 @@ workflow_do_Installations() {
     for label in $queuedLabelsArray; do
         _aap_heartbeat "install:${label}"
         _ensure_patching_dialog
-        log_info "Installing ${label}..."
+        log_info "Installing ${label}: $(_aap_install_version_log "$label")"
         local itemStatus="success"
         
         # Use built-in swiftDialog Installomator integration options (if swiftDialog is being used)
@@ -9450,7 +10258,7 @@ workflow_do_Installations() {
             if [[ -f "$_candidate" ]]; then
                 stagedFilePath="$_candidate"
                 stagedDownloadArg="downloadURL=file://${_candidate}"
-                log_info "Using staged installer for '${label}': ${_candidate}"
+                log_info "Using staged installer for '${label}' ($(_aap_install_version_log "$label")): ${_candidate}"
                 break
             fi
         done
@@ -9502,6 +10310,7 @@ workflow_do_Installations() {
                 # Remove from both the report PLIST and DiscoveredLabels on success so a future
                 # DiscoveryFrequency-skipped run never re-queues this now-patched app.
                 if [[ $installomatorExitCode -eq 0 ]]; then
+                    install_session_success_labels+=("${label}")
                     remove_aap_report_item "$label"
                     remove_discovered_label "$label"
                 fi
@@ -9547,6 +10356,7 @@ workflow_do_Installations() {
             # Remove from both the report PLIST and DiscoveredLabels on success so a future
             # DiscoveryFrequency-skipped run never re-queues this now-patched app.
             if [[ $installomatorExitCode -eq 0 ]]; then
+                install_session_success_labels+=("${label}")
                 remove_aap_report_item "$label"
                 remove_discovered_label "$label"
             fi
@@ -9653,7 +10463,30 @@ check_and_echo_errors() {
     
 }
 
+_aap_webhook_session_labels() {
+    # Labels that succeeded in the user-facing install. Background successes are reported
+    # by their own webhook and are not part of this list. (#307)
+    if [[ "${install_session_ran}" == "TRUE" ]]; then
+        if [[ ${#install_session_success_labels[@]} -gt 0 ]]; then
+            print -r -- "${(j: :)install_session_success_labels}"
+        else
+            print -r -- "None"
+        fi
+    else
+        print -r -- "$(echo "$queuedLabelsArray")"
+    fi
+}
+
 appsUpToDate(){
+    if [[ "${webhook_report_scope}" == "background" ]]; then
+        log_info "SUCCESS: Background updates were installed: ${(j: :)silent_patch_success_labels}"
+        webhookStatus="✅ Success: Background update(s)"
+        formatted_result="${(j: :)silent_patch_success_labels}"
+        formatted_error_result="None"
+        errorCount="0"
+        return 0
+    fi
+
     # Find the last position text in appAutoPatchLog
     appsUpToDate=$(tail -n 200 "$appAutoPatchLog" | grep 'All apps are up to date. Nothing to do.' | tail -n 1)
     
@@ -9670,14 +10503,14 @@ appsUpToDate(){
     if [[ $errorsCount -le 0 ]] && [[ ! -n $appsUpToDate ]]; then
         log_info "SUCCESS: Applications updates were installed with no errors"
         webhookStatus="✅ Success: App(s) updated"
-        formatted_result=$(echo "$queuedLabelsArray")
+        formatted_result="$(_aap_webhook_session_labels)"
         formatted_error_result="None"
         errorCount="0"
     elif
         [[ $errorsCount -gt 0 ]] && [[ ! -n $appsUpToDate ]]; then
             log_info "FAILURES DETECTED: Applications updates were installed with some errors"
             webhookStatus="❌ Error: Update(s) failed"
-            formatted_result=$(echo "$queuedLabelsArray")
+            formatted_result="$(_aap_webhook_session_labels)"
             check_and_echo_errors
         else
             log_info "SUCCESS: Applications were all up to date, nothing to install"
@@ -9982,10 +10815,146 @@ webHookMessage() {
         curlResult=$(curl -s -X POST -H "Content-Type: application/json" -d "$jsonPayload" "$webhook_url_teams_option")
         log_verbose "Webhook result: $curlResult"
     fi
+
+    # Google Chat incoming webhook (cardsV2). Adapted from #93 for the current
+    # webhook payload: same status, device, labels, errors, and MDM link as Slack/Teams.
+    if [[ -z "${webhook_url_google_chat_option}" ]]; then
+        log_info "No Google Chat webhook configured"
+    else
+        if defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url &> /dev/null; then
+            jamfProURL=$(/usr/bin/defaults read /Library/Preferences/com.jamfsoftware.jamf.plist jss_url)
+            mdmComputerURL="${jamfProURL}/computers.html?query=${serialNumber}&queryType=COMPUTERS"
+        elif [[ "$(profiles show | grep -A4 "Management Profile" | sed -n -e 's/^.*profileIdentifier: //p')" == "Microsoft.Profiles.MDM" ]]; then
+            mdmURL="https://intune.microsoft.com/#view/Microsoft_Intune_Devices/DeviceSettingsMenuBlade/~/overview/mdmDeviceId"
+            mdmComputerID="$(grep -rnwi '/Library/Logs/Microsoft/Intune' -e 'DeviceId:' | head -1 | grep -E -o 'DeviceId.{0,38}' | cut -d ' ' -f2)"
+            if [[ -n "$mdmComputerID" ]]; then
+                mdmComputerURL="${mdmURL}/${mdmComputerID}"
+            else
+                mdmComputerURL="https://intune.microsoft.com/#view/Microsoft_Intune_DeviceSettings/DevicesMacOsMenu/~/macOsDevices"
+            fi
+        elif [[ $mdmName == "Jumpcloud" ]]; then
+            mdmComputerURL="https://console.jumpcloud.com/#/devices/list"
+        elif [[ $mdmName == "Workspace One" ]]; then
+            if [[ -n "$server_url" ]]; then
+                base_url=$(echo "$server_url" | sed -n 's/\(https:\/\/[^\/]*\).*/\1/p')
+                mdmComputerURL="${base_url}/AirWatch/#/AirWatch/Devices/List/"
+            else
+                mdmComputerURL="https://console.workspace.one"
+            fi
+        elif [[ $mdmName == "Mosyle" ]]; then
+            mdmComputerURL="${mosyleComputerURL}"
+        else
+            log_info "No MDM determined - Google Chat webhook will omit the device link"
+            mdmComputerURL=""
+        fi
+
+        local googleChatButton=""
+        if [[ -n "${mdmComputerURL}" && -n "${mdmName}" ]]; then
+            googleChatButton=',
+                            {
+                                "buttonList": {
+                                    "buttons": [
+                                        {
+                                            "text": "View in '"${mdmName}"'",
+                                            "onClick": {
+                                                "openLink": {
+                                                    "url": "'"${mdmComputerURL}"'"
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            }'
+        fi
+
+        log_info "Sending Google Chat WebHook"
+        jsonPayload='{
+            "text": "'"${webhookStatus}"' — '"${serialNumber}"'",
+            "cardsV2": [
+                {
+                    "cardId": "appautopatch",
+                    "card": {
+                        "header": {
+                            "title": "'"${appTitle}"'",
+                            "subtitle": "'"${webhookStatus}"'",
+                            "imageUrl": "https://raw.githubusercontent.com/App-Auto-Patch/App-Auto-Patch/main/Images/AAPLogo.png",
+                            "imageType": "SQUARE"
+                        },
+                        "sections": [
+                            {
+                                "widgets": [
+                                    {
+                                        "decoratedText": {
+                                            "topLabel": "Serial Number",
+                                            "text": "'"${serialNumber}"'",
+                                            "bottomLabel": "'"${modelName}"'"
+                                        }
+                                    },
+                                    {
+                                        "decoratedText": {
+                                            "topLabel": "Current User",
+                                            "text": "'"${currentUserAccountName}"'"
+                                        }
+                                    },
+                                    {
+                                        "decoratedText": {
+                                            "topLabel": "Versions",
+                                            "text": "AAP '"${scriptVersion}"' · OS '"${osVersion}"'"
+                                        }
+                                    },
+                                    {
+                                        "textParagraph": {
+                                            "text": "<b>Label(s)</b><br>'"${formatted_result}"'"
+                                        }
+                                    },
+                                    {
+                                        "textParagraph": {
+                                            "text": "<b>Error(s)</b><br>'"${formatted_error_result}"'"
+                                        }
+                                    }'"${googleChatButton}"'
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        }'
+
+        curlResult=$(curl -s -X POST -H "Content-Type: application/json; charset=UTF-8" -d "$jsonPayload" "$webhook_url_google_chat_option")
+        log_verbose "Webhook result: $curlResult"
+    fi
     
 }
 
+_aap_send_background_patch_webhook() {
+    # Fired when silent background patching finishes, before any user-session install.
+    # Only the labels that exited 0 are included. Open or failed apps stay out of this
+    # notice and can appear later in the user-session webhook. (#307)
+    [[ ${#silent_patch_success_labels[@]} -gt 0 ]] || return 0
+    local saved_status="${webhookStatus:-}"
+    local saved_result="${formatted_result:-}"
+    local saved_error_result="${formatted_error_result:-}"
+    local saved_error_count="${errorCount:-0}"
+    check_webhook background
+    webhookStatus="$saved_status"
+    formatted_result="$saved_result"
+    formatted_error_result="$saved_error_result"
+    errorCount="$saved_error_count"
+    background_webhook_sent="TRUE"
+}
+
 check_webhook(){
+    local report_scope="${1:-session}"
+    # A run that only patched closed apps already sent that list. Do not send a second
+    # notice with an empty user-session list. (#307)
+    if [[ "${report_scope}" == "session" ]] \
+        && [[ "${background_webhook_sent}" == "TRUE" ]] \
+        && [[ "${install_session_ran}" != "TRUE" ]] \
+        && [[ ${errorCount:-0} -le 0 ]]; then
+        log_info "Background patch webhook already sent; no user-session installs to report."
+        return 0
+    fi
+    webhook_report_scope="${report_scope}"
     case ${webhook_feature_option} in
         
         "ALL" ) # Notify on success and failure 
@@ -10014,6 +10983,7 @@ check_webhook(){
         ;;
         
     esac
+    webhook_report_scope="session"
 }
 
 resolve_early_silent_mode() {
@@ -10682,8 +11652,10 @@ main() {
         # Call the bouncing progress SwiftDialog window
         swiftDialogDiscoverWindow
         
-        # Start of label pattern
-        label_re='^([a-z0-9\_-]*)(\))$'
+        # Start of label pattern. '|' is a same-line alias (chatgpt|codex)).
+        # The queued name comes from _aap_index_fragment_labels: the filename when it is
+        # one of the case names, otherwise the first case name. (#279, #312)
+        label_re='^([a-z0-9\_|-]*)(\))$'
 
         # ignore comments
         comment_re='^\#$'
@@ -10763,35 +11735,22 @@ main() {
         optionalLabelsArray+=($optionalLabelsFromConfig)
         excludedBackgroundLabelsArray+=($excludedBackgroundLabelsFromConfig)
 
+        _aap_build_discovery_index
+        _aap_index_fragment_labels
+
         for labelFragment in "$fragmentsPath"/labels/*.sh; do 
             
             appCustomVersion=""
-            if grep -q '^\s*appCustomVersion\s*()' "$labelFragment"
-            then
-                appCustomVersion=$(grep -E -m1 '^\s*appCustomVersion' "$labelFragment" | sed -E 's/^.*\(\)[[:space:]]*\{[[:space:]]*(.*)[[:space:]]*\}/\1/')
-                
-                if [[ -z "$appCustomVersion" ]] || [[ "$appCustomVersion" == *"{"$ ]]
-                then
-                    appCustomVersion=$(awk '
-                    /^[[:space:]]*appCustomVersion[[:space:]]*\(\)[[:space:]]*\{/ { inside=1; next }
-                    inside {
-                        if ($0 ~ /^[[:space:]]*\}/) { inside=0; exit }
-                        print
-                    }' "$labelFragment")
-                fi
-                if [[ ! "$appCustomVersion" =~ ^[[:space:]]*strings ]]; then
-                    appCustomVersion=$(eval "$appCustomVersion" 2>/dev/null)
-                fi
-            fi
-            
-            
+            appCustomVersionBody=""
             labelFile=$(basename -- "$labelFragment")
             labelFile="${labelFile%.*}"
+            fragmentLabelName="${AAPLabelNameByFragmentFile[$labelFile]:-$labelFile}"
             
             # Issue 142 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/142
             # Exact-element membership rather than a "${array[*]}" substring match: the latter joins
             # on the first character of IFS, so it silently matched nothing while IFS was $'\n'.
-            if (( ${ignoredLabelsArray[(Ie)${labelFile}]} )); then
+            # Match either the fragment filename or the Installomator case name. (#312)
+            if (( ${ignoredLabelsArray[(Ie)${labelFile}]} )) || (( ${ignoredLabelsArray[(Ie)${fragmentLabelName}]} )); then
                 log_verbose "Ignoring label $labelFile."
                 continue
             fi
@@ -10799,27 +11758,48 @@ main() {
             # IgnoredLabels="*" means ignore everything that is not explicitly required or optional.
             if [[ "${ignore_all_labels}" == "TRUE" ]] \
             && (( ! ${requiredLabelsArray[(Ie)${labelFile}]} )) \
-            && (( ! ${optionalLabelsArray[(Ie)${labelFile}]} )); then
+            && (( ! ${requiredLabelsArray[(Ie)${fragmentLabelName}]} )) \
+            && (( ! ${optionalLabelsArray[(Ie)${labelFile}]} )) \
+            && (( ! ${optionalLabelsArray[(Ie)${fragmentLabelName}]} )); then
                 log_verbose "Ignoring label $labelFile (IgnoredLabels is '*' and this label is neither required nor optional)."
                 continue
+            fi
+
+            if grep -q '^\s*appCustomVersion\s*()' "$labelFragment"
+            then
+                appCustomVersionBody=$(grep -E -m1 '^\s*appCustomVersion' "$labelFragment" | sed -E 's/^.*\(\)[[:space:]]*\{[[:space:]]*(.*)[[:space:]]*\}/\1/')
+
+                if [[ -z "$appCustomVersionBody" ]] || [[ "$appCustomVersionBody" == *"{"$ ]]
+                then
+                    appCustomVersionBody=$(awk '
+                    /^[[:space:]]*appCustomVersion[[:space:]]*\(\)[[:space:]]*\{/ { inside=1; next }
+                    inside {
+                        if ($0 ~ /^[[:space:]]*\}/) { inside=0; exit }
+                        print
+                    }' "$labelFragment")
+                fi
             fi
             
             exec 3< "${labelFragment}"
             
             while read -r -u 3 line; do 
                 
-                # Remove spaces and tabs
-                scrubbedLine="$(echo $line | sed -E -e 's/^( |\t)*//g' -e 's/^\s*#.*$//')"
+                # Strip leading spaces and tabs, and drop a full-line comment, without
+                # forking echo and sed. That fork ran once per line of every label file. (#291)
+                scrubbedLine="${line#"${line%%[!$' \t']*}"}"
+                if [[ "${scrubbedLine#"${scrubbedLine%%[![:space:]]*}"}" == \#* ]]; then
+                    scrubbedLine=""
+                fi
                 
                 if [ -n $scrubbedLine ]; then
                     if [[ $in_label -eq 0 && "$scrubbedLine" =~ $label_re ]]; then
-                        label_name=${match[1]}
-                        # Issue 143 https://github.com/App-Auto-Patch/App-Auto-Patch/issues/143
-                        if [[ "${label_name:l}" = "${labelFile:l}" ]]; then
+                        # Filename when it is a case name; otherwise the case name itself.
+                        # missiveapp.sh is queued as missive. bracketsio.sh stays bracketsio. (#312)
+                        label_name="${AAPLabelNameByFragmentFile[$labelFile]:-$labelFile}"
+                        if [[ "${label_name:l}" == "${labelFile:l}" ]]; then
                             log_verbose "label_name: $label_name"
                         else
-                            label_name=$labelFile
-                            log_verbose "Setting label_name to labelFile: $label_name"
+                            log_verbose "Label file ${labelFile}.sh uses Installomator label ${label_name}."
                         fi
 
                         in_label=1
@@ -10830,7 +11810,19 @@ main() {
                         # label complete. A valid label includes a Team ID. If we have one, we can check for installed
                         _aap_heartbeat "discovery:${label_name:-${labelFile:-label}}"
                         _ensure_preparation_dialog "discovery"
-                        [[ -n $expectedTeamID ]] && PgetAppVersion
+                        if [[ -n $expectedTeamID ]] && _aap_discovery_label_is_absent; then
+                            log_verbose "Not installed, skipping version check for ${label_name}."
+                            discoveryLabelsSkipped=$(( discoveryLabelsSkipped + 1 ))
+                        elif [[ -n $expectedTeamID ]]; then
+                            if [[ -n "$appCustomVersionBody" ]]; then
+                                if [[ "$appCustomVersionBody" =~ ^[[:space:]]*strings ]]; then
+                                    appCustomVersion="$appCustomVersionBody"
+                                else
+                                    appCustomVersion=$(eval "$appCustomVersionBody" 2>/dev/null)
+                                fi
+                            fi
+                            PgetAppVersion
+                        fi
                         
                         in_label=0
                         packageID=""
@@ -10862,6 +11854,10 @@ main() {
                 fi
             done
         done
+
+        if [[ "${aapDiscoveryIndexReady}" == "TRUE" ]]; then
+            log_info "Discovery skipped ${discoveryLabelsSkipped} label(s) that are not installed."
+        fi
 
         # Label fragment parsing is finished; everything below relies on normal word splitting.
         IFS=$discovery_saved_IFS
@@ -11011,15 +12007,24 @@ main() {
     # Discovery and queue reconstruction are now complete; the new report is authoritative.
     _aap_discard_pre_discovery_report_backup
 
-    # User-driven patching mode (#258): refresh discovery/report state, optionally stage installers,
-    # optionally notify the user, then exit without silent patching, deferral UI, hard-deadline
-    # enforcement, or installation. Support App / pending-apps dialog remains the install trigger.
+    # User-driven patching mode (#258, #283): refresh discovery/report state and optionally stage
+    # installers. When WorkflowDiscoveryOnlyBackgroundPatchClosedApps is enabled, also install
+    # updates for apps that are not open. Open or blocked apps stay in the report for the Pending
+    # Apps dialog. There is still no deferral UI, hard-deadline enforcement, or interactive installation.
     if [[ "${workflow_discovery_only_active}" == "TRUE" ]]; then
         if [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
             log_info "Discovery-only workflow: staging ${#countOfElementsArray[@]} queued update(s)."
             workflow_stage_updates
         fi
-        if [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+        if [[ "${WorkflowDiscoveryOnlyBackgroundPatchClosedAppsOption}" == "TRUE" ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            log_info "Discovery-only workflow: silently patching closed apps."
+            workflow_silent_patch_closed_apps
+        fi
+        if [[ ${silent_patch_success_count} -gt 0 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
+            send_aap_notification_silent_and_queued "${silent_patch_success_count}" "${#countOfElementsArray[@]}"
+        elif [[ ${silent_patch_success_count} -gt 0 ]]; then
+            send_aap_notification_silent_updated "${silent_patch_success_count}"
+        elif [[ ${#countOfElementsArray[@]} -gt 0 ]]; then
             if aap_notification_enabled apps_queued; then
                 send_aap_notification_apps_queued "${#countOfElementsArray[@]}"
             else
@@ -11107,12 +12112,9 @@ main() {
     # progress window over both steps with per-app status and a determinate progress bar.
     # stagingWindowOpened tracks whether it was opened, since countOfElementsArray can end up
     # empty afterward (all apps patched silently) even though the window still needs closing.
-    # Only open the window when one of the two workflows it is a progress indicator for will
-    # actually run. If neither WorkflowStageUpdatesOption nor WorkflowBackgroundPatchClosedAppsOption
-    # is TRUE, the two blocks below are both skipped and the window would be closed immediately
-    # after opening; the immediate "quit:" then races swiftDialog's own startup (it launches
-    # backgrounded via "&") and is written and the command file removed before swiftDialog has
-    # started reading it, so the window never quits and lingers on screen for the rest of the run.
+    # Open it only when staging or background patching will actually run. If neither is enabled,
+    # the window opens and closes immediately, and that quit races swiftDialog's startup so the
+    # window stays on screen for the rest of the run. Pending-apps Install Now still skips it.
     stagingWindowOpened="FALSE"
     if [[ "${skip_stage_and_background_patch}" != "TRUE" ]] && [[ ${InteractiveModeOption} == 2 ]] && [[ ${#countOfElementsArray[@]} -gt 0 ]] \
        && { [[ "${WorkflowStageUpdatesOption}" == "TRUE" ]] || [[ "${WorkflowBackgroundPatchClosedAppsOption}" == "TRUE" ]]; }; then
