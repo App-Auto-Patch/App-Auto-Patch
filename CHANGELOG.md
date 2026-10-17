@@ -4,6 +4,25 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 # Version 3
 
+## Version 3.8.0
+### 16-Oct-2026
+
+**New Features**
+
+- **Homebrew Support** - Discover and upgrade outdated Homebrew casks and formulae alongside Installomator labels, in the same discovery run, the same user dialog, and the same deferral/deadline/reporting flow. Opt-in; disabled by default. Homebrew runs de-privileged as the owner of the Homebrew prefix. A root-owned prefix disables Homebrew entirely. A prefix owned by someone other than the console user - including when no one is logged in at all - still has its formulae managed as that owner; only casks are held back, since replacing a cask's application bundle is the part that can interact with a GUI session.
+	- Managed Preference Key: `<key>HomebrewEnabled</key>` `<true/>` | `<false/>` - default: `false`
+	- Managed Preference Key: `<key>HomebrewCaskEnabled</key>` `<true/>` | `<false/>` - default: `true`
+	- Managed Preference Key: `<key>HomebrewFormulaEnabled</key>` `<true/>` | `<false/>` - default: `true`
+	- Managed Preference Key: `<key>HomebrewPriority</key>` `<string>INSTALLOMATOR | HOMEBREW</string>` - default: `INSTALLOMATOR`. Decides which tool wins when a package is available from both.
+	- Managed Preference Key: `<key>HomebrewPreferredPackages</key>` `<string>pkg1 pkg2</string>` - per-package override of `HomebrewPriority`. Under `INSTALLOMATOR` priority these packages are taken from Homebrew instead; under `HOMEBREW` priority they are taken from Installomator instead.
+	- Managed Preference Key: `<key>HomebrewBinaryPath</key>` `<string>/opt/homebrew/bin/brew</string>` - optional; auto-detected when unset
+	- Managed Preference Key: `<key>HomebrewIgnoredCasks</key>` `<string>cask1 cask2</string>`
+	- Managed Preference Key: `<key>HomebrewIgnoredFormulae</key>` `<string>formula1 formula2</string>`
+	- CLI: `--homebrew-enabled` / `-disabled`, `--homebrew-cask-enabled` / `-disabled`, `--homebrew-formula-enabled` / `-disabled`, `--homebrew-priority=`, `--homebrew-preferred-packages=`, `--homebrew-binary-path=`, `--homebrew-ignored-casks=`, `--homebrew-ignored-formulae=`
+	- Casks that declare `auto_updates true` or `version :latest` are not managed - they update themselves
+	- Casks installed from a `.pkg` that requires an administrator password cannot be upgraded unattended; the failure is logged and counted, and does not abort the run
+	- `--reset-labels` clears the discovered Homebrew queue alongside the other label lists
+
 ## Version 3.7.6
 ### 13-Oct-2026
 

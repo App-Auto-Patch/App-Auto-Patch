@@ -324,6 +324,61 @@
             ],
             "property_order": 60
         },
+        "HomebrewEnabled": {
+            "type": "boolean",
+            "title": "Homebrew Enabled",
+            "default": "0",
+            "description": "Discover and upgrade outdated Homebrew casks and formulae alongside Installomator labels. Disabled by default.",
+            "property_order": 1300
+        },
+        "HomebrewCaskEnabled": {
+            "type": "boolean",
+            "title": "Homebrew Casks Enabled",
+            "default": "1",
+            "description": "Manage outdated Homebrew casks. Only applies when Homebrew Enabled is on.",
+            "property_order": 1301
+        },
+        "HomebrewFormulaEnabled": {
+            "type": "boolean",
+            "title": "Homebrew Formulae Enabled",
+            "default": "1",
+            "description": "Manage outdated Homebrew formulae. Only applies when Homebrew Enabled is on.",
+            "property_order": 1302
+        },
+        "HomebrewPriority": {
+            "type": "string",
+            "title": "Homebrew Priority",
+            "default": "INSTALLOMATOR",
+            "description": "Which tool wins when the same software is available from both: INSTALLOMATOR (default) or HOMEBREW.",
+            "options": {
+                "enum": ["INSTALLOMATOR", "HOMEBREW"]
+            },
+            "property_order": 1303
+        },
+        "HomebrewPreferredPackages": {
+            "type": "string",
+            "title": "Homebrew Preferred Packages",
+            "description": "Space-separated package names that invert Homebrew Priority per package. Under INSTALLOMATOR priority these come from Homebrew; under HOMEBREW priority they come from Installomator.",
+            "property_order": 1304
+        },
+        "HomebrewBinaryPath": {
+            "type": "string",
+            "title": "Homebrew Binary Path",
+            "description": "Full path to the brew binary. Auto-detected at /opt/homebrew/bin/brew and /usr/local/bin/brew when unset.",
+            "property_order": 1305
+        },
+        "HomebrewIgnoredCasks": {
+            "type": "string",
+            "title": "Homebrew Ignored Casks",
+            "description": "Space-separated cask names to never upgrade. Exact matches only.",
+            "property_order": 1306
+        },
+        "HomebrewIgnoredFormulae": {
+            "type": "string",
+            "title": "Homebrew Ignored Formulae",
+            "description": "Space-separated formula names to never upgrade. Exact matches only, so openssl does not match openssl@3.",
+            "property_order": 1307
+        },
         "DialogOnTop": {
             "type": "string",
             "title": "Dialog On Top",
