@@ -1,0 +1,51 @@
+name: Feature request - Configuration Helper
+description: Suggest something the App Auto-Patch Configuration Helper, the Mac app that builds App Auto-Patch 4 profiles, should do.
+title: "[Helper Feature]: "
+labels: ["enhancement", "needs-review", "configuration helper"]
+assignees: ["TechTrekkie"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. This form is for the **App Auto-Patch Configuration Helper**, the Mac app that builds App Auto-Patch 4 configuration profiles.
+        (For App Auto-Patch itself, use the App Auto-Patch 4 feature request form.)
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe what is hard or missing when you build or deploy App Auto-Patch profiles, before jumping to a solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Roughly what should the helper do? Sketches, wording and setting names are welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you have considered
+      description: Anything you tried first that did not work, or tools that solve part of this.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the helper?
+      options:
+        - Guided Setup
+        - All Settings
+        - Importing profiles
+        - Exporting and the deployment kit
+        - Uploading to Jamf Pro (or another MDM)
+        - The Issues list (validation notes)
+        - The cycle preview
+        - Something new
+    validations:
+      required: true
