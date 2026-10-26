@@ -8,7 +8,7 @@ body:
     attributes:
       value: |
         Thanks for taking the time to report a bug in **App Auto-Patch 4**, the native macOS app.
-        (For the original zsh script, 3.x, use the other bug report form.)
+        (For the original zsh script, 3.x, or the Configuration Helper, use their own bug report forms.)
 
         **Please attach a diagnostic bundle.** It is the single most useful thing for finding the cause:
 

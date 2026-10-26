@@ -1,0 +1,91 @@
+name: Bug report - Configuration Helper
+description: Something in the App Auto-Patch Configuration Helper, the Mac app that builds App Auto-Patch 4 profiles, is not working as expected.
+title: "[Helper Bug]: "
+labels: ["bug", "needs-triage", "configuration helper"]
+assignees: ["TechTrekkie"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug in the **App Auto-Patch Configuration Helper**, the Mac app that builds App Auto-Patch 4 configuration profiles.
+        (For App Auto-Patch itself, use the App Auto-Patch 4 bug report form.)
+
+        If the problem is in a profile the helper exported or imported, attaching that file is the most useful thing you can add. **Remove secrets first**, such as `GitHubAPIToken` and webhook URLs. Jamf Pro passwords and client secrets are never saved in a project or profile.
+
+  - type: input
+    id: helper-version
+    attributes:
+      label: Configuration Helper version
+      description: From the menu bar, App Auto-Patch Configuration Helper, About App Auto-Patch Configuration Helper.
+      placeholder: "e.g. 1.0.0 (1)"
+    validations:
+      required: true
+
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      description: From the Apple menu, About This Mac, or run `sw_vers -productVersion`.
+      placeholder: "e.g. 15.4"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where did it happen?
+      options:
+        - Guided Setup
+        - All Settings
+        - Importing a profile or plist
+        - Exporting (deployment kit, settings profile or plist)
+        - Uploading to Jamf Pro
+        - The Issues list (validation notes)
+        - The cycle preview
+        - Choosing Installomator labels
+        - Somewhere else
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the unexpected behavior. If an exported profile behaves unexpectedly on a Mac, say which App Auto-Patch version that Mac runs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps make this much easier to act on.
+      placeholder: |
+        1. Choose Guided Setup and the Balanced preset
+        2. On the Deadlines step, ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: files
+    attributes:
+      label: Profile or project
+      description: Drag the `.mobileconfig`, plist or `.aapconfig` project into this box, with secrets removed.
+    validations:
+      required: false
+
+  - type: textarea
+    id: extras
+    attributes:
+      label: Anything else
+      description: Screenshots, error messages, workarounds you tried.
+    validations:
+      required: false

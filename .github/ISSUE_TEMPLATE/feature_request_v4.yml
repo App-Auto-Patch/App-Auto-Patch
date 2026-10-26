@@ -8,7 +8,7 @@ body:
     attributes:
       value: |
         Thanks for the suggestion. This form is for **App Auto-Patch 4**, the native macOS app.
-        (For the original zsh script, 3.x, use the other feature request form.)
+        (For the original zsh script, 3.x, or the Configuration Helper, use their own feature request forms.)
 
         Requests on this form are copied to the project's private development tracker so the team can work on them. The title, description and comments are copied; your username is shown there as the reporter.
 
