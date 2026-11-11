@@ -13,7 +13,7 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 **Changes**
 
-- `ConvertAppsInHomeFolder`, `IgnoreAppsInHomeFolder`, `DialogOnTop`, `UseOverlayIcon`, and `RemoveInstallomatorPath` now accept a boolean (`<true/>` / `<false/>`) as well as the string `TRUE` / `FALSE`, in any case. Before, these settings only worked as the string `TRUE`, so a boolean `<true/>` turned the setting off. Existing string values keep working.
+- `ConvertAppsInHomeFolder`, `IgnoreAppsInHomeFolder`, `DialogOnTop`, `UseOverlayIcon`, and `RemoveInstallomatorPath` now accept a boolean (`<true/>` / `<false/>`) as well as the string `TRUE` / `FALSE`, in any case. Before, these settings only worked as the string `TRUE`, so a boolean `<true/>` turned the setting off. Existing string values keep working. (#345)
 
 ## Version 3.7.6
 ### 13-Oct-2026
