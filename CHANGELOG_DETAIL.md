@@ -2,6 +2,10 @@
 
 # Version 3
 
+## Version 3.7.7
+### 11-Nov-2026 (1) - Build 3.7.7.2611111200
+- [#343](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/343): the Zoom call active check in `workflow_silent_patch_closed_apps` and `workflow_do_Installations` reported a meeting when `pgrep CptHost` **or** `pgrep aomhost` returned a PID. On the affected Mac, Zoom started an `aomhost` about 30 seconds after the app opened, as a child of `zoom.us`, and kept it running after meetings ended. That process alone made every run skip the `zoom*` label. When a meeting is joined, Zoom starts a `CptHost` and a second `aomhost` together, and both exit when it ends. Both checks now call `zoom_meeting_active`, which returns true only when `zoom.us` is running and either `CptHost` is running or `zoom.us` has UDP sockets on port 8801 (Zoom's meeting media port). `aomhost` is no longer checked. Process names are matched exactly (`pgrep -x`). The UDP check is a fallback because some networks send Zoom media over 443.
+
 ## Version 3.7.6
 ### 13-Oct-2026 (1) - Build 3.7.6.2610131000
 - [#312](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/312): discovery queued the fragment filename. `missiveapp.sh` contains the case name `missive`, so Installomator reported `label not found` when AAP called `missiveapp`. A multi-name header such as `adobebrackets` / `bracketsio` or `chatgpt` / `codex` should still use the name that matches the filename. The queued name is now the filename when that filename is one of the case names, and otherwise the first case name. Later reads of the fragment, including staging and dialog names, follow that name back to the original file.

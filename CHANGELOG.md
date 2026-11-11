@@ -4,6 +4,13 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 # Version 3
 
+## Version 3.7.7
+### 11-Nov-2026
+
+**Fixes**
+
+- Fixed: with `ZoomCallActiveCheck` on, Zoom updates were skipped on a Mac that was not in a meeting. Zoom can keep an `aomhost` process running for as long as the app is open, and that process alone was treated as a meeting. A meeting is now detected when Zoom's `CptHost` process is running, or when Zoom has meeting media connections on UDP port 8801. (#343)
+
 ## Version 3.7.6
 ### 13-Oct-2026
 

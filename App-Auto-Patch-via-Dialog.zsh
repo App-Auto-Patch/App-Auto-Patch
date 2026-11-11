@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.7.6"
-scriptDate="2026/10/13"
-scriptBuild="3.7.6.2610131000"
+scriptVersion="3.7.7"
+scriptDate="2026/11/11"
+scriptBuild="3.7.7.2611111200"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -8850,6 +8850,25 @@ is_excluded_background_label() {
     (( ${excludedBackgroundLabelsArray[(Ie)${label}]} ))
 }
 
+zoom_meeting_active() {
+    # Returns 0 (true) while a Zoom meeting is in progress (#343).
+    # aomhost is not used: Zoom can start one when the app opens and keep it running for as long
+    # as Zoom is open, so an aomhost alone does not mean a meeting. When a meeting is joined, Zoom
+    # starts CptHost (alongside a second aomhost) and both exit when the meeting ends.
+    /usr/bin/pgrep -qx zoom.us || return 1
+    if /usr/bin/pgrep -qx CptHost; then
+        log_verbose "Zoom meeting check: CptHost is running"
+        return 0
+    fi
+    # Fallback: Zoom's meeting media connections use UDP port 8801. Some networks send this
+    # traffic over 443 instead, which is why CptHost is checked first.
+    if /usr/sbin/lsof -nP -a -i UDP -c zoom.us 2>/dev/null | /usr/bin/grep -q ':8801'; then
+        log_verbose "Zoom meeting check: zoom.us has UDP connections on port 8801"
+        return 0
+    fi
+    return 1
+}
+
 filter_excluded_background_labels_from_silent_install() {
     # For fully-silent runs only: pull excluded-background labels out of the install queue so
     # they are not patched unattended, while leaving them in DiscoveredLabels / the report PLIST
@@ -9108,7 +9127,7 @@ workflow_silent_patch_closed_apps() {
     local progressTotal=${#queuedLabelsArray[@]}
     local progressCompleted=0
     # Same zsh behavior as workflow_stage_updates: a bare `local` inside the loop reprints the last value. (#265)
-    local _dname _ipath _cpthostpid _aomhostpid
+    local _dname _ipath
 
     _aap_mini_progress_begin "${progressTotal}" "${display_string_silent_patch_progress}" "${display_string_staging_message}"
 
@@ -9138,9 +9157,7 @@ workflow_silent_patch_closed_apps() {
 
         # Respect Zoom call active check for zoom labels
         if [[ "${zoom_call_active_check_option}" == "TRUE" && "${label}" == "zoom"* ]]; then
-            _cpthostpid=$(pgrep CptHost 2>/dev/null)
-            _aomhostpid=$(pgrep aomhost 2>/dev/null)
-            if [[ -n "${_cpthostpid}" || -n "${_aomhostpid}" ]]; then
+            if zoom_meeting_active; then
                 log_info "Zoom meeting in progress. Skipping silent patch of '${label}'; adding to user dialog queue."
                 remainingLabels+=("${label}")
                 _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
@@ -9333,10 +9350,7 @@ workflow_do_Installations() {
 
         if [[ ${zoom_call_active_check_option} == "TRUE" && ${label} == "zoom"* ]] ; then
 
-	        CPTHOSTPID=$(pgrep CptHost)
-	        AOMHOSTPID=$(pgrep aomhost)
-
-	        if [[ -n "$CPTHOSTPID" || -n "$AOMHOSTPID" ]]; then
+	        if zoom_meeting_active; then
 		        log_error "Zoom Meeting in progress. Skipping Update"
                 let errorCount++
                 itemStatus="fail"
