@@ -3,7 +3,10 @@
 # Version 3
 
 ## Version 3.7.7
-### 11-Nov-2026 (1) - Build 3.7.7.2611111200
+### 11-Nov-2026 (2) - Build 3.7.7.2611111125
+- `ConvertAppsInHomeFolder`, `IgnoreAppsInHomeFolder`, `DialogOnTop`, `UseOverlayIcon`, and `RemoveInstallomatorPath` were compared only with `== "TRUE"`, and nothing normalized them first. `defaults read` returns a plist boolean as `1` / `0`, so `<true/>` in a configuration profile was treated as off. That turned off `ConvertAppsInHomeFolder` and `UseOverlayIcon`, which default to `TRUE`. `manage_parameter_options` now normalizes each one to `TRUE` / `FALSE`, accepting `1` / `0` or `true` / `false` in any case. Any other value logs an error and uses the default. The resolved value is saved to the local plist with `-bool`, as the other boolean settings are. The existing `== "TRUE"` checks are unchanged. The usage help now lists these keys as `<true/> | <false/>`.
+
+### 11-Nov-2026 (1) - Build 3.7.7.2611111117
 - [#343](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/343): the Zoom call active check in `workflow_silent_patch_closed_apps` and `workflow_do_Installations` reported a meeting when `pgrep CptHost` **or** `pgrep aomhost` returned a PID. On the affected Mac, Zoom started an `aomhost` about 30 seconds after the app opened, as a child of `zoom.us`, and kept it running after meetings ended. That process alone made every run skip the `zoom*` label. When a meeting is joined, Zoom starts a `CptHost` and a second `aomhost` together, and both exit when it ends. Both checks now call `zoom_meeting_active`, which returns true only when `zoom.us` is running and either `CptHost` is running or `zoom.us` has UDP sockets on port 8801 (Zoom's meeting media port). `aomhost` is no longer checked. Process names are matched exactly (`pgrep -x`). The UDP check is a fallback because some networks send Zoom media over 443.
 
 ## Version 3.7.6

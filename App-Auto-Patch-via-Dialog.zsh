@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.7"
 scriptDate="2026/11/11"
-scriptBuild="3.7.7.2611111200"
+scriptBuild="3.7.7.2611111125"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -129,7 +129,7 @@ echo "
     <key>BannerImage</key> <string>Filepath|URL|colour=#hex|gradient=colour,colour</string>
     <key>BannerTitle</key> <string>Text to display within the banner (leave unset for no title text - e.g. if BannerImage already has title text baked in)</string>
     <key>BannerHeight</key> <integer>points</integer>
-    <key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</string>
+    <key>ConvertAppsInHomeFolder</key> <true/> | <false/>
     <key>DaysUntilReset</key> <integer>number</integer>
     <key>DeadlineCountFocus</key> <integer>number</integer>
     <key>DeadlineCountHard</key> <integer>number</integer>
@@ -141,12 +141,12 @@ echo "
     <key>DeferralTimerMenu</key> <string>minutes,minutes,minutes,etc...</string>
     <key>DeferralTimerWorkflowRelaunch</key> <integer>minutes</integer>
     <key>DialogIcon</key> <string>Filepath|URL</string>
-    <key>DialogOnTop</key> <string>TRUE,FALSE</string>
+    <key>DialogOnTop</key> <true/> | <false/>
     <key>DialogTimeoutDeferral</key> <integer>seconds</integer>
     <key>DialogTimeoutDeferralAction</key> <string>Defer,Continue</string>
     <key>DialogTimeoutConfirmInstall</key> <integer>seconds</integer>
     <key>DialogQuitHandlingDiscoveryStaging</key> <string>PROMPT,CONTINUE,STOP</string> (Stop is ignored when a hard deadline is due or Install Now is running)
-    <key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>
+    <key>IgnoreAppsInHomeFolder</key> <true/> | <false/>
     <key>IgnoredLabels</key> <string>label label label etc</string>
     <key>ExcludedBackgroundLabels</key> <string>label label label etc</string>
     <key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc</string>
@@ -168,7 +168,7 @@ echo "
     <key>MonthlyPatchingCadenceStartTime</key> <string>09:00:00</string>
     <key>OptionalLabels</key> <string>label label label etc</string>
     <key>PatchWeekStartDay</key> <integer>number</integer>
-    <key>RemoveInstallomatorPath</key> <string>TRUE,FALSE</string>
+    <key>RemoveInstallomatorPath</key> <true/> | <false/>
     <key>RequiredLabels</key> <string>label label label etc</string>
     <key>SelfUpdateEnabled</key> <true/> | <false/>
     <key>SelfUpdateFrequency</key> <string>daily|weekly|monthly</string>
@@ -178,7 +178,7 @@ echo "
     <key>SupportTeamWebsite</key> <string>URL</string>
     <key>UnattendedExit</key> <string>TRUE,FALSE</string>
     <key>UnattendedExitSeconds</key> <integer>seconds</integer>
-    <key>UseOverlayIcon</key> <string>TRUE,FALSE</string>
+    <key>UseOverlayIcon</key> <true/> | <false/>
     <key>VerboseMode</key> <true/> | <false/>
     <key>VersionComparisonInstallomatorFallback</key> <true/> | <false/>
     <key>VersionComparisonMethod</key> <string>IS_AT_LEAST,EQUAL_TO</string>
@@ -2811,6 +2811,71 @@ manage_parameter_options() {
         defaults write "${appAutoPatchLocalPLIST}" WorkflowStageUpdates -bool false
     fi
     { [[ -n "${WorkflowStageUpdatesOption}" ]]; } && log_verbose "WorkflowStageUpdatesOption is: ${WorkflowStageUpdatesOption}"
+
+    # ConvertAppsInHomeFolder, IgnoreAppsInHomeFolder, DialogOnTop, UseOverlayIcon, and
+    # RemoveInstallomatorPath accept a plist boolean (`defaults read` returns 1/0) or the string
+    # TRUE/FALSE in any case. Each is normalized to TRUE/FALSE, so the later `== "TRUE"` checks
+    # work for either type, and saved to ${appAutoPatchLocalPLIST} as a boolean.
+
+    # Manage ${convertAppsInHomeFolder} (default TRUE) and save to ${appAutoPatchLocalPLIST}.
+    case "${convertAppsInHomeFolder:l}" in
+        1|true)  convertAppsInHomeFolder="TRUE" ;;
+        0|false) convertAppsInHomeFolder="FALSE" ;;
+        *)
+            log_error "ConvertAppsInHomeFolder must be a boolean (or TRUE/FALSE); using TRUE."
+            convertAppsInHomeFolder="TRUE"
+        ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" ConvertAppsInHomeFolder -bool "${convertAppsInHomeFolder:l}"
+    log_verbose "convertAppsInHomeFolder is: ${convertAppsInHomeFolder}"
+
+    # Manage ${ignoreAppsInHomeFolder} (default FALSE) and save to ${appAutoPatchLocalPLIST}.
+    case "${ignoreAppsInHomeFolder:l}" in
+        1|true)  ignoreAppsInHomeFolder="TRUE" ;;
+        0|false) ignoreAppsInHomeFolder="FALSE" ;;
+        *)
+            log_error "IgnoreAppsInHomeFolder must be a boolean (or TRUE/FALSE); using FALSE."
+            ignoreAppsInHomeFolder="FALSE"
+        ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" IgnoreAppsInHomeFolder -bool "${ignoreAppsInHomeFolder:l}"
+    log_verbose "ignoreAppsInHomeFolder is: ${ignoreAppsInHomeFolder}"
+
+    # Manage ${dialogOnTop} (default FALSE) and save to ${appAutoPatchLocalPLIST}.
+    case "${dialogOnTop:l}" in
+        1|true)  dialogOnTop="TRUE" ;;
+        0|false) dialogOnTop="FALSE" ;;
+        *)
+            log_error "DialogOnTop must be a boolean (or TRUE/FALSE); using FALSE."
+            dialogOnTop="FALSE"
+        ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" DialogOnTop -bool "${dialogOnTop:l}"
+    log_verbose "dialogOnTop is: ${dialogOnTop}"
+
+    # Manage ${useOverlayIcon} (default TRUE) and save to ${appAutoPatchLocalPLIST}.
+    case "${useOverlayIcon:l}" in
+        1|true)  useOverlayIcon="TRUE" ;;
+        0|false) useOverlayIcon="FALSE" ;;
+        *)
+            log_error "UseOverlayIcon must be a boolean (or TRUE/FALSE); using TRUE."
+            useOverlayIcon="TRUE"
+        ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" UseOverlayIcon -bool "${useOverlayIcon:l}"
+    log_verbose "useOverlayIcon is: ${useOverlayIcon}"
+
+    # Manage ${removeInstallomatorPath} (default FALSE) and save to ${appAutoPatchLocalPLIST}.
+    case "${removeInstallomatorPath:l}" in
+        1|true)  removeInstallomatorPath="TRUE" ;;
+        0|false) removeInstallomatorPath="FALSE" ;;
+        *)
+            log_error "RemoveInstallomatorPath must be a boolean (or TRUE/FALSE); using FALSE."
+            removeInstallomatorPath="FALSE"
+        ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" RemoveInstallomatorPath -bool "${removeInstallomatorPath:l}"
+    log_verbose "removeInstallomatorPath is: ${removeInstallomatorPath}"
 
     # Manage ${bannerImageOption}, ${bannerTitleOption}, and ${bannerHeightOption} — store the raw
     # values to the local plist so they persist for reporting; no boolean coercion needed.

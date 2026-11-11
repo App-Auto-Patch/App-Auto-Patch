@@ -11,6 +11,10 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 
 - Fixed: with `ZoomCallActiveCheck` on, Zoom updates were skipped on a Mac that was not in a meeting. Zoom can keep an `aomhost` process running for as long as the app is open, and that process alone was treated as a meeting. A meeting is now detected when Zoom's `CptHost` process is running, or when Zoom has meeting media connections on UDP port 8801. (#343)
 
+**Changes**
+
+- `ConvertAppsInHomeFolder`, `IgnoreAppsInHomeFolder`, `DialogOnTop`, `UseOverlayIcon`, and `RemoveInstallomatorPath` now accept a boolean (`<true/>` / `<false/>`) as well as the string `TRUE` / `FALSE`, in any case. Before, these settings only worked as the string `TRUE`, so a boolean `<true/>` turned the setting off. Existing string values keep working.
+
 ## Version 3.7.6
 ### 13-Oct-2026
 

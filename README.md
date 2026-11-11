@@ -17,6 +17,7 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 
 ## New features/Specific Changes in 3.7.7
 - The Zoom call active check no longer reports a meeting because of an `aomhost` process that Zoom keeps running while the app is open. A meeting is detected when Zoom's `CptHost` process is running, or when Zoom has meeting media connections on UDP port 8801. (#343)
+- `ConvertAppsInHomeFolder`, `IgnoreAppsInHomeFolder`, `DialogOnTop`, `UseOverlayIcon`, and `RemoveInstallomatorPath` now accept a boolean (`<true/>` / `<false/>`) as well as the string `TRUE` / `FALSE`, in any case.
 
 ## New features/Specific Changes in 3.7.6
 - A fragment whose filename is not an Installomator label is queued as the case name. `missiveapp.sh` is installed as `missive`. A filename that is one of the case names, such as `bracketsio` or `chatgpt`, is still used. (#312)
