@@ -9,9 +9,9 @@
 <key>AppTitle</key>
 <string>App Auto-Patch via Intune</string>
 <key>ConvertAppsInHomeFolder</key>
-<string>TRUE</string>
+<true/>
 <key>IgnoreAppsInHomeFolder</key>
-<string>FALSE</string>
+<false/>
 <key>InstallomatorOptions</key>
 <string>BLOCKING_PROCESS_ACTION=prompt_user NOTIFY=silent LOGO=microsoft</string>
 <key>InstallomatorVersion</key>
@@ -37,29 +37,29 @@
 <key>DaysUntilReset</key>
 <integer>7</integer>
 <key>UnattendedExit</key>
-<string>FALSE</string>
+<false/>
 <key>UnattendedExitSeconds</key>
 <integer>60</integer>
 <key>DialogOnTop</key>
-<string>TRUE</string>
+<true/>
 <key>DialogQuitHandlingDiscoveryStaging</key>
 <string>PROMPT</string>
 <key>StaleProcessTimeoutSeconds</key>
 <integer>3600</integer>
 <key>UseOverlayIcon</key>
-<string>TRUE</string>
+<true/>
 <key>RemoveInstallomatorPath</key>
-<string>FALSE</string>
+<false/>
 <key>VerboseMode</key>
 <string>TRUE</string>
 <key>WorkflowDisableAppDiscovery</key>
-<string>FALSE</string>
+<false/>
 <key>WorkflowScheduledDiscovery</key>
 <false/>
 <key>WorkflowDiscoveryOnlyBackgroundPatchClosedApps</key>
 <false/>
 <key>WorkflowDisableRelaunch</key>
-<string>FALSE</string>
+<false/>
 <key>WebhookFeature</key>
 <string>FALSE</string>
 <key>WebhookURLSlack</key>

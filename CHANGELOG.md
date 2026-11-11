@@ -14,6 +14,12 @@ This is a user-facing summary of App Auto-Patch releases: what changed, what's n
 **Changes**
 
 - `ConvertAppsInHomeFolder`, `IgnoreAppsInHomeFolder`, `DialogOnTop`, `UseOverlayIcon`, and `RemoveInstallomatorPath` now accept a boolean (`<true/>` / `<false/>`) as well as the string `TRUE` / `FALSE`, in any case. Before, these settings only worked as the string `TRUE`, so a boolean `<true/>` turned the setting off. Existing string values keep working. (#345)
+- Profile manifests, version 7:
+  - Ten settings are now booleans instead of a `TRUE` / `FALSE` text choice: `ConvertAppsInHomeFolder`, `IgnoreAppsInHomeFolder`, `DialogOnTop`, `UseOverlayIcon`, `RemoveInstallomatorPath`, `InstallomatorUpdateDisable`, `UnattendedExit`, `GitHubAPIAuthEnabled`, `WorkflowDisableAppDiscovery`, and `WorkflowDisableRelaunch`. The first five need App Auto-Patch 3.7.7 or later as booleans; on earlier versions a boolean `true` for those five is treated as off.
+  - `VerboseMode` is now in the manifests.
+  - In the Jamf manifest, `ZoomCallActiveCheck` and `SelfUpdateEnabled` now default to `true` instead of the string `"1"`.
+  - The Intune configuration and the All-Options example profiles use booleans for the same settings. (#345)
+- **Before upgrading the manifest in Jamf Pro:** a profile built from the old manifest stores these settings as `"TRUE"` / `"FALSE"` strings. Those keep working with 3.7.7, but after you upload the new schema, set each one again in the profile and save it.
 - A setting removed from the managed configuration profile is now also cleared from the local plist, so its default applies again. Before, AAP kept applying the value it had saved locally until the local plist was cleared by hand or with `--reset-defaults`. Settings that were only set locally, with command-line options or `defaults write`, are not touched. If the whole profile is missing, or has no App Auto-Patch settings, the settings saved from it are cleared only once that has been true on two runs in a row, so a profile that is briefly gone while MDM reinstalls it does not reset everything. Settings removed before upgrading to 3.7.7 are not cleared; use `--reset-defaults` for those. (#346)
 
 ## Version 3.7.6

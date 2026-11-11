@@ -13,7 +13,7 @@
 	<key>pfm_format_version</key>
 	<integer>1</integer>
 	<key>pfm_last_modified</key>
-	<date>2026-10-05T00:00:00Z</date>
+	<date>2026-11-11T00:00:00Z</date>
 	<key>pfm_platforms</key>
 	<array>
 		<string>macOS</string>
@@ -574,25 +574,15 @@ During a profile replacement, the system updates payloads with the same 'Payload
 			<key>pfm_app_min</key>
 			<string>3.0</string>
 			<key>pfm_description</key>
-			<string>Forces the AAP dialogs to stay on top of all other windows</string>
+			<string>Forces the AAP dialogs to stay on top of all other windows. Set as a boolean with App Auto-Patch 3.7.7 or later; earlier versions only accept the string TRUE.</string>
 			<key>pfm_documentation_url</key>
 			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#dialogontop</string>
 			<key>pfm_name</key>
 			<string>DialogOnTop</string>
-			<key>pfm_range_list</key>
-			<array>
-				<string>TRUE</string>
-				<string>FALSE</string>
-			</array>
-			<key>pfm_range_list_titles</key>
-			<array>
-				<string>Force Dialog On Top</string>
-				<string>Do Not Force Dialog On Top</string>
-			</array>
 			<key>pfm_title</key>
 			<string>Dialog On Top</string>
 			<key>pfm_type</key>
-			<string>string</string>
+			<string>boolean</string>
 		</dict>
 		<dict>
 			<key>pfm_app_min</key>
@@ -769,20 +759,10 @@ During a profile replacement, the system updates payloads with the same 'Payload
 			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#unattendedexit</string>
 			<key>pfm_name</key>
 			<string>UnattendedExit</string>
-			<key>pfm_range_list</key>
-			<array>
-				<string>TRUE</string>
-				<string>FALSE</string>
-			</array>
-			<key>pfm_range_list_titles</key>
-			<array>
-				<string>Auto Close Dialog</string>
-				<string>Do Not Auto Close Dialog</string>
-			</array>
 			<key>pfm_title</key>
 			<string>Unattended Exit</string>
 			<key>pfm_type</key>
-			<string>string</string>
+			<string>boolean</string>
 		</dict>
 		<dict>
 			<key>pfm_app_min</key>
@@ -804,25 +784,15 @@ During a profile replacement, the system updates payloads with the same 'Payload
 			<key>pfm_app_min</key>
 			<string>3.0</string>
 			<key>pfm_description</key>
-			<string>Toggles swiftDialog to use an overlay icon</string>
+			<string>Toggles swiftDialog to use an overlay icon. Set as a boolean with App Auto-Patch 3.7.7 or later; earlier versions only accept the string TRUE.</string>
 			<key>pfm_documentation_url</key>
 			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#useoverlayicon</string>
 			<key>pfm_name</key>
 			<string>UseOverlayIcon</string>
-			<key>pfm_range_list</key>
-			<array>
-				<string>TRUE</string>
-				<string>FALSE</string>
-			</array>
-			<key>pfm_range_list_titles</key>
-			<array>
-				<string>Use Overlay Icon</string>
-				<string>Do Not Use Overlay Icon</string>
-			</array>
 			<key>pfm_title</key>
 			<string>Use Overlay Icon</string>
 			<key>pfm_type</key>
-			<string>string</string>
+			<string>boolean</string>
 		</dict>
 		<dict>
 			<key>pfm_app_min</key>
@@ -970,53 +940,33 @@ During a profile replacement, the system updates payloads with the same 'Payload
 			<key>pfm_app_min</key>
 			<string>3.0</string>
 			<key>pfm_default</key>
-			<string>TRUE</string>
+			<true/>
 			<key>pfm_description</key>
-			<string>This will convert any apps found in the users home folder to the /Applications folder</string>
+			<string>This will convert any apps found in the users home folder to the /Applications folder. Set as a boolean with App Auto-Patch 3.7.7 or later; earlier versions only accept the string TRUE.</string>
 			<key>pfm_documentation_url</key>
 			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#convertappsinhomefolder</string>
 			<key>pfm_name</key>
 			<string>ConvertAppsInHomeFolder</string>
-			<key>pfm_range_list</key>
-			<array>
-				<string>TRUE</string>
-				<string>FALSE</string>
-			</array>
-			<key>pfm_range_list_titles</key>
-			<array>
-				<string>Convert Apps</string>
-				<string>Do Not Convert Apps</string>
-			</array>
 			<key>pfm_title</key>
 			<string>Convert Apps In Home Folder</string>
 			<key>pfm_type</key>
-			<string>string</string>
+			<string>boolean</string>
 		</dict>
 		<dict>
 			<key>pfm_app_min</key>
 			<string>3.0</string>
 			<key>pfm_default</key>
-			<string>FALSE</string>
+			<false/>
 			<key>pfm_description</key>
-			<string>Ignore apps found in '/Users/'. If an update is found in '/Users/' and variable is set to false, the app will be updated into the application's default path</string>
+			<string>Ignore apps found in '/Users/'. If an update is found in '/Users/' and variable is set to false, the app will be updated into the application's default path. Set as a boolean with App Auto-Patch 3.7.7 or later; earlier versions only accept the string TRUE.</string>
 			<key>pfm_documentation_url</key>
 			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#ignoreappsinhomefolder</string>
 			<key>pfm_name</key>
 			<string>IgnoreAppsInHomeFolder</string>
-			<key>pfm_range_list</key>
-			<array>
-				<string>TRUE</string>
-				<string>FALSE</string>
-			</array>
-			<key>pfm_range_list_titles</key>
-			<array>
-				<string>Ignore Apps in Home Folder</string>
-				<string>Move Apps to the Default Path</string>
-			</array>
 			<key>pfm_title</key>
 			<string>Ignore Apps In Home Folder</string>
 			<key>pfm_type</key>
-			<string>string</string>
+			<string>boolean</string>
 		</dict>
 		<dict>
 			<key>pfm_app_min</key>
@@ -1054,53 +1004,33 @@ During a profile replacement, the system updates payloads with the same 'Payload
 			<key>pfm_app_min</key>
 			<string>3.2</string>
 			<key>pfm_default</key>
-			<string>FALSE</string>
+			<false/>
 			<key>pfm_description</key>
 			<string>This will prevent Installomator from automatically updating. If Installomator does not exist in the working folder, it will still download from GitHub to prevent script failure</string>
 			<key>pfm_documentation_url</key>
 			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Installomator-Integration#installomator-update-disable</string>
 			<key>pfm_name</key>
 			<string>InstallomatorUpdateDisable</string>
-			<key>pfm_range_list</key>
-			<array>
-				<string>TRUE</string>
-				<string>FALSE</string>
-			</array>
-			<key>pfm_range_list_titles</key>
-			<array>
-				<string>Disable Installomator Updates</string>
-				<string>Enable Installomator Updates</string>
-			</array>
 			<key>pfm_title</key>
 			<string>Installomator Update Disable</string>
 			<key>pfm_type</key>
-			<string>string</string>
+			<string>boolean</string>
 		</dict>
 		<dict>
 			<key>pfm_app_min</key>
 			<string>3.7.0</string>
 			<key>pfm_default</key>
-			<string>FALSE</string>
+			<false/>
 			<key>pfm_description</key>
 			<string>When TRUE, App Auto-Patch authenticates GitHub REST API requests (api.github.com) with the personal access token in GitHubAPIToken, raising the rate limit from 60 to 5,000 requests per hour. Managed preferences only - the token is never written to the local preference file and is never logged. If this key is TRUE, GitHubAPIToken is required or startup validation fails.</string>
 			<key>pfm_documentation_url</key>
 			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#githubapiauthenabled</string>
 			<key>pfm_name</key>
 			<string>GitHubAPIAuthEnabled</string>
-			<key>pfm_range_list</key>
-			<array>
-				<string>TRUE</string>
-				<string>FALSE</string>
-			</array>
-			<key>pfm_range_list_titles</key>
-			<array>
-				<string>Enable GitHub API Authentication</string>
-				<string>Disable GitHub API Authentication</string>
-			</array>
 			<key>pfm_title</key>
 			<string>GitHub API Auth Enabled</string>
 			<key>pfm_type</key>
-			<string>string</string>
+			<string>boolean</string>
 		</dict>
 		<dict>
 			<key>pfm_app_min</key>
@@ -1316,27 +1246,17 @@ During a profile replacement, the system updates payloads with the same 'Payload
 			<key>pfm_app_min</key>
 			<string>3.0</string>
 			<key>pfm_default</key>
-			<string>FALSE</string>
+			<false/>
 			<key>pfm_description</key>
-			<string>Remove Installomator after App Auto-Patch is completed</string>
+			<string>Remove Installomator after App Auto-Patch is completed. Set as a boolean with App Auto-Patch 3.7.7 or later; earlier versions only accept the string TRUE.</string>
 			<key>pfm_documentation_url</key>
 			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Configure-Settings#removeinstallomatorpath</string>
 			<key>pfm_name</key>
 			<string>RemoveInstallomatorPath</string>
-			<key>pfm_range_list</key>
-			<array>
-				<string>TRUE</string>
-				<string>FALSE</string>
-			</array>
-			<key>pfm_range_list_titles</key>
-			<array>
-				<string>Remove Installomator</string>
-				<string>Do Not Remove Installomator</string>
-			</array>
 			<key>pfm_title</key>
 			<string>Remove Installomator Path</string>
 			<key>pfm_type</key>
-			<string>string</string>
+			<string>boolean</string>
 		</dict>
 		<dict>
 			<key>pfm_app_min</key>
@@ -1492,27 +1412,17 @@ During a profile replacement, the system updates payloads with the same 'Payload
 			<key>pfm_app_min</key>
 			<string>3.0</string>
 			<key>pfm_default</key>
-			<string>FALSE</string>
+			<false/>
 			<key>pfm_description</key>
 			<string>Disables the discovery of applications that require patching. If a list of labels from a previous discovery exists, AAP will use that list for the workflow</string>
 			<key>pfm_documentation_url</key>
 			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#disable-app-discovery</string>
 			<key>pfm_name</key>
 			<string>WorkflowDisableAppDiscovery</string>
-			<key>pfm_range_list</key>
-			<array>
-				<string>TRUE</string>
-				<string>FALSE</string>
-			</array>
-			<key>pfm_range_list_titles</key>
-			<array>
-				<string>Disable App Discovery</string>
-				<string>Enable App Discovery</string>
-			</array>
 			<key>pfm_title</key>
 			<string>Disable App Discovery Workflow</string>
 			<key>pfm_type</key>
-			<string>string</string>
+			<string>boolean</string>
 		</dict>
 		<dict>
 			<key>pfm_app_min</key>
@@ -1598,27 +1508,17 @@ During a profile replacement, the system updates payloads with the same 'Payload
 			<key>pfm_app_min</key>
 			<string>3.0</string>
 			<key>pfm_default</key>
-			<string>FALSE</string>
+			<false/>
 			<key>pfm_description</key>
 			<string>Disable the automatic relaunch of AAP after the current workflow successfully completes</string>
 			<key>pfm_documentation_url</key>
 			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Workflows#disable-automatic-relaunch</string>
 			<key>pfm_name</key>
 			<string>WorkflowDisableRelaunch</string>
-			<key>pfm_range_list</key>
-			<array>
-				<string>TRUE</string>
-				<string>FALSE</string>
-			</array>
-			<key>pfm_range_list_titles</key>
-			<array>
-				<string>Disable Automatic Relaunch</string>
-				<string>Enable Automatic Relaunch</string>
-			</array>
 			<key>pfm_title</key>
 			<string>Disable Relaunch Workflow</string>
 			<key>pfm_type</key>
-			<string>string</string>
+			<string>boolean</string>
 		</dict>
 		<dict>
 			<key>pfm_app_min</key>
@@ -1781,6 +1681,22 @@ During a profile replacement, the system updates payloads with the same 'Payload
 			<string>VersionComparisonInstallomatorFallback</string>
 			<key>pfm_title</key>
 			<string>Version Comparison Installomator Fallback</string>
+			<key>pfm_type</key>
+			<string>boolean</string>
+		</dict>
+		<dict>
+			<key>pfm_app_min</key>
+			<string>3.7.0</string>
+			<key>pfm_default</key>
+			<false/>
+			<key>pfm_description</key>
+			<string>When enabled, App Auto-Patch writes detailed troubleshooting output to /Library/Management/AppAutoPatch/logs/aap_verbose.log. Each run replaces that log, and the previous run is kept in logs-verbose-archive (the 10 newest files). Leave this off unless you are troubleshooting.</string>
+			<key>pfm_documentation_url</key>
+			<string>https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Logs#verbose-mode-version-37</string>
+			<key>pfm_name</key>
+			<string>VerboseMode</string>
+			<key>pfm_title</key>
+			<string>Verbose Mode</string>
 			<key>pfm_type</key>
 			<string>boolean</string>
 		</dict>
@@ -2958,6 +2874,6 @@ During a profile replacement, the system updates payloads with the same 'Payload
 	<key>pfm_unique</key>
 	<true/>
 	<key>pfm_version</key>
-	<integer>6</integer>
+	<integer>7</integer>
 </dict>
 </plist>

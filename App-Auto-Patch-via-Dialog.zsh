@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.7"
 scriptDate="2026/11/11"
-scriptBuild="3.7.7.2611111139"
+scriptBuild="3.7.7.2611111148"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -150,11 +150,11 @@ echo "
     <key>IgnoredLabels</key> <string>label label label etc</string>
     <key>ExcludedBackgroundLabels</key> <string>label label label etc</string>
     <key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc</string>
-    <key>InstallomatorUpdateDisable</key> <string>TRUE,FALSE</string>
+    <key>InstallomatorUpdateDisable</key> <true/> | <false/>
     <key>InstallomatorVersion</key> <string>Main,Release,Custom</string>
     <key>InstallomatorVersionCustomRepoPath</key> <string>Installomator/Installomator</string>
     <key>InstallomatorVersionCustomBranchName</key> <string>main</string>
-    <key>GitHubAPIAuthEnabled</key> <string>TRUE,FALSE</string>
+    <key>GitHubAPIAuthEnabled</key> <true/> | <false/>
     <key>GitHubAPIToken</key> <string>github_pat_...</string>
     <key>PrePatchScript</key> <string>/Library/Management/AppAutoPatch/Hooks/pre.sh</string>
     <key>PostPatchScript</key> <string>/Library/Management/AppAutoPatch/Hooks/post.sh</string>
@@ -176,7 +176,7 @@ echo "
     <key>SupportTeamName</key> <string>name</string>
     <key>SupportTeamPhone</key> <string>phone</string>
     <key>SupportTeamWebsite</key> <string>URL</string>
-    <key>UnattendedExit</key> <string>TRUE,FALSE</string>
+    <key>UnattendedExit</key> <true/> | <false/>
     <key>UnattendedExitSeconds</key> <integer>seconds</integer>
     <key>UseOverlayIcon</key> <true/> | <false/>
     <key>VerboseMode</key> <true/> | <false/>

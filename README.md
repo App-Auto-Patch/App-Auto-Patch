@@ -18,6 +18,7 @@ App Auto-Patch simplifies the process of inventorying installed applications and
 ## New features/Specific Changes in 3.7.7
 - The Zoom call active check no longer reports a meeting because of an `aomhost` process that Zoom keeps running while the app is open. A meeting is detected when Zoom's `CptHost` process is running, or when Zoom has meeting media connections on UDP port 8801. (#343)
 - `ConvertAppsInHomeFolder`, `IgnoreAppsInHomeFolder`, `DialogOnTop`, `UseOverlayIcon`, and `RemoveInstallomatorPath` now accept a boolean (`<true/>` / `<false/>`) as well as the string `TRUE` / `FALSE`, in any case. (#345)
+- The profile manifests (version 7) now offer these five settings, plus `InstallomatorUpdateDisable`, `UnattendedExit`, `GitHubAPIAuthEnabled`, `WorkflowDisableAppDiscovery`, and `WorkflowDisableRelaunch`, as on/off booleans instead of a `TRUE` / `FALSE` text choice. `VerboseMode` is now in the manifests. (#345)
 - A setting removed from the managed configuration profile is now also cleared from the local plist, so its default applies again instead of the value AAP saved earlier. Settings that were only set locally are not touched. If the whole profile is missing, the settings saved from it are cleared only once it has been missing on two runs in a row. (#346)
 
 ## New features/Specific Changes in 3.7.6

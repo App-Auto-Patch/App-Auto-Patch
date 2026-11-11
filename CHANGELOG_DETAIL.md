@@ -3,6 +3,15 @@
 # Version 3
 
 ## Version 3.7.7
+### 11-Nov-2026 (4) - Build 3.7.7.2611111148
+- [#345](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/345): profile manifests and example profiles.
+  - **Manifests:** `xyz.techitout.appAutoPatch-manifest.plist` (`pfm_version` 6 → 7, `pfm_last_modified` 2026-11-11) and `xyz.techitout.appAutoPatch-manifest-jamf.json` now type `ConvertAppsInHomeFolder`, `IgnoreAppsInHomeFolder`, `DialogOnTop`, `UseOverlayIcon`, `RemoveInstallomatorPath`, `InstallomatorUpdateDisable`, `UnattendedExit`, `GitHubAPIAuthEnabled`, `WorkflowDisableAppDiscovery`, and `WorkflowDisableRelaunch` as `boolean`. The `TRUE` / `FALSE` enum and range lists are removed, and string defaults became `true` / `false`.
+  - **The five keys from earlier in this version:** their descriptions now say a boolean needs 3.7.7 or later. The other five already accepted `1`.
+  - **`VerboseMode`:** added to both manifests (boolean, default `false`, `pfm_app_min` 3.7.0, linked to the Logs wiki page). It's placed before `userInterface`, whose Jamf `property_order` moves from 206 to 207.
+  - **Jamf defaults:** `ZoomCallActiveCheck` and `SelfUpdateEnabled` defaulted to the string `"1"` and now default to `true`.
+  - **Example profiles:** `AAP-Intune MDM Configuration/xyz.techitout.appAutoPatch.xml` and the All-Options `.plist` / `.mobileconfig` examples use `<true/>` / `<false/>` for those keys. The All-Options examples now include `VerboseMode`.
+  - **Usage help:** `InstallomatorUpdateDisable`, `GitHubAPIAuthEnabled`, and `UnattendedExit` are now listed as `<true/> | <false/>`.
+
 ### 11-Nov-2026 (3) - Build 3.7.7.2611111139
 - [#346](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/346): `get_preferences` reads managed, then local, then the built-in default, and most settings are saved to the local plist. A key removed from the configuration profile kept applying from its saved local copy. New `sync_removed_managed_preferences` runs at the top of `workflow_startup`, before `resolve_verbose_mode`, `resolve_self_update_preferences`, and `get_preferences`.
   - It reads the top-level keys of the managed plist with `plutil`. Keys inside a nested dict are ignored.
