@@ -5,7 +5,7 @@
 	<key>AppTitle</key>
 	<string>App Auto-Patch</string>
 	<key>ConvertAppsInHomeFolder</key>
-	<string>TRUE</string>
+	<true/>
 	<key>DaysUntilReset</key>
 	<string>7</string>
 	<key>DeadlineCountFocus</key>
@@ -29,7 +29,7 @@
 	<key>DialogIcon</key>
 	<string>examplefilepath.png</string>
 	<key>DialogOnTop</key>
-	<string>TRUE</string>
+	<true/>
 	<key>ShowDockIcon</key>
 	<true/>
 	<key>DialogQuitHandlingDiscoveryStaging</key>
@@ -47,7 +47,7 @@
 	<key>DialogTimeoutDeferralAction</key>
 	<string>Defer</string>
 	<key>IgnoreAppsInHomeFolder</key>
-	<string>FALSE</string>
+	<false/>
 	<key>SkipPreUpdateVerification</key>
 	<false/>
 	<key>IgnoredLabels</key>
@@ -57,7 +57,7 @@
 	<key>InstallomatorOptions</key>
 	<string>BLOCKING_PROCESS_ACTION=quit_kill NOTIFY=silent LOGO=appstore IGNORE_APP_STORE_APPS=yes</string>
 	<key>InstallomatorUpdateDisable</key>
-	<string>FALSE</string>
+	<false/>
 	<key>InstallomatorVersion</key>
 	<string>Main</string>
 	<key>InstallomatorVersionCustomRepoPath</key>
@@ -65,7 +65,7 @@
 	<key>InstallomatorVersionCustomBranchName</key>
 	<string>Main</string>
 	<key>GitHubAPIAuthEnabled</key>
-	<string>FALSE</string>
+	<false/>
 	<key>GitHubAPIToken</key>
 	<string>github_pat_REPLACE_ME</string>
 	<key>PrePatchScript</key>
@@ -95,7 +95,7 @@
 	<key>PatchWeekStartDay</key>
 	<string>2</string>
 	<key>RemoveInstallomatorPath</key>
-	<string>FALSE</string>
+	<false/>
 	<key>RequiredLabels</key>
 	<string>googlechromepkg homebrew</string>
 	<key>SelfUpdateEnabled</key>
@@ -111,11 +111,13 @@
 	<key>SupportTeamWebsite</key>
 	<string>www.company.com</string>
 	<key>UnattendedExit</key>
-	<string>TRUE</string>
+	<true/>
 	<key>UnattendedExitSeconds</key>
 	<integer>60</integer>
 	<key>UseOverlayIcon</key>
-	<string>TRUE</string>
+	<true/>
+	<key>VerboseMode</key>
+	<false/>
 	<key>VersionComparisonInstallomatorFallback</key>
 	<true/>
 	<key>VersionComparisonMethod</key>
@@ -131,13 +133,13 @@
 	<key>MosyleConsoleURL</key>
 	<string>https://mybusiness.mosyle.com</string>
 	<key>WorkflowDisableAppDiscovery</key>
-	<string>FALSE</string>
+	<false/>
 	<key>WorkflowScheduledDiscovery</key>
 	<false/>
 	<key>WorkflowDiscoveryOnlyBackgroundPatchClosedApps</key>
 	<false/>
 	<key>WorkflowDisableRelaunch</key>
-	<string>FALSE</string>
+	<false/>
 	<key>BusinessHours</key>
 	<string>MON:09:00-17:00,TUE:09:00-17:00,WED:09:00-17:00,THU:09:00-17:00,FRI:09:00-17:00</string>
 	<key>BusinessHoursRespectHardDeadline</key>

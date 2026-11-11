@@ -314,7 +314,7 @@
         "ZoomCallActiveCheck": {
             "type": "boolean",
             "title": "Zoom Call Active Check",
-            "default": "1",
+            "default": true,
             "description": "When enabled, AAP will automatically skip updating Zoom if a call is active",
             "links": [
                 {
@@ -325,19 +325,9 @@
             "property_order": 60
         },
         "DialogOnTop": {
-            "type": "string",
+            "type": "boolean",
             "title": "Dialog On Top",
-            "description": "Forces the AAP dialogs to stay on top of all other windows",
-            "enum": [
-                "TRUE",
-                "FALSE"
-            ],
-            "options": {
-                "enum_titles": [
-                    "TRUE",
-                    "FALSE"
-                ]
-            },
+            "description": "Forces the AAP dialogs to stay on top of all other windows. Set as a boolean with App Auto-Patch 3.7.7 or later; earlier versions only accept the string TRUE.",
             "links": [
                 {
                     "rel": "More information",
@@ -495,19 +485,9 @@
             "property_order": 73
         },
         "UnattendedExit": {
-            "type": "string",
+            "type": "boolean",
             "title": "Unattended Exit",
             "description": "Deterines if the Dialog should automatically close after completion if there is no response from the end-user",
-            "enum": [
-                "TRUE",
-                "FALSE"
-            ],
-            "options": {
-                "enum_titles": [
-                    "TRUE",
-                    "FALSE"
-                ]
-            },
             "links": [
                 {
                     "rel": "More information",
@@ -535,19 +515,9 @@
             "property_order": 80
         },
         "UseOverlayIcon": {
-            "type": "string",
+            "type": "boolean",
             "title": "Use Overlay Icon",
-            "description": "Toggles swiftDialog to use an overlay icon",
-            "enum": [
-                "TRUE",
-                "FALSE"
-            ],
-            "options": {
-                "enum_titles": [
-                    "TRUE",
-                    "FALSE"
-                ]
-            },
+            "description": "Toggles swiftDialog to use an overlay icon. Set as a boolean with App Auto-Patch 3.7.7 or later; earlier versions only accept the string TRUE.",
             "links": [
                 {
                     "rel": "More information",
@@ -706,20 +676,10 @@
             "property_order": 105
         },
         "ConvertAppsInHomeFolder": {
-            "type": "string",
+            "type": "boolean",
             "title": "Convert Apps In Home Folder",
-            "default": "TRUE",
-            "description": "This will convert any apps found in the users home folder to the /Applications folder",
-            "enum": [
-                "TRUE",
-                "FALSE"
-            ],
-            "options": {
-                "enum_titles": [
-                    "TRUE",
-                    "FALSE"
-                ]
-            },
+            "default": true,
+            "description": "This will convert any apps found in the users home folder to the /Applications folder. Set as a boolean with App Auto-Patch 3.7.7 or later; earlier versions only accept the string TRUE.",
             "links": [
                 {
                     "rel": "More information",
@@ -729,20 +689,10 @@
             "property_order": 110
         },
         "IgnoreAppsInHomeFolder": {
-            "type": "string",
+            "type": "boolean",
             "title": "Ignore Apps In Home Folder",
-            "default": "FALSE",
-            "description": "Ignore apps found in '/Users/'. If an update is found in '/Users/' and variable is set to false, the app will be updated into the application's default path",
-            "enum": [
-                "TRUE",
-                "FALSE"
-            ],
-            "options": {
-                "enum_titles": [
-                    "TRUE",
-                    "FALSE"
-                ]
-            },
+            "default": false,
+            "description": "Ignore apps found in '/Users/'. If an update is found in '/Users/' and variable is set to false, the app will be updated into the application's default path. Set as a boolean with App Auto-Patch 3.7.7 or later; earlier versions only accept the string TRUE.",
             "links": [
                 {
                     "rel": "More information",
@@ -783,20 +733,10 @@
             "property_order": 120
         },
         "InstallomatorUpdateDisable": {
-            "type": "string",
+            "type": "boolean",
             "title": "Installomator Update Disable",
-            "default": "FALSE",
+            "default": false,
             "description": "This will prevent Installomator from automatically updating. If Installomator does not exist in the working folder, it will still download from GitHub to prevent script failure",
-            "enum": [
-                "TRUE",
-                "FALSE"
-            ],
-            "options": {
-                "enum_titles": [
-                    "TRUE",
-                    "FALSE"
-                ]
-            },
             "links": [
                 {
                     "rel": "More information",
@@ -806,20 +746,10 @@
             "property_order": 125
         },
         "GitHubAPIAuthEnabled": {
-            "type": "string",
+            "type": "boolean",
             "title": "GitHub API Auth Enabled",
-            "default": "FALSE",
+            "default": false,
             "description": "When TRUE, App Auto-Patch authenticates GitHub REST API requests (api.github.com) with the personal access token in GitHubAPIToken, raising the rate limit from 60 to 5,000 requests per hour. Managed preferences only - the token is never written to the local preference file and is never logged. If this key is TRUE, GitHubAPIToken is required or startup validation fails.",
-            "enum": [
-                "TRUE",
-                "FALSE"
-            ],
-            "options": {
-                "enum_titles": [
-                    "TRUE",
-                    "FALSE"
-                ]
-            },
             "links": [
                 {
                     "rel": "More information",
@@ -1046,20 +976,10 @@
             "property_order": 145
         },
         "RemoveInstallomatorPath": {
-            "type": "string",
+            "type": "boolean",
             "title": "Remove Installomator Path",
-            "default": "FALSE",
-            "description": "Remove Installomator after App Auto-Patch is completed",
-            "enum": [
-                "TRUE",
-                "FALSE"
-            ],
-            "options": {
-                "enum_titles": [
-                    "TRUE",
-                    "FALSE"
-                ]
-            },
+            "default": false,
+            "description": "Remove Installomator after App Auto-Patch is completed. Set as a boolean with App Auto-Patch 3.7.7 or later; earlier versions only accept the string TRUE.",
             "links": [
                 {
                     "rel": "More information",
@@ -1214,20 +1134,10 @@
             "property_order": 187
         },
         "WorkflowDisableAppDiscovery": {
-            "type": "string",
+            "type": "boolean",
             "title": "Disable App Discovery Workflow",
-            "default": "FALSE",
+            "default": false,
             "description": "Disables the discovery of applications that require patching. If a list of labels from a previous discovery exists, AAP will use that list for the workflow",
-            "enum": [
-                "TRUE",
-                "FALSE"
-            ],
-            "options": {
-                "enum_titles": [
-                    "TRUE",
-                    "FALSE"
-                ]
-            },
             "links": [
                 {
                     "rel": "More information",
@@ -1306,20 +1216,10 @@
             "property_order": 195
         },
         "WorkflowDisableRelaunch": {
-            "type": "string",
+            "type": "boolean",
             "title": "Disable Relaunch Workflow",
-            "default": "FALSE",
+            "default": false,
             "description": "Disable the automatic relaunch of AAP after the current workflow successfully completes",
-            "enum": [
-                "TRUE",
-                "FALSE"
-            ],
-            "options": {
-                "enum_titles": [
-                    "TRUE",
-                    "FALSE"
-                ]
-            },
             "links": [
                 {
                     "rel": "More information",
@@ -1411,7 +1311,7 @@
         },
         "SelfUpdateEnabled": {
             "type": "boolean",
-            "default": "1",
+            "default": true,
             "title": "Self Update Enabled",
             "description": "Determines if the Self Update feature is enabled. this will automatically update App Auto-Patch if a new version is posted on github",
             "links": [
@@ -1481,7 +1381,20 @@
             ],
             "property_order": 205
         },
-        "userInterface": {
+         "VerboseMode": {
+            "type": "boolean",
+            "title": "Verbose Mode",
+            "default": false,
+            "description": "When enabled, App Auto-Patch writes detailed troubleshooting output to /Library/Management/AppAutoPatch/logs/aap_verbose.log. Each run replaces that log, and the previous run is kept in logs-verbose-archive (the 10 newest files). Leave this off unless you are troubleshooting.",
+            "links": [
+                {
+                    "rel": "More information",
+                    "href": "https://github.com/App-Auto-Patch/App-Auto-Patch/wiki/Logs#verbose-mode-version-37"
+                }
+            ],
+            "property_order": 206
+        },
+       "userInterface": {
             "type": "object",
             "title": "User Interface",
             "description": "All features related to how App Auto Patch defines the user interface.",
@@ -2274,7 +2187,7 @@
                     ]
                 }
             },
-            "property_order": 206
+            "property_order": 207
         }
     }
 }

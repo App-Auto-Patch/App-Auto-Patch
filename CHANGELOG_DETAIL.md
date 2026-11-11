@@ -2,6 +2,34 @@
 
 # Version 3
 
+## Version 3.7.7
+### 11-Nov-2026 (4) - Build 3.7.7.2611111148
+- [#345](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/345): profile manifests and example profiles.
+  - **Manifests:** `xyz.techitout.appAutoPatch-manifest.plist` (`pfm_version` 6 → 7, `pfm_last_modified` 2026-11-11) and `xyz.techitout.appAutoPatch-manifest-jamf.json` now type `ConvertAppsInHomeFolder`, `IgnoreAppsInHomeFolder`, `DialogOnTop`, `UseOverlayIcon`, `RemoveInstallomatorPath`, `InstallomatorUpdateDisable`, `UnattendedExit`, `GitHubAPIAuthEnabled`, `WorkflowDisableAppDiscovery`, and `WorkflowDisableRelaunch` as `boolean`. The `TRUE` / `FALSE` enum and range lists are removed, and string defaults became `true` / `false`.
+  - **The five keys from earlier in this version:** their descriptions now say a boolean needs 3.7.7 or later. The other five already accepted `1`.
+  - **`VerboseMode`:** added to both manifests (boolean, default `false`, `pfm_app_min` 3.7.0, linked to the Logs wiki page). It's placed before `userInterface`, whose Jamf `property_order` moves from 206 to 207.
+  - **Jamf defaults:** `ZoomCallActiveCheck` and `SelfUpdateEnabled` defaulted to the string `"1"` and now default to `true`.
+  - **Example profiles:** `AAP-Intune MDM Configuration/xyz.techitout.appAutoPatch.xml` and the All-Options `.plist` / `.mobileconfig` examples use `<true/>` / `<false/>` for those keys. The All-Options examples now include `VerboseMode`.
+  - **Usage help:** `InstallomatorUpdateDisable`, `GitHubAPIAuthEnabled`, and `UnattendedExit` are now listed as `<true/> | <false/>`.
+
+### 11-Nov-2026 (3) - Build 3.7.7.2611111139
+- [#346](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/346): `get_preferences` reads managed, then local, then the built-in default, and most settings are saved to the local plist. A key removed from the configuration profile kept applying from its saved local copy. New `sync_removed_managed_preferences` runs at the top of `workflow_startup`, before `resolve_verbose_mode`, `resolve_self_update_preferences`, and `get_preferences`.
+  - It reads the top-level keys of the managed plist with `plutil`. Keys inside a nested dict are ignored.
+  - It saves the names of those keys, never their values, to `ManagedKeysLastSeen` in the local plist.
+  - A key saved on the last run but missing now is deleted from the local plist and logged, so the default applies on that same run.
+  - Only the keys listed in `aapManagedPreferenceKeys` are tracked, so runtime state in the local plist (for example `DiscoveredLabels` or the deadline counters) is never cleared, and keys that were only ever set locally are not touched.
+  - When the managed plist is missing, or has none of those keys, the run is counted in `ManagedPlistMissingRuns`. Everything saved from it is cleared only on the second run in a row. A run that finds the keys again resets the count.
+  - A Jamf-launched run, or a run from outside the AAP folder, skips the check, because it relaunches through the LaunchDaemon and would otherwise be counted twice.
+  - A managed plist that exists but can't be read is skipped for that run.
+  - Messages are collected during startup and logged by `get_preferences`.
+  - On the first run after upgrading there's no saved list, so nothing is cleared until the next run.
+
+### 11-Nov-2026 (2) - Build 3.7.7.2611111125
+- [#345](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/345): `ConvertAppsInHomeFolder`, `IgnoreAppsInHomeFolder`, `DialogOnTop`, `UseOverlayIcon`, and `RemoveInstallomatorPath` were compared only with `== "TRUE"`, and nothing normalized them first. `defaults read` returns a plist boolean as `1` / `0`, so `<true/>` in a configuration profile was treated as off. That turned off `ConvertAppsInHomeFolder` and `UseOverlayIcon`, which default to `TRUE`. `manage_parameter_options` now normalizes each one to `TRUE` / `FALSE`, accepting `1` / `0` or `true` / `false` in any case. Any other value logs an error and uses the default. The resolved value is saved to the local plist with `-bool`, as the other boolean settings are. The existing `== "TRUE"` checks are unchanged. The usage help now lists these keys as `<true/> | <false/>`.
+
+### 11-Nov-2026 (1) - Build 3.7.7.2611111117
+- [#343](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/343): the Zoom call active check in `workflow_silent_patch_closed_apps` and `workflow_do_Installations` reported a meeting when `pgrep CptHost` **or** `pgrep aomhost` returned a PID. On the affected Mac, Zoom started an `aomhost` about 30 seconds after the app opened, as a child of `zoom.us`, and kept it running after meetings ended. That process alone made every run skip the `zoom*` label. When a meeting is joined, Zoom starts a `CptHost` and a second `aomhost` together, and both exit when it ends. Both checks now call `zoom_meeting_active`, which returns true only when `zoom.us` is running and either `CptHost` is running or `zoom.us` has UDP sockets on port 8801 (Zoom's meeting media port). `aomhost` is no longer checked. Process names are matched exactly (`pgrep -x`). The UDP check is a fallback because some networks send Zoom media over 443.
+
 ## Version 3.7.6
 ### 13-Oct-2026 (1) - Build 3.7.6.2610131000
 - [#312](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/312): discovery queued the fragment filename. `missiveapp.sh` contains the case name `missive`, so Installomator reported `label not found` when AAP called `missiveapp`. A multi-name header such as `adobebrackets` / `bracketsio` or `chatgpt` / `codex` should still use the name that matches the filename. The queued name is now the filename when that filename is one of the case names, and otherwise the first case name. Later reads of the fragment, including staging and dialog names, follow that name back to the original file.

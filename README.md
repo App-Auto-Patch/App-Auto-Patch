@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
 [<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
 
-# App Auto-Patch 3.7.6
+# App Auto-Patch 3.7.7
 
 ![Static Badge](https://img.shields.io/badge/AAP4%20Release%20-4.0.0%20(125)-blue)
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub pre-release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag&include_prereleases) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch) [![swiftDialog](https://img.shields.io/badge/swiftDialog-Enabled-blue)](https://swiftdialog.app)
@@ -14,6 +14,12 @@ App Auto-Patch is a MDM-agnostic Third Party Patching tool that combines local a
 ## Why Build This
 
 App Auto-Patch simplifies the process of inventorying installed applications and patching them, for any MDM. For those using Jamf Pro, this helps eliminate the need to create multiple Smart Groups, Policies, Patch Management Titles, etc., within Jamf Pro. It provides an easy way to keep end users' applications updated with minimal effort.
+
+## New features/Specific Changes in 3.7.7
+- The Zoom call active check no longer reports a meeting because of an `aomhost` process that Zoom keeps running while the app is open. A meeting is detected when Zoom's `CptHost` process is running, or when Zoom has meeting media connections on UDP port 8801. (#343)
+- `ConvertAppsInHomeFolder`, `IgnoreAppsInHomeFolder`, `DialogOnTop`, `UseOverlayIcon`, and `RemoveInstallomatorPath` now accept a boolean (`<true/>` / `<false/>`) as well as the string `TRUE` / `FALSE`, in any case. (#345)
+- The profile manifests (version 7) now offer these five settings, plus `InstallomatorUpdateDisable`, `UnattendedExit`, `GitHubAPIAuthEnabled`, `WorkflowDisableAppDiscovery`, and `WorkflowDisableRelaunch`, as on/off booleans instead of a `TRUE` / `FALSE` text choice. `VerboseMode` is now in the manifests. (#345)
+- A setting removed from the managed configuration profile is now also cleared from the local plist, so its default applies again instead of the value AAP saved earlier. Settings that were only set locally are not touched. If the whole profile is missing, the settings saved from it are cleared only once it has been missing on two runs in a row. (#346)
 
 ## New features/Specific Changes in 3.7.6
 - A fragment whose filename is not an Installomator label is queued as the case name. `missiveapp.sh` is installed as `missive`. A filename that is one of the case names, such as `bracketsio` or `chatgpt`, is still used. (#312)

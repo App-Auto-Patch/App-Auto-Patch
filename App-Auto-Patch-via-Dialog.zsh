@@ -24,9 +24,9 @@
 # Script Version and Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-scriptVersion="3.7.6"
-scriptDate="2026/10/13"
-scriptBuild="3.7.6.2610131000"
+scriptVersion="3.7.7"
+scriptDate="2026/11/11"
+scriptBuild="3.7.7.2611111148"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -129,7 +129,7 @@ echo "
     <key>BannerImage</key> <string>Filepath|URL|colour=#hex|gradient=colour,colour</string>
     <key>BannerTitle</key> <string>Text to display within the banner (leave unset for no title text - e.g. if BannerImage already has title text baked in)</string>
     <key>BannerHeight</key> <integer>points</integer>
-    <key>ConvertAppsInHomeFolder</key> <string>TRUE,FALSE</string>
+    <key>ConvertAppsInHomeFolder</key> <true/> | <false/>
     <key>DaysUntilReset</key> <integer>number</integer>
     <key>DeadlineCountFocus</key> <integer>number</integer>
     <key>DeadlineCountHard</key> <integer>number</integer>
@@ -141,20 +141,20 @@ echo "
     <key>DeferralTimerMenu</key> <string>minutes,minutes,minutes,etc...</string>
     <key>DeferralTimerWorkflowRelaunch</key> <integer>minutes</integer>
     <key>DialogIcon</key> <string>Filepath|URL</string>
-    <key>DialogOnTop</key> <string>TRUE,FALSE</string>
+    <key>DialogOnTop</key> <true/> | <false/>
     <key>DialogTimeoutDeferral</key> <integer>seconds</integer>
     <key>DialogTimeoutDeferralAction</key> <string>Defer,Continue</string>
     <key>DialogTimeoutConfirmInstall</key> <integer>seconds</integer>
     <key>DialogQuitHandlingDiscoveryStaging</key> <string>PROMPT,CONTINUE,STOP</string> (Stop is ignored when a hard deadline is due or Install Now is running)
-    <key>IgnoreAppsInHomeFolder</key> <string>TRUE,FALSE</string>
+    <key>IgnoreAppsInHomeFolder</key> <true/> | <false/>
     <key>IgnoredLabels</key> <string>label label label etc</string>
     <key>ExcludedBackgroundLabels</key> <string>label label label etc</string>
     <key>InstallomatorOptions</key> <string>OPTION=option OPTION=option etc</string>
-    <key>InstallomatorUpdateDisable</key> <string>TRUE,FALSE</string>
+    <key>InstallomatorUpdateDisable</key> <true/> | <false/>
     <key>InstallomatorVersion</key> <string>Main,Release,Custom</string>
     <key>InstallomatorVersionCustomRepoPath</key> <string>Installomator/Installomator</string>
     <key>InstallomatorVersionCustomBranchName</key> <string>main</string>
-    <key>GitHubAPIAuthEnabled</key> <string>TRUE,FALSE</string>
+    <key>GitHubAPIAuthEnabled</key> <true/> | <false/>
     <key>GitHubAPIToken</key> <string>github_pat_...</string>
     <key>PrePatchScript</key> <string>/Library/Management/AppAutoPatch/Hooks/pre.sh</string>
     <key>PostPatchScript</key> <string>/Library/Management/AppAutoPatch/Hooks/post.sh</string>
@@ -168,7 +168,7 @@ echo "
     <key>MonthlyPatchingCadenceStartTime</key> <string>09:00:00</string>
     <key>OptionalLabels</key> <string>label label label etc</string>
     <key>PatchWeekStartDay</key> <integer>number</integer>
-    <key>RemoveInstallomatorPath</key> <string>TRUE,FALSE</string>
+    <key>RemoveInstallomatorPath</key> <true/> | <false/>
     <key>RequiredLabels</key> <string>label label label etc</string>
     <key>SelfUpdateEnabled</key> <true/> | <false/>
     <key>SelfUpdateFrequency</key> <string>daily|weekly|monthly</string>
@@ -176,9 +176,9 @@ echo "
     <key>SupportTeamName</key> <string>name</string>
     <key>SupportTeamPhone</key> <string>phone</string>
     <key>SupportTeamWebsite</key> <string>URL</string>
-    <key>UnattendedExit</key> <string>TRUE,FALSE</string>
+    <key>UnattendedExit</key> <true/> | <false/>
     <key>UnattendedExitSeconds</key> <integer>seconds</integer>
-    <key>UseOverlayIcon</key> <string>TRUE,FALSE</string>
+    <key>UseOverlayIcon</key> <true/> | <false/>
     <key>VerboseMode</key> <true/> | <false/>
     <key>VersionComparisonInstallomatorFallback</key> <true/> | <false/>
     <key>VersionComparisonMethod</key> <string>IS_AT_LEAST,EQUAL_TO</string>
@@ -1440,6 +1440,117 @@ _aap_resolve_label_alias_lists() {
     done
 }
 
+# Clear settings from the local plist that were removed from the managed profile (#346).
+# get_preferences reads managed, then local, then the built-in default, and most settings are
+# saved to the local plist. Without this, a key removed from the profile keeps applying from its
+# saved local copy. Only key names are tracked (in ManagedKeysLastSeen), never values, so secrets
+# such as GitHubAPIToken are not copied. Only keys in aapManagedPreferenceKeys are tracked, so
+# runtime state in the local plist is never cleared, and keys that were only ever set locally
+# (CLI options or `defaults write`) are never touched.
+# If the managed plist is missing or has none of these keys, everything that came from it is
+# cleared only once that has been true on two runs in a row (ManagedPlistMissingRuns), so a
+# profile that is briefly gone while MDM reinstalls it does not reset every setting.
+# Runs at the top of workflow_startup, before anything reads preferences, so it cannot log yet:
+# messages are collected in managed_preferences_sync_messages and logged by get_preferences.
+sync_removed_managed_preferences() {
+    managed_preferences_sync_messages=()
+    # Add new MDM preference keys here.
+    local -a aapManagedPreferenceKeys=(
+        AppTitle BannerHeight BannerImage BannerTitle BusinessHours BusinessHoursAllowDiscovery \
+        BusinessHoursRespectHardDeadline BusinessHoursSilentDuring ConvertAppsInHomeFolder \
+        DaysUntilReset DeadlineCountFocus DeadlineCountHard DeadlineDaysFocus DeadlineDaysHard \
+        DeferralTimerDefault DeferralTimerError DeferralTimerFocus DeferralTimerMenu \
+        DeferralTimerWorkflowRelaunch DialogIcon DialogOnTop DialogQuitHandlingDiscoveryStaging \
+        DialogTimeoutConfirmInstall DialogTimeoutDeferral DialogTimeoutDeferralAction \
+        DiscoveryFrequency ExcludedBackgroundLabels GitHubAPIAuthEnabled GitHubAPIToken \
+        IgnoreAppsInHomeFolder IgnoreDNDApps IgnoredLabels InstallomatorOptions \
+        InstallomatorUpdateDisable InstallomatorVersion InstallomatorVersionCustomBranchName \
+        InstallomatorVersionCustomRepoPath InteractiveMode MonthlyPatchingCadenceEnabled \
+        MonthlyPatchingCadenceOrdinalValue MonthlyPatchingCadenceStartTime \
+        MonthlyPatchingCadenceWeekdayIndex MosyleConsoleURL OptionalLabels \
+        PatchScriptTimeoutSeconds PatchWeekStartDay PostPatchScript PostPatchScriptFailAction \
+        PrePatchScript PrePatchScriptFailAction RemoveInstallomatorPath RequiredLabels \
+        SelfUpdateEnabled SelfUpdateFrequency ShowDockIcon ShowNotifications \
+        ShowNotificationsAll ShowNotificationsAppsQueued ShowNotificationsSilentAndQueued \
+        ShowNotificationsSilentUpdated SkipPreUpdateVerification StaleProcessTimeoutSeconds \
+        SupportTeamEmail SupportTeamName SupportTeamPhone SupportTeamWebsite UnattendedExit \
+        UnattendedExitSeconds UseOverlayIcon VerboseMode VersionComparisonInstallomatorFallback \
+        VersionComparisonMethod WebhookFeature WebhookURLGoogleChat WebhookURLSlack \
+        WebhookURLTeams WorkflowBackgroundPatchClosedApps WorkflowDisableAppDiscovery \
+        WorkflowDisableRelaunch WorkflowDiscoveryOnlyBackgroundPatchClosedApps \
+        WorkflowInstallNowPatchingStatusAction WorkflowScheduledDiscovery WorkflowStageUpdates \
+        ZoomCallActiveCheck
+    )
+    local managedFile="${appAutoPatchManagedPLIST}.plist"
+    local localFile="${appAutoPatchLocalPLIST}.plist"
+    local -a currentKeys previousKeys removedKeys
+    local key missingRuns managedXML
+
+    # Nothing to clean up yet on a first install.
+    [[ -f "${localFile}" ]] || return 0
+
+    # A Jamf-launched run, or a run from outside the AAP folder, restarts via the LaunchDaemon a
+    # few seconds later. Leave the check to that run so one run is not counted twice.
+    local currentFolder
+    currentFolder=$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")
+    if [[ "${parent_process_is_jamf}" == "TRUE" ]] \
+    || ! { [[ "${currentFolder}" == "${appAutoPatchFolder}" ]] || [[ "${currentFolder}" == $(dirname "${appAutoPatchLink}") ]]; }; then
+        return 0
+    fi
+
+    previousKeys=(${(z)"$(defaults read "${appAutoPatchLocalPLIST}" ManagedKeysLastSeen 2> /dev/null)"})
+
+    if [[ -f "${managedFile}" ]]; then
+        # A managed plist that exists but cannot be parsed is skipped for this run, leaving the
+        # saved list and the missing-run count unchanged.
+        if ! managedXML=$(/usr/bin/plutil -convert xml1 -o - "${managedFile}" 2> /dev/null); then
+            managed_preferences_sync_messages+=("Managed preferences: could not read ${managedFile}; skipping the removed-key check this run.")
+            return 0
+        fi
+        # Top-level keys only: a <key> inside a nested dict is a value, not a setting.
+        local -a fileKeys
+        fileKeys=(${(f)"$(print -r -- "${managedXML}" | /usr/bin/awk '
+            /<dict>/ { depth++ }
+            /<\/dict>/ { depth-- }
+            depth == 1 && match($0, /<key>[^<]*<\/key>/) { print substr($0, RSTART + 5, RLENGTH - 11) }
+        ')"})
+        for key in "${fileKeys[@]}"; do
+            (( ${aapManagedPreferenceKeys[(Ie)${key}]} )) && currentKeys+=("${key}")
+        done
+    fi
+
+    if (( ${#currentKeys[@]} == 0 )); then
+        # Managed plist is missing, or has none of the AAP keys.
+        (( ${#previousKeys[@]} == 0 )) && { defaults delete "${appAutoPatchLocalPLIST}" ManagedPlistMissingRuns 2> /dev/null; return 0; }
+        missingRuns=$(defaults read "${appAutoPatchLocalPLIST}" ManagedPlistMissingRuns 2> /dev/null)
+        [[ "${missingRuns}" == <-> ]] || missingRuns=0
+        missingRuns=$(( missingRuns + 1 ))
+        if (( missingRuns < 2 )); then
+            defaults write "${appAutoPatchLocalPLIST}" ManagedPlistMissingRuns -int "${missingRuns}"
+            managed_preferences_sync_messages+=("Managed preferences: no App Auto-Patch settings found in ${managedFile}. If they are still missing on the next run, the settings saved from them will be cleared from the local plist (count: ${#previousKeys[@]}).")
+            return 0
+        fi
+        removedKeys=("${previousKeys[@]}")
+        defaults delete "${appAutoPatchLocalPLIST}" ManagedPlistMissingRuns 2> /dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" ManagedKeysLastSeen 2> /dev/null
+        managed_preferences_sync_messages+=("Managed preferences: no App Auto-Patch settings found on two runs in a row; clearing the settings saved from them (count: ${#removedKeys[@]}).")
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" ManagedPlistMissingRuns 2> /dev/null
+        for key in "${previousKeys[@]}"; do
+            (( ${currentKeys[(Ie)${key}]} )) || removedKeys+=("${key}")
+        done
+        defaults write "${appAutoPatchLocalPLIST}" ManagedKeysLastSeen -string "${currentKeys[*]}"
+    fi
+
+    for key in "${removedKeys[@]}"; do
+        # Only keys AAP manages; a hand-edited ManagedKeysLastSeen cannot clear runtime state.
+        (( ${aapManagedPreferenceKeys[(Ie)${key}]} )) || continue
+        defaults delete "${appAutoPatchLocalPLIST}" "${key}" 2> /dev/null
+        managed_preferences_sync_messages+=("Managed preferences: ${key} was removed from the managed profile; cleared it from the local plist so the default applies.")
+    done
+    return 0
+}
+
 get_preferences() {
 
     write_status "Running: Collecting preferences"
@@ -1521,6 +1632,12 @@ get_preferences() {
         
         log_status "Continuing to gather new preferences"
     fi
+
+    # Report what sync_removed_managed_preferences did at the top of workflow_startup (#346).
+    local _syncMessage
+    for _syncMessage in "${managed_preferences_sync_messages[@]}"; do
+        log_status "${_syncMessage}"
+    done
 
 
     # Collect Managed PLIST preferences if any
@@ -2812,6 +2929,71 @@ manage_parameter_options() {
     fi
     { [[ -n "${WorkflowStageUpdatesOption}" ]]; } && log_verbose "WorkflowStageUpdatesOption is: ${WorkflowStageUpdatesOption}"
 
+    # ConvertAppsInHomeFolder, IgnoreAppsInHomeFolder, DialogOnTop, UseOverlayIcon, and
+    # RemoveInstallomatorPath accept a plist boolean (`defaults read` returns 1/0) or the string
+    # TRUE/FALSE in any case. Each is normalized to TRUE/FALSE, so the later `== "TRUE"` checks
+    # work for either type, and saved to ${appAutoPatchLocalPLIST} as a boolean.
+
+    # Manage ${convertAppsInHomeFolder} (default TRUE) and save to ${appAutoPatchLocalPLIST}.
+    case "${convertAppsInHomeFolder:l}" in
+        1|true)  convertAppsInHomeFolder="TRUE" ;;
+        0|false) convertAppsInHomeFolder="FALSE" ;;
+        *)
+            log_error "ConvertAppsInHomeFolder must be a boolean (or TRUE/FALSE); using TRUE."
+            convertAppsInHomeFolder="TRUE"
+        ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" ConvertAppsInHomeFolder -bool "${convertAppsInHomeFolder:l}"
+    log_verbose "convertAppsInHomeFolder is: ${convertAppsInHomeFolder}"
+
+    # Manage ${ignoreAppsInHomeFolder} (default FALSE) and save to ${appAutoPatchLocalPLIST}.
+    case "${ignoreAppsInHomeFolder:l}" in
+        1|true)  ignoreAppsInHomeFolder="TRUE" ;;
+        0|false) ignoreAppsInHomeFolder="FALSE" ;;
+        *)
+            log_error "IgnoreAppsInHomeFolder must be a boolean (or TRUE/FALSE); using FALSE."
+            ignoreAppsInHomeFolder="FALSE"
+        ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" IgnoreAppsInHomeFolder -bool "${ignoreAppsInHomeFolder:l}"
+    log_verbose "ignoreAppsInHomeFolder is: ${ignoreAppsInHomeFolder}"
+
+    # Manage ${dialogOnTop} (default FALSE) and save to ${appAutoPatchLocalPLIST}.
+    case "${dialogOnTop:l}" in
+        1|true)  dialogOnTop="TRUE" ;;
+        0|false) dialogOnTop="FALSE" ;;
+        *)
+            log_error "DialogOnTop must be a boolean (or TRUE/FALSE); using FALSE."
+            dialogOnTop="FALSE"
+        ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" DialogOnTop -bool "${dialogOnTop:l}"
+    log_verbose "dialogOnTop is: ${dialogOnTop}"
+
+    # Manage ${useOverlayIcon} (default TRUE) and save to ${appAutoPatchLocalPLIST}.
+    case "${useOverlayIcon:l}" in
+        1|true)  useOverlayIcon="TRUE" ;;
+        0|false) useOverlayIcon="FALSE" ;;
+        *)
+            log_error "UseOverlayIcon must be a boolean (or TRUE/FALSE); using TRUE."
+            useOverlayIcon="TRUE"
+        ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" UseOverlayIcon -bool "${useOverlayIcon:l}"
+    log_verbose "useOverlayIcon is: ${useOverlayIcon}"
+
+    # Manage ${removeInstallomatorPath} (default FALSE) and save to ${appAutoPatchLocalPLIST}.
+    case "${removeInstallomatorPath:l}" in
+        1|true)  removeInstallomatorPath="TRUE" ;;
+        0|false) removeInstallomatorPath="FALSE" ;;
+        *)
+            log_error "RemoveInstallomatorPath must be a boolean (or TRUE/FALSE); using FALSE."
+            removeInstallomatorPath="FALSE"
+        ;;
+    esac
+    defaults write "${appAutoPatchLocalPLIST}" RemoveInstallomatorPath -bool "${removeInstallomatorPath:l}"
+    log_verbose "removeInstallomatorPath is: ${removeInstallomatorPath}"
+
     # Manage ${bannerImageOption}, ${bannerTitleOption}, and ${bannerHeightOption} — store the raw
     # values to the local plist so they persist for reporting; no boolean coercion needed.
     if [[ -n "${bannerImageOption}" ]]; then
@@ -3199,6 +3381,9 @@ workflow_startup() {
     # Resolve VerboseMode before any log_aap / log_verbose traffic so aap_verbose.log is gated for
     # the entire run (including self_update, get_dialog, get_preferences preference dumps, etc.).
     # Managed → CLI → local precedence matches the historical late-startup block.
+    # First clear local copies of settings removed from the managed profile (#346), so they are
+    # not picked up by resolve_verbose_mode, resolve_self_update_preferences, or get_preferences.
+    sync_removed_managed_preferences
     resolve_verbose_mode
 
     # --pending-apps-dialog is a one-shot trigger. The flag file lets the request survive a
@@ -8850,6 +9035,25 @@ is_excluded_background_label() {
     (( ${excludedBackgroundLabelsArray[(Ie)${label}]} ))
 }
 
+zoom_meeting_active() {
+    # Returns 0 (true) while a Zoom meeting is in progress (#343).
+    # aomhost is not used: Zoom can start one when the app opens and keep it running for as long
+    # as Zoom is open, so an aomhost alone does not mean a meeting. When a meeting is joined, Zoom
+    # starts CptHost (alongside a second aomhost) and both exit when the meeting ends.
+    /usr/bin/pgrep -qx zoom.us || return 1
+    if /usr/bin/pgrep -qx CptHost; then
+        log_verbose "Zoom meeting check: CptHost is running"
+        return 0
+    fi
+    # Fallback: Zoom's meeting media connections use UDP port 8801. Some networks send this
+    # traffic over 443 instead, which is why CptHost is checked first.
+    if /usr/sbin/lsof -nP -a -i UDP -c zoom.us 2>/dev/null | /usr/bin/grep -q ':8801'; then
+        log_verbose "Zoom meeting check: zoom.us has UDP connections on port 8801"
+        return 0
+    fi
+    return 1
+}
+
 filter_excluded_background_labels_from_silent_install() {
     # For fully-silent runs only: pull excluded-background labels out of the install queue so
     # they are not patched unattended, while leaving them in DiscoveredLabels / the report PLIST
@@ -9108,7 +9312,7 @@ workflow_silent_patch_closed_apps() {
     local progressTotal=${#queuedLabelsArray[@]}
     local progressCompleted=0
     # Same zsh behavior as workflow_stage_updates: a bare `local` inside the loop reprints the last value. (#265)
-    local _dname _ipath _cpthostpid _aomhostpid
+    local _dname _ipath
 
     _aap_mini_progress_begin "${progressTotal}" "${display_string_silent_patch_progress}" "${display_string_staging_message}"
 
@@ -9138,9 +9342,7 @@ workflow_silent_patch_closed_apps() {
 
         # Respect Zoom call active check for zoom labels
         if [[ "${zoom_call_active_check_option}" == "TRUE" && "${label}" == "zoom"* ]]; then
-            _cpthostpid=$(pgrep CptHost 2>/dev/null)
-            _aomhostpid=$(pgrep aomhost 2>/dev/null)
-            if [[ -n "${_cpthostpid}" || -n "${_aomhostpid}" ]]; then
+            if zoom_meeting_active; then
                 log_info "Zoom meeting in progress. Skipping silent patch of '${label}'; adding to user dialog queue."
                 remainingLabels+=("${label}")
                 _dname="$(awk -F\" '/^[[:space:]]*name=/{print $2; exit}' "$(_aap_fragment_path_for_label "$label")")"
@@ -9333,10 +9535,7 @@ workflow_do_Installations() {
 
         if [[ ${zoom_call_active_check_option} == "TRUE" && ${label} == "zoom"* ]] ; then
 
-	        CPTHOSTPID=$(pgrep CptHost)
-	        AOMHOSTPID=$(pgrep aomhost)
-
-	        if [[ -n "$CPTHOSTPID" || -n "$AOMHOSTPID" ]]; then
+	        if zoom_meeting_active; then
 		        log_error "Zoom Meeting in progress. Skipping Update"
                 let errorCount++
                 itemStatus="fail"
