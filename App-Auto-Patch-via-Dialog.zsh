@@ -26,7 +26,7 @@
 
 scriptVersion="3.7.7"
 scriptDate="2026/11/11"
-scriptBuild="3.7.7.2611111125"
+scriptBuild="3.7.7.2611111139"
 scriptFunctionalName="App Auto-Patch"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 autoload -Uz is-at-least
@@ -1440,6 +1440,117 @@ _aap_resolve_label_alias_lists() {
     done
 }
 
+# Clear settings from the local plist that were removed from the managed profile (#346).
+# get_preferences reads managed, then local, then the built-in default, and most settings are
+# saved to the local plist. Without this, a key removed from the profile keeps applying from its
+# saved local copy. Only key names are tracked (in ManagedKeysLastSeen), never values, so secrets
+# such as GitHubAPIToken are not copied. Only keys in aapManagedPreferenceKeys are tracked, so
+# runtime state in the local plist is never cleared, and keys that were only ever set locally
+# (CLI options or `defaults write`) are never touched.
+# If the managed plist is missing or has none of these keys, everything that came from it is
+# cleared only once that has been true on two runs in a row (ManagedPlistMissingRuns), so a
+# profile that is briefly gone while MDM reinstalls it does not reset every setting.
+# Runs at the top of workflow_startup, before anything reads preferences, so it cannot log yet:
+# messages are collected in managed_preferences_sync_messages and logged by get_preferences.
+sync_removed_managed_preferences() {
+    managed_preferences_sync_messages=()
+    # Add new MDM preference keys here.
+    local -a aapManagedPreferenceKeys=(
+        AppTitle BannerHeight BannerImage BannerTitle BusinessHours BusinessHoursAllowDiscovery \
+        BusinessHoursRespectHardDeadline BusinessHoursSilentDuring ConvertAppsInHomeFolder \
+        DaysUntilReset DeadlineCountFocus DeadlineCountHard DeadlineDaysFocus DeadlineDaysHard \
+        DeferralTimerDefault DeferralTimerError DeferralTimerFocus DeferralTimerMenu \
+        DeferralTimerWorkflowRelaunch DialogIcon DialogOnTop DialogQuitHandlingDiscoveryStaging \
+        DialogTimeoutConfirmInstall DialogTimeoutDeferral DialogTimeoutDeferralAction \
+        DiscoveryFrequency ExcludedBackgroundLabels GitHubAPIAuthEnabled GitHubAPIToken \
+        IgnoreAppsInHomeFolder IgnoreDNDApps IgnoredLabels InstallomatorOptions \
+        InstallomatorUpdateDisable InstallomatorVersion InstallomatorVersionCustomBranchName \
+        InstallomatorVersionCustomRepoPath InteractiveMode MonthlyPatchingCadenceEnabled \
+        MonthlyPatchingCadenceOrdinalValue MonthlyPatchingCadenceStartTime \
+        MonthlyPatchingCadenceWeekdayIndex MosyleConsoleURL OptionalLabels \
+        PatchScriptTimeoutSeconds PatchWeekStartDay PostPatchScript PostPatchScriptFailAction \
+        PrePatchScript PrePatchScriptFailAction RemoveInstallomatorPath RequiredLabels \
+        SelfUpdateEnabled SelfUpdateFrequency ShowDockIcon ShowNotifications \
+        ShowNotificationsAll ShowNotificationsAppsQueued ShowNotificationsSilentAndQueued \
+        ShowNotificationsSilentUpdated SkipPreUpdateVerification StaleProcessTimeoutSeconds \
+        SupportTeamEmail SupportTeamName SupportTeamPhone SupportTeamWebsite UnattendedExit \
+        UnattendedExitSeconds UseOverlayIcon VerboseMode VersionComparisonInstallomatorFallback \
+        VersionComparisonMethod WebhookFeature WebhookURLGoogleChat WebhookURLSlack \
+        WebhookURLTeams WorkflowBackgroundPatchClosedApps WorkflowDisableAppDiscovery \
+        WorkflowDisableRelaunch WorkflowDiscoveryOnlyBackgroundPatchClosedApps \
+        WorkflowInstallNowPatchingStatusAction WorkflowScheduledDiscovery WorkflowStageUpdates \
+        ZoomCallActiveCheck
+    )
+    local managedFile="${appAutoPatchManagedPLIST}.plist"
+    local localFile="${appAutoPatchLocalPLIST}.plist"
+    local -a currentKeys previousKeys removedKeys
+    local key missingRuns managedXML
+
+    # Nothing to clean up yet on a first install.
+    [[ -f "${localFile}" ]] || return 0
+
+    # A Jamf-launched run, or a run from outside the AAP folder, restarts via the LaunchDaemon a
+    # few seconds later. Leave the check to that run so one run is not counted twice.
+    local currentFolder
+    currentFolder=$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")
+    if [[ "${parent_process_is_jamf}" == "TRUE" ]] \
+    || ! { [[ "${currentFolder}" == "${appAutoPatchFolder}" ]] || [[ "${currentFolder}" == $(dirname "${appAutoPatchLink}") ]]; }; then
+        return 0
+    fi
+
+    previousKeys=(${(z)"$(defaults read "${appAutoPatchLocalPLIST}" ManagedKeysLastSeen 2> /dev/null)"})
+
+    if [[ -f "${managedFile}" ]]; then
+        # A managed plist that exists but cannot be parsed is skipped for this run, leaving the
+        # saved list and the missing-run count unchanged.
+        if ! managedXML=$(/usr/bin/plutil -convert xml1 -o - "${managedFile}" 2> /dev/null); then
+            managed_preferences_sync_messages+=("Managed preferences: could not read ${managedFile}; skipping the removed-key check this run.")
+            return 0
+        fi
+        # Top-level keys only: a <key> inside a nested dict is a value, not a setting.
+        local -a fileKeys
+        fileKeys=(${(f)"$(print -r -- "${managedXML}" | /usr/bin/awk '
+            /<dict>/ { depth++ }
+            /<\/dict>/ { depth-- }
+            depth == 1 && match($0, /<key>[^<]*<\/key>/) { print substr($0, RSTART + 5, RLENGTH - 11) }
+        ')"})
+        for key in "${fileKeys[@]}"; do
+            (( ${aapManagedPreferenceKeys[(Ie)${key}]} )) && currentKeys+=("${key}")
+        done
+    fi
+
+    if (( ${#currentKeys[@]} == 0 )); then
+        # Managed plist is missing, or has none of the AAP keys.
+        (( ${#previousKeys[@]} == 0 )) && { defaults delete "${appAutoPatchLocalPLIST}" ManagedPlistMissingRuns 2> /dev/null; return 0; }
+        missingRuns=$(defaults read "${appAutoPatchLocalPLIST}" ManagedPlistMissingRuns 2> /dev/null)
+        [[ "${missingRuns}" == <-> ]] || missingRuns=0
+        missingRuns=$(( missingRuns + 1 ))
+        if (( missingRuns < 2 )); then
+            defaults write "${appAutoPatchLocalPLIST}" ManagedPlistMissingRuns -int "${missingRuns}"
+            managed_preferences_sync_messages+=("Managed preferences: no App Auto-Patch settings found in ${managedFile}. If they are still missing on the next run, the settings saved from them will be cleared from the local plist (count: ${#previousKeys[@]}).")
+            return 0
+        fi
+        removedKeys=("${previousKeys[@]}")
+        defaults delete "${appAutoPatchLocalPLIST}" ManagedPlistMissingRuns 2> /dev/null
+        defaults delete "${appAutoPatchLocalPLIST}" ManagedKeysLastSeen 2> /dev/null
+        managed_preferences_sync_messages+=("Managed preferences: no App Auto-Patch settings found on two runs in a row; clearing the settings saved from them (count: ${#removedKeys[@]}).")
+    else
+        defaults delete "${appAutoPatchLocalPLIST}" ManagedPlistMissingRuns 2> /dev/null
+        for key in "${previousKeys[@]}"; do
+            (( ${currentKeys[(Ie)${key}]} )) || removedKeys+=("${key}")
+        done
+        defaults write "${appAutoPatchLocalPLIST}" ManagedKeysLastSeen -string "${currentKeys[*]}"
+    fi
+
+    for key in "${removedKeys[@]}"; do
+        # Only keys AAP manages; a hand-edited ManagedKeysLastSeen cannot clear runtime state.
+        (( ${aapManagedPreferenceKeys[(Ie)${key}]} )) || continue
+        defaults delete "${appAutoPatchLocalPLIST}" "${key}" 2> /dev/null
+        managed_preferences_sync_messages+=("Managed preferences: ${key} was removed from the managed profile; cleared it from the local plist so the default applies.")
+    done
+    return 0
+}
+
 get_preferences() {
 
     write_status "Running: Collecting preferences"
@@ -1521,6 +1632,12 @@ get_preferences() {
         
         log_status "Continuing to gather new preferences"
     fi
+
+    # Report what sync_removed_managed_preferences did at the top of workflow_startup (#346).
+    local _syncMessage
+    for _syncMessage in "${managed_preferences_sync_messages[@]}"; do
+        log_status "${_syncMessage}"
+    done
 
 
     # Collect Managed PLIST preferences if any
@@ -3264,6 +3381,9 @@ workflow_startup() {
     # Resolve VerboseMode before any log_aap / log_verbose traffic so aap_verbose.log is gated for
     # the entire run (including self_update, get_dialog, get_preferences preference dumps, etc.).
     # Managed → CLI → local precedence matches the historical late-startup block.
+    # First clear local copies of settings removed from the managed profile (#346), so they are
+    # not picked up by resolve_verbose_mode, resolve_self_update_preferences, or get_preferences.
+    sync_removed_managed_preferences
     resolve_verbose_mode
 
     # --pending-apps-dialog is a one-shot trigger. The flag file lets the request survive a

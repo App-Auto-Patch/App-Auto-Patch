@@ -3,6 +3,18 @@
 # Version 3
 
 ## Version 3.7.7
+### 11-Nov-2026 (3) - Build 3.7.7.2611111139
+- [#346](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/346): `get_preferences` reads managed, then local, then the built-in default, and most settings are saved to the local plist. A key removed from the configuration profile kept applying from its saved local copy. New `sync_removed_managed_preferences` runs at the top of `workflow_startup`, before `resolve_verbose_mode`, `resolve_self_update_preferences`, and `get_preferences`.
+  - It reads the top-level keys of the managed plist with `plutil`. Keys inside a nested dict are ignored.
+  - It saves the names of those keys, never their values, to `ManagedKeysLastSeen` in the local plist.
+  - A key saved on the last run but missing now is deleted from the local plist and logged, so the default applies on that same run.
+  - Only the keys listed in `aapManagedPreferenceKeys` are tracked, so runtime state in the local plist (for example `DiscoveredLabels` or the deadline counters) is never cleared, and keys that were only ever set locally are not touched.
+  - When the managed plist is missing, or has none of those keys, the run is counted in `ManagedPlistMissingRuns`. Everything saved from it is cleared only on the second run in a row. A run that finds the keys again resets the count.
+  - A Jamf-launched run, or a run from outside the AAP folder, skips the check, because it relaunches through the LaunchDaemon and would otherwise be counted twice.
+  - A managed plist that exists but can't be read is skipped for that run.
+  - Messages are collected during startup and logged by `get_preferences`.
+  - On the first run after upgrading there's no saved list, so nothing is cleared until the next run.
+
 ### 11-Nov-2026 (2) - Build 3.7.7.2611111125
 - [#345](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/345): `ConvertAppsInHomeFolder`, `IgnoreAppsInHomeFolder`, `DialogOnTop`, `UseOverlayIcon`, and `RemoveInstallomatorPath` were compared only with `== "TRUE"`, and nothing normalized them first. `defaults read` returns a plist boolean as `1` / `0`, so `<true/>` in a configuration profile was treated as off. That turned off `ConvertAppsInHomeFolder` and `UseOverlayIcon`, which default to `TRUE`. `manage_parameter_options` now normalizes each one to `TRUE` / `FALSE`, accepting `1` / `0` or `true` / `false` in any case. Any other value logs an error and uses the default. The resolved value is saved to the local plist with `-bool`, as the other boolean settings are. The existing `== "TRUE"` checks are unchanged. The usage help now lists these keys as `<true/> | <false/>`.
 
