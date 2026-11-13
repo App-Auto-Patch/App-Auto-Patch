@@ -9,9 +9,10 @@
 
 **Download it, and find the documentation and release notes, at [appautopatch.app](https://appautopatch.app).**
 
-<img alt="App Auto-Patch 4: the dashboard, the menu bar, an update prompt with deferral options, and the prompt after the deadline has passed" src="Images/AAP4-Slideshow.png" width="720">
-
-<sub>The dashboard, the menu bar, an update prompt with deferral options, and the prompt after the deadline has passed.</sub>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Images/AAP4-Slideshow-Dark.png">
+  <img alt="App Auto-Patch 4: the dashboard, the menu bar while installers download, an update prompt with deferral options, the menu bar badge while updates wait, the deferral history on the dashboard, and the menu bar once every app is up to date" src="Images/AAP4-Slideshow-Light.png" width="720">
+</picture>
 
 ### Highlights
 - **Keeps apps current automatically.** A background pass silently patches apps that have an update and aren't running. Installers are downloaded before anything installs.
