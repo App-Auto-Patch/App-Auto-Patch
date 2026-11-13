@@ -1,9 +1,43 @@
 <!-- markdownlint-disable-next-line first-line-heading no-inline-html -->
-[<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://techitout.xyz/app-auto-patch)
+[<img align="left" alt="App Auto Patch" src="Images/AAPLogo.png" width="128" />](https://appautopatch.app)
+
+# App Auto-Patch 4
+
+[![Static Badge](https://img.shields.io/badge/AAP4%20Release%20-4.0.0%20(127)-blue)](https://appautopatch.app/download/) [![Website](https://img.shields.io/badge/Website-appautopatch.app-blue)](https://appautopatch.app)
+
+**App Auto-Patch 4.0.0 is a native macOS app, rebuilt in Swift and SwiftUI.** It keeps third-party apps up to date by running [Installomator](https://github.com/Installomator/Installomator) from a root helper, with a menu bar item, a dashboard and native update prompts. It uses the same `xyz.techitout.appAutoPatch` preference domain as 3.x, so existing configuration profiles carry over.
+
+**Download it, and find the documentation and release notes, at [appautopatch.app](https://appautopatch.app).**
+
+<img alt="App Auto-Patch 4: the dashboard, the menu bar, an update prompt with deferral options, and the prompt after the deadline has passed" src="Images/AAP4-Slideshow.png" width="720">
+
+<sub>The dashboard, the menu bar, an update prompt with deferral options, and the prompt after the deadline has passed.</sub>
+
+### Highlights
+- **Keeps apps current automatically.** A background pass silently patches apps that have an update and aren't running. Installers are downloaded before anything installs.
+- **Deferrals and deadlines**, with native prompts and notifications, and a badge on the menu bar icon when updates are waiting.
+- **MDM-friendly.** Every setting is in the `xyz.techitout.appAutoPatch` domain, with profile manifests for every key. The [Configuration Helper](https://appautopatch.app/configuration-helper/) builds profiles and can upload them to Jamf Pro.
+- **Keeps itself up to date** with the `appautopatch4` Installomator label.
+- **Audit trail and diagnostics.** Per-app patch history, a log of every deferral, and a one-click diagnostic bundle.
+- **Translated into 15 languages**, from German to Korean.
+
+### Get started
+- **[Download](https://appautopatch.app/download/)** the latest package.
+- **[Getting started](https://appautopatch.app/getting-started/overview/)**: what App Auto-Patch 4 does and how it works.
+- **[Quick start for admins](https://appautopatch.app/admin/quick-start/)**: deploy it with your MDM in five steps.
+- **[Preferences reference](https://appautopatch.app/reference/preferences/)**: every setting, with its type and default.
+- **[Release notes](https://appautopatch.app/reference/release-notes/)**: what changed in each build.
+
+App Auto-Patch 4 needs macOS 14 Sonoma or later, on Apple silicon or Intel. Coming from 3.x? Your profiles deploy against 4.0, but check `PatchWeekStartDay`: 4.0 counts Sunday as 1, where 3.x counted Monday as 1.
+
+Report a bug or suggest a feature for App Auto-Patch 4 or the Configuration Helper with this repository's [issue forms](https://github.com/App-Auto-Patch/App-Auto-Patch/issues/new/choose).
+
+---
 
 # App Auto-Patch 3.7.7
 
-![Static Badge](https://img.shields.io/badge/AAP4%20Release%20-4.0.0%20(127)-blue)
+The shell script version of App Auto-Patch, `App-Auto-Patch-via-Dialog.zsh`, which uses [swiftDialog](https://swiftdialog.app) for its prompts. Everything below this point is about 3.7.7.
+
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag) ![GitHub pre-release (latest by date)](https://img.shields.io/github/v/release/App-Auto-Patch/App-Auto-Patch?display_name=tag&include_prereleases) ![GitHub issues](https://img.shields.io/github/issues-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/App-Auto-Patch/App-Auto-Patch) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/App-Auto-Patch/App-Auto-Patch) [![swiftDialog](https://img.shields.io/badge/swiftDialog-Enabled-blue)](https://swiftdialog.app)
 
 ## Introduction
