@@ -3,7 +3,7 @@
 
 # App Auto-Patch 4
 
-[![Static Badge](https://img.shields.io/badge/AAP4%20Release%20-4.0.0%20(127)-blue)](https://appautopatch.app/download/) [![Website](https://img.shields.io/badge/Website-appautopatch.app-blue)](https://appautopatch.app)
+[![Static Badge](https://img.shields.io/badge/AAP4%20Release%20-4.0.0%20(128)-blue)](https://appautopatch.app/download/) [![Website](https://img.shields.io/badge/Website-appautopatch.app-blue)](https://appautopatch.app)
 
 **App Auto-Patch 4.0.0 is a native macOS app, rebuilt in Swift and SwiftUI.** It keeps third-party apps up to date by running [Installomator](https://github.com/Installomator/Installomator) from a root helper, with a menu bar item, a dashboard and native update prompts. It uses the same `xyz.techitout.appAutoPatch` preference domain as 3.x, so existing configuration profiles carry over.
 
